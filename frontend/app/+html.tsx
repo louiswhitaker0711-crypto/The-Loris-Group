@@ -47,6 +47,20 @@ export default function Root({ children }: PropsWithChildren) {
                  to match the active theme (dark users get the dark field). */
               html, body { background-color: #eef4fa; }
 
+              /* Browser autofill (a saved email or password) repaints the
+                 field with the browser's own pale background and dark text,
+                 which shows as a white box on dark forms such as the login
+                 screen. Delaying that repaint indefinitely keeps each field's
+                 own colours; the value is still filled in as normal. */
+              input:-webkit-autofill,
+              input:-webkit-autofill:hover,
+              input:-webkit-autofill:focus,
+              input:-webkit-autofill:active,
+              textarea:-webkit-autofill,
+              select:-webkit-autofill {
+                transition: background-color 0s 600000s, color 0s 600000s !important;
+              }
+
               /* iOS WebKit "text autosizing" inflates font sizes ~10-15% in
                  installed standalone PWAs (not in Safari tabs), which made
                  every label render bigger than the native app inside the same
