@@ -1,10 +1,9 @@
-"""Vertex's office week: the Mon–Fri timetable, its lanes, and who sits in which.
+"""The office week: the Monday to Saturday timetable, its lanes, and who sits in which.
 
 The office timetable runs in four lanes, the columns of the Owner's schedule
-sheet: Stage 4+, Leaders (Stage 3 / 3+ Coaches), Stage 2 and Stage 1. Most
-days show Stage 1 and Stage 2 together as "Stage 1/2"; Wednesday (Shadow Day)
-splits them. A block lists the lanes it covers in `groups`; a block without
-`groups` (older data) gets its lanes from its audience.
+sheet: Stage 4+, Leaders (Stage 3 / 3+ Coaches), Stage 2 and Stage 1. A block
+lists the lanes it covers in `groups`; a block without `groups` (older data)
+gets its lanes from its audience.
 
 Office blocks are the Owner's template: only an admin edits them. Everyone
 else adds personal events and tasks on top (audience 'personal').
@@ -38,7 +37,8 @@ FIELD = "#2c5a26"     # Field
 CYAN = "#22d3e6"      # Appointments
 BAM = "#3d2f63"       # BAM
 
-FIELD_END = "20:30"
+FIELD_START = "13:30"
+FIELD_END = "20:00"
 
 
 def _b(day, start, end, title, groups, color):
@@ -46,53 +46,30 @@ def _b(day, start, end, title, groups, color):
             "title": title, "groups": list(groups), "color": color}
 
 
-VERTEX_WEEK: list[dict] = [
-    # Monday
-    _b(0, "08:30", "09:15", "Core catch-up", S4, GOLD),
-    _b(0, "09:15", "09:45", "Team meetings", S4, BROWN),
-    _b(0, "09:45", "10:15", "Prime-Time", LD, PRIME),
-    _b(0, "10:15", "11:15", "FR Goals + Sales Impact", ALL, BLUE),
-    _b(0, "11:15", "11:45", "Sectors", S4, NAVY),
-    _b(0, "11:15", "11:45", "Prime-Time", LD + S12, PRIME),
-    _b(0, "11:45", "12:30", "Morning Meeting", ALL, OLIVE),
-    _b(0, "12:30", FIELD_END, "Field", ALL, FIELD),
-    # Tuesday: Day Trip
-    _b(1, "08:45", "09:30", "Owners call", S4, GOLD),
-    _b(1, "09:30", "10:00", "Appointments", S4, CYAN),
-    _b(1, "10:00", "10:30", "Podcast Impact", S4 + LD, BLUE),
-    _b(1, "10:30", "11:00", "Sectors", S4 + LD, NAVY),
-    _b(1, "10:30", "11:15", "Prime-Time", S12, PRIME),
-    _b(1, "11:15", FIELD_END, "Field", ALL, FIELD),
-    # Wednesday: Shadow Day (Stage 2 and Stage 1 split)
-    _b(2, "08:30", "09:00", "FR CALL", S4, GOLD),
-    _b(2, "10:00", "10:15", "N/S Test", ["s1"], SKY),
-    _b(2, "10:15", "11:00", "Coaching Leaders Meeting", S4 + LD, BLUE),
-    _b(2, "10:15", "11:00", "Stage 2's Impact", ["s2"], SKY),
-    _b(2, "10:15", "11:00", "S/D EXPECTATIONS", ["s1"], BLUE),
-    _b(2, "11:00", "11:30", "Sectors", S4 + LD, NAVY),
-    _b(2, "11:00", "11:45", "Prime-Time", S12, PRIME),
-    _b(2, "11:45", "12:30", "Morning Meeting", ALL, OLIVE),
-    _b(2, "12:30", FIELD_END, "Field", ALL, FIELD),
-    # Thursday: Day Trip
-    _b(3, "08:30", "09:00", "SRJ OWNERS CALL", S4, GOLD),
-    _b(3, "09:30", "10:00", "Appointments", S4, CYAN),
-    _b(3, "09:30", "10:15", "JMO 3+ Coaching Leaders call", LD, BLUE),
-    _b(3, "10:30", "11:00", "Sectors", S4 + LD, NAVY),
-    _b(3, "10:30", "11:15", "Prime-Time", S12, PRIME),
-    _b(3, "11:15", FIELD_END, "Field", ALL, FIELD),
-    # Friday: 2nd Day Badge
-    _b(4, "08:30", "09:00", "FEO CALL", S4, GOLD),
-    _b(4, "09:00", "09:45", "SALES COACHING ACADEMY", LD, BLUE),
-    _b(4, "09:30", "10:00", "Appointments", S4, CYAN),
-    _b(4, "10:00", "10:30", "Prime-Time", LD, PRIME),
-    _b(4, "10:00", "10:45", "BAM", S12, BAM),
-    _b(4, "10:30", "11:00", "Sectors", S4 + LD, NAVY),
-    _b(4, "11:00", "12:15", "BAM", ALL, BAM),
-    _b(4, "12:15", FIELD_END, "Field", ALL, FIELD),
-]
+def _day(day: int) -> list[dict]:
+    """One office day. The planning meeting starts half an hour earlier on
+    Monday and Saturday."""
+    planning_start = "09:00" if day in (0, 5) else "09:30"
+    return [
+        # For anyone who wants to run an office: at least two leaders.
+        _b(day, planning_start, "10:00", "Planning meeting", S4 + LD, GOLD),
+        # Anyone coaching: for people who want to learn how to run a team.
+        _b(day, "10:00", "10:30", "Sector leaders meeting", S4 + LD, NAVY),
+        # Everyone, all stages: a topic per stage, and sales coaching.
+        _b(day, "10:30", "11:00", "COD workshops", ALL, SKY),
+        # Individual sales coaching.
+        _b(day, "11:00", "11:45", "Primetime", ALL, PRIME),
+        _b(day, "11:45", "12:15", "Morning Meeting", ALL, OLIVE),
+        _b(day, FIELD_START, FIELD_END, "Field", ALL, FIELD),
+    ]
 
-# Shown beside the day name ("Tuesday · Day Trip"). Admin-editable per office.
-VERTEX_DAY_LABELS = {"1": "Day Trip", "2": "Shadow Day", "3": "Day Trip", "4": "2nd Day Badge"}
+
+# Monday (0) to Saturday (5). The name is kept from the original template.
+VERTEX_WEEK: list[dict] = [b for day in range(6) for b in _day(day)]
+
+# Shown beside the day name ("Tuesday · Day Trip"). Admin-editable per office;
+# none by default.
+VERTEX_DAY_LABELS: dict[str, str] = {}
 
 # Titles of the schedule the office had before the Owner's timetable. An office
 # whose Mon–Fri blocks are all still one of these gets the new week once.
