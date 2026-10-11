@@ -486,7 +486,7 @@ const s = StyleSheet.create({
   brand: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, height: 58 },
   brandRail: { justifyContent: 'center', paddingHorizontal: 0 },
   brandMark: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  brandText: { flex: 1, fontFamily: fonts.displayWide, fontSize: 13, letterSpacing: 0.4, color: C.text },
+  brandText: { flex: 1, fontFamily: fonts.displayWide, fontSize: 12, letterSpacing: 0.2, color: C.text },
   iconBtn: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   section: { fontFamily: fonts.mono, fontSize: 10, letterSpacing: 1.4, textTransform: 'uppercase', color: C.faint, marginTop: 10, marginBottom: 6, paddingHorizontal: 10 },
   moreHead: { flexDirection: 'row', alignItems: 'center', marginTop: 14, marginBottom: 2, paddingRight: 10, minHeight: 28 },
