@@ -15,7 +15,7 @@ from core.brand import BRITISH_ENGLISH, SELF_EMPLOYED_TERMS
 HOUSE_MANTRA = (
     "High standards\n"
     "High intensity\n"
-    "Learn today, lead tomorrow 🌱"
+    "Tomorrow is a new day 🌱"
 )
 HOUSE_GOALS = (
     "📈 Hit the weekly target\n"
@@ -44,7 +44,7 @@ Momentum is building. Leaders are stepping up, and the standard is rising. Stay 
 
 High standards.
 High intensity.
-Learn today, lead tomorrow.
+Tomorrow is a new day.
 
 📈 Hit the weekly target
 📈 Fails under 10%
@@ -65,7 +65,7 @@ Great work today 🙌 Bells are ringing 🛎️, leaders are leading 👨‍✈�
 
 High standards
 High intensity
-Learn today, lead tomorrow 🌱
+Tomorrow is a new day 🌱
 
 📈 Hit the weekly target
 📈 Fails under 10%
