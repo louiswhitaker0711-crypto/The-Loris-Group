@@ -312,9 +312,10 @@ export default function PublicBellsScreen() {
             <Chip label="Green %" value={`${totals.green_pct ?? 0}%`} accent="#22c55e" icon="leaf" />
           </View>
           <View style={styles.totalsRowSecondary}>
-            <Chip label="£15+"   value={`${totals.total_over30 ?? 0}`}   accent="#f59e0b" icon="trending-up" />
-            <Chip label="£12"    value={`${totals.total_under30 ?? 0}`}  accent="#6a7b90" icon="checkmark-circle" />
-            <Chip label="£15+ %" value={`${totals.pct_over30 ?? 0}%`}   accent="#f59e0b" />
+            <Chip label="Gold"   value={`${totals.total_over30 ?? 0}`}   accent="#f59e0b" icon="trending-up" />
+            <Chip label="Silver"    value={`${totals.total_under30 ?? 0}`}  accent="#6a7b90" icon="checkmark-circle" />
+            <Chip label="Gold %" value={`${totals.pct_over30 ?? 0}%`}   accent="#f59e0b" />
+            <Chip label="Round %" value={`${totals.pct_memberships ?? 0}%`} accent="#22c55e" />
           </View>
 
           {/* Daily totals strip — tap a day to see that day's office stats */}
@@ -481,7 +482,7 @@ function TableView({ entries }: { entries: Entry[] }) {
         <View style={[tvStyles.sumCol, tvStyles.headerCell]}><Text style={tvStyles.headerText}>Tot</Text></View>
         <View style={[tvStyles.sumCol, tvStyles.headerCell]}><Text style={tvStyles.headerText}>Days</Text></View>
         <View style={[tvStyles.sumCol, tvStyles.headerCell]}><Text style={tvStyles.headerText}>P/A</Text></View>
-        <View style={[tvStyles.pctCol, tvStyles.headerCell]}><Text style={tvStyles.headerText}>£15+ %</Text></View>
+        <View style={[tvStyles.pctCol, tvStyles.headerCell]}><Text style={tvStyles.headerText}>Gold %</Text></View>
         <View style={[tvStyles.moneyCol, tvStyles.headerCell]}><Text style={tvStyles.headerText}>Est. fees</Text></View>
       </View>
 
@@ -749,9 +750,10 @@ function PublicDayBreakdownModal({ dayIdx, entries, weekEnding, onClose }: {
             <View style={styles.statGrid}>
               <StatTile label="Sign-ups" value={`${totals.sales}`} accent={colors.primary} />
               <StatTile label="P/A" value={totals.pa.toFixed(1)} accent={colors.text} />
-              <StatTile label="£15+" value={`${totals.over30}`} accent="#f59e0b" icon="trending-up" />
-              <StatTile label="£12" value={`${totals.under30}`} accent="#6a7b90" icon="checkmark-circle" />
-              <StatTile label="£15+ %" value={`${totals.goldRate}%`} accent="#f59e0b" />
+              <StatTile label="Gold" value={`${totals.over30}`} accent="#f59e0b" icon="trending-up" />
+              <StatTile label="Silver" value={`${totals.under30}`} accent="#6a7b90" icon="checkmark-circle" />
+              <StatTile label="Gold %" value={`${totals.goldRate}%`} accent="#f59e0b" />
+              <StatTile label="Round %" value={`${totals.memRate}%`} accent="#22c55e" />
               <StatTile label="Working" value={`${totals.working}`} accent="#22c55e" icon="people" />
             </View>
 
@@ -770,8 +772,8 @@ function PublicDayBreakdownModal({ dayIdx, entries, weekEnding, onClose }: {
                   <View key={`${r.name}-${i}`} style={styles.repRow}>
                     <Text style={styles.repName} numberOfLines={1}>{r.name}</Text>
                     <View style={styles.repStats}>
-                      {r.over30 > 0 && <Text style={[styles.repStat, { color: colors.textSecondary }]}>{r.over30} × £15+</Text>}
-                      {r.under30 > 0 && <Text style={[styles.repStat, { color: colors.textMuted }]}>{r.under30} × £12</Text>}
+                      {r.over30 > 0 && <Text style={[styles.repStat, { color: colors.textSecondary }]}>{r.over30} × Gold</Text>}
+                      {r.under30 > 0 && <Text style={[styles.repStat, { color: colors.textMuted }]}>{r.under30} × Silver</Text>}
                     </View>
                   </View>
                 ))

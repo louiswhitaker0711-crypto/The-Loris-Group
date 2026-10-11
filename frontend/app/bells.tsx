@@ -205,7 +205,7 @@ function BellsScreen() {
               <Text style={[styles.kpiLabel, { color: colors.onPrimary }]}>Sign-ups</Text>
               <Text style={[styles.kpiValue, { color: colors.onPrimary }]}>{num(officeTotals.total_sales)}</Text>
               <Text style={[styles.kpiSub, { color: colors.onPrimary }]} numberOfLines={1}>
-                {num(officeTotals.total_over30) > 0 ? `${num(officeTotals.total_over30)} at ${TIER.over30.short} · ${num(officeTotals.total_under30)} at ${TIER.under30.short}` : `${list.data?.office_name || 'Office'}`}
+                {num(officeTotals.total_sales) > 0 ? `${num(officeTotals.total_over30)} ${TIER.over30.short} · ${num(officeTotals.total_under30)} ${TIER.under30.short} · ${num(officeTotals.total_memberships)} in The Round` : `${list.data?.office_name || 'Office'}`}
               </Text>
             </View>
             <View style={styles.kpi}>
@@ -232,7 +232,7 @@ function BellsScreen() {
               <View style={styles.kpi}>
                 <Text style={styles.kpiLabel}>MC fees</Text>
                 <Text style={styles.kpiValue}>{formatMoney(num(officeTotals.mc_fees))}</Text>
-                <Text style={styles.kpiSub} numberOfLines={1}>{formatMoney(num(officeTotals.fee_mc))} a sign-up · Admins only</Text>
+                <Text style={styles.kpiSub} numberOfLines={1}>{formatMoney(num(officeTotals.fee_mc_target))} {TIER.over30.short} · {formatMoney(num(officeTotals.fee_mc_standard))} {TIER.under30.short} · Admins only</Text>
               </View>
             )}
           </View>
@@ -260,7 +260,7 @@ function BellsScreen() {
 
           {(() => {
             // Days the hourly OwnerIQ sync filled: its sign-up count lands in
-            // the £12 column because OwnerIQ has no £12/£15+ split.
+            // the Silver column because OwnerIQ has no Silver/Gold split.
             const filled = entries.reduce((n, e) => {
               const mine: Record<string, number> = (e as any).owneriq_days || {};
               return n + Object.entries(mine).filter(([i, v]) => {
@@ -271,8 +271,8 @@ function BellsScreen() {
             return filled > 0 ? (
               <View style={[styles.oiqNote, { borderColor: colors.border }]}>
                 <Text style={[styles.oiqNoteText, { color: colors.textMuted }]}>
-                  {filled} day{filled === 1 ? '' : 's'} this week came from OwnerIQ as £12 sign-ups.
-                  Change any £15+ ones: once a day is edited here, the sync leaves it alone.
+                  {filled} day{filled === 1 ? '' : 's'} this week came from OwnerIQ as Silver sign-ups.
+                  Change any Gold ones: once a day is edited here, the sync leaves it alone.
                 </Text>
               </View>
             ) : null;

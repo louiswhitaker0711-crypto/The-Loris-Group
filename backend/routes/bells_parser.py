@@ -3,23 +3,24 @@
 
 Format example (each block = one BA, each emoji line = ONE sign-up):
     Mason 6
-    🥇          <- 1 £15+ sign-up (Target £15 or Premium £20 a month)
-    🥈          <- 1 £12 sign-up (Standard)
+    🥇          <- 1 Gold sign-up (£10+ order)
+    🥈          <- 1 Silver sign-up (£5.00 to £9.99 order)
     🥇
-    🥇⭕️        <- 1 £15+ sign-up (the ⭕️ is ignored)
+    🥇⭕️        <- 1 Gold sign-up that also took The Round
     🥈
     🥇
-                  → totals: 4 × £15+ + 2 × £12 = 6 sign-ups
+                  → totals: 4 Gold + 2 Silver = 6 sign-ups, 1 membership
 
     Rosa 2
     🥈
     🥇
 
 Emoji codes (per sign-up line):
-    🥇 = £15+ sign-up — Target (£15) or Premium (£20) monthly gift → Bells `over30`
-    🥈 = £12 sign-up — Standard monthly gift                     → Bells `under30`
-    ⭕️ = ignored (a leftover code from the original report format; Vertex has
-         no memberships — it is never counted)
+    🥇 = Gold sign-up — repeat weekly order of £10 or more      → Bells `over30`
+    🥈 = Silver sign-up — repeat weekly order of £5.00 to £9.99 → Bells `under30`
+    ⭕️ = that sign-up also took The Round (the membership)     → Bells `memberships`
+         It only counts on a line that has a 🥇 or 🥈: a membership is an
+         add-on to a sign-up, never a sign-up of its own.
 
 Rules:
     * One block per BA; blank line(s) separate blocks
@@ -28,7 +29,7 @@ Rules:
     * The whole message = ONE day's results — picked via date input in UI
 
 The Bells field names (`over30`, `under30`, `memberships`) are kept from the
-original data model; see routes/bells.py for their Vertex meaning.
+original data model; see routes/bells.py for what each one means.
 """
 from __future__ import annotations
 
@@ -66,9 +67,9 @@ class ParsedRep(BaseModel):
     matched_user_name: Optional[str] = None
     match_confidence: float = 0.0
     matched_via: Optional[str] = None   # 'exact' | 'fuzzy' | 'alias'
-    over30: int = 0         # 🥇 £15+ sign-ups
-    under30: int = 0        # 🥈 £12 sign-ups
-    memberships: int = 0    # legacy field, always 0 (⭕️ is ignored)
+    over30: int = 0         # 🥇 Gold sign-ups
+    under30: int = 0        # 🥈 Silver sign-ups
+    memberships: int = 0    # ⭕️ of those sign-ups, how many took The Round
     sales_count: int = 0    # sign-ups = over30 + under30
     raw_lines: List[str] = Field(default_factory=list)
     confidence: float = 1.0
@@ -89,9 +90,9 @@ class ParseResponse(BaseModel):
 # Deterministic emoji parser
 # ─────────────────────────────────────────────────────────────────────────────
 
-GOLD_RX = re.compile(r"\U0001F947")          # 🥇 = £15+ sign-up (over30)
-SILVER_RX = re.compile(r"\U0001F948")        # 🥈 = £12 sign-up (under30)
-# ⭕️ (and 🔴) used to mark a membership; Vertex has none, so they're ignored.
+GOLD_RX = re.compile(r"\U0001F947")          # 🥇 = Gold sign-up (over30)
+SILVER_RX = re.compile(r"\U0001F948")        # 🥈 = Silver sign-up (under30)
+MEMBER_RX = re.compile(r"[\u2B55\U0001F534]")  # ⭕️ (or 🔴) = that sign-up took The Round
 ANY_EMOJI_RX = re.compile(
     r"[\U0001F300-\U0001FAFF\u2600-\u27BF\uFE0F\u200D]"
 )
@@ -146,7 +147,8 @@ def _name_from_header(line: str) -> str:
 
 def deterministic_parse(text: str) -> List[ParsedRep]:
     """Parse the pasted message into per-BA daily totals.
-    Each emoji line below the name = ONE sign-up (🥇 £15+ or 🥈 £12).
+    Each emoji line below the name = ONE sign-up (🥇 Gold or 🥈 Silver); a ⭕️
+    on that line means the sign-up also took The Round.
     Number after name is IGNORED — we trust the emojis (per user request)."""
     reps: List[ParsedRep] = []
     for block in _split_blocks(text):
@@ -167,12 +169,16 @@ def deterministic_parse(text: str) -> List[ParsedRep]:
 
         over30 = 0
         under30 = 0
+        memberships = 0
         for line in emoji_lines:
             # Edge case: multiple 🥇 / 🥈 on the same line (rare). Count each
-            # as its own sign-up. Anything else on the line (⭕️ included) is
-            # ignored.
-            over30 += len(GOLD_RX.findall(line))
-            under30 += len(SILVER_RX.findall(line))
+            # as its own sign-up. A ⭕️ marks a membership on that line's
+            # sign-up(s): never more memberships than sign-ups on the line.
+            golds = len(GOLD_RX.findall(line))
+            silvers = len(SILVER_RX.findall(line))
+            over30 += golds
+            under30 += silvers
+            memberships += min(len(MEMBER_RX.findall(line)), golds + silvers)
         sales_count = over30 + under30
 
         # Confidence: drop slightly if the rep block had non-emoji noise lines
@@ -187,7 +193,7 @@ def deterministic_parse(text: str) -> List[ParsedRep]:
             raw_name=name,
             over30=over30,
             under30=under30,
-            memberships=0,
+            memberships=memberships,
             sales_count=sales_count,
             raw_lines=emoji_lines,
             confidence=confidence,
@@ -428,10 +434,16 @@ class ApplyRep(BaseModel):
     user_id: Optional[str] = None
     user_name: str
     raw_name: Optional[str] = None   # original name from the paste, used to learn aliases
-    over30: int = 0                  # £15+ sign-ups
-    under30: int = 0                 # £12 sign-ups
-    memberships: int = 0             # legacy — accepted for old clients, never written
+    over30: int = 0                  # Gold sign-ups
+    under30: int = 0                 # Silver sign-ups
+    memberships: int = 0             # of those, how many took The Round
     status: Optional[str] = None     # explicit override: "in"|"off"|"ab"|"rt"|"nc"; None = infer from sign-ups
+
+
+def _memberships_for(rep: "ApplyRep") -> Optional[int]:
+    """Memberships to store for a day: an add-on to a sign-up, so never more
+    than the day's sign-ups, and None when there are none."""
+    return min(max(0, int(rep.memberships or 0)), max(0, rep.over30 + rep.under30)) or None
 
 
 class ApplyRequest(BaseModel):
@@ -525,7 +537,7 @@ async def apply_bulk(req: ApplyRequest, request: Request):
             days[day_idx] = {
                 "over30": rep.over30 or None,
                 "under30": rep.under30 or None,
-                "memberships": None,
+                "memberships": _memberships_for(rep),
                 "status": explicit if explicit else ("in" if (rep.over30 + rep.under30) > 0 else "off"),
             }
             try:
@@ -570,12 +582,12 @@ async def apply_bulk(req: ApplyRequest, request: Request):
         while len(days) < 7:
             days.append({"over30": None, "under30": None, "memberships": None, "status": "off"})
         explicit = rep.status if rep.status in ("in", "off", "ab", "rt", "nc") else None
-        # `memberships` is legacy (unused by Vertex): keep whatever the cell
-        # already held rather than overwrite stored data.
+        # The report is the day's full picture, so its membership count
+        # replaces the cell's, like the two sign-up counts do.
         days[day_idx] = {
             "over30": rep.over30 or None,
             "under30": rep.under30 or None,
-            "memberships": (days[day_idx] or {}).get("memberships"),
+            "memberships": _memberships_for(rep),
             "status": explicit if explicit else ("in" if (rep.over30 + rep.under30) > 0 else (days[day_idx].get("status") or "off")),
         }
         await db.bells_entries.update_one(

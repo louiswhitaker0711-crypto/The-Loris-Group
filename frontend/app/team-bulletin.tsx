@@ -42,7 +42,7 @@ const LOGO_URL = `${BACKEND_URL}/api/logo.png`;
 let _logoUri: string | null = null;
 
 // ── Types ────────────────────────────────────────────────────────────────────
-// total_sales = sign-ups; total_over30 / pct_gold = £15+ sign-ups and their share.
+// total_sales = sign-ups; total_over30 / pct_gold = Gold sign-ups and their share.
 type TeamRow = {
   rank: number;
   team_name: string;
@@ -134,7 +134,7 @@ export function buildTeamBulletinHtml(b: TeamBulletin): string {
         <div style="color:${P.rule};font-size:11pt;font-weight:700;margin-top:3pt;">Led by ${esc(hero.leader_name)} &nbsp;·&nbsp; ${esc(hero.office)}</div>
         <div style="display:flex;gap:12pt;margin-top:10pt;flex-wrap:wrap;">
           <span style="background:${P.mid};color:${P.paper};padding:4pt 10pt;border-radius:20pt;font-size:9.5pt;font-weight:700;">${plural(hero.member_count)}</span>
-          <span style="background:${P.lime};color:${P.forest};padding:4pt 10pt;border-radius:20pt;font-size:9.5pt;font-weight:700;">£15+ ${hero.pct_gold.toFixed(1)}%</span>
+          <span style="background:${P.lime};color:${P.forest};padding:4pt 10pt;border-radius:20pt;font-size:9.5pt;font-weight:700;">Gold ${hero.pct_gold.toFixed(1)}%</span>
           <span style="background:${P.deep};color:${P.rule};padding:4pt 10pt;border-radius:20pt;font-size:9.5pt;font-weight:700;">P/A ${hero.piece_average.toFixed(1)}</span>
         </div>
       </div>
@@ -158,7 +158,7 @@ export function buildTeamBulletinHtml(b: TeamBulletin): string {
           <div style="color:${P.rule};font-size:9pt;font-weight:700;margin-top:2pt;">${esc(t.leader_name)} · ${esc(t.office)}</div>
           <div style="display:flex;gap:8pt;margin-top:5pt;">
             <span style="color:${P.rule};font-size:8.5pt;font-weight:600;">${plural(t.member_count)}</span>
-            <span style="color:${P.lime};font-size:8.5pt;font-weight:700;">£15+ ${t.pct_gold.toFixed(1)}%</span>
+            <span style="color:${P.lime};font-size:8.5pt;font-weight:700;">Gold ${t.pct_gold.toFixed(1)}%</span>
             <span style="color:${P.rule};font-size:8.5pt;font-weight:600;">P/A ${t.piece_average.toFixed(1)}</span>
           </div>
         </div>
@@ -385,7 +385,7 @@ export default function TeamBulletinScreen() {
                       <Text style={[styles.statPillText, { color: POSTER.paper }]}>{t.member_count} {t.member_count === 1 ? 'member' : 'members'}</Text>
                     </View>
                     <View style={[styles.statPill, { backgroundColor: POSTER.lime }]}>
-                      <Text style={[styles.statPillText, { color: POSTER.forest }]}>£15+ {t.pct_gold.toFixed(1)}%</Text>
+                      <Text style={[styles.statPillText, { color: POSTER.forest }]}>Gold {t.pct_gold.toFixed(1)}%</Text>
                     </View>
                     <View style={[styles.statPill, { backgroundColor: 'rgba(238,244,250,0.10)' }]}>
                       <Text style={[styles.statPillText, { color: colors.inkMuted }]}>P/A {t.piece_average.toFixed(1)}</Text>

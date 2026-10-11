@@ -24,13 +24,13 @@ OFFICE = "off1"
 PLAN_WEEK = "2026-07-26"
 REVIEW_WEEK = "2026-07-19"
 
-# Vertex fee knobs picked for easy arithmetic: £10 a £12 sign-up (under30)
-# and £40 a £15+ sign-up (over30). Memberships are a legacy field and are
-# never paid.
+# Fee knobs picked for easy arithmetic: £10 a Silver sign-up (under30) and
+# £40 a Gold sign-up (over30). The membership fee is zeroed so the earnings
+# asserted below stay sign-up fees only (memberships are still counted).
 FEES = {
     "fee_standard": 10,
     "fee_target": 40,
-    "fee_premium": 40,
+    "fee_membership": 0,
 }
 
 

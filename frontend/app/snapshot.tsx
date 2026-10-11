@@ -3,7 +3,7 @@
  *
  * Shows:
  *   • Sales-vs-Goal headline (with the absolute number remaining)
- *   • Target-vs-actual chips: P/A (target 2.5), £15+ % (55%)
+ *   • Target-vs-actual chips: P/A (target 2.5), Gold % (55%)
  *   • Top 5 by Sales volume   (rank · name · sales · P/A · £earnings)
  *   • Top 5 by earnings       (rank · name · £earnings · sales)
  *
@@ -254,7 +254,7 @@ export default function WeeklySnapshotScreen() {
               <TargetCard
                 styles={styles}
                 colors={colors}
-                label="£15+ %"
+                label="Gold %"
                 value={`${totals.pct_over30 ?? 0}%`}
                 target={`${TARGET_GOLD_PCT}%`}
                 hit={(totals.pct_over30 || 0) >= TARGET_GOLD_PCT}

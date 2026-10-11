@@ -4,7 +4,7 @@
  * Flow:
  *   1. Pick a rep (default = you, or first leader/admin in the list)
  *   2. Pick a day (default = today)
- *   3. Tap +1 on £15+ / £12 to increment that day's count
+ *   3. Tap +1 on Gold / Silver (and Round, if they took the membership)
  *   4. Tap Save — fires upsertBell with the new totals
  *
  * Designed for one-handed use — thumb stays on the bottom half.
@@ -53,7 +53,7 @@ export default function QuickLogSheet({ visible, weekEnding, entries, onClose, o
 
   const [selectedKey, setSelectedKey] = useState<string>('');
   const [dayIdx, setDayIdx] = useState<number>(todayDayIdx());
-  const [delta, setDelta] = useState<{ over30: number; under30: number }>({ over30: 0, under30: 0 });
+  const [delta, setDelta] = useState<{ over30: number; under30: number; memberships: number }>({ over30: 0, under30: 0, memberships: 0 });
   const [saving, setSaving] = useState(false);
 
   // Default-select first entry on open
@@ -63,7 +63,7 @@ export default function QuickLogSheet({ visible, weekEnding, entries, onClose, o
       setSelectedKey(first.user_id || `name:${first.user_name}`);
     }
     if (!visible) {
-      setDelta({ over30: 0, under30: 0 });
+      setDelta({ over30: 0, under30: 0, memberships: 0 });
       setDayIdx(todayDayIdx());
       setSelectedKey('');
     }
@@ -75,17 +75,20 @@ export default function QuickLogSheet({ visible, weekEnding, entries, onClose, o
   const projected = {
     over30: (baseDay.over30 || 0) + delta.over30,
     under30: (baseDay.under30 || 0) + delta.under30,
+    memberships: (baseDay.memberships || 0) + delta.memberships,
   };
-  // Sign-ups are £15+ (over30) + £12 (under30).
+  // Sign-ups are Gold (over30) + Silver (under30). The Round (memberships) is
+  // an add-on to a sign-up, so it never counts as one.
   const totalAdded = delta.over30 + delta.under30;
+  const anythingAdded = totalAdded + delta.memberships > 0;
 
-  const bump = (k: 'over30' | 'under30', step: 1 | -1) => {
+  const bump = (k: 'over30' | 'under30' | 'memberships', step: 1 | -1) => {
     haptics.light();
     setDelta((d) => ({ ...d, [k]: Math.max(0, d[k] + step) }));
   };
 
   const handleSave = async () => {
-    if (!selectedEntry || totalAdded === 0) {
+    if (!selectedEntry || !anythingAdded) {
       toast.info('Nothing to save', `Tap +1 on ${TIER.over30.short} or ${TIER.under30.short} first.`);
       return;
     }
@@ -100,8 +103,8 @@ export default function QuickLogSheet({ visible, weekEnding, entries, onClose, o
         return {
           over30: projected.over30 || null,
           under30: projected.under30 || null,
-          // Not used by Vertex — pass the day's existing value straight through.
-          memberships: cur.memberships ?? null,
+          // Never more members than the day's sign-ups.
+          memberships: Math.min(projected.memberships, projected.over30 + projected.under30) || null,
           status: 'in',
         };
       });
@@ -111,7 +114,7 @@ export default function QuickLogSheet({ visible, weekEnding, entries, onClose, o
         week_ending: weekEnding,
         days,
       });
-      toast.success(`+${totalAdded} for ${selectedEntry.user_name}`, `${DAY_LABELS[dayIdx]} updated.`);
+      toast.success(totalAdded > 0 ? `+${totalAdded} for ${selectedEntry.user_name}` : `Updated ${selectedEntry.user_name}`, `${DAY_LABELS[dayIdx]} updated.`);
       onSaved();
       onClose();
     } catch (e: any) {
@@ -166,7 +169,7 @@ export default function QuickLogSheet({ visible, weekEnding, entries, onClose, o
               <TouchableOpacity
                 key={d}
                 style={[styles.dayChip, sel && styles.dayChipActive]}
-                onPress={() => { haptics.tap(); setDayIdx(i); setDelta({ over30: 0, under30: 0 }); }}
+                onPress={() => { haptics.tap(); setDayIdx(i); setDelta({ over30: 0, under30: 0, memberships: 0 }); }}
               >
                 <Text style={[styles.dayChipText, sel && styles.dayChipTextActive]}>{d}</Text>
               </TouchableOpacity>
@@ -177,7 +180,7 @@ export default function QuickLogSheet({ visible, weekEnding, entries, onClose, o
         {/* Tally cards */}
         <View style={styles.tallyGrid}>
           <Tally
-            tag={TIER.over30.short} label="Target/Premium" primary
+            tag={TIER.over30.short} label="£10+ order" primary
             dayName={DAY_LABELS[dayIdx]}
             base={baseDay.over30 || 0}
             delta={delta.over30}
@@ -187,12 +190,22 @@ export default function QuickLogSheet({ visible, weekEnding, entries, onClose, o
             styles={styles}
           />
           <Tally
-            tag={TIER.under30.short} label="Standard"
+            tag={TIER.under30.short} label="£5 to £9.99"
             dayName={DAY_LABELS[dayIdx]}
             base={baseDay.under30 || 0}
             delta={delta.under30}
             onPlus={() => bump('under30', 1)}
             onMinus={() => bump('under30', -1)}
+            colors={colors}
+            styles={styles}
+          />
+          <Tally
+            tag={TIER.memberships.short} label="Took the membership" noun="members"
+            dayName={DAY_LABELS[dayIdx]}
+            base={baseDay.memberships || 0}
+            delta={delta.memberships}
+            onPlus={() => bump('memberships', 1)}
+            onMinus={() => bump('memberships', -1)}
             colors={colors}
             styles={styles}
           />
@@ -205,12 +218,14 @@ export default function QuickLogSheet({ visible, weekEnding, entries, onClose, o
               {selectedEntry ? selectedEntry.user_name : 'Pick a rep'} · {DAY_LABELS[dayIdx]}
             </Text>
             <Text style={styles.summarySub}>
-              {totalAdded > 0 ? `+${signUps(totalAdded)} → new total ${projected.over30 + projected.under30}` : 'No changes yet'}
+              {totalAdded > 0
+                ? `+${signUps(totalAdded)} → new total ${projected.over30 + projected.under30}${delta.memberships > 0 ? ` · +${delta.memberships} in The Round` : ''}`
+                : delta.memberships > 0 ? `+${delta.memberships} in The Round` : 'No changes yet'}
             </Text>
           </View>
           <TouchableOpacity
-            style={[styles.saveBtn, (saving || totalAdded === 0) && { opacity: 0.4 }]}
-            disabled={saving || totalAdded === 0}
+            style={[styles.saveBtn, (saving || !anythingAdded) && { opacity: 0.4 }]}
+            disabled={saving || !anythingAdded}
             onPress={handleSave}
           >
             {saving ? <ActivityIndicator color={colors.onPrimary} /> : (
@@ -227,12 +242,12 @@ export default function QuickLogSheet({ visible, weekEnding, entries, onClose, o
 }
 
 // ── Tally card ──────────────────────────────────────────────────────────
-function Tally({ tag, label, primary, dayName, base, delta, onPlus, onMinus, colors, styles }: any) {
+function Tally({ tag, label, primary, noun = 'sign-ups', dayName, base, delta, onPlus, onMinus, colors, styles }: any) {
   const total = base + delta;
   return (
     <View style={styles.tallyCard}>
       <View style={styles.tallyHeader}>
-        {/* Tier chip — £15+ on the brand colour, £12 on the quiet surface. */}
+        {/* Tier chip — Gold on the brand colour, the others on the quiet surface. */}
         <View style={[styles.tallyTag, primary ? { backgroundColor: colors.primary, borderColor: colors.primary } : null]}>
           <Text style={[styles.tallyTagText, primary ? { color: colors.onPrimary } : null]}>{tag}</Text>
         </View>
@@ -241,10 +256,10 @@ function Tally({ tag, label, primary, dayName, base, delta, onPlus, onMinus, col
       <Text style={styles.tallyValue}>{total}</Text>
       {delta > 0 ? <Text style={styles.tallyDelta}>+{delta}</Text> : <Text style={styles.tallyDeltaPlaceholder}> </Text>}
       <View style={styles.tallyButtons}>
-        <TouchableOpacity style={styles.tallyMinus} onPress={onMinus} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel={`${dayName} ${tag} sign-ups minus one`}>
+        <TouchableOpacity style={styles.tallyMinus} onPress={onMinus} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel={`${dayName} ${tag} ${noun} minus one`}>
           <Ionicons name="remove" size={18} color={colors.text} />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.tallyPlus} onPress={onPlus} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel={`${dayName} ${tag} sign-ups plus one`}>
+        <TouchableOpacity style={styles.tallyPlus} onPress={onPlus} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityLabel={`${dayName} ${tag} ${noun} plus one`}>
           <Ionicons name="add" size={22} color={colors.onPrimary} />
         </TouchableOpacity>
       </View>

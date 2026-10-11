@@ -2,8 +2,8 @@
  * Weekly Bulletin — Monday-morning leaderboard generator.
  *
  * Pulls cross-office Bells data for a chosen week and renders two top-5
- * boards: Sign-ups, and £15+ % (the share of a rep's sign-ups at £15/month
- * or more — Target or Premium). Admins and leaders can export the same
+ * boards: Sign-ups, and Gold % (the share of a rep's sign-ups that were Gold:
+ * a repeat weekly order of £10 or more). Admins and leaders can export the same
  * ready-to-view countrywide result; the underlying data is read-only.
  *
  * The API still returns `top_membership` (memberships aren't used by Vertex)
@@ -47,7 +47,7 @@ const LOGO_URL = `${BACKEND_URL}/api/logo.png`;
 let _logoUri: string | null = null;
 
 // ── Types matching backend `/bulletin/weekly` payload ──────────────────────
-// `sales` = sign-ups, `over30` = £15+ sign-ups, `earnings` = estimated BA fees (£).
+// `sales` = sign-ups, `over30` = Gold sign-ups, `earnings` = estimated BA fees (£).
 type SalesRow = { rank: number; user_id: string | null; name: string; office: string; avatar?: string | null; sales: number; earnings: number };
 type PctRow   = { rank: number; user_id: string | null; name: string; office: string; avatar?: string | null; sales: number; memberships?: number; over30?: number; pct: number };
 export type Bulletin = {
@@ -268,22 +268,22 @@ export default function BulletinScreen() {
             <View style={{ height: 14 }} />
 
             <LeaderboardCard
-              title="Top 5 £15+ %"
+              title="Top 5 Gold %"
               accent={POSTER.lime}
               onAccent={POSTER.forest}
               valueColor={colors.text}
               rows={data.top_gold}
-              valueLabel="£15+ %"
+              valueLabel="Gold %"
               formatValue={(r) => `${r.pct.toFixed(1)}%`}
               secondaryLabel="sign-ups"
-              formatSecondary={(r) => `${r.over30}/${r.sales} at £15+`}
+              formatSecondary={(r) => `${r.over30}/${r.sales} Gold`}
               emptyHint={`No reps with ${data.min_sales_pct}+ sign-ups this week.`}
               styles={styles}
             />
 
             <View style={styles.footerLine}>
-              <Text style={styles.footerText}>£15+ % = share of sign-ups at £15/month or more (Target or Premium)</Text>
-              <Text style={styles.footerText}>£15+ % needs {data.min_sales_pct}+ sign-ups to qualify · Tied? More sign-ups wins.</Text>
+              <Text style={styles.footerText}>Gold % = share of sign-ups that were Gold (a repeat weekly order of £10 or more)</Text>
+              <Text style={styles.footerText}>Gold % needs {data.min_sales_pct}+ sign-ups to qualify · Tied? More sign-ups wins.</Text>
             </View>
           </View>
         )}
@@ -319,7 +319,7 @@ export default function BulletinScreen() {
 // ── HTML builder for PDF export ────────────────────────────────────────────
 // A dark forest poster: a #1 hero with a big circular photo and a trophy
 // badge, a banner-ribbon name plate, numbered lime chips for ranks 2-5, a
-// cityscape silhouette tying the page together, and the £15+ % board below.
+// cityscape silhouette tying the page together, and the Gold % board below.
 // Vertex branding sits in the masthead. All styling is inline so expo-print
 // renders it identically on iOS / Android / web.
 export function buildBulletinHtml(b: Bulletin): string {
@@ -371,7 +371,7 @@ export function buildBulletinHtml(b: Bulletin): string {
     numberedRowHtml(r.name || '', r.office || '', String(r.sales), r.earnings)
   ).join('');
 
-  // ── Mini-hero for #1 in £15+ % — circular photo with a lime ring, name +
+  // ── Mini-hero for #1 in Gold % — circular photo with a lime ring, name +
   // office + big pct text below. Sits beside the rest list (ranks 2-5).
   const miniHeroBlock = (r: any, valueText: string) => `
     <div style="text-align:center;">
@@ -381,18 +381,18 @@ export function buildBulletinHtml(b: Bulletin): string {
       <div style="color:${P.lime};font-weight:900;font-size:22pt;font-variant-numeric:tabular-nums;margin-top:5pt;letter-spacing:0.4pt;">${escape(valueText)}</div>
     </div>`;
 
-  // Ranks 2..5 in the £15+ % panel — numbered rank chip + name + office + pct.
+  // Ranks 2..5 in the Gold % panel — numbered rank chip + name + office + pct.
   const compactRow = (rank: number, r: any, valueText: string) => `
     <div style="display:flex;align-items:center;gap:10pt;padding:6pt 0;border-bottom:0.6pt solid ${P.mid};">
       <div style="background:${P.mid};color:${P.paper};width:24pt;height:24pt;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:11pt;flex-shrink:0;">${rank}</div>
       <div style="flex:1;line-height:1.15;min-width:0;">
         <div style="color:${P.paper};font-weight:900;font-size:13pt;letter-spacing:0.3pt;">${escape(r.name || '')}</div>
-        <div style="font-family:${P.mono};color:${P.rule};font-weight:700;font-size:8.5pt;letter-spacing:0.8pt;text-transform:uppercase;">${escape(r.office || '')} · ${r.over30 ?? 0}/${r.sales} at £15+</div>
+        <div style="font-family:${P.mono};color:${P.rule};font-weight:700;font-size:8.5pt;letter-spacing:0.8pt;text-transform:uppercase;">${escape(r.office || '')} · ${r.over30 ?? 0}/${r.sales} Gold</div>
       </div>
       <div style="color:${P.lime};font-weight:900;font-size:14pt;font-variant-numeric:tabular-nums;">${escape(valueText)}</div>
     </div>`;
 
-  // The £15+ % panel: mini-hero on the left, ranks 2-5 on the right.
+  // The Gold % panel: mini-hero on the left, ranks 2-5 on the right.
   const pctRows = b.top_gold || [];
   const fmtPct = (r: any) => `${r.pct.toFixed(1)}%`;
   const pctPanelBody = pctRows.length === 0
@@ -503,11 +503,11 @@ export function buildBulletinHtml(b: Bulletin): string {
 
   ${cityscape}
 
-  <!-- £15+ % panel — forest card with lime accents -->
+  <!-- Gold % panel — forest card with lime accents -->
   <div style="background:${P.deep};padding:14pt 22pt;">
     <div style="background:${P.forest};border:1pt solid ${P.mid};border-radius:10pt;padding:14pt 16pt;">
-      <div style="color:${P.lime};font-weight:900;font-size:14pt;letter-spacing:0.6pt;text-transform:uppercase;border-bottom:2pt solid ${P.lime};padding-bottom:7pt;margin-bottom:8pt;text-align:center;">★ Top £15+ %</div>
-      <div style="font-family:${P.mono};font-size:8.5pt;color:${P.rule};font-weight:700;margin-bottom:12pt;letter-spacing:0.8pt;text-align:center;text-transform:uppercase;">Share of sign-ups at £15/month or more · min ${b.min_sales_pct} sign-ups</div>
+      <div style="color:${P.lime};font-weight:900;font-size:14pt;letter-spacing:0.6pt;text-transform:uppercase;border-bottom:2pt solid ${P.lime};padding-bottom:7pt;margin-bottom:8pt;text-align:center;">★ Top Gold %</div>
+      <div style="font-family:${P.mono};font-size:8.5pt;color:${P.rule};font-weight:700;margin-bottom:12pt;letter-spacing:0.8pt;text-align:center;text-transform:uppercase;">Share of sign-ups that were Gold · min ${b.min_sales_pct} sign-ups</div>
       ${pctPanelBody}
     </div>
   </div>

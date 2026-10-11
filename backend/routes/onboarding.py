@@ -59,12 +59,16 @@ DEFAULT_CONTENT = {
     ),
     "pay_title": "How your earnings work",
     "pay_notes": (
-        "You earn a fee for every sign-up, set by the monthly amount the supporter "
-        "chooses: £55 for a £12 standard sign-up, £60 for a £15 target sign-up and "
-        "£60 for a £20 premium sign-up. Quality pays too: £15 for every supporter "
-        "who reaches their 3rd direct debit, paid 4 months after the sign-up month "
-        "in any month your quality rate is 70% or above. Your coach will walk you "
-        "through it, and the Pay tab shows what your week is worth."
+        "You earn a fee for every sign-up, set by the value of the customer's "
+        "repeat weekly order: £12 for a Silver sign-up (an order of £5.00 to "
+        "£9.99) and £20 for a Gold sign-up (£10 or more). If the customer also "
+        "takes The Round membership, that adds £8. Quality pays too: when the "
+        "customer is still ordering in their 4th week you earn £5 for a Silver "
+        "and £8 for a Gold. A sign-up that fails pays nothing.\n\n"
+        "When it's paid: the week runs Monday to Saturday. Sign-up fees are "
+        "paid on the Wednesday 11 days after that Saturday, membership fees a "
+        "week after that, and 4th-week payments about 8 weeks after the sign-up. Your coach will walk you through it, and the "
+        "Earnings Calculator shows what your week is worth."
     ),
     "week_one_note": (
         "Day 1 (Monday): BA Academy Day 1 · Office based (12:30 PM – 6:30 PM)\n"

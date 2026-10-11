@@ -1,19 +1,17 @@
 /**
- * Earnings Calculator — what a BA's week is worth, and when quality payments
- * land. Laid out the way the office's previous hub had it.
+ * Earnings Calculator — what a BA's week is worth, and when it is paid.
  *
  * Tabs:
  *   This week — "Your earnings this week" (live total), "Build your week"
- *     (£12 / £15 / £20 sign-up steppers), the call completion rate (under the
- *     threshold takes a deduction off every sign-up that week), the extra
- *     incentives, and the breakdown.
- *   Quality — the Quality Payments Calculator: a quality rate against the
- *     gate, monthly sign-ups over 12 months, when each payment lands.
+ *     (Silver / Gold / The Round steppers), the 4th-week rate (what the
+ *     week's sign-ups earn again at week 4), the breakdown, and the pay dates.
+ *   Quality — how quality pay works, the campaign's targets, and what counts
+ *     as a fail.
  *   Rates — every rate and what it means. Admins edit them here.
  *
  * The formulas live in src/pay/vertexPay.ts (mirrored server-side in
- * backend/core/vertex_pay.py); every £ figure and % threshold is the office's
- * own (GET /commission-fees). What a person types is remembered on their
+ * backend/core/vertex_pay.py); every £ figure is the office's own
+ * (GET /commission-fees). What a person types is remembered on their
  * device. The week starts from their Bells row until they change it.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -31,37 +29,32 @@ import { apiService } from '../../src/api/client';
 import { useAuth } from '../../src/auth/AuthContext';
 import { useActiveOffice } from '../../src/office/ActiveOfficeContext';
 import { showAlert } from '../../src/utils/showAlert';
-import { APP_LOCALE, APP_TZ, formatMoney } from '../../src/utils/appTime';
+import { APP_LOCALE, formatMoney } from '../../src/utils/appTime';
 import { DepthCard } from '../../src/components/ui/DepthCard';
 import { SlidingSegments } from '../../src/components/ui/SlidingSegments';
 import {
-  DEFAULT_FEES, FEE_BOUNDS, VertexFees, MonthKey, normalizeFees, weekPay, weekIncentive, monthIncentive,
-  qualityProjection, addMonths, formatMonth, monthKey, toCount, toPct,
+  DEFAULT_FEES, FEE_BOUNDS, TARGETS, TIER_RULES, VertexFees, normalizeFees, weekPay, retentionPay,
+  payDates, formatPayDate,
 } from '../../src/pay/vertexPay';
 
 // ==================== TYPES ====================
-type SummaryMonth = { month: MonthKey; standard: number; target: number; sign_ups: number; weeks: number };
 type MySummary = {
   week_ending: string;
   has_entry: boolean;
-  this_week: { standard: number; target: number; sign_ups: number; days_worked: number; earnings: number };
-  months: SummaryMonth[];
+  this_week: { standard: number; target: number; memberships?: number; sign_ups: number; days_worked: number; earnings: number };
   fees: Partial<VertexFees>;
 };
-type Counts = { c12: number; c15: number; c20: number };
+type Counts = { silver: number; gold: number; round: number };
 
 /** What the person types here, remembered per device (never sent anywhere). */
 type Saved = {
   week?: Record<string, Counts>;       // by week_ending
-  rate?: number;                       // call completion rate, %
-  avgAge?: string;                     // average donor age
-  quality?: { rate?: number; start?: MonthKey; signups?: Record<string, number> };
+  keep?: number;                       // 4th-week rate, %
 };
-const STORE_KEY = 'vertex.earnings.v2';
-const DEFAULT_QUALITY_RATE = 73;
+const STORE_KEY = 'hub.earnings.v3';
 type TabKey = 'week' | 'quality' | 'rates';
 
-// The calculator's panels are dark in both themes, like the hub's.
+// The calculator's panels are dark in both themes.
 const EC = {
   ink: brand.deep,
   surface: brand.forest,
@@ -72,19 +65,14 @@ const EC = {
   text: '#e7f0f9',
   muted: '#a8b6c7',
   red: '#f1928c',
-  teal: '#4fd1c5',
+  teal: '#4ade80',
+  amber: brand.amber,
 };
 
 // ==================== HELPERS ====================
-function currentMonthKey(): MonthKey {
-  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: APP_TZ, year: 'numeric', month: '2-digit' }).formatToParts(new Date());
-  const y = parseInt(parts.find((p) => p.type === 'year')?.value || '2026', 10);
-  const m = parseInt(parts.find((p) => p.type === 'month')?.value || '1', 10);
-  return monthKey({ year: y, month: m });
-}
-const shortMonth = (k: MonthKey) => formatMonth(k, 'short', APP_LOCALE);
 const pounds = (n: number) => formatMoney(Math.round(n));
-const pluralise = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+/** £5 / £9.99 — pence only when there are any. */
+const price = (n: number) => (Number.isInteger(n) ? `£${n}` : `£${n.toFixed(2)}`);
 
 /** Counts smoothly towards a number (jumps straight there with reduced motion). */
 function useCountUp(target: number): number {
@@ -178,9 +166,6 @@ export default function EarningsScreen() {
     );
   }
 
-  const nowMonth = summary?.months?.length ? summary.months[summary.months.length - 1].month : currentMonthKey();
-  const monthSignUps = summary?.months?.find((m) => m.month === nowMonth)?.sign_ups ?? 0;
-
   return (
     <View style={styles.container}>
       <View style={styles.tabRow}>
@@ -197,14 +182,17 @@ export default function EarningsScreen() {
             <WeekCalculator
               fees={fees}
               weekEnding={summary?.week_ending || ''}
-              bells={{ c12: summary?.this_week.standard ?? 0, c15: summary?.this_week.target ?? 0, c20: 0 }}
+              bells={{
+                silver: summary?.this_week.standard ?? 0,
+                gold: summary?.this_week.target ?? 0,
+                round: summary?.this_week.memberships ?? 0,
+              }}
               hasBells={!!summary?.has_entry}
-              monthSignUps={monthSignUps}
               saved={saved}
               update={update}
             />
           )}
-          {tab === 'quality' && <QualityCalculator fees={fees} nowMonth={nowMonth} saved={saved} update={update} />}
+          {tab === 'quality' && <QualityGuide fees={fees} />}
           {tab === 'rates' && (isAdmin ? <RatesEditor officeId={ratesOffice} /> : <RatesGuide fees={fees} />)}
         </View>
       </ScrollView>
@@ -213,42 +201,36 @@ export default function EarningsScreen() {
 }
 
 // ==================== THIS WEEK ====================
-function WeekCalculator({ fees, weekEnding, bells, hasBells, monthSignUps, saved, update }: {
-  fees: VertexFees; weekEnding: string; bells: Counts; hasBells: boolean; monthSignUps: number;
+function WeekCalculator({ fees, weekEnding, bells, hasBells, saved, update }: {
+  fees: VertexFees; weekEnding: string; bells: Counts; hasBells: boolean;
   saved: Saved; update: (p: Partial<Saved>) => void;
 }) {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const edited = saved.week?.[weekEnding];
   const calc: Counts = edited ?? bells;
-  const rate = saved.rate ?? fees.leadership_threshold_pct;
-  const [rateText, setRateText] = useState<string | null>(null);
-  const ageText = saved.avgAge ?? '';
+  const keep = Math.round(saved.keep ?? TARGETS.fourthWeekPct);
 
-  const signs = calc.c12 + calc.c15 + calc.c20;
-  const pay = weekPay({
-    standard: calc.c12, targetPlus: calc.c15 + calc.c20, premium: calc.c20,
-    thirdDDs: 0, leadership: true, callCompletionPct: rate,
-  }, fees);
-  const base = pay.signUpFees;
-  const deduction = pay.leadershipDeduction;
-  const incentive = weekIncentive(signs, parseFloat(ageText), rate, fees);
-  const month = monthIncentive(monthSignUps, parseFloat(ageText), rate, fees);
-  const total = base - deduction + incentive.amount;
+  const pay = weekPay({ silver: calc.silver, gold: calc.gold, memberships: calc.round }, fees);
+  const later = retentionPay(calc.silver, calc.gold, keep, fees);
+  const total = pay.upFront + later.total;
   const shownTotal = useCountUp(total);
-  const below = rate < fees.leadership_threshold_pct;
+  const onTarget = keep >= TARGETS.fourthWeekPct;
+  const dates = payDates(weekEnding);
 
-  const setCount = (key: keyof Counts, value: number) =>
-    update({ week: { ...(saved.week || {}), [weekEnding]: { ...calc, [key]: Math.max(0, Math.min(999, value)) } } });
-  const setRate = (v: number) => update({ rate: Math.round(Math.min(100, Math.max(0, v)) * 10) / 10 });
+  const setCount = (key: keyof Counts, value: number) => {
+    const next = { ...calc, [key]: Math.max(0, Math.min(999, value)) };
+    // A membership is an add-on to a sign-up, so there can't be more of them.
+    next.round = Math.min(next.round, next.silver + next.gold);
+    update({ week: { ...(saved.week || {}), [weekEnding]: next } });
+  };
 
-  const tiers: { key: keyof Counts; title: string; description: string; fee: number }[] = [
-    { key: 'c12', title: '£12', description: 'Standard sign-up', fee: fees.fee_standard },
-    { key: 'c15', title: '£15', description: 'Target sign-up', fee: fees.fee_target },
-    { key: 'c20', title: '£20', description: 'Premium sign-up', fee: fees.fee_premium },
+  const tiers: { key: keyof Counts; title: string; description: string }[] = [
+    { key: 'silver', title: 'Silver', description: `Order of ${price(TIER_RULES.silverFrom)} to ${price(TIER_RULES.goldFrom - 0.01)} · ${pounds(fees.fee_standard)} up front` },
+    { key: 'gold', title: 'Gold', description: `Order of ${price(TIER_RULES.goldFrom)} or more · ${pounds(fees.fee_target)} up front` },
+    { key: 'round', title: 'The Round', description: `Sign-ups that took the membership · ${pounds(fees.fee_membership)} each` },
   ];
-  const kept = Math.max(0, base - deduction);
-  const barTotal = Math.max(1, base + incentive.amount);
+  const barTotal = Math.max(1, total);
 
   return (
     <View testID="earnings-calculator">
@@ -264,8 +246,13 @@ function WeekCalculator({ fees, weekEnding, bells, hasBells, monthSignUps, saved
           {pounds(shownTotal)}
         </Text>
         <View style={styles.heroBottom}>
-          <Text style={styles.heroMeta}><Text style={styles.heroMetaStrong}>{signs}</Text> {signs === 1 ? 'sign-up' : 'sign-ups'}</Text>
-          <Text style={styles.heroMeta}>Updated as you plan</Text>
+          <Text style={styles.heroMeta}>
+            <Text style={styles.heroMetaStrong}>{pay.signUps}</Text> {pay.signUps === 1 ? 'sign-up' : 'sign-ups'}
+            {pay.memberships > 0 ? ` · ${pay.memberships} in The Round` : ''}
+          </Text>
+          <Text style={styles.heroMeta}>
+            <Text style={styles.heroMetaStrong}>{pounds(pay.upFront)}</Text> up front · <Text style={styles.heroMetaStrong}>{pounds(later.total)}</Text> at week 4
+          </Text>
         </View>
       </View>
 
@@ -278,13 +265,13 @@ function WeekCalculator({ fees, weekEnding, bells, hasBells, monthSignUps, saved
           </View>
           <Text style={styles.panelAside}>BA fee per sign-up</Text>
         </View>
-        {tiers.map(({ key, title, description, fee }, i) => (
+        {tiers.map(({ key, title, description }, i) => (
           <View key={key} style={[styles.signupRow, i % 2 === 1 && styles.signupRowAlt]} testID={`row-signup-${key}`}>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={styles.signupTitle}>{title}</Text>
-              <Text style={styles.signupSub}>{description} · {pounds(fee)} BA fee</Text>
+              <Text style={styles.signupSub}>{description}</Text>
             </View>
-            <Stepper label={`${title} sign-ups`} value={calc[key]} onChange={(v) => setCount(key, v)} testKey={key} />
+            <Stepper label={key === 'round' ? 'The Round members' : `${title} sign-ups`} value={calc[key]} onChange={(v) => setCount(key, v)} testKey={key} />
           </View>
         ))}
         {hasBells && (
@@ -292,7 +279,7 @@ function WeekCalculator({ fees, weekEnding, bells, hasBells, monthSignUps, saved
             <Ionicons name="notifications-outline" size={13} color={EC.muted} />
             <Text style={styles.bellsText}>
               {edited
-                ? `Bells has you on ${bells.c12} at £12 and ${bells.c15} at £15+ this week.`
+                ? `Bells has you on ${bells.silver} Silver, ${bells.gold} Gold and ${bells.round} in The Round this week.`
                 : 'Started from your Bells row for this week. Change any number to plan ahead.'}
             </Text>
             {edited ? (
@@ -304,31 +291,14 @@ function WeekCalculator({ fees, weekEnding, bells, hasBells, monthSignUps, saved
         )}
       </View>
 
-      {/* 02 / Call completion rate */}
-      <View style={[styles.panel, below && { borderColor: 'rgba(241,146,140,0.5)' }]}>
+      {/* 02 / Week 4 */}
+      <View style={[styles.panel, !onTarget && { borderColor: 'rgba(241,146,140,0.5)' }]}>
         <View style={styles.rateHead}>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={styles.kicker}>02 / Call completion rate</Text>
-            <Text style={styles.panelTitle}>Call completion rate (posted Wednesday)</Text>
+            <Text style={styles.kicker}>02 / Week 4</Text>
+            <Text style={styles.panelTitle}>Customers still ordering in week 4</Text>
           </View>
-          <View style={styles.rateEntry}>
-            <TextInput
-              style={styles.rateInput}
-              value={rateText ?? String(rate)}
-              onChangeText={(t) => {
-                const clean = t.replace(/[^0-9.]/g, '').slice(0, 5);
-                setRateText(clean);
-                const n = parseFloat(clean);
-                if (Number.isFinite(n)) setRate(n);
-              }}
-              onBlur={() => setRateText(null)}
-              keyboardType="decimal-pad"
-              selectTextOnFocus
-              accessibilityLabel="Call completion rate, percent"
-              testID="input-call-completion-rate-number"
-            />
-            <Text style={styles.rateUnit}>%</Text>
-          </View>
+          <Text style={[styles.bigRate, !onTarget && { color: EC.red }]}>{keep}<Text style={styles.bigRateUnit}>%</Text></Text>
         </View>
         <View style={styles.sliderWrap}>
           <Slider
@@ -336,68 +306,19 @@ function WeekCalculator({ fees, weekEnding, bells, hasBells, monthSignUps, saved
             minimumValue={0}
             maximumValue={100}
             step={1}
-            value={rate}
-            onValueChange={(v) => { setRateText(null); setRate(v); }}
-            minimumTrackTintColor={below ? EC.red : EC.lime}
+            value={keep}
+            onValueChange={(v) => update({ keep: Math.round(v) })}
+            minimumTrackTintColor={onTarget ? EC.lime : EC.red}
             maximumTrackTintColor="rgba(231,240,249,0.18)"
-            thumbTintColor={below ? EC.red : EC.lime}
-            accessibilityLabel="Call completion rate slider"
-            testID="input-call-completion-rate"
+            thumbTintColor={onTarget ? EC.lime : EC.red}
+            accessibilityLabel="Customers still ordering in week 4, percent"
+            testID="input-fourth-week-rate"
           />
-          <Scale gate={fees.leadership_threshold_pct} label={`${fees.leadership_threshold_pct}% threshold`} />
-          <Text style={[styles.rateNote, !below && styles.rateNoteClear]} testID="status-leadership-deduction">
-            {below
-              ? `Below ${fees.leadership_threshold_pct}%: ${pounds(fees.leadership_deduction)} is deducted per sign-up this week.`
-              : `At or above ${fees.leadership_threshold_pct}%: no deduction this week.`}
-          </Text>
-        </View>
-      </View>
-
-      {/* 03 / Extra incentives */}
-      <View style={styles.panel}>
-        <View style={styles.panelHead}>
-          <View style={{ flexShrink: 1 }}>
-            <Text style={styles.kicker}>03 / Extra incentives</Text>
-            <Text style={styles.panelTitle}>Extra incentives</Text>
-          </View>
-          <Text style={styles.panelAside}>Volume with quality</Text>
-        </View>
-        <View style={styles.signupRow}>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={styles.fieldTitle}>Average donor age</Text>
-            <Text style={styles.signupSub}>Your week's average, from your quality report</Text>
-          </View>
-          <View style={styles.rateEntry}>
-            <TextInput
-              style={styles.rateInput}
-              value={ageText}
-              onChangeText={(t) => update({ avgAge: t.replace(/[^0-9.]/g, '').slice(0, 4) })}
-              keyboardType="decimal-pad"
-              placeholder="0"
-              placeholderTextColor={EC.muted}
-              selectTextOnFocus
-              accessibilityLabel="Average donor age"
-              testID="input-average-age"
-            />
-          </View>
-        </View>
-        <View style={styles.gates}>
-          <Gate met={incentive.signUpsMet} text={`${fees.incentive_week_signups}+ sign-ups in the week`} />
-          <Gate met={incentive.ageMet} text={`Average age ${fees.incentive_min_age}+`} />
-          <Gate met={incentive.callsMet} text={`Call completion ${fees.incentive_call_pct}%+`} />
-        </View>
-        <Text style={[styles.rateNote, { marginHorizontal: 20 }, incentive.tier > 0 ? styles.rateNoteClear : styles.rateNoteIdle]} testID="status-week-incentive">
-          {incentive.tier === 2
-            ? `All three met with ${fees.incentive_week_top_signups}+ sign-ups: +${pounds(incentive.amount)} this week.`
-            : incentive.tier === 1
-              ? `All three met: +${pounds(incentive.amount)} this week. Reach ${fees.incentive_week_top_signups} sign-ups for ${pounds(fees.incentive_week_top_amount)}.`
-              : `Meet all three for +${pounds(fees.incentive_week_amount)}, or +${pounds(fees.incentive_week_top_amount)} with ${fees.incentive_week_top_signups}+ sign-ups.`}
-        </Text>
-        <View style={styles.monthLine}>
-          <Ionicons name={month.tier ? 'checkmark-circle' : 'calendar-outline'} size={15} color={month.tier ? EC.lime : EC.muted} />
-          <Text style={styles.monthLineText}>
-            In the month: {fees.incentive_month_signups}+ sign-ups with the same two quality gates adds {pounds(fees.incentive_month_amount)}.
-            {' '}Bells has you on {monthSignUps} this month.
+          <Scale gate={TARGETS.fourthWeekPct} label={`${TARGETS.fourthWeekPct}% target`} />
+          <Text style={[styles.rateNote, styles.rateNoteClear]} testID="status-retention">
+            {pay.signUps === 0
+              ? `Each customer still ordering in their 4th week pays again: ${pounds(fees.retention_standard)} for a Silver, ${pounds(fees.retention_target)} for a Gold.`
+              : `At ${keep}%, ${later.silverKept} of your Silver and ${later.goldKept} of your Gold reach week 4: +${pounds(later.total)}.`}
           </Text>
         </View>
       </View>
@@ -412,9 +333,10 @@ function WeekCalculator({ fees, weekEnding, bells, hasBells, monthSignUps, saved
           <Text style={styles.panelAside}>Weekly estimate</Text>
         </View>
         <View style={styles.breakdown}>
-          <Line label="Sign-up fees" value={pounds(base)} testID="value-signup-fees" />
-          {deduction > 0 && <Line label="Quality deduction" value={`−${pounds(deduction)}`} tone="red" testID="value-leadership-deduction" />}
-          {incentive.amount > 0 && <Line label="Extra incentive" value={`+${pounds(incentive.amount)}`} tone="teal" testID="value-week-incentive" />}
+          <Line label={`Silver sign-ups (${calc.silver})`} value={pounds(pay.silverFees)} testID="value-silver-fees" />
+          <Line label={`Gold sign-ups (${calc.gold})`} value={pounds(pay.goldFees)} testID="value-gold-fees" />
+          <Line label={`The Round (${pay.memberships})`} value={pounds(pay.membershipFees)} tone="teal" testID="value-membership-fees" />
+          <Line label={`Week 4 payments, at ${keep}%`} value={pounds(later.total)} tone="amber" testID="value-retention" />
           <Line label="Estimated total" value={pounds(total)} total testID="value-breakdown-total" />
         </View>
         <View style={styles.composition}>
@@ -423,56 +345,71 @@ function WeekCalculator({ fees, weekEnding, bells, hasBells, monthSignUps, saved
             <Text style={styles.compositionText}>Estimated {pounds(total)}</Text>
           </View>
           <View style={styles.track} accessibilityRole="image"
-            accessibilityLabel={`Sign-up fees ${pounds(base)}${deduction ? `, quality deduction minus ${pounds(deduction)}` : ''}${incentive.amount ? `, extra incentive ${pounds(incentive.amount)}` : ''}`}>
-            <View style={{ flex: kept / barTotal, backgroundColor: EC.lime }} />
-            {deduction > 0 && <View style={{ flex: deduction / barTotal, backgroundColor: EC.red }} />}
-            {incentive.amount > 0 && <View style={{ flex: incentive.amount / barTotal, backgroundColor: EC.teal }} />}
-            {base + incentive.amount === 0 && <View style={{ flex: 1 }} />}
+            accessibilityLabel={`Sign-up fees ${pounds(pay.signUpFees)}, The Round ${pounds(pay.membershipFees)}, week 4 payments ${pounds(later.total)}`}>
+            {pay.signUpFees > 0 && <View style={{ flex: pay.signUpFees / barTotal, backgroundColor: EC.lime }} />}
+            {pay.membershipFees > 0 && <View style={{ flex: pay.membershipFees / barTotal, backgroundColor: EC.teal }} />}
+            {later.total > 0 && <View style={{ flex: later.total / barTotal, backgroundColor: EC.amber }} />}
+            {total === 0 && <View style={{ flex: 1 }} />}
           </View>
           <View style={styles.key}>
             <KeyDot colour={EC.lime} text="Sign-ups" />
-            {deduction > 0 && <KeyDot colour={EC.red} text="Deducted" />}
-            {incentive.amount > 0 && <KeyDot colour={EC.teal} text="Extra incentive" />}
+            <KeyDot colour={EC.teal} text="The Round" />
+            <KeyDot colour={EC.amber} text="Week 4" />
           </View>
         </View>
       </View>
 
+      {/* When it's paid */}
+      <View style={styles.panel}>
+        <View style={styles.panelHead}>
+          <View style={{ flexShrink: 1 }}>
+            <Text style={styles.kicker}>03 / Pay dates</Text>
+            <Text style={styles.panelTitle}>When this week is paid</Text>
+          </View>
+          {weekEnding ? <Text style={styles.panelAside}>Week ending {formatPayDate(weekEnding, APP_LOCALE)}</Text> : null}
+        </View>
+        <View style={styles.breakdown}>
+          <Line label="Sign-up fees" value={formatPayDate(dates.signUps, APP_LOCALE) || 'The Wednesday 11 days after the Saturday'} testID="value-pay-date-signups" />
+          <Line label="The Round" value={formatPayDate(dates.memberships, APP_LOCALE) || 'A week after the sign-up fees'} tone="teal" testID="value-pay-date-round" />
+          <Line label="Week 4 payments" value={dates.retention ? `around ${formatPayDate(dates.retention, APP_LOCALE)}` : 'About 8 weeks after the week ends'} tone="amber" testID="value-pay-date-retention" />
+        </View>
+        <Text style={styles.payNote}>
+          Sign-up fees wait for the orders to be delivered and not cancelled. The Round has a 14-day cooling-off period, so it is paid a week later. For a week 4 payment the customer needs 4 weeks of deliveries within 6 weeks, then it is processed and paid.
+        </Text>
+      </View>
+
+      <Text style={styles.foot}>
+        A sign-up that fails pays nothing: cancelled before the first delivery, a first delivery more than {TIER_RULES.maxDaysToFirstDelivery} days away, an order under {price(TIER_RULES.silverFrom)}, or no repeat items on it.
+      </Text>
       <Text style={styles.foot}>These figures are based on the numbers you enter. Check them against Field IQ.</Text>
     </View>
   );
 }
 
 // ==================== QUALITY ====================
-function QualityCalculator({ fees, nowMonth, saved, update }: {
-  fees: VertexFees; nowMonth: MonthKey; saved: Saved; update: (p: Partial<Saved>) => void;
-}) {
+function QualityGuide({ fees }: { fees: VertexFees }) {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const q = saved.quality || {};
-  const save = (patch: Partial<NonNullable<Saved['quality']>>) => update({ quality: { ...q, ...patch } });
-  const rate = Math.round(q.rate ?? DEFAULT_QUALITY_RATE);
-  const start = q.start || nowMonth;
-  const signups = q.signups || {};
-  const gate = fees.quality_gate_pct;
-  const lag = fees.quality_lag_months;
-  const passes = rate >= gate;
-
-  const months = Array.from({ length: 12 }, (_, i) => addMonths(start, i));
-  const projection = qualityProjection(start, months.map((m) => signups[m] ?? 0), rate, fees);
-  const rows = projection.rows;
-  const totalSignups = rows.reduce((a, r) => a + r.signUps, 0);
-  const totalQualifying = rows.reduce((a, r) => a + r.qualifying, 0);
-  const shownPay = useCountUp(projection.total);
-  const maxPay = Math.max(1, ...rows.map((r) => r.payment));
-  const example = `${formatMonth(addMonths('2026-09', 0), 'long', APP_LOCALE).split(' ')[0]} sign-ups are paid in ${formatMonth(addMonths('2026-09', lag), 'long', APP_LOCALE).split(' ')[0]}`;
-
+  const targets: { label: string; value: string; sub: string }[] = [
+    { label: 'Average order value', value: `${price(TARGETS.orderValue)}+`, sub: 'repeat weekly items, before delivery' },
+    { label: 'Drop days', value: `${TARGETS.dropDays}+`, sub: 'delivery days a week, on average' },
+    { label: 'Fails', value: `under ${TARGETS.failPct}%`, sub: 'of your sign-ups' },
+    { label: 'The Round', value: `${TARGETS.memberPct}%+`, sub: 'of your sign-ups take the membership' },
+    { label: '4th week', value: `${TARGETS.fourthWeekPct}%+`, sub: 'of customers still ordering in week 4' },
+  ];
+  const fails = [
+    'The customer cancels before their first delivery.',
+    `The first delivery is set more than ${TIER_RULES.maxDaysToFirstDelivery} days away.`,
+    `The order is under ${price(TIER_RULES.silverFrom)}.`,
+    'There are no repeat items on the order (one-off items only).',
+  ];
   return (
-    <View testID="quality-calculator">
+    <View testID="quality-guide">
       <View style={styles.header}>
         <Text style={styles.eyebrow}>My tools</Text>
-        <Text style={styles.h1}>Quality Payments Calculator</Text>
+        <Text style={styles.h1}>Quality</Text>
         <Text style={styles.lede}>
-          Enter your monthly sign-ups and set your quality rate to see your quality payments over 12 months. Quality payments are paid {pluralise(lag, 'month')} after the sign-up month.
+          Half of what a sign-up is worth comes from the customer staying. These are the numbers the campaign looks at.
         </Text>
       </View>
 
@@ -480,188 +417,65 @@ function QualityCalculator({ fees, nowMonth, saved, update }: {
       <View style={styles.how}>
         <View style={styles.howHead}>
           <Ionicons name="information-circle-outline" size={16} color={colors.text} />
-          <Text style={styles.howTitle}>How quality payments work</Text>
+          <Text style={styles.howTitle}>How quality pays</Text>
         </View>
         <Text style={styles.howText}>
-          If a supporter you sign up keeps donating for 3 months (3 direct debits), you earn {pounds(fees.quality_payment)} for them. It's paid {pluralise(lag, 'month')} after the month you signed them up: for example, {example}. To qualify, your quality rate for that month must be {gate}% or higher.
+          If a customer you sign up is still ordering in their 4th week, you earn {pounds(fees.retention_standard)} for a Silver and {pounds(fees.retention_target)} for a Gold, on top of the up-front fee. The customer needs 4 weeks of deliveries within 6 weeks; the payment follows about 8 weeks after the sign-up.
         </Text>
       </View>
 
-      {/* Quality rate */}
-      <View style={[styles.panel, !passes && { borderColor: 'rgba(241,146,140,0.5)' }]}>
-        <View style={styles.rateHead}>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={styles.panelTitle}>Quality rate</Text>
-            <View style={[styles.chip, passes ? styles.chipPass : styles.chipFail]}>
-              <Text style={[styles.chipText, { color: passes ? brand.deep : '#ffd9d6' }]}>
-                {passes ? `Above the ${gate}% gate: payments unlocked` : `Below the ${gate}% gate: no payments`}
-              </Text>
-            </View>
-          </View>
-          <Text style={[styles.bigRate, !passes && { color: EC.red }]}>{rate}<Text style={styles.bigRateUnit}>%</Text></Text>
-        </View>
-        <View style={styles.sliderWrap}>
-          <Slider
-            style={styles.slider}
-            minimumValue={0}
-            maximumValue={100}
-            step={1}
-            value={rate}
-            onValueChange={(v) => save({ rate: Math.round(v) })}
-            minimumTrackTintColor={passes ? EC.lime : EC.red}
-            maximumTrackTintColor="rgba(231,240,249,0.18)"
-            thumbTintColor={passes ? EC.lime : EC.red}
-            accessibilityLabel="Quality rate, percent"
-            testID="input-quality-rate"
-          />
-          <Scale gate={gate} label={`${gate}% gate`} />
-          {!passes && (
-            <View style={styles.warn}>
-              <Ionicons name="alert-circle-outline" size={16} color={EC.red} />
-              <Text style={styles.warnText}>Below the {gate}% gate. No quality payments will be made until your rate reaches {gate}% or above.</Text>
-            </View>
-          )}
-        </View>
-      </View>
-
-      {/* Summary */}
+      {/* Targets */}
       <View style={styles.summary}>
-        <View style={styles.summaryTile}>
-          <Text style={styles.summaryLabel}>Sign-ups</Text>
-          <Text style={styles.summaryValue}>{totalSignups}</Text>
-          <Text style={styles.summarySub}>over 12 months</Text>
-        </View>
-        <View style={styles.summaryTile}>
-          <Text style={styles.summaryLabel}>Qualifying supporters</Text>
-          <Text style={styles.summaryValue}>{totalQualifying}</Text>
-          <Text style={styles.summarySub}>reach their 3rd DD at {rate}%</Text>
-        </View>
-        <View style={[styles.summaryTile, styles.summaryBig]}>
-          <Text style={[styles.summaryLabel, { color: EC.muted }]}>Total quality payments</Text>
-          <Text style={[styles.summaryValue, { color: EC.lime }]} testID="value-quality-total">{pounds(shownPay)}</Text>
-          <Text style={[styles.summarySub, { color: EC.muted }]}>
-            {passes ? `${pounds(fees.quality_payment)} × ${totalQualifying}` : `Get above ${gate}% to unlock`}
-          </Text>
-        </View>
-      </View>
-
-      {/* When you get paid */}
-      <DepthCard style={styles.card}>
-        <Text style={styles.cardTitle}>When you get paid</Text>
-        <View style={styles.bars} accessibilityRole="image"
-          accessibilityLabel={`Payments by month paid: ${rows.map((r) => `${shortMonth(r.paidMonth)} ${pounds(r.payment)}`).join(', ')}`}>
-          {rows.map((r) => (
-            <View key={r.signUpMonth} style={styles.bar}>
-              <Text style={styles.barValue} numberOfLines={1}>{r.payment ? pounds(r.payment) : ''}</Text>
-              <View style={styles.barTrack}>
-                <View style={[styles.barFill, { height: `${(r.payment / maxPay) * 100}%` as any }]} />
-              </View>
-              <Text style={styles.barLabel} numberOfLines={1}>{shortMonth(r.paidMonth).replace(' 20', " '")}</Text>
-            </View>
-          ))}
-        </View>
-      </DepthCard>
-
-      {/* 12-month projection */}
-      <DepthCard style={styles.card}>
-        <View style={styles.tableHead}>
-          <Text style={[styles.cardTitle, { marginBottom: 0, flex: 1 }]}>12-month projection</Text>
-          <Text style={styles.startLabel}>Starting</Text>
-          <Pressable onPress={() => save({ start: addMonths(start, -1) })} style={styles.navBtn} accessibilityLabel="Start a month earlier" hitSlop={6}>
-            <Ionicons name="chevron-back" size={16} color={colors.text} />
-          </Pressable>
-          <Text style={styles.startMonth}>{shortMonth(start)}</Text>
-          <Pressable onPress={() => save({ start: addMonths(start, 1) })} style={styles.navBtn} accessibilityLabel="Start a month later" hitSlop={6}>
-            <Ionicons name="chevron-forward" size={16} color={colors.text} />
-          </Pressable>
-        </View>
-        <View style={styles.tr}>
-          <Text style={[styles.th, styles.cMonth]}>Month</Text>
-          <Text style={[styles.th, styles.cIn]}>Sign-ups</Text>
-          <Text style={[styles.th, styles.cQual]}>{rate}% 3rd donation</Text>
-          <Text style={[styles.th, styles.cPaid]}>Paid in</Text>
-          <Text style={[styles.th, styles.cPay]}>Quality payment</Text>
-        </View>
-        {rows.map((r) => (
-          <View key={r.signUpMonth} style={styles.tr}>
-            <Text style={[styles.tdStrong, styles.cMonth]}>{shortMonth(r.signUpMonth)}</Text>
-            <View style={styles.cIn}>
-              <TextInput
-                style={styles.cellInput}
-                value={r.signUps ? String(r.signUps) : ''}
-                placeholder="0"
-                placeholderTextColor={colors.textMuted}
-                onChangeText={(t) => save({ signups: { ...signups, [r.signUpMonth]: toCount(t.replace(/[^0-9]/g, '')) } })}
-                keyboardType="number-pad"
-                selectTextOnFocus
-                accessibilityLabel={`${formatMonth(r.signUpMonth, 'long', APP_LOCALE)} sign-ups`}
-              />
-            </View>
-            <Text style={[styles.td, styles.cQual]}>{r.signUps ? r.qualifying : '—'}</Text>
-            <Text style={[styles.td, styles.cPaid]}>{shortMonth(r.paidMonth)}</Text>
-            <Text style={[r.signUps && passes ? styles.tdStrong : styles.td, styles.cPay]}>
-              {r.signUps ? (passes ? pounds(r.payment) : '£0 · below gate') : '—'}
-            </Text>
+        {targets.map((t) => (
+          <View key={t.label} style={styles.summaryTile}>
+            <Text style={styles.summaryLabel}>{t.label}</Text>
+            <Text style={styles.summaryValue}>{t.value}</Text>
+            <Text style={styles.summarySub}>{t.sub}</Text>
           </View>
         ))}
-        <View style={[styles.tr, styles.trTotal]}>
-          <Text style={[styles.tdStrong, styles.cMonth]}>Total</Text>
-          <Text style={[styles.tdStrong, styles.cIn, { textAlign: 'center' }]}>{totalSignups || '—'}</Text>
-          <Text style={[styles.tdStrong, styles.cQual]}>{totalSignups ? totalQualifying : '—'}</Text>
-          <Text style={[styles.td, styles.cPaid]} />
-          <Text style={[styles.tdStrong, styles.cPay]}>{pounds(projection.total)}</Text>
-        </View>
+      </View>
+
+      {/* Fails */}
+      <DepthCard style={styles.card}>
+        <Text style={styles.cardTitle}>What counts as a fail</Text>
+        <Text style={[styles.fieldHint, { marginTop: -6, marginBottom: 6 }]}>A fail pays nothing, up front or at week 4.</Text>
+        {fails.map((f) => (
+          <View key={f} style={styles.failRow}>
+            <Ionicons name="close-circle-outline" size={16} color={colors.red} />
+            <Text style={styles.failText}>{f}</Text>
+          </View>
+        ))}
       </DepthCard>
 
-      <Text style={styles.foot}>
-        Projections assume the same quality rate every month. Actual payments depend on 3rd direct debits confirmed by the charity, and the {gate}% gate must be met in each individual month.
-      </Text>
-      <Text style={styles.foot}>These figures are based on the numbers you enter. Check them against Field IQ.</Text>
+      <Text style={styles.foot}>Your own quality figures come from the campaign's reports. Ask your coach for them.</Text>
     </View>
   );
 }
 
 // ==================== RATES ====================
-type RateField = { key: keyof VertexFees; label: string; unit: '£' | '%' | 'months' | 'count' | 'years'; help: string };
+type RateField = { key: keyof VertexFees; label: string; unit: '£'; help: string };
 const RATE_GROUPS: Array<{ title: string; hint: string; fields: RateField[]; adminOnly?: boolean }> = [
   {
     title: 'Sign-up fees',
-    hint: 'What a BA earns for each sign-up, by the donor\'s monthly gift. Bells prices its £15+ column at the Target fee.',
+    hint: 'What a BA earns up front for each sign-up, by the value of the customer\'s repeat weekly order.',
     fields: [
-      { key: 'fee_standard', label: '£12 Standard', unit: '£', help: 'BA fee for each £12 a month sign-up.' },
-      { key: 'fee_target', label: '£15 Target', unit: '£', help: 'BA fee for each £15 a month sign-up.' },
-      { key: 'fee_premium', label: '£20 Premium', unit: '£', help: 'BA fee for each £20 a month sign-up.' },
+      { key: 'fee_standard', label: 'Silver', unit: '£', help: 'BA fee for each sign-up with an order of £5.00 to £9.99.' },
+      { key: 'fee_target', label: 'Gold', unit: '£', help: 'BA fee for each sign-up with an order of £10 or more.' },
     ],
   },
   {
-    title: 'Call completion',
-    hint: 'The call completion rate is posted each Wednesday. Below the threshold, the deduction comes off every sign-up that week.',
+    title: 'The Round',
+    hint: 'The membership can be taken with a Silver or a Gold sign-up, or not at all.',
     fields: [
-      { key: 'leadership_threshold_pct', label: 'Call completion threshold', unit: '%', help: 'A week under this rate takes the deduction.' },
-      { key: 'leadership_deduction', label: 'Deduction per sign-up', unit: '£', help: 'Taken off each sign-up in a week under the threshold.' },
+      { key: 'fee_membership', label: 'Per member', unit: '£', help: 'Added for each sign-up that takes The Round.' },
     ],
   },
   {
-    title: 'Extra incentives',
-    hint: 'Added on top for volume with quality. Every one needs both quality gates: the average donor age and the call completion rate.',
+    title: 'Week 4 payments',
+    hint: 'Paid for each customer still ordering in their 4th week (4 weeks of deliveries within 6 weeks).',
     fields: [
-      { key: 'incentive_min_age', label: 'Average donor age', unit: 'years', help: 'Quality gate: the average age must be this or higher.' },
-      { key: 'incentive_call_pct', label: 'Call completion rate', unit: '%', help: 'Quality gate: call completion must be this or higher.' },
-      { key: 'incentive_week_signups', label: 'Weekly sign-ups', unit: 'count', help: 'This many sign-ups or more in a week, with both gates met…' },
-      { key: 'incentive_week_amount', label: 'Weekly incentive', unit: '£', help: '…earns this on top of that week\'s fees.' },
-      { key: 'incentive_week_top_signups', label: 'Weekly sign-ups, top level', unit: 'count', help: 'This many or more in a week, with both gates met…' },
-      { key: 'incentive_week_top_amount', label: 'Weekly incentive, top level', unit: '£', help: '…earns this instead of the weekly incentive.' },
-      { key: 'incentive_month_signups', label: 'Monthly sign-ups', unit: 'count', help: 'This many sign-ups or more in a month, with both gates met…' },
-      { key: 'incentive_month_amount', label: 'Monthly incentive', unit: '£', help: '…earns this on top for the month.' },
-    ],
-  },
-  {
-    title: 'Quality payments',
-    hint: 'Paid for supporters who reach their 3rd direct debit, in months that meet the quality gate.',
-    fields: [
-      { key: 'quality_gate_pct', label: 'Monthly quality gate', unit: '%', help: 'The month\'s quality rate must be this or higher to be paid.' },
-      { key: 'quality_payment', label: 'Per qualifying supporter', unit: '£', help: 'Paid for each supporter who reaches their 3rd direct debit.' },
-      { key: 'quality_lag_months', label: 'Paid after (months)', unit: 'months', help: 'How many months after the sign-up month the payment lands.' },
+      { key: 'retention_standard', label: 'Silver at week 4', unit: '£', help: 'Paid for each Silver customer who reaches week 4.' },
+      { key: 'retention_target', label: 'Gold at week 4', unit: '£', help: 'Paid for each Gold customer who reaches week 4.' },
     ],
   },
   {
@@ -669,13 +483,13 @@ const RATE_GROUPS: Array<{ title: string; hint: string; fields: RateField[]; adm
     hint: 'What the office is paid for each sign-up. Only Admins see this, here and in the MC fees column on Bells.',
     adminOnly: true,
     fields: [
-      { key: 'fee_mc', label: 'MC fee per sign-up', unit: '£', help: 'What the office is paid for every sign-up, whatever the gift.' },
+      { key: 'fee_mc_standard', label: 'MC fee, Silver', unit: '£', help: 'What the office is paid for each Silver sign-up.' },
+      { key: 'fee_mc_target', label: 'MC fee, Gold', unit: '£', help: 'What the office is paid for each Gold sign-up.' },
     ],
   },
 ];
 const ALL_FIELDS = RATE_GROUPS.flatMap((g) => g.fields);
-const showValue = (f: RateField, v: number) =>
-  f.unit === '£' ? formatMoney(v) : f.unit === '%' ? `${v}%` : f.unit === 'months' ? pluralise(v, 'month') : f.unit === 'years' ? `${v}+` : `${v}+`;
+const showValue = (_f: RateField, v: number) => formatMoney(v);
 
 /** Everyone else: the office's rates and what each one means (read-only). */
 function RatesGuide({ fees }: { fees: VertexFees }) {
@@ -792,7 +606,7 @@ function RatesEditor({ officeId }: { officeId?: string }) {
                     <Text style={styles.fieldHint}>{f.help}</Text>
                   </View>
                   {/* Fixed prefix/suffix slots keep every input in one column. */}
-                  <Text style={styles.prefix}>{f.unit === '£' ? '£' : ''}</Text>
+                  <Text style={styles.prefix}>£</Text>
                   <TextInput
                     style={[styles.smallInput, bad && { borderColor: colors.red }]}
                     value={values[f.key]}
@@ -802,7 +616,7 @@ function RatesEditor({ officeId }: { officeId?: string }) {
                     accessibilityLabel={`${g.title}: ${f.label}`}
                     testID={`rate-${f.key}`}
                   />
-                  <Text style={styles.suffix}>{f.unit === '%' ? '%' : ''}</Text>
+                  <Text style={styles.suffix} />
                 </View>
               );
             })}
@@ -832,7 +646,7 @@ function RatesEditor({ officeId }: { officeId?: string }) {
           <Text style={styles.linkBtnText}>Fill in the standard rates</Text>
         </Pressable>
         <Text style={styles.note}>
-          Standard: £12 → £55, £15 and £20 → £60. Call completion under 70% takes £5 off per sign-up. Extra incentives: 12+ sign-ups in a week with an average age of 45+ and 85%+ call completion adds £50, 16+ adds £100, and 50+ in a month adds £100. Quality payments: 70% gate, £15 per supporter, paid 4 months later. Bells' fee estimates and everyone's Earnings Calculator use these straight away.
+          Standard: Silver £12 and Gold £20 up front, £8 for The Round, then £5 for a Silver and £8 for a Gold at week 4. Bells' fee estimates and everyone's Earnings Calculator use these straight away.
         </Text>
       </DepthCard>
     </>
@@ -885,10 +699,10 @@ function Gate({ met, text }: { met: boolean; text: string }) {
   );
 }
 
-function Line({ label, value, tone, total, testID }: { label: string; value: string; tone?: 'red' | 'teal'; total?: boolean; testID?: string }) {
+function Line({ label, value, tone, total, testID }: { label: string; value: string; tone?: 'red' | 'teal' | 'amber'; total?: boolean; testID?: string }) {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const c = tone === 'red' ? EC.red : tone === 'teal' ? EC.teal : EC.text;
+  const c = tone === 'red' ? EC.red : tone === 'teal' ? EC.teal : tone === 'amber' ? EC.amber : EC.text;
   return (
     <View style={[styles.line, total && styles.lineTotal]}>
       <Text style={[styles.lineLabel, total && styles.lineLabelTotal, tone && { color: c }]}>{label}</Text>
@@ -1031,6 +845,10 @@ const createStyles = (colors: any) => StyleSheet.create({
   cPay: { width: 84, textAlign: 'right' },
   cellInput: { height: 34, borderRadius: 9, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, textAlign: 'center',
     fontFamily: fonts.bodySemibold, fontSize: 14, color: colors.text },
+
+  payNote: { fontFamily: fonts.body, fontSize: 12, lineHeight: 17.5, color: EC.muted, paddingHorizontal: 20, paddingTop: 4, paddingBottom: 18 },
+  failRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginTop: 8 },
+  failText: { flex: 1, fontFamily: fonts.body, fontSize: 13.5, lineHeight: 19.5, color: colors.text },
 
   // Rates + shared cards
   card: { borderRadius: 20, padding: 16, marginBottom: 12 },

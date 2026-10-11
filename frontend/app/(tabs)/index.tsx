@@ -913,7 +913,8 @@ export default function HomeScreen() {
             out.push({ l: '💵 Sign-ups', v: `${sales.total}${tail}`, n: sales.total, suffix: tail });
           }
           if (q?.source) {
-            out.push({ l: '£15+', v: q.gold_pct != null ? `${q.gold_pct}%` : '—', ...(q.gold_pct != null ? { n: q.gold_pct, suffix: '%' } : {}) });
+            out.push({ l: 'Gold', v: q.gold_pct != null ? `${q.gold_pct}%` : '—', ...(q.gold_pct != null ? { n: q.gold_pct, suffix: '%' } : {}) });
+            if (q.mem_pct != null) out.push({ l: 'Round', v: `${q.mem_pct}%`, n: q.mem_pct, suffix: '%' });
             if (q.fails_pct != null) out.push({ l: 'Fails', v: `${q.fails_pct}%`, n: q.fails_pct, suffix: '%' });
             if (q.second_delivery?.pct != null) out.push({ l: '2nd deliv', v: `${q.second_delivery.pct}%`, n: q.second_delivery.pct, suffix: '%' });
             if (q.fourth_delivery?.pct != null) out.push({ l: '4th deliv', v: `${q.fourth_delivery.pct}%`, n: q.fourth_delivery.pct, suffix: '%' });
@@ -1181,7 +1182,7 @@ export default function HomeScreen() {
                   <View style={styles.pulseStat}>
                     <AnimatedNumber value={st.week_gold_pct} suffix="%" style={[styles.pulseNumber, { color: colors.primary }]} />
                     <StatAccent />
-                    <Text style={styles.pulseLabel}>£15+ this week</Text>
+                    <Text style={styles.pulseLabel}>Gold this week</Text>
                   </View>
                 </>
               );
