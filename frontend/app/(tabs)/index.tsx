@@ -477,11 +477,13 @@ export default function HomeScreen() {
         { label: 'Goal planner', sub: 'Monthly targets', icon: 'bar-chart-outline', route: '/monthly-planner', tint: 'green' },
         { label: 'COD', sub: 'Coaching & development', icon: 'school-outline', route: '/coaching', tint: 'accent' },
         { label: 'Bells', sub: 'Weekly sign-ups board', icon: 'notifications-outline', route: '/(tabs)/hires?view=bells', tint: 'yellow' },
+        { label: 'Campaign Knowledge', sub: 'Product, pitch & playbook', icon: 'library-outline', route: '/product-knowledge', tint: 'primary' },
       ]
     : [
         { label: 'Bells', sub: 'Weekly sign-ups board', icon: 'notifications-outline', route: '/(tabs)/hires?view=bells', tint: 'primary' },
         { label: 'Bulletins', sub: 'Share last week', icon: 'megaphone-outline', route: '/weekly-share', tint: 'green' },
         { label: 'Add new starter', testKey: 'Add trainee', sub: 'Start their Day 1–8', icon: 'person-add-outline', route: '/add-hire', tint: 'accent' },
+        { label: 'Campaign Knowledge', sub: 'Product, pitch & playbook', icon: 'library-outline', route: '/product-knowledge', tint: 'yellow' },
       ];
 
   const tintColor = (t?: QuickAction['tint']) =>

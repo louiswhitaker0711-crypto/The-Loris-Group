@@ -91,6 +91,15 @@ export const TAB_REGISTRY: TabItem[] = [
     visibleFor: ['trainee', 'leader', 'admin'],
     defaultVisibleByRole: { trainee: false, leader: true, admin: true },
   },
+  // The campaign playbook (the product, the pitch, quality, pay) and its quiz.
+  // Everyone gets it pinned: before this it was only a Home shortcut for BAs,
+  // so an Admin or Coach had no way in without typing the address.
+  {
+    id: 'campaign-knowledge', label: 'Campaign Knowledge', short: 'Campaign', longLabel: 'Campaign Knowledge — the product, the pitch and the playbook',
+    icon: 'library-outline', kind: 'route', target: '/product-knowledge',
+    visibleFor: ['trainee', 'leader', 'admin'],
+    defaultVisibleByRole: { trainee: true, leader: true, admin: true },
+  },
   // The Library has no sidebar item of its own: it is a section of Coaching
   // (/coaching?tab=library).
   // Bells has no sidebar item of its own: it is the third section of the
