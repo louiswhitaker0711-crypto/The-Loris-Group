@@ -36,19 +36,19 @@ _BELLS_PAGE_HTML = r"""<!DOCTYPE html>
         :root {
             /* Vertex brand — forest + lime. Lime always carries forest text;
                forest carries paper/white text. */
-            --primary: #102d25;
-            --primary-light: #244c3b;
-            --gradient: linear-gradient(135deg, #244c3b 0%, #102d25 100%);
-            --accent: #b7df58;
-            --on-accent: #102d25;
-            --accent-wash: #e9f3d2;
+            --primary: #0c2340;
+            --primary-light: #1d4fa8;
+            --gradient: linear-gradient(135deg, #1d4fa8 0%, #0c2340 100%);
+            --accent: #22d0ec;
+            --on-accent: #0c2340;
+            --accent-wash: #d3f1f7;
             --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
             --font-label: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
-            --text: #17362b;
-            --text-muted: #50675a;
-            --bg: #f0f4e9;
-            --surface: #f9faf4;
-            --border: #cedbc7;
+            --text: #12294a;
+            --text-muted: #51657f;
+            --bg: #eef4fa;
+            --surface: #f8fbfe;
+            --border: #cbd8e6;
             /* Traffic-light thresholds are computed in JS (trafficLightBg())
                with their own hardcoded rgba values — untouched by this
                rebrand. These vars are only used for minor status text. */
@@ -59,7 +59,7 @@ _BELLS_PAGE_HTML = r"""<!DOCTYPE html>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         html, body { font-family: var(--font-display); background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
         body { padding: 16px 12px 60px; max-width: 960px; margin: 0 auto; }
-        .lock-box { max-width: 440px; margin: 60px auto 0; background: var(--surface); padding: 28px 24px; border-radius: 16px; border: 1px solid var(--border); box-shadow: 0 8px 28px rgba(16,45,37,0.10); }
+        .lock-box { max-width: 440px; margin: 60px auto 0; background: var(--surface); padding: 28px 24px; border-radius: 16px; border: 1px solid var(--border); box-shadow: 0 8px 28px rgba(12,35,64,0.10); }
         /* The logo is a transparent lime wordmark: always on forest, never on white. */
         .lock-logo { height: 56px; width: auto; max-width: 220px; display: block; margin: 0 auto 14px; background: var(--primary); padding: 10px 16px; border-radius: 12px; box-sizing: border-box; }
         .lock-title { font-family: var(--font-display); font-size: 22px; font-weight: 800; text-align: center; margin-bottom: 6px; letter-spacing: -0.2px; }
@@ -91,14 +91,14 @@ _BELLS_PAGE_HTML = r"""<!DOCTYPE html>
 
         .actions { display: flex; gap: 8px; margin-bottom: 12px; }
         .action-btn { flex: 0 1 auto; padding: 8px 14px; border: 1px solid var(--border); background: var(--surface); border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; color: var(--text); display: inline-flex; align-items: center; gap: 4px; text-decoration: none; }
-        .action-btn.primary { background: var(--accent); border-color: #8caf38; color: var(--on-accent); }
+        .action-btn.primary { background: var(--accent); border-color: #0a9bcb; color: var(--on-accent); }
         .action-btn:hover { opacity: 0.9; }
 
         /* Each chips-row sizes its columns based on the number of chips it
            actually contains, so 4-chip / 3-chip / 2-chip rows all line up
            with even spacing. */
         .chips-row { display: flex; gap: 6px; margin-bottom: 6px; }
-        .chip { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 6px; text-align: center; box-shadow: 0 1px 3px rgba(16,45,37,0.05); }
+        .chip { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 6px; text-align: center; box-shadow: 0 1px 3px rgba(12,35,64,0.05); }
         .chip-lbl-row { display: flex; align-items: center; justify-content: center; gap: 4px; }
         .chip-icon { width: 14px; height: 14px; border-radius: 7px; display: inline-flex; align-items: center; justify-content: center; font-size: 9px; line-height: 1; }
         .chip-lbl { font-family: var(--font-label); font-size: 10px; font-weight: 700; color: var(--text-muted); letter-spacing: 0.5px; text-transform: uppercase; }
@@ -107,13 +107,13 @@ _BELLS_PAGE_HTML = r"""<!DOCTYPE html>
         /* Option A — neutral surface; tinted icon-chip carries the meaning.
            No top border, no coloured number text — single visual hierarchy. */
         .chip-icon.green  { background: rgba(34, 197, 94, 0.12);  color: #16a34a; }
-        .chip-icon.primary{ background: rgba(183, 223, 88, 0.35); color: var(--primary); }
+        .chip-icon.primary{ background: rgba(34, 208, 236, 0.35); color: var(--primary); }
 
         .daily { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px; margin-bottom: 12px; }
         .daily-title { font-family: var(--font-label); font-size: 11px; font-weight: 700; color: var(--text-muted); letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 8px; }
         .daily-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
-        .daily-cell { text-align: center; padding: 6px 0; cursor: pointer; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); transition: background 0.15s; user-select: none; -webkit-tap-highlight-color: rgba(183, 223, 88, 0.3); }
-        .daily-cell.has-sales { background: rgba(183, 223, 88, 0.18); border-color: rgba(140, 175, 56, 0.45); }
+        .daily-cell { text-align: center; padding: 6px 0; cursor: pointer; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); transition: background 0.15s; user-select: none; -webkit-tap-highlight-color: rgba(34, 208, 236, 0.3); }
+        .daily-cell.has-sales { background: rgba(34, 208, 236, 0.18); border-color: rgba(10, 155, 203, 0.45); }
         .daily-cell:hover, .daily-cell:active { background: var(--bg); }
         .daily-lbl { font-size: 10px; font-weight: 700; color: var(--text-muted); }
         .daily-val { font-size: 17px; font-weight: 800; margin-top: 2px; font-variant-numeric: tabular-nums; color: var(--text); }
@@ -144,12 +144,12 @@ _BELLS_PAGE_HTML = r"""<!DOCTYPE html>
 
         .tbl-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow-x: auto; margin-bottom: 12px; -webkit-overflow-scrolling: touch; }
         table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 800px; }
-        thead { background: #e4ecd9; }
+        thead { background: #d8e5f2; }
         th { padding: 9px 6px; font-weight: 800; text-align: center; font-size: 11px; border-bottom: 1px solid var(--border); white-space: nowrap; }
         th.name-col, td.name-col { text-align: left; padding-left: 12px; min-width: 140px; max-width: 180px; }
         td { padding: 9px 6px; text-align: center; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
         tr:last-child td { border-bottom: none; }
-        tr:nth-child(even) { background: #f4f7ee; }
+        tr:nth-child(even) { background: #f0f5fa; }
         .name-col .name-text { font-weight: 700; }
         .role-tag { display: inline-block; font-size: 9px; font-weight: 800; color: var(--text-muted); margin-left: 4px; letter-spacing: 0.3px; text-transform: uppercase; }
         tr.team-row td:first-child { border-left-width: 3px !important; border-left-style: solid; }
@@ -167,7 +167,7 @@ _BELLS_PAGE_HTML = r"""<!DOCTYPE html>
         .team-section-dot { font-size: 12px; font-weight: 900; opacity: 0.4; }
         .leader-star { display: inline-block; margin-right: 4px; font-size: 11px; vertical-align: middle; }
         td.money { color: var(--primary); font-weight: 800; }
-        .cell-muted { color: #5f7266; }
+        .cell-muted { color: #5f6e81; }
         .cell-rt { color: var(--amber); }
         .cell-nc { color: var(--text-muted); }
         /* AB = scheduled absence (pre-determined day off). Just bold red
@@ -195,7 +195,7 @@ _BELLS_PAGE_HTML = r"""<!DOCTYPE html>
         /* Tabs */
         .tabs { display: flex; gap: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 4px; margin-bottom: 12px; }
         .tab { flex: 1; padding: 8px; border: none; background: transparent; font-size: 12px; font-weight: 800; color: var(--text-muted); letter-spacing: 0.3px; cursor: pointer; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; text-transform: uppercase; }
-        .tab.active { background: var(--gradient); color: #f0f4e9; }
+        .tab.active { background: var(--gradient); color: #eef4fa; }
         .tab:hover:not(.active) { color: var(--text); }
 
         /* Teams view */
@@ -358,7 +358,7 @@ _BELLS_PAGE_HTML = r"""<!DOCTYPE html>
         function renderLockScreen() {
             $app.innerHTML = `
                 <div class="lock-box">
-                    <img src="/api/logo.png" alt="Vertex Hub" class="lock-logo" />
+                    <img src="/api/logo.png" alt="The Loris Hub" class="lock-logo" />
                     <div class="lock-title">Protected Weekly Snapshot</div>
                     <div class="lock-sub">Enter the share code for <b>${escapeHtml(SLUG)}</b> to view this week's Bells data.</div>
                     <input id="codeInput" class="lock-input" type="text" placeholder="Share code" autocomplete="off" autocapitalize="off" />
@@ -391,7 +391,7 @@ _BELLS_PAGE_HTML = r"""<!DOCTYPE html>
                 $app.innerHTML = `
                     <div class="header">
                         <div class="header-left">
-                            <img src="/api/logo.png" alt="Vertex Hub" class="h-logo" />
+                            <img src="/api/logo.png" alt="The Loris Hub" class="h-logo" />
                             <div><div class="h-title">${escapeHtml(SLUG)}</div><div class="h-sub">Weekly Sign-ups Snapshot · Public View</div></div>
                         </div>
                         <button id="lockBtn" class="btn-small">🔒 Lock</button>
@@ -644,7 +644,7 @@ _BELLS_PAGE_HTML = r"""<!DOCTYPE html>
             $app.innerHTML = `
                 <div class="header">
                     <div class="header-left">
-                        <img src="/api/logo.png" alt="Vertex Hub" class="h-logo" />
+                        <img src="/api/logo.png" alt="The Loris Hub" class="h-logo" />
                         <div>
                             <div class="h-title">${escapeHtml(d.office_name || SLUG)}</div>
                             <div class="h-sub">Weekly Sign-ups Snapshot · Public View</div>
@@ -714,7 +714,7 @@ _BELLS_PAGE_HTML = r"""<!DOCTYPE html>
                     </div>
                 `)}
 
-                <div class="footer-note">Data refreshes every visit. Shared via Vertex Hub · Last loaded at ${new Date().toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit', timeZone: APP_TZ })}</div>
+                <div class="footer-note">Data refreshes every visit. Shared via The Loris Hub · Last loaded at ${new Date().toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit', timeZone: APP_TZ })}</div>
             `;
 
             document.getElementById('lockBtn').addEventListener('click', clearCode);

@@ -23,16 +23,16 @@ import {
 // on brand). Tapping an empty slot creates an item there.
 
 export const CAL = {
-  canvas: '#0d2720',
-  panel: '#102d25',
-  line: 'rgba(240,244,233,0.07)',
-  lineStrong: 'rgba(240,244,233,0.13)',
-  text: '#f0f4e9',
-  muted: '#9fb8a8',
-  faint: 'rgba(159,184,168,0.55)',
-  lime: '#b7df58',
-  onLime: '#102d25',
-  todayCol: 'rgba(183,223,88,0.05)',
+  canvas: '#0a1e37',
+  panel: '#0c2340',
+  line: 'rgba(238,244,250,0.07)',
+  lineStrong: 'rgba(238,244,250,0.13)',
+  text: '#eef4fa',
+  muted: '#a0b1c6',
+  faint: 'rgba(160,177,198,0.55)',
+  lime: '#22d0ec',
+  onLime: '#0c2340',
+  todayCol: 'rgba(34,208,236,0.05)',
 };
 
 const GUTTER = 50;
@@ -243,7 +243,7 @@ function EventChip({ it, iso, top, height, dim, onPress, onToggleDone }: {
   const personal = isPersonal(b);
   const task = b.kind === 'task';
   const done = isDone(b, iso);
-  const fill = b.color || '#2c5a26';
+  const fill = b.color || '#1f53ae';
   const fg = personal ? CAL.text : textOn(fill);
   const short = height < 22;
   const lines = Math.max(1, Math.floor((height - 6) / 13));
@@ -255,7 +255,7 @@ function EventChip({ it, iso, top, height, dim, onPress, onToggleDone }: {
         {
           top: top + 1, height: height - 2,
           left: `${it.left * 100}%` as any, width: `${it.width * 100}%` as any,
-          backgroundColor: personal ? 'rgba(16,45,37,0.92)' : fill,
+          backgroundColor: personal ? 'rgba(12,35,64,0.92)' : fill,
           borderColor: personal ? fill : 'rgba(255,255,255,0.10)',
           borderLeftColor: personal ? fill : 'rgba(255,255,255,0.35)',
         },
@@ -290,26 +290,26 @@ function EventChip({ it, iso, top, height, dim, onPress, onToggleDone }: {
 }
 
 const s = StyleSheet.create({
-  canvas: { flex: 1, backgroundColor: CAL.canvas, borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(183,223,88,0.10)' },
+  canvas: { flex: 1, backgroundColor: CAL.canvas, borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(34,208,236,0.10)' },
   headRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: CAL.lineStrong, backgroundColor: CAL.panel },
   headCell: { flex: 1, alignItems: 'center', paddingTop: 6, minWidth: 0 },
   headCellSep: { borderLeftWidth: 1, borderLeftColor: CAL.line },
   headTap: { alignItems: 'center', paddingHorizontal: 8, borderRadius: 10 },
   headDow: { fontFamily: fonts.mono, fontSize: 10, letterSpacing: 1.2, color: CAL.muted },
   headNum: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
-  headNumToday: { backgroundColor: CAL.lime, boxShadow: '0 0 14px rgba(183,223,88,0.45)' } as any,
+  headNumToday: { backgroundColor: CAL.lime, boxShadow: '0 0 14px rgba(34,208,236,0.45)' } as any,
   headNumText: { fontFamily: fonts.bodyBold, fontSize: 16, color: CAL.text, fontVariant: ['tabular-nums'] as any },
   headLabel: { fontFamily: fonts.bodySemibold, fontSize: 10, color: CAL.lime, marginTop: 1, height: 14, paddingHorizontal: 4 },
   laneHeadRow: { flexDirection: 'row', alignSelf: 'stretch', marginTop: 4, borderTopWidth: 1, borderTopColor: CAL.line },
   laneHead: { flex: 1, alignItems: 'center', paddingVertical: 4, minWidth: 0 },
-  laneHeadMine: { backgroundColor: 'rgba(183,223,88,0.10)', borderBottomWidth: 2, borderBottomColor: CAL.lime },
+  laneHeadMine: { backgroundColor: 'rgba(34,208,236,0.10)', borderBottomWidth: 2, borderBottomColor: CAL.lime },
   laneHeadText: { fontFamily: fonts.mono, fontSize: 9.5, letterSpacing: 0.4, color: CAL.muted },
 
   hour: { position: 'absolute', right: 8, fontFamily: fonts.mono, fontSize: 10, color: CAL.faint },
   col: { flex: 1, position: 'relative', minWidth: 0 },
   colSep: { borderLeftWidth: 1, borderLeftColor: CAL.line },
   hLine: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: CAL.line },
-  hHalf: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: 'rgba(240,244,233,0.03)' },
+  hHalf: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: 'rgba(238,244,250,0.03)' },
 
   chip: {
     position: 'absolute', borderRadius: 6, paddingHorizontal: 4, paddingVertical: 2,
@@ -317,7 +317,7 @@ const s = StyleSheet.create({
     boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
   } as any,
   chipPersonal: { borderStyle: 'dashed', borderLeftWidth: 3 },
-  chipHover: { boxShadow: '0 0 0 1px rgba(183,223,88,0.6), 0 6px 16px rgba(0,0,0,0.35)', zIndex: 5 } as any,
+  chipHover: { boxShadow: '0 0 0 1px rgba(34,208,236,0.6), 0 6px 16px rgba(0,0,0,0.35)', zIndex: 5 } as any,
   chipTitle: { fontFamily: fonts.bodyBold, fontSize: 11.5, lineHeight: 14 },
   chipTitleSmall: { fontSize: 10.5, lineHeight: 12.5 },
   chipTime: { fontFamily: fonts.mono, fontSize: 9.5, opacity: 0.85, marginTop: 1 },
@@ -326,6 +326,6 @@ const s = StyleSheet.create({
   absent: { position: 'absolute', top: 12, left: 0, right: 0, alignItems: 'center', gap: 4 },
   absentText: { fontFamily: fonts.bodySemibold, fontSize: 11, color: CAL.muted },
 
-  nowLine: { position: 'absolute', left: 0, right: 0, height: 2, backgroundColor: CAL.lime, zIndex: 10, boxShadow: '0 0 8px rgba(183,223,88,0.7)' } as any,
+  nowLine: { position: 'absolute', left: 0, right: 0, height: 2, backgroundColor: CAL.lime, zIndex: 10, boxShadow: '0 0 8px rgba(34,208,236,0.7)' } as any,
   nowDot: { position: 'absolute', left: -5, top: -4, width: 10, height: 10, borderRadius: 5, backgroundColor: CAL.lime },
 });

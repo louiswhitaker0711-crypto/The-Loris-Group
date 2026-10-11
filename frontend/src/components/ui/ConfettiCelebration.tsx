@@ -56,7 +56,7 @@ export const ConfettiCelebration = forwardRef<ConfettiCelebrationHandle, Props>(
           fadeOut
           autoStart
           fallSpeed={2800}
-          colors={['#b7df58', '#8caf38', '#3a7a56', '#e7b65c', '#f0f4e9', '#22d3ee']}
+          colors={['#22d0ec', '#0a9bcb', '#2864d9', '#e7b65c', '#eef4fa', '#22d3ee']}
           ref={cannonRef}
         />
       )}

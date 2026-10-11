@@ -118,7 +118,7 @@ export function CenterNoticeHost() {
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(5, 15, 11, 0.45)',
+    backgroundColor: 'rgba(5, 12, 21, 0.45)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 32,

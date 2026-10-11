@@ -45,7 +45,7 @@ export function reservePdfTab(): Window | null {
         '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">' +
         '<title>Opening…</title><body style="margin:0;display:flex;align-items:center;' +
         'justify-content:center;height:100vh;font:15px -apple-system,system-ui,sans-serif;' +
-        'color:#6b6478;background:#f4f7ec">Opening…</body>'
+        'color:#6b6478;background:#edf4fb">Opening…</body>'
       );
     }
     return w;

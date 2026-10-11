@@ -48,15 +48,15 @@ const MAX_TABS = 8;
 const HOME_KEY = 'home';
 
 const C = {
-  side: '#0b211c',
-  sideEdge: 'rgba(183,223,88,0.10)',
-  text: '#e8efe3',
-  muted: '#9fb8a8',
-  faint: 'rgba(159,184,168,0.6)',
-  lime: '#b7df58',
-  onLime: '#102d25',
-  hover: 'rgba(240,244,233,0.06)',
-  activeBg: 'rgba(183,223,88,0.12)',
+  side: '#081a30',
+  sideEdge: 'rgba(34,208,236,0.10)',
+  text: '#e4ecf4',
+  muted: '#a0b1c6',
+  faint: 'rgba(160,177,198,0.6)',
+  lime: '#22d0ec',
+  onLime: '#0c2340',
+  hover: 'rgba(238,244,250,0.06)',
+  activeBg: 'rgba(34,208,236,0.12)',
 };
 
 // ── Insets ───────────────────────────────────────────────────────────────────
@@ -243,7 +243,7 @@ function Sidebar({ mode, inDrawer, pinned, more, activeId, unread, onToggle, top
 
   return (
     <View style={[s.side, inDrawer && { flex: 1 }, { width: rail ? RAIL_W : inDrawer ? '100%' : SIDE_W, paddingTop: topInset }]}>
-      <LinearGradient pointerEvents="none" colors={['rgba(183,223,88,0.10)', 'rgba(183,223,88,0)']} style={s.sideGlow} />
+      <LinearGradient pointerEvents="none" colors={['rgba(34,208,236,0.10)', 'rgba(34,208,236,0)']} style={s.sideGlow} />
 
       <View style={[s.brand, rail && s.brandRail]}>
         <Pressable onPress={() => go('/(tabs)')} style={s.brandMark} accessibilityLabel="Home">
@@ -433,7 +433,7 @@ function TabChip({ t, active, pinned, phone, page, text, onPress, onClose, onLay
       testID={`tab-${t.key}`}
     >
       {active && <View style={s.tabTopLine} />}
-      <Ionicons name={active ? filledIcon(t.icon) : t.icon} size={15} color={active ? (isDarkHex(page) ? C.lime : '#244c3b') : C.muted} />
+      <Ionicons name={active ? filledIcon(t.icon) : t.icon} size={15} color={active ? (isDarkHex(page) ? C.lime : '#1d4fa8') : C.muted} />
       <Text style={[s.tabText, { color: active ? text : C.muted }]} numberOfLines={1}>{t.label}</Text>
       {!pinned && (
         <Pressable
@@ -492,12 +492,12 @@ const s = StyleSheet.create({
   moreHead: { flexDirection: 'row', alignItems: 'center', marginTop: 14, marginBottom: 2, paddingRight: 10, minHeight: 28 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, height: 42, paddingHorizontal: 12, borderRadius: 10, marginBottom: 2 },
   rowActive: { backgroundColor: C.activeBg },
-  rowLabel: { flex: 1, fontFamily: fonts.body, fontSize: 14, color: '#cdd9cf' },
-  activeBar: { position: 'absolute', left: -10, top: 9, bottom: 9, width: 3, borderRadius: 2, backgroundColor: C.lime, boxShadow: '0 0 10px rgba(183,223,88,0.8)' } as any,
+  rowLabel: { flex: 1, fontFamily: fonts.body, fontSize: 14, color: '#cdd6de' },
+  activeBar: { position: 'absolute', left: -10, top: 9, bottom: 9, width: 3, borderRadius: 2, backgroundColor: C.lime, boxShadow: '0 0 10px rgba(34,208,236,0.8)' } as any,
   railItem: { alignItems: 'center', justifyContent: 'center', height: 56, borderRadius: 12, marginBottom: 4, gap: 3 },
   railLabel: { fontFamily: fonts.bodySemibold, fontSize: 9.5, color: C.muted, maxWidth: RAIL_W - 14 },
   railRule: { height: 1, backgroundColor: C.sideEdge, marginVertical: 6, marginHorizontal: 8 },
-  tip: { position: 'absolute', left: RAIL_W - 4, top: 14, backgroundColor: '#1c4436', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(183,223,88,0.25)', zIndex: 99, boxShadow: '0 8px 20px rgba(0,0,0,0.35)' } as any,
+  tip: { position: 'absolute', left: RAIL_W - 4, top: 14, backgroundColor: '#163e7a', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(34,208,236,0.25)', zIndex: 99, boxShadow: '0 8px 20px rgba(0,0,0,0.35)' } as any,
   tipText: { fontFamily: fonts.bodySemibold, fontSize: 12, color: C.text, whiteSpace: 'nowrap' } as any,
   foot: { borderTopWidth: 1, borderTopColor: C.sideEdge, padding: 10, gap: 4 },
   me: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 8, borderRadius: 12 },
@@ -517,10 +517,10 @@ const s = StyleSheet.create({
   badgeText: { fontFamily: fonts.bodyBold, fontSize: 10.5, lineHeight: 13, color: '#ffffff', fontVariant: ['tabular-nums'] as any },
   tab: { flexDirection: 'row', alignItems: 'center', gap: 7, height: TAB_H - 4, paddingLeft: 12, paddingRight: 6, marginRight: 2, borderTopLeftRadius: 10, borderTopRightRadius: 10, maxWidth: 220, minWidth: 0 },
   tabPhone: { height: 40, paddingLeft: 10 },
-  tabTopLine: { position: 'absolute', left: 10, right: 10, top: 0, height: 2, borderRadius: 1, backgroundColor: C.lime, boxShadow: '0 0 8px rgba(183,223,88,0.7)' } as any,
+  tabTopLine: { position: 'absolute', left: 10, right: 10, top: 0, height: 2, borderRadius: 1, backgroundColor: C.lime, boxShadow: '0 0 8px rgba(34,208,236,0.7)' } as any,
   tabText: { fontFamily: fonts.bodySemibold, fontSize: 12.5, flexShrink: 1 },
   tabClose: { width: 22, height: 22, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
 
-  backdrop: { backgroundColor: 'rgba(5,18,14,0.55)' },
+  backdrop: { backgroundColor: 'rgba(6,14,24,0.55)' },
   drawer: { position: 'absolute', left: 0, top: 0, bottom: 0, boxShadow: '12px 0 40px rgba(0,0,0,0.45)' } as any,
 });

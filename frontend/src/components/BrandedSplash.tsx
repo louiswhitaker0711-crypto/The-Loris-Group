@@ -9,10 +9,10 @@ import { DotField } from './ui/Decor';
 import { VertexLogo } from './ui/VertexMark';
 import { BrandLoader } from './ui/BrandLoader';
 
-// Vertex brand splash — the logo on a forest (or paper) surface, halftone
+// Brand splash — the logo on a dark (or paper) surface, halftone
 // dot fields in the corners, gradient organisation pill.
-const DARK_BG  = '#061410';   // = darkColors.page (the abyss the PageField paints)
-const LIGHT_BG = '#f0f4e9';   // = lightColors.page — no colour jump when the app mounts
+const DARK_BG  = '#060e1a';   // = darkColors.page (the abyss the PageField paints)
+const LIGHT_BG = '#eef4fa';   // = lightColors.page — no colour jump when the app mounts
 
 export function BrandedSplash() {
   const { effective } = useTheme();
@@ -47,9 +47,9 @@ export function BrandedSplash() {
       <DotField size={240} opacity={dark ? 0.22 : 0.16} corner="top-right" style={{ top: 0, right: 0 }} />
       <DotField size={280} opacity={dark ? 0.18 : 0.12} corner="bottom-left" style={{ bottom: 0, left: 0 }} />
 
-      {/* The Vertex logo: lime on forest at night, brand green on paper */}
+      {/* The logo in its own gradient, on the dark or light page */}
       <Animated.View style={[styles.logoWrap, { transform: [{ scale: pulse }] }]}>
-        <VertexLogo width={240} color={dark ? brand.lime : brand.mid} />
+        <VertexLogo width={240} />
       </Animated.View>
 
       {/* Wordmark */}

@@ -331,8 +331,8 @@ export default function MyProgressScreen() {
             stretches on overscroll, and the journey hero rides up over its
             bottom edge. Decoration is static (no loops): a glow + line cube. */}
         <EditorialHero variant="ink" scrollY={scrollY} overlapNext={22}>
-          <GlowOrb size={170} color="#8caf38" opacity={isDark ? 0.5 : 0.4} style={{ top: -30, right: -18 }} />
-          <DotField size={120} color="#b7df58" opacity={isDark ? 0.3 : 0.22} corner="top-right" style={{ right: 0, top: 0 }} />
+          <GlowOrb size={170} color="#0a9bcb" opacity={isDark ? 0.5 : 0.4} style={{ top: -30, right: -18 }} />
+          <DotField size={120} color="#22d0ec" opacity={isDark ? 0.3 : 0.22} corner="top-right" style={{ right: 0, top: 0 }} />
           <View style={styles.profileRow}>
             <HexFrame size={76}>
               <Text style={styles.avatarText}>{initial}</Text>

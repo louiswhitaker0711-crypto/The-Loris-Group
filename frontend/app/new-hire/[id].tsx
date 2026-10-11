@@ -616,7 +616,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     fontWeight: '600',
   },
   actionButtonAccent: {
-    backgroundColor: '#EAF2DA',
+    backgroundColor: '#dbe9f6',
     borderWidth: 1,
     borderColor: colors.accent,
   },

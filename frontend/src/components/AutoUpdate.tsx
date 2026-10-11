@@ -159,7 +159,7 @@ const styles = StyleSheet.create({
   wrap: { position: 'absolute', left: 0, right: 0, bottom: 104, alignItems: 'center', zIndex: 4000 },
   pill: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: 'rgba(11, 22, 17, 0.94)',
+    backgroundColor: 'rgba(8, 19, 33, 0.94)',
     borderColor: 'rgba(255, 255, 255, 0.18)', borderWidth: 1,
     borderRadius: 999, paddingVertical: 9, paddingLeft: 14, paddingRight: 10,
     shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },

@@ -329,7 +329,7 @@ export default function NotificationsScreen() {
                       <Switch
                         value={c.enabled}
                         onValueChange={(next) => togglePref(c.key, next)}
-                        trackColor={{ false: '#91B69E', true: colors.primary }}
+                        trackColor={{ false: '#8ea8c8', true: colors.primary }}
                         thumbColor="#fff"
                         testID={`pref-switch-${c.key}`}
                       />

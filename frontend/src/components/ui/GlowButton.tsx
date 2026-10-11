@@ -51,7 +51,7 @@ export type GlowButtonProps = {
 // White 16px bold label is "large text" → needs ≥3:1; every stop here clears it.
 const GREEN_GRADIENT = ['#0d9f6e', '#059669', '#047857'] as const;
 const GLOW_SHADOW: Record<GlowButtonTone, string> = {
-  gradient: '0 8px 18px rgba(58,122,86,0.45)',
+  gradient: '0 8px 18px rgba(40,100,217,0.45)',
   green: '0 8px 18px rgba(16,185,129,0.45)',
 };
 const DEFAULT_RADIUS = 16;

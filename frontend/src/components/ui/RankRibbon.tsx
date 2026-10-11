@@ -33,12 +33,12 @@ export type RankRibbonProps = {
   style?: StyleProp<ViewStyle>;
 };
 
-const INK = '#0b211c';
+const INK = '#081a30';
 const PAD_X = 14;                       // 28 px total = the spec's "width + 28"
 const SIZES = { sm: { h: 22, font: 10 }, md: { h: 26, font: 11 } } as const;
 
 const TINTS: Record<RankRibbonTint, { stops: readonly string[]; text: string }> = {
-  purple: { stops: ['#3a7a56', '#2f6a4b', '#244c3b'], text: '#ffffff' }, // white 5.1 / 6.6 / 9.0
+  purple: { stops: ['#2864d9', '#225bc3', '#1d4fa8'], text: '#ffffff' }, // white 5.1 / 6.6 / 9.0
   gold:   { stops: GRADIENT_GOLD,                     text: INK },       // ink 16.7 / 11.6 / 5.9
   green:  { stops: ['#0b8457', '#047857', '#065f46'], text: '#ffffff' }, // white 4.7 / 5.5 / 7.7
   amber:  { stops: ['#fcd34d', '#f59e0b', '#d97706'], text: INK },       // ink 13.2 / 8.9 / 6.0

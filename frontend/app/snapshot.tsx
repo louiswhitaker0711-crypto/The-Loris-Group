@@ -341,7 +341,7 @@ function Section({ title, children, colors }: any) {
 }
 
 function LeaderRow({ rank, name, primary, secondary, styles, colors, accent }: any) {
-  const rankColor = rank === 1 ? '#f59e0b' : rank === 2 ? '#6B8070' : rank === 3 ? '#b45309' : (accent || colors.primary);
+  const rankColor = rank === 1 ? '#f59e0b' : rank === 2 ? '#6a7b90' : rank === 3 ? '#b45309' : (accent || colors.primary);
   return (
     <View style={styles.leaderRow}>
       <View style={[styles.rankBadge, { backgroundColor: rankColor }]}>

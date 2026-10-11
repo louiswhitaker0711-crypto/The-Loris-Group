@@ -550,7 +550,7 @@ export function SalesPathPanel({ path, meta, viewerIsCoach, viewerIsAdmin, targe
                       >
                         <DepthCard
                           style={[styles.boardRow, isMe && styles.boardRowMe]}
-                          fill={isMe ? (colors.primary || '#244C3B') + '1F' : colors.surfaceAlt}
+                          fill={isMe ? (colors.primary || '#1d4fa8') + '1F' : colors.surfaceAlt}
                         >
                           <Text style={styles.boardRank}>{RANK_MEDALS[r.rank - 1] || `#${r.rank}`}</Text>
                           <Text style={[styles.boardName, isMe && { color: colors.primary }]} numberOfLines={1}>
@@ -619,14 +619,14 @@ const createStyles = (colors: any) => StyleSheet.create({
   introLink: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 12 },
   introLinkWell: {
     width: 24, height: 24, borderRadius: 8, alignItems: 'center', justifyContent: 'center',
-    boxShadow: '0 4px 10px -3px rgba(58,122,86,0.55)',
+    boxShadow: '0 4px 10px -3px rgba(40,100,217,0.55)',
   },
   introLinkText: { fontFamily: fonts.bodyBold, fontSize: 12.5, color: colors.primary },
 
   // Form — 2×2 glowing stat tiles
   formGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   // surfaceAlt (the tile/chip token), never `surface`: in dark, surface
-  // (#0C241D) is DARKER than the card hosting it (#102D25) and the tiles sank
+  // (#0b1c30) is DARKER than the card hosting it (#0c2340) and the tiles sank
   // into wells — the exact pattern §2.3 exists to kill. surfaceAlt raises in
   // dark and reads as a lavender tile on the white card in light.
   formChip: {
@@ -642,8 +642,8 @@ const createStyles = (colors: any) => StyleSheet.create({
 
   nextBox: {
     marginTop: 12, padding: 12, paddingLeft: 15, borderRadius: 14, overflow: 'hidden',
-    backgroundColor: (colors.primary || '#244C3B') + '12',
-    borderWidth: 1, borderColor: (colors.primary || '#244C3B') + '30',
+    backgroundColor: (colors.primary || '#1d4fa8') + '12',
+    borderWidth: 1, borderColor: (colors.primary || '#1d4fa8') + '30',
   },
   nextAccent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 3 },
   nextTitle: { fontFamily: fonts.display, fontSize: 13.5, color: colors.primary, letterSpacing: -0.1 },
@@ -692,7 +692,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   // `fill` carries the face colour (DepthCard strips backgroundColor), so the
   // "you" row only has to say so on the rim.
-  boardRowMe: { borderColor: (colors.primary || '#244C3B') + '66' },
+  boardRowMe: { borderColor: (colors.primary || '#1d4fa8') + '66' },
   podiumRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: 10, marginBottom: 12, marginTop: 6 },
   podiumCol: { alignItems: 'center', width: 92 },
   podiumEmoji: { fontSize: 16 },

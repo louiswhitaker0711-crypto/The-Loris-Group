@@ -39,12 +39,12 @@ const PALETTE: TeamTint[] = [
   { border: '#FB7185', bg: '#FFF1F2', pill: '#FFE4E6', text: '#BE123C' }, // rose
   { border: '#22d3ee', bg: '#ecfeff', pill: '#cffafe', text: '#0e7490' }, // cyan
   { border: '#fb923c', bg: '#fff7ed', pill: '#ffedd5', text: '#c2410c' }, // orange
-  { border: '#8FA596', bg: '#F5F8F3', pill: '#E3EBE0', text: '#3D5446' }, // sage (fallback)
+  { border: '#90a0b3', bg: '#f5f8fb', pill: '#e1e8ef', text: '#3b4e66' }, // sage (fallback)
 ];
 
 // Dark: same hue per index, roles flipped. `bg` is a deep tinted panel that
-// still reads as RAISED above the #061410 abyss; `pill` is a deeper chip of
-// the same hue; `text` is the pale tone (≥ 11:1 on the #102d25 card,
+// still reads as RAISED above the #060e1a abyss; `pill` is a deeper chip of
+// the same hue; `text` is the pale tone (≥ 11:1 on the #0c2340 card,
 // ≥ 8.7:1 on its own pill). `border` keeps the vivid hue — it is a rail /
 // dot / rule, never type (#22d3ee is decoration only, never text).
 const PALETTE_DARK: TeamTint[] = [
@@ -55,7 +55,7 @@ const PALETTE_DARK: TeamTint[] = [
   { border: '#FB7185', bg: '#2E1419', pill: '#4A1D26', text: '#FECDD3' }, // rose
   { border: '#22D3EE', bg: '#0E2A33', pill: '#12414C', text: '#A5F3FC' }, // cyan
   { border: '#FB923C', bg: '#2E1D12', pill: '#4A2C13', text: '#FED7AA' }, // orange
-  { border: '#8FA596', bg: '#16241E', pill: '#243A30', text: '#D5E2D2' }, // sage (fallback)
+  { border: '#90a0b3', bg: '#162333', pill: '#21344c', text: '#d1dde8' }, // sage (fallback)
 ];
 
 // Hash a string into a small unsigned int.

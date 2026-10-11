@@ -173,7 +173,7 @@ const createStyles = (c: any) => StyleSheet.create({
   card: { borderRadius: 16, padding: 14 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
-  iconWell: { width: 26, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 10px rgba(58,122,86,0.35)' },
+  iconWell: { width: 26, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 10px rgba(40,100,217,0.35)' },
   title: { fontFamily: fonts.displayWide, fontSize: 12.5, letterSpacing: 0.9, textTransform: 'uppercase', color: c.text },
   dayTag: { fontFamily: fonts.mono, fontSize: 10.5, color: c.textMuted, marginLeft: 2 },
   collapseBtn: { padding: 2 },

@@ -91,7 +91,7 @@ const FALLBACK_META = {
 // band hue belongs. `label` is the same band read as TYPE, and type has to
 // clear 4.5:1 on the card face (spec §6.5) — the vivid greens/ambers do not
 // (GREEN #22c55e is 2.1:1 on the washed paper face), so the label darkens in
-// light and lightens in dark. Measured on the real faces (#FFFFFF / #102D25
+// light and lightens in dark. Measured on the real faces (#FFFFFF / #0c2340
 // under each wash): 5.8/4.6/4.7/5.7 light, 12.0/9.1/8.8/5.9 dark.
 const TLS = [
   { name: 'SUPER GREEN', band: `${WEEK_BAND_LABELS.super_green.range} sign-ups a week`, color: '#15803d', bg: '#15803d18',
@@ -120,7 +120,7 @@ const MEASURED = [
 const HERO_LEDE = 'There are two ladders here. The Cycle of Development ladder — the COD — is about leading — and you can climb that one fast. This one is about selling: how good you actually are at the doors, from your first sign-up to the very top. It never stops, whatever your title is.';
 
 // Ink glyph colour on light coin metals (HexCoin's numeral contrast rule).
-const COIN_INK = '#0b211c';
+const COIN_INK = '#081a30';
 
 // Hero cube (spec §1.2 "the brand cube is a live 3D object", §3.3 "Sales Path
 // intro hero — 150 rubik").

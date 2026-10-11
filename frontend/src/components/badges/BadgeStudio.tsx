@@ -534,7 +534,7 @@ function FitSlider({ value, min, max, step, height = 32, onChange }: {
       value={value}
       onValueChange={onChange}
       minimumTrackTintColor={colors.primary}
-      maximumTrackTintColor="#BED393"
+      maximumTrackTintColor="#65e2f5"
       thumbTintColor={colors.primary}
     />
   );
@@ -781,7 +781,7 @@ export function CreateBadgeModal({ onClose, onCreated, editBadge, prefill }: {
               {activePhotoUri ? (
                 <Image source={{ uri: activePhotoUri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
               ) : (
-                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#EDF3E4' }}>
+                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#e4eef8' }}>
                   <Ionicons name="person-outline" size={48} color={colors.textMuted} />
                 </View>
               )}
@@ -1136,7 +1136,7 @@ export function ExportOptionsModal({ badges, onClose, onDone }: {
       // native keeps PDF → share.
       await exportPdfFromHtml(
         html,
-        { dialogTitle: `${badges.length} ${APP_SHORT_NAME} Badge${badges.length > 1 ? 's' : ''}`, filename: 'vertex-badges.pdf' },
+        { dialogTitle: `${badges.length} ${APP_SHORT_NAME} Badge${badges.length > 1 ? 's' : ''}`, filename: 'badges.pdf' },
         printWin,
       );
       setWorking(false); setProgress('');
@@ -1193,7 +1193,7 @@ export function ExportOptionsModal({ badges, onClose, onDone }: {
                 style={{
                   width: previewWidth,
                   padding: 10,
-                  backgroundColor: '#F7FAF1',
+                  backgroundColor: '#f4f8fc',
                   borderRadius: 10,
                   borderWidth: 1,
                   borderColor: colors.border,

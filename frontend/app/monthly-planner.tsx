@@ -293,7 +293,7 @@ export default function MonthlyPlannerScreen() {
           {savingState === 'saving' && <View style={s.savePill}><Text style={s.savePillText}>Saving…</Text></View>}
           {savingState === 'saved' && <View style={[s.savePill, { backgroundColor: '#dcfce7' }]}><Text style={[s.savePillText, { color: '#166534' }]}>Saved</Text></View>}
           {!canEdit && q.data?.exists && (
-            <View style={[s.savePill, { backgroundColor: '#EDF3E4' }]}>
+            <View style={[s.savePill, { backgroundColor: '#e4eef8' }]}>
               <Ionicons name="lock-closed" size={12} color={colors.textMuted} />
               <Text style={[s.savePillText, { color: colors.textMuted }]}>{isOwner ? 'Locked' : 'Read only'}</Text>
             </View>
@@ -805,7 +805,7 @@ function BudgetSection({ budget, canEdit, onChange }: { budget: any; canEdit: bo
           <Text style={s.summaryLabel}>Total £ needed (Needs + Wants)</Text>
           <Text style={s.summaryValue}>{formatMoney(tmN + tmW, 2)}</Text>
         </View>
-        <View style={[s.summaryRow, { backgroundColor: 'rgba(58, 122, 86,0.08)', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 10, marginTop: 4 }]}>
+        <View style={[s.summaryRow, { backgroundColor: 'rgba(40, 100, 217,0.08)', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 10, marginTop: 4 }]}>
           <Text style={[s.summaryLabel, { color: colors.primary, fontWeight: '800' }]}>Total sign-ups required to break even</Text>
           <AnimatedNumber value={totalSales} decimals={0} style={[s.summaryValue, { color: colors.primary, fontSize: 18 }]} />
         </View>
@@ -920,7 +920,7 @@ const createS = (colors: any) => StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
   title: { fontFamily: fonts.bodyBold, fontSize: 22, color: colors.text },
   subtitle: { fontFamily: fonts.bodySemibold, fontSize: 13, color: colors.textSecondary },
-  savePill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 5, paddingHorizontal: 10, borderRadius: 999, backgroundColor: 'rgba(58, 122, 86,0.1)' },
+  savePill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 5, paddingHorizontal: 10, borderRadius: 999, backgroundColor: 'rgba(40, 100, 217,0.1)' },
   savePillText: { fontFamily: fonts.bodySemibold, fontSize: 11, color: colors.primary },
   printBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 12, borderRadius: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border },
   printBtnText: { fontFamily: fonts.bodySemibold, fontSize: 12.5, color: colors.text },
@@ -967,7 +967,7 @@ const createS = (colors: any) => StyleSheet.create({
   tblTotal: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: colors.border },
   tblTotalLabel: { fontFamily: fonts.bodySemibold, fontSize: 11, color: colors.textMuted },
   tblTotalNum: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.text },
-  addRowBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 8, marginTop: 6, borderRadius: 8, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.border, backgroundColor: 'rgba(58, 122, 86,0.04)' },
+  addRowBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 8, marginTop: 6, borderRadius: 8, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.border, backgroundColor: 'rgba(40, 100, 217,0.04)' },
   addRowText: { fontFamily: fonts.bodySemibold, fontSize: 12, color: colors.primary },
   swotGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   swotCell: { width: '48%', borderWidth: 2, borderRadius: 10, padding: 8, backgroundColor: colors.background },
@@ -986,7 +986,7 @@ const createS = (colors: any) => StyleSheet.create({
   gapPillText: { fontFamily: fonts.bodySemibold, fontSize: 12, color: colors.textMuted },
   gapPillTextActive: { color: colors.onPrimary },
   monthRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8 },
-  monthRowActive: { backgroundColor: 'rgba(58, 122, 86,0.08)' },
+  monthRowActive: { backgroundColor: 'rgba(40, 100, 217,0.08)' },
   monthRowText: { flex: 1, fontFamily: fonts.body, fontSize: 13, color: colors.text },
   learnRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 },
   learnInput: { minWidth: 0, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 6, paddingVertical: 7, paddingHorizontal: 8, fontFamily: fonts.body, fontSize: 12, color: colors.text },

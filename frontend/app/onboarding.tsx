@@ -138,7 +138,7 @@ const MONEY_RE = /(£[\d,]+(?:\.\d{1,2})?)/g;
 /** Coin diameter on the rail (spec §4: HexCoin 28). */
 const NODE = 28;
 /** Plum ink for glyphs on the green (done) and silver (upcoming) metals. */
-const NODE_INK = '#0b211c';
+const NODE_INK = '#081a30';
 /** Halo loop (spec §5 "skill-tree halo / current journey node"). */
 const HALO_MS = 1600;
 
@@ -320,7 +320,7 @@ export default function OnboardingScreen() {
   // the AA floor); darkening the plate takes white back to ~8:1.
   const onGlass = isDark ? '#ffffff' : colors.text;
   const popChip = isDark
-    ? { backgroundColor: 'rgba(8,20,14,0.34)', borderColor: 'rgba(255,255,255,0.36)' }
+    ? { backgroundColor: 'rgba(7,17,29,0.34)', borderColor: 'rgba(255,255,255,0.36)' }
     : null;
   // Proof-ladder chips sit on the INK card, so they use the glass recipe: the
   // light theme's near-white glass takes plum text, the dark theme's 6%-white

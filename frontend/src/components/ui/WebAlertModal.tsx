@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
   btnRow: {
     flexDirection: 'row',
     borderTopWidth: 1,
-    borderTopColor: '#DDE7D4',
+    borderTopColor: '#d3e0ed',
   },
   btnRowStacked: {
     flexDirection: 'column',

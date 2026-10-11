@@ -676,7 +676,7 @@ export default function ManualScreen() {
             <Reveal key={`kpi-las-${kpiSelectedDay}`} index={3}>
             <DepthCard sheen={false} style={styles.kpiCard}>
               <View style={styles.kpiCardHeader}>
-                <Ionicons name="shield-checkmark" size={18} color="#2F6A4B" />
+                <Ionicons name="shield-checkmark" size={18} color="#225bc3" />
                 <Text style={styles.kpiCardTitle}>Coach Assisted Sign-ups</Text>
               </View>
               <View style={styles.kpiFieldRow}>
@@ -1160,20 +1160,20 @@ export default function ManualScreen() {
 const createStyles = (colors: any) => {
   const isDark = String(colors.background).toLowerCase() !== '#ffffff';
   // Tinted card backgrounds — light pastels in light mode, translucent in dark
-  const blueBg    = isDark ? 'rgba(140, 175, 56, 0.12)' : '#F7FAF1';
-  const blueBdr   = isDark ? 'rgba(140, 175, 56, 0.30)' : '#E2EFC4';
-  const blueText  = isDark ? '#D5E9A6' : '#2F6A4B';
-  const blueChip  = isDark ? 'rgba(140, 175, 56, 0.20)' : '#EAF2DA';
-  const blueChipText = isDark ? '#E2EFC4' : '#56731B';
-  const purpleBg    = isDark ? 'rgba(58, 122, 86, 0.18)' : '#EAF2DA';
-  const purpleBdr   = isDark ? 'rgba(140, 175, 56, 0.40)' : '#AEC879';
-  const purpleText  = isDark ? '#AEC879' : '#2F6A4B';
-  const purpleDeepText = isDark ? '#D2E1B5' : '#244C3B';
-  const purpleInputBg = isDark ? 'rgba(58, 122, 86, 0.10)' : '#E7EFD7';
-  const purpleDot    = isDark ? '#8CAF38' : '#2F6A4B';
+  const blueBg    = isDark ? 'rgba(10, 155, 203, 0.12)' : '#f4f8fc';
+  const blueBdr   = isDark ? 'rgba(10, 155, 203, 0.30)' : '#c5ecf4';
+  const blueText  = isDark ? '#a0edf9' : '#225bc3';
+  const blueChip  = isDark ? 'rgba(10, 155, 203, 0.20)' : '#dbe9f6';
+  const blueChipText = isDark ? '#c5ecf4' : '#086381';
+  const purpleBg    = isDark ? 'rgba(40, 100, 217, 0.18)' : '#dbe9f6';
+  const purpleBdr   = isDark ? 'rgba(10, 155, 203, 0.40)' : '#2dd7f2';
+  const purpleText  = isDark ? '#2dd7f2' : '#225bc3';
+  const purpleDeepText = isDark ? '#a7eef9' : '#1d4fa8';
+  const purpleInputBg = isDark ? 'rgba(40, 100, 217, 0.10)' : '#d6e6f5';
+  const purpleDot    = isDark ? '#0a9bcb' : '#225bc3';
   // Spec 2.1: the new rgba tokens are never concatenated. This is the literal
   // glow lift shadow (same 0.45 / 0.65 alpha the glow token carries per theme).
-  const glowLift = isDark ? '0 6px 14px -6px rgba(140, 175, 56, 0.65)' : '0 6px 14px -6px rgba(140, 175, 56, 0.45)';
+  const glowLift = isDark ? '0 6px 14px -6px rgba(10, 155, 203, 0.65)' : '0 6px 14px -6px rgba(10, 155, 203, 0.45)';
   return StyleSheet.create({
   container: { flex: 1 },
   // Top chrome rides the page field (no white band) — the ink rails carry it.
@@ -1216,9 +1216,9 @@ const createStyles = (colors: any) => {
   readCatTick: { width: 16, height: 3, borderRadius: 1.5 },
   // Category kicker colour is split per theme because no single brand token
   // clears 4.5:1 on BOTH page fields (measured on the rendered glyph):
-  //   dark  page #061410: primary #7fa032 = 6.32:1, primaryDark #2f6a4b = 3.12:1
-  //   light page #F0F4E9: primaryDark #244c3b = 7.27:1 (4.35:1 at the darkest
-  //                       PageField blob), primary #2f6a4b = 5.30:1 (3.17:1 there)
+  //   dark  page #060e1a: primary #0c8eb9 = 6.32:1, primaryDark #225bc3 = 3.12:1
+  //   light page #eef4fa: primaryDark #1d4fa8 = 7.27:1 (4.35:1 at the darkest
+  //                       PageField blob), primary #225bc3 = 5.30:1 (3.17:1 there)
   // so each theme takes the token that is the stronger of the two on its own field.
   readCatKicker: { fontFamily: fonts.displayWide, fontSize: 10.5, color: isDark ? colors.primary : colors.primaryDark, letterSpacing: 1.3 },
   readCatRule: { flex: 1, height: 2, borderRadius: 1, opacity: 0.35 },

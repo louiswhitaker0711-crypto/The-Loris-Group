@@ -483,8 +483,8 @@ const createStyles = (colors: any) => StyleSheet.create({
   addModuleBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
     paddingVertical: 14, marginTop: 18, borderRadius: 10,
-    backgroundColor: (colors.primary || '#244C3B') + '12',
-    borderWidth: 1, borderColor: (colors.primary || '#244C3B') + '33', borderStyle: 'dashed',
+    backgroundColor: (colors.primary || '#1d4fa8') + '12',
+    borderWidth: 1, borderColor: (colors.primary || '#1d4fa8') + '33', borderStyle: 'dashed',
   },
   addModuleText: { color: colors.primary, fontSize: 13, fontWeight: '800' },
 });

@@ -283,7 +283,7 @@ function ThemedStatusBar() {
 
   // Web/PWA: keep the document chrome (safe-area bands, browser theme-color)
   // painted with the live theme's page field so the whole screen is one
-  // continuous background. The static #061410 in +html.tsx only covers the
+  // continuous background. The static #060e1a in +html.tsx only covers the
   // instant before React mounts.
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') return;

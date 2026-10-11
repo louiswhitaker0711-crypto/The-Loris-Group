@@ -65,12 +65,12 @@ type TabKey = 'week' | 'quality' | 'rates';
 const EC = {
   ink: brand.deep,
   surface: brand.forest,
-  raised: '#163a2d',
-  line: 'rgba(183,223,88,0.16)',
+  raised: '#10315d',
+  line: 'rgba(34,208,236,0.16)',
   lime: brand.lime,
-  green: '#8fc13a',
-  text: '#eef4e6',
-  muted: '#a6baa8',
+  green: '#0ea5d7',
+  text: '#e7f0f9',
+  muted: '#a8b6c7',
   red: '#f1928c',
   teal: '#4fd1c5',
 };
@@ -339,7 +339,7 @@ function WeekCalculator({ fees, weekEnding, bells, hasBells, monthSignUps, saved
             value={rate}
             onValueChange={(v) => { setRateText(null); setRate(v); }}
             minimumTrackTintColor={below ? EC.red : EC.lime}
-            maximumTrackTintColor="rgba(238,244,230,0.18)"
+            maximumTrackTintColor="rgba(231,240,249,0.18)"
             thumbTintColor={below ? EC.red : EC.lime}
             accessibilityLabel="Call completion rate slider"
             testID="input-call-completion-rate"
@@ -509,7 +509,7 @@ function QualityCalculator({ fees, nowMonth, saved, update }: {
             value={rate}
             onValueChange={(v) => save({ rate: Math.round(v) })}
             minimumTrackTintColor={passes ? EC.lime : EC.red}
-            maximumTrackTintColor="rgba(238,244,230,0.18)"
+            maximumTrackTintColor="rgba(231,240,249,0.18)"
             thumbTintColor={passes ? EC.lime : EC.red}
             accessibilityLabel="Quality rate, percent"
             testID="input-quality-rate"
@@ -829,7 +829,7 @@ function RatesEditor({ officeId }: { officeId?: string }) {
           onPress={() => setDraft(Object.fromEntries(Object.entries(DEFAULT_FEES).map(([k, v]) => [k, String(v)])))}
         >
           <Ionicons name="refresh" size={14} color={colors.text} />
-          <Text style={styles.linkBtnText}>Fill in the standard Vertex rates</Text>
+          <Text style={styles.linkBtnText}>Fill in the standard rates</Text>
         </Pressable>
         <Text style={styles.note}>
           Standard: £12 → £55, £15 and £20 → £60. Call completion under 70% takes £5 off per sign-up. Extra incentives: 12+ sign-ups in a week with an average age of 45+ and 85%+ call completion adds £50, 16+ adds £100, and 50+ in a month adds £100. Quality payments: 70% gate, £15 per supporter, paid 4 months later. Bells' fee estimates and everyone's Earnings Calculator use these straight away.
@@ -924,16 +924,16 @@ const createStyles = (colors: any) => StyleSheet.create({
   foot: { fontFamily: fonts.body, fontSize: 12, lineHeight: 17, color: colors.textMuted, marginTop: 4, marginBottom: 6 },
 
   // Hero
-  hero: { overflow: 'hidden', borderRadius: 24, padding: 26, backgroundColor: EC.ink, borderWidth: 1, borderColor: 'rgba(183,223,88,0.22)',
-    boxShadow: '0 22px 45px -28px rgba(16,32,15,0.55)' } as any,
+  hero: { overflow: 'hidden', borderRadius: 24, padding: 26, backgroundColor: EC.ink, borderWidth: 1, borderColor: 'rgba(34,208,236,0.22)',
+    boxShadow: '0 22px 45px -28px rgba(11,27,47,0.55)' } as any,
   heroRing: { position: 'absolute', width: 280, height: 280, right: -78, top: -92, borderRadius: 140, borderWidth: 1,
-    borderColor: 'rgba(183,223,88,0.14)', boxShadow: '0 0 0 42px rgba(183,223,88,0.04), 0 0 0 88px rgba(183,223,88,0.025)' } as any,
+    borderColor: 'rgba(34,208,236,0.14)', boxShadow: '0 0 0 42px rgba(34,208,236,0.04), 0 0 0 88px rgba(34,208,236,0.025)' } as any,
   kicker: { fontFamily: fonts.mono, fontSize: 10.5, letterSpacing: 1.8, textTransform: 'uppercase', color: EC.green },
-  heroTitle: { fontFamily: fonts.display, fontSize: 22, color: '#e5ecdf', marginTop: 14 },
+  heroTitle: { fontFamily: fonts.display, fontSize: 22, color: '#dfe8f1', marginTop: 14 },
   heroTotal: { fontFamily: fonts.display, fontSize: 76, lineHeight: 86, letterSpacing: -3.5, color: EC.lime, fontVariant: ['tabular-nums'] as any },
   heroBottom: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 24, rowGap: 6, marginTop: 16, paddingTop: 16,
-    borderTopWidth: 1, borderTopColor: 'rgba(183,223,88,0.18)' },
-  heroMeta: { fontFamily: fonts.body, fontSize: 12.5, color: '#b9c9b5' },
+    borderTopWidth: 1, borderTopColor: 'rgba(34,208,236,0.18)' },
+  heroMeta: { fontFamily: fonts.body, fontSize: 12.5, color: '#b8c5d6' },
   heroMetaStrong: { fontFamily: fonts.bodyBold, color: EC.text },
 
   // Panels
@@ -942,11 +942,11 @@ const createStyles = (colors: any) => StyleSheet.create({
   panelTitle: { fontFamily: fonts.display, fontSize: 20, lineHeight: 25, color: EC.text, marginTop: 5 },
   panelAside: { fontFamily: fonts.body, fontSize: 11.5, color: EC.muted },
   signupRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 84, paddingHorizontal: 20, paddingVertical: 14, borderTopWidth: 1, borderTopColor: EC.line },
-  signupRowAlt: { backgroundColor: 'rgba(183,223,88,0.03)' },
+  signupRowAlt: { backgroundColor: 'rgba(34,208,236,0.03)' },
   signupTitle: { fontFamily: fonts.display, fontSize: 26, color: EC.text },
   fieldTitle: { fontFamily: fonts.display, fontSize: 17, color: EC.text },
   signupSub: { fontFamily: fonts.body, fontSize: 11.5, lineHeight: 16, color: EC.muted, marginTop: 4 },
-  stepper: { flexDirection: 'row', alignItems: 'center', gap: 3, padding: 4, borderRadius: 14, backgroundColor: EC.ink, borderWidth: 1, borderColor: 'rgba(183,223,88,0.22)' },
+  stepper: { flexDirection: 'row', alignItems: 'center', gap: 3, padding: 4, borderRadius: 14, backgroundColor: EC.ink, borderWidth: 1, borderColor: 'rgba(34,208,236,0.22)' },
   stepBtn: { width: 44, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: EC.raised },
   stepValue: { minWidth: 46, textAlign: 'center', fontFamily: fonts.display, fontSize: 22, color: EC.text, fontVariant: ['tabular-nums'] as any },
   bellsRow: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 20, paddingVertical: 12, borderTopWidth: 1, borderTopColor: EC.line },
@@ -954,7 +954,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   bellsLink: { fontFamily: fonts.bodySemibold, fontSize: 12, color: EC.lime },
 
   rateHead: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingTop: 20 },
-  rateEntry: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, borderRadius: 13, backgroundColor: EC.ink, borderWidth: 1, borderColor: 'rgba(183,223,88,0.22)' },
+  rateEntry: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, borderRadius: 13, backgroundColor: EC.ink, borderWidth: 1, borderColor: 'rgba(34,208,236,0.22)' },
   rateInput: { width: 62, height: 46, textAlign: 'center', fontFamily: fonts.display, fontSize: 21, color: EC.text, outlineStyle: 'none' } as any,
   rateUnit: { fontFamily: fonts.bodySemibold, fontSize: 15, color: EC.muted },
   sliderWrap: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 18 },
@@ -965,12 +965,12 @@ const createStyles = (colors: any) => StyleSheet.create({
   scaleTick: { width: 2, height: 8, borderRadius: 1, backgroundColor: EC.lime, marginBottom: 2 },
   rateNote: { fontFamily: fonts.bodySemibold, fontSize: 12.5, lineHeight: 18, color: '#ffd9d6', backgroundColor: 'rgba(241,146,140,0.12)',
     borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, marginTop: 6, overflow: 'hidden' },
-  rateNoteClear: { color: EC.lime, backgroundColor: 'rgba(183,223,88,0.10)' },
-  rateNoteIdle: { color: EC.text, backgroundColor: 'rgba(238,244,230,0.07)' },
+  rateNoteClear: { color: EC.lime, backgroundColor: 'rgba(34,208,236,0.10)' },
+  rateNoteIdle: { color: EC.text, backgroundColor: 'rgba(231,240,249,0.07)' },
 
   gates: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 20, paddingTop: 14, paddingBottom: 6, borderTopWidth: 1, borderTopColor: EC.line },
-  gate: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: 'rgba(238,244,230,0.16)' },
-  gateMet: { borderColor: 'rgba(183,223,88,0.5)', backgroundColor: 'rgba(183,223,88,0.08)' },
+  gate: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: 'rgba(231,240,249,0.16)' },
+  gateMet: { borderColor: 'rgba(34,208,236,0.5)', backgroundColor: 'rgba(34,208,236,0.08)' },
   gateText: { fontFamily: fonts.bodySemibold, fontSize: 12, color: EC.muted },
   monthLine: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 18 },
   monthLineText: { flex: 1, fontFamily: fonts.body, fontSize: 12, lineHeight: 17, color: EC.muted },
@@ -985,7 +985,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   composition: { paddingHorizontal: 20, paddingTop: 6, paddingBottom: 20 },
   compositionLabel: { flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
   compositionText: { fontFamily: fonts.body, fontSize: 11.5, color: EC.muted },
-  track: { flexDirection: 'row', height: 12, borderRadius: 6, overflow: 'hidden', backgroundColor: 'rgba(238,244,230,0.10)' },
+  track: { flexDirection: 'row', height: 12, borderRadius: 6, overflow: 'hidden', backgroundColor: 'rgba(231,240,249,0.10)' },
   key: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginTop: 9 },
   keyItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   keyDot: { width: 9, height: 9, borderRadius: 5 },
@@ -1005,7 +1005,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   warnText: { flex: 1, fontFamily: fonts.bodySemibold, fontSize: 12.5, lineHeight: 18, color: '#ffd9d6' },
   summary: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 14, marginBottom: 14 },
   summaryTile: { flexGrow: 1, flexBasis: 150, padding: 15, borderRadius: 16, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border },
-  summaryBig: { flexBasis: 220, backgroundColor: EC.ink, borderColor: 'rgba(183,223,88,0.22)' },
+  summaryBig: { flexBasis: 220, backgroundColor: EC.ink, borderColor: 'rgba(34,208,236,0.22)' },
   summaryLabel: { fontFamily: fonts.mono, fontSize: 10, letterSpacing: 1.2, textTransform: 'uppercase', color: colors.textMuted },
   summaryValue: { fontFamily: fonts.display, fontSize: 32, letterSpacing: -1, color: colors.text, marginTop: 4, fontVariant: ['tabular-nums'] as any },
   summarySub: { fontFamily: fonts.body, fontSize: 11.5, color: colors.textMuted, marginTop: 2 },

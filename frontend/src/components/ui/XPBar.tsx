@@ -81,7 +81,7 @@ export type XPBarProps = {
    * dropped into a hero is right without the screen saying anything, and a bar
    * on a card is unchanged.
    *
-   * Why it matters: `trackBg` is a LIGHT-theme pale lilac (#DCE5D2), which on a
+   * Why it matters: `trackBg` is a LIGHT-theme pale lilac (#d1deeb), which on a
    * dark block reads as the FILLED portion — an empty bar looked 100 % charged
    * next to "0/6 lessons" on the Product Knowledge hero and "0/60 checks" on
    * the coaching hero. 'ink' cuts a dark groove instead, and works in BOTH
@@ -94,7 +94,7 @@ export type XPBarProps = {
 };
 
 const TIP_SIZE = 8;
-const TIP_COLOR = '#b7df58';
+const TIP_COLOR = '#22d0ec';
 const TIP_PERIOD_MS = 2400;                  // 1 → 1.4 → 1 (1200 ms each way)
 const CHARGE = { duration: MOTION.dur.charge, easing: MOTION.easeOut } as const;
 const VIEW_FRACTION = 0.9;                   // start when y < scroll + 90 % of the window
@@ -103,7 +103,7 @@ const SAFETY_MS = 4000;                      // screens that don't feed pageScro
 /** expo-linear-gradient wants a ≥2-stop tuple; tolerate a 1-stop array. */
 function toStops(stops: readonly string[]): readonly [string, string, ...string[]] {
   if (stops.length >= 2) return stops as unknown as readonly [string, string, ...string[]];
-  const c = stops[0] ?? '#8caf38';
+  const c = stops[0] ?? '#0a9bcb';
   return [c, c];
 }
 
@@ -310,7 +310,7 @@ const styles = StyleSheet.create({
     height: TIP_SIZE,
     borderRadius: TIP_SIZE / 2,
     backgroundColor: TIP_COLOR,
-    boxShadow: '0 0 8px rgba(183,223,88,0.6)',
+    boxShadow: '0 0 8px rgba(34,208,236,0.6)',
   },
 });
 

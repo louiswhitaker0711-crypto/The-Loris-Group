@@ -317,7 +317,7 @@ export async function exportPdfFromHtml(
   opts: { filename?: string; dialogTitle?: string; width?: number; height?: number; sizeToContent?: boolean; imageAsPdf?: boolean } = {},
   printWin?: Window | null,
 ): Promise<void> {
-  const { filename = 'vertex-document.pdf', dialogTitle = APP_NAME, width, height, sizeToContent, imageAsPdf } = opts;
+  const { filename = 'document.pdf', dialogTitle = APP_NAME, width, height, sizeToContent, imageAsPdf } = opts;
   if (Platform.OS === 'web') {
     if (printWin && !printWin.closed) { try { printWin.close(); } catch { /* ignore */ } }
     // Installed PWA / mobile: window.print() prints the app shell there, so
@@ -342,7 +342,7 @@ export async function exportPdfFromHtml(
   await deliverPdf(uri, dialogTitle, filename);
 }
 
-export async function deliverPdf(uri: string, dialogTitle: string, filename = 'vertex-document.pdf'): Promise<void> {
+export async function deliverPdf(uri: string, dialogTitle: string, filename = 'document.pdf'): Promise<void> {
   if (Platform.OS === 'web') {
     try {
       const a = document.createElement('a');

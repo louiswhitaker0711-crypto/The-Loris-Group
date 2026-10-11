@@ -15,6 +15,7 @@ import { lightColors } from '../../../src/theme/ThemeContext';
 import { useColors } from '../../../src/theme/ThemeContext';
 import { teamColor, NO_TEAM_TINT } from '../../../src/utils/teamColors';
 import { APP_LOCALE, formatMoney } from '../../../src/utils/appTime';
+import { APP_NAME } from '../../../src/theme/brand';
 import { SUPER_GREEN_WEEK_MIN, GREEN_WEEK_MIN, AMBER_WEEK_MIN, RED_WEEK_MAX } from '../../../src/utils/weekBands';
 
 // ─────────────────────────── helpers ───────────────────────────
@@ -312,7 +313,7 @@ export default function PublicBellsScreen() {
           </View>
           <View style={styles.totalsRowSecondary}>
             <Chip label="£15+"   value={`${totals.total_over30 ?? 0}`}   accent="#f59e0b" icon="trending-up" />
-            <Chip label="£12"    value={`${totals.total_under30 ?? 0}`}  accent="#6B8070" icon="checkmark-circle" />
+            <Chip label="£12"    value={`${totals.total_under30 ?? 0}`}  accent="#6a7b90" icon="checkmark-circle" />
             <Chip label="£15+ %" value={`${totals.pct_over30 ?? 0}%`}   accent="#f59e0b" />
           </View>
 
@@ -345,7 +346,7 @@ export default function PublicBellsScreen() {
           )}
 
           <Text style={styles.footer}>
-            Data refreshes live. Shared via Vertex Hub.  ·  Last loaded at {new Date().toLocaleTimeString(APP_LOCALE, { hour: 'numeric', minute: '2-digit', hour12: true })}
+            Data refreshes live. Shared via {APP_NAME}.  ·  Last loaded at {new Date().toLocaleTimeString(APP_LOCALE, { hour: 'numeric', minute: '2-digit', hour12: true })}
           </Text>
         </>
       )}
@@ -367,7 +368,7 @@ export default function PublicBellsScreen() {
 function hexToRgba(hex: string, alpha: number): string {
   const h = (hex || '').replace('#', '');
   const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
-  if (full.length !== 6) return `rgba(58, 122, 86, ${alpha})`;
+  if (full.length !== 6) return `rgba(40, 100, 217, ${alpha})`;
   const r = parseInt(full.substring(0, 2), 16);
   const g = parseInt(full.substring(2, 4), 16);
   const b = parseInt(full.substring(4, 6), 16);
@@ -399,14 +400,14 @@ function TableView({ entries }: { entries: Entry[] }) {
   const tvStyles = useMemo(() => createTvStyles(colors), [colors]);
 
   const cellForDay = (d: Day): { text: string; color: string } => {
-    if (!d) return { text: '—', color: '#6B8070' };
-    if (d.status === 'off') return { text: '—', color: '#6B8070' };
+    if (!d) return { text: '—', color: '#6a7b90' };
+    if (d.status === 'off') return { text: '—', color: '#6a7b90' };
     if (d.status === 'ab') return { text: 'ab', color: '#dc2626' };
     if (d.status === 'nc') return { text: 'nc', color: '#6b7280' };
     if (d.status === 'pc') return { text: 'pc', color: '#0891b2' };
     const tot = (d.over30 || 0) + (d.under30 || 0);
     if (d.status === 'rt') return { text: tot > 0 ? `rt ${tot}` : 'rt', color: '#d97706' };
-    return { text: String(tot), color: tot > 0 ? colors.text : '#91B69E' };
+    return { text: String(tot), color: tot > 0 ? colors.text : '#8ea8c8' };
   };
 
   // ── Group entries by primary_team.leader_id (Excel-sheet style) ──
@@ -519,7 +520,7 @@ function TableView({ entries }: { entries: Entry[] }) {
                   tvStyles.bodyRow,
                   tlBg
                     ? { backgroundColor: tlBg }
-                    : (i % 2 === 1 ? { backgroundColor: '#F7FAF1' } : (isLeader ? { backgroundColor: 'rgba(58, 122, 86, 0.05)' } : {})),
+                    : (i % 2 === 1 ? { backgroundColor: '#f4f8fc' } : (isLeader ? { backgroundColor: 'rgba(40, 100, 217, 0.05)' } : {})),
                 ]}
               >
                 <View style={[tvStyles.nameCol, tvStyles.bodyCell, stickyNameCol, { backgroundColor: tlBg ?? (isWeb ? colors.surface : undefined) }]}>
@@ -535,12 +536,12 @@ function TableView({ entries }: { entries: Entry[] }) {
                   </Text>
                 </View>
                   <View style={[{ width: LW_COL }, tvStyles.bodyCell]}>
-                    <Text style={[tvStyles.cellText, { color: '#6B8070' }]}>
+                    <Text style={[tvStyles.cellText, { color: '#6a7b90' }]}>
                       {e.last_week_total != null ? String(e.last_week_total) : '—'}
                     </Text>
                   </View>
                   <View style={[{ width: GOAL_COL }, tvStyles.bodyCell]}>
-                    <Text style={[tvStyles.cellText, { color: '#6B8070' }]}>
+                    <Text style={[tvStyles.cellText, { color: '#6a7b90' }]}>
                       {e.weekly_goal != null ? String(e.weekly_goal) : '—'}
                     </Text>
                   </View>
@@ -594,7 +595,7 @@ function TableView({ entries }: { entries: Entry[] }) {
 const createStyles = (colors: any) => StyleSheet.create({
   container: { flex: 1 },
   unlockBox: { alignSelf: 'center', maxWidth: 440, width: '100%', padding: 20, borderRadius: 16, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  unlockIconWrap: { alignSelf: 'center', padding: 12, borderRadius: 50, backgroundColor: 'rgba(58, 122, 86, 0.1)', marginBottom: 12 },
+  unlockIconWrap: { alignSelf: 'center', padding: 12, borderRadius: 50, backgroundColor: 'rgba(40, 100, 217, 0.1)', marginBottom: 12 },
   unlockTitle: { fontSize: 20, fontWeight: '800', color: colors.text, textAlign: 'center', marginBottom: 6 },
   unlockSubtitle: { fontSize: 13, color: colors.textMuted, textAlign: 'center', marginBottom: 20, lineHeight: 18 },
   unlockInput: { backgroundColor: '#fff', borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16, color: colors.text, marginBottom: 10, textAlign: 'center', letterSpacing: 1 },
@@ -749,7 +750,7 @@ function PublicDayBreakdownModal({ dayIdx, entries, weekEnding, onClose }: {
               <StatTile label="Sign-ups" value={`${totals.sales}`} accent={colors.primary} />
               <StatTile label="P/A" value={totals.pa.toFixed(1)} accent={colors.text} />
               <StatTile label="£15+" value={`${totals.over30}`} accent="#f59e0b" icon="trending-up" />
-              <StatTile label="£12" value={`${totals.under30}`} accent="#6B8070" icon="checkmark-circle" />
+              <StatTile label="£12" value={`${totals.under30}`} accent="#6a7b90" icon="checkmark-circle" />
               <StatTile label="£15+ %" value={`${totals.goldRate}%`} accent="#f59e0b" />
               <StatTile label="Working" value={`${totals.working}`} accent="#22c55e" icon="people" />
             </View>

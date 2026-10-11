@@ -33,7 +33,7 @@ export function DayMissionCard({ day, objective, itemCount, weightText, isTraine
   return (
     <View style={styles.wrap}>
       <LinearGradient
-        colors={isDark ? GRADIENT_PANEL : (['#e1ebce', '#eef4e3', '#f9fbf5'] as const)}
+        colors={isDark ? GRADIENT_PANEL : (['#ccdff2', '#e4eef8', '#f8fbfd'] as const)}
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
         style={styles.hero}
       >

@@ -378,8 +378,8 @@ const createStyles = (colors: any) => StyleSheet.create({
   sigChip: {
     flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start',
     marginTop: 6, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999,
-    backgroundColor: (colors.primary || '#244C3B') + '1A',
-    borderWidth: 1, borderColor: (colors.primary || '#244C3B') + '33',
+    backgroundColor: (colors.primary || '#1d4fa8') + '1A',
+    borderWidth: 1, borderColor: (colors.primary || '#1d4fa8') + '33',
   },
   sigChipMet: { backgroundColor: colors.greenBg, borderColor: colors.sgreen + '44' },
   sigText: { fontFamily: fonts.bodyBold, fontSize: 10.5, color: colors.primary },

@@ -1,13 +1,13 @@
 {
-  "name": "Vertex Hub",
-  "short_name": "Vertex",
-  "description": "Vertex Organisation training & team app",
+  "name": "The Loris Hub",
+  "short_name": "TheLorisHub",
+  "description": "The Loris Hub: training & team app",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#102d25",
-  "theme_color": "#102d25",
+  "background_color": "#0c2340",
+  "theme_color": "#0c2340",
   "icons": [
     {
       "src": "/icons/icon-192.png",

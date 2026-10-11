@@ -31,6 +31,7 @@ import { BrandLoader } from '../src/components/ui/BrandLoader';
 import { useTabBarClearance } from '../src/customization/CustomTabBar';
 import { Aurora } from '../src/components/ui/Aurora';
 import { formatMoney } from '../src/utils/appTime';
+import { APP_NAME } from '../src/theme/brand';
 import {
   isoAddDays, lastWeekEndingISO as lastSundayISO, prettyWeekRange, prettyDate,
   posterWeekEnding, todayLong, POSTER, colorForName, initialsOf,
@@ -228,7 +229,7 @@ export default function BulletinScreen() {
             <Aurora />
             <Image source={{ uri: '/api/logo.png' }} style={styles.bannerLogo} resizeMode="contain" />
             <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={styles.bannerLabel}>Vertex Hub · Weekly Bulletin</Text>
+              <Text style={styles.bannerLabel}>{APP_NAME} · Weekly Bulletin</Text>
               <Text style={styles.bannerWeek}>w/e {prettyDate(weekEnding)} · All offices</Text>
             </View>
             <Ionicons name="trophy" size={28} color={POSTER.lime} />
@@ -568,7 +569,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 10,
     borderBottomWidth: 0.5, borderBottomColor: colors.border,
   },
-  boardRowFirst: { backgroundColor: 'rgba(183,223,88,0.10)' },
+  boardRowFirst: { backgroundColor: 'rgba(34,208,236,0.10)' },
   rankBadge: {
     backgroundColor: POSTER.mid, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 4,
     minWidth: 30, alignItems: 'center',

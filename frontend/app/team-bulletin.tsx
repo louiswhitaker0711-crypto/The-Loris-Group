@@ -75,8 +75,8 @@ function Avatar({ uri, name, size = 48, ringColor }: { uri?: string | null; name
 }
 
 // ── Rank medal colours (1st / 2nd / 3rd) ─────────────────────────────────────
-const MEDAL_BG: Record<number, string> = { 1: POSTER.amber, 2: '#a9b8ad', 3: '#b07a45' };
-const MEDAL_RING: Record<number, string> = { 1: POSTER.lime, 2: '#a9b8ad', 3: '#b07a45' };
+const MEDAL_BG: Record<number, string> = { 1: POSTER.amber, 2: '#adb7c4', 3: '#b07a45' };
+const MEDAL_RING: Record<number, string> = { 1: POSTER.lime, 2: '#adb7c4', 3: '#b07a45' };
 
 // ── PDF builder ───────────────────────────────────────────────────────────────
 export function buildTeamBulletinHtml(b: TeamBulletin): string {
@@ -144,7 +144,7 @@ export function buildTeamBulletinHtml(b: TeamBulletin): string {
     </div>` : '';
 
   // Ranks 2+ rows
-  const RANK_COLOR: Record<number, string> = { 2: '#a9b8ad', 3: '#b07a45' };
+  const RANK_COLOR: Record<number, string> = { 2: '#adb7c4', 3: '#b07a45' };
   const restRows = teams.slice(1).map((t) => {
     const rankColor = RANK_COLOR[t.rank] || P.mid;
     const rankLabel = t.rank === 2 ? '🥈' : t.rank === 3 ? '🥉' : `#${t.rank}`;
@@ -386,7 +386,7 @@ export default function TeamBulletinScreen() {
                     <View style={[styles.statPill, { backgroundColor: POSTER.lime }]}>
                       <Text style={[styles.statPillText, { color: POSTER.forest }]}>£15+ {t.pct_gold.toFixed(1)}%</Text>
                     </View>
-                    <View style={[styles.statPill, { backgroundColor: 'rgba(240,244,233,0.10)' }]}>
+                    <View style={[styles.statPill, { backgroundColor: 'rgba(238,244,250,0.10)' }]}>
                       <Text style={[styles.statPillText, { color: colors.inkMuted }]}>P/A {t.piece_average.toFixed(1)}</Text>
                     </View>
                   </View>

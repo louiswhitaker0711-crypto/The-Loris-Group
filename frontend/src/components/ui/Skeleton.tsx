@@ -57,7 +57,7 @@ export function Skeleton({ width = '100%', height = 14, borderRadius = 6, style 
     }],
   }));
 
-  const shine = isDark ? 'rgba(183,223,88,0.16)' : 'rgba(255,255,255,0.65)';
+  const shine = isDark ? 'rgba(34,208,236,0.16)' : 'rgba(255,255,255,0.65)';
 
   return (
     <Animated.View

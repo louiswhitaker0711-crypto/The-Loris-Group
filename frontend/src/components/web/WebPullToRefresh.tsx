@@ -95,7 +95,7 @@ export default function WebPullToRefresh() {
     >
       <View
         style={{
-          width: 36, height: 36, borderRadius: 18, backgroundColor: '#0b211c',
+          width: 36, height: 36, borderRadius: 18, backgroundColor: '#081a30',
           alignItems: 'center', justifyContent: 'center', opacity: 0.55 + progress * 0.45,
           shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
         }}

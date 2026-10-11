@@ -1,9 +1,9 @@
-/* Vertex Hub service worker — Web Push for the installed PWA (iOS Home Screen
- * + Android/Chrome). Renders Vertex-branded notifications and focuses/opens the
+/* The Loris Hub service worker — Web Push for the installed PWA (iOS Home Screen
+ * + Android/Chrome). Renders branded notifications and focuses/opens the
  * app on tap. Kept dependency-free and tiny. It keeps no Cache Storage (no
  * offline cache), so there is no cache name to version — nothing from the
  * Cube install can be reused. */
-const APP_NAME = 'Vertex Hub';
+const APP_NAME = 'The Loris Hub';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -33,7 +33,7 @@ self.addEventListener('push', (event) => {
   const title = payload.title || APP_NAME;
   const options = {
     body: payload.body || '',
-    icon: '/icons/icon-192.png',      // Vertex app icon
+    icon: '/icons/icon-192.png',      // app icon
     badge: '/icons/badge-96.png',     // monochrome X for the Android status bar
     tag: (payload.data && payload.data.tag) || undefined, // collapse duplicates when set
     renotify: !!(payload.data && payload.data.tag),

@@ -135,7 +135,7 @@ export default function WebPushToggle() {
             disabled={status === 'denied'}
             // Same off-track as the Schedule Reminders switch above it —
             // colors.border is too faint against the white card face.
-            trackColor={{ false: '#91B69E', true: colors.primary }}
+            trackColor={{ false: '#8ea8c8', true: colors.primary }}
             thumbColor="#fff"
           />
         )}

@@ -414,7 +414,7 @@ export default function ProfileScreen() {
                 <Ionicons
                   name={roleCoinIcon(user?.role)}
                   size={14}
-                  color={user?.role === 'admin' ? '#ffffff' : '#0b211c'}
+                  color={user?.role === 'admin' ? '#ffffff' : '#081a30'}
                 />
               </HexCoin>
             </TouchableOpacity>
@@ -1073,14 +1073,14 @@ const createMyBadgesStyles = (colors: any, isDark: boolean) => StyleSheet.create
     flex: 1,
     borderRadius: 15.5,
     padding: 1.5,
-    boxShadow: isDark ? '0 8px 18px -8px rgba(0,0,0,0.75)' : '0 7px 15px -7px rgba(16,45,37,0.45)',
+    boxShadow: isDark ? '0 8px 18px -8px rgba(0,0,0,0.75)' : '0 7px 15px -7px rgba(12,35,64,0.45)',
   },
   tile: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: 14, backgroundColor: colors.background },
   tileLocked: {
     backgroundColor: colors.trackBg,
     borderWidth: 1,
     borderColor: colors.borderDark,
-    boxShadow: isDark ? 'inset 0 3px 7px rgba(0,0,0,0.65)' : 'inset 0 3px 7px rgba(16,45,37,0.30)',
+    boxShadow: isDark ? 'inset 0 3px 7px rgba(0,0,0,0.65)' : 'inset 0 3px 7px rgba(12,35,64,0.30)',
   },
   hex: { marginBottom: 4 },
   emoji: { fontSize: 26, marginBottom: 4 },
@@ -1187,7 +1187,7 @@ function NotificationsSection() {
           value={enabled}
           onValueChange={toggle}
           disabled={!loaded || saving}
-          trackColor={{ false: '#91B69E', true: colors.primary }}
+          trackColor={{ false: '#8ea8c8', true: colors.primary }}
           thumbColor="#fff"
         />
       </View>
@@ -1378,7 +1378,7 @@ const createTeamStyles = (colors: any) => StyleSheet.create({
   helper: { fontSize: 11, color: colors.textMuted, marginTop: 2, lineHeight: 15 },
   valueRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.surfaceAlt, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 },
   valueText: { flex: 1, fontSize: 15, fontWeight: '700', color: colors.text },
-  editBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: colors.primary, backgroundColor: 'rgba(58, 122, 86, 0.06)' },
+  editBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: colors.primary, backgroundColor: 'rgba(40, 100, 217, 0.06)' },
   editBtnText: { color: colors.primary, fontSize: 13, fontWeight: '700' },
   editWrap: { gap: 10 },
   input: { backgroundColor: colors.surfaceAlt, borderRadius: 10, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: colors.text },

@@ -19,7 +19,7 @@ import { dotField } from './vertexGeometry';
 // ── Soft radial glow ─────────────────────────────────────────────────────────
 export function GlowOrb({
   size = 260,
-  color = '#2f6a4b',
+  color = '#225bc3',
   opacity = 0.35,
   style,
 }: {
@@ -82,8 +82,8 @@ export function DecorField({ dark = true }: { dark?: boolean }) {
   const dots = dark ? 0.2 : 0.14;
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      <GlowOrb size={340} color="#2f6a4b" opacity={glow} style={{ top: -90, right: -110 }} />
-      <GlowOrb size={300} color="#244c3b" opacity={glow * 0.8} style={{ bottom: -80, left: -120 }} />
+      <GlowOrb size={340} color="#225bc3" opacity={glow} style={{ top: -90, right: -110 }} />
+      <GlowOrb size={300} color="#1d4fa8" opacity={glow * 0.8} style={{ bottom: -80, left: -120 }} />
       <GlowOrb size={180} color="#e7b65c" opacity={glow * 0.45} style={{ top: '38%', left: -70 }} />
       <DotField size={220} opacity={dots} corner="top-right" style={{ top: -20, right: -20 }} />
       <DotField size={260} opacity={dots * 0.8} corner="bottom-left" style={{ bottom: -20, left: -20 }} />

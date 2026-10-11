@@ -71,7 +71,7 @@ const NODE_COL = 76;
 const PAD = 6;
 const ROW_GAP = 10;
 const CARD_PAD_X = 12;
-const INK = '#0b211c';
+const INK = '#081a30';
 const HALO_MS = 1600;
 /**
  * Meta line box (10 px mono): the row grows by exactly one line when the meta
@@ -103,7 +103,7 @@ function TodayHalo() {
   return (
     <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, style]}>
       <Svg width={NODE} height={NODE}>
-        <Polygon points={HEX} fill="none" stroke="#8caf38" strokeWidth={2.5} strokeLinejoin="round" />
+        <Polygon points={HEX} fill="none" stroke="#0a9bcb" strokeWidth={2.5} strokeLinejoin="round" />
       </Svg>
     </Animated.View>
   );
@@ -156,7 +156,7 @@ function NodeCoin({ node, colors, isDark }: { node: JourneyNode; colors: any; is
   // in the opposite tone so the numeral clears AA over the whole gradient —
   // the earned coin does exactly this with its own glow (HexCoin numeral).
   const ghostInk = tint === 'purple' && isDark ? '#ffffff' : INK;
-  const ghostHalo = ghostInk === INK ? 'rgba(255,255,255,0.9)' : 'rgba(7,18,13,0.9)';
+  const ghostHalo = ghostInk === INK ? 'rgba(255,255,255,0.9)' : 'rgba(6,15,26,0.9)';
   const icon =
     node.kind === 'pk' ? 'school' :
     node.kind === 'trophy' ? 'trophy' :
@@ -282,7 +282,7 @@ export function JourneyPath({ nodes }: { nodes: JourneyNode[] }) {
               <React.Fragment key={i}>
                 {/* wide neon bloom + soft glow under the lit trail (static paths, no loop) */}
                 <Path d={s.d} stroke="#e7b65c" strokeOpacity={isDark ? 0.16 : 0.10} strokeWidth={26} fill="none" strokeLinecap="round" />
-                <Path d={s.d} stroke="#8caf38" strokeOpacity={isDark ? 0.34 : 0.22} strokeWidth={14} fill="none" strokeLinecap="round" />
+                <Path d={s.d} stroke="#0a9bcb" strokeOpacity={isDark ? 0.34 : 0.22} strokeWidth={14} fill="none" strokeLinecap="round" />
                 <Path d={s.d} stroke={`url(#${trailId})`} strokeWidth={5} fill="none" strokeLinecap="round" />
                 <Path d={s.d} stroke="#ffffff" strokeOpacity={0.35} strokeWidth={1.2} fill="none" strokeLinecap="round" />
               </React.Fragment>

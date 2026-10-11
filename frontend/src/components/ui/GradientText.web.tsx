@@ -83,7 +83,7 @@ export function GradientText({
   const { layout, text } = useMemo(() => splitStyle(style), [style]);
   const label = String(children);
   const baseFontSize = text.fontSize ?? 14;
-  const stops = colors.length >= 2 ? colors : [colors[0] ?? '#2f6a4b', colors[0] ?? '#2f6a4b'];
+  const stops = colors.length >= 2 ? colors : [colors[0] ?? '#225bc3', colors[0] ?? '#225bc3'];
   const glowHue = stops[Math.floor(stops.length / 2)];
 
   const textAlign = text.textAlign;
@@ -196,7 +196,7 @@ export function GradientText({
  *
  * Round-2 review, finding 9: the numeral glow rendered as a rectangular halo
  * with hard vertical edges (sampled behind Pay's "$77.00" in dark: card face
- * rgb(12,26,20), box rgb(16,34,26), a hard left edge inside three pixels).
+ * rgb(9,22,38), box rgb(9,29,53), a hard left edge inside three pixels).
  * The cause is the clip, not the shadow — a single-line Text sets
  * `overflow: hidden`, so a 12-14 px blur that spreads past the glyph box is
  * sliced off square at the box edge. The twin is inset NEGATIVELY by this much

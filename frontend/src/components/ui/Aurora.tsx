@@ -107,9 +107,9 @@ export function Aurora({ dim, intense }: AuroraProps) {
   const rawId = useId();
   const uid = useMemo(() => rawId.replace(/[^a-zA-Z0-9_-]/g, ''), [rawId]);
   const blobs = useMemo<BlobSpec[]>(() => [
-    { size: 230, color: '#8caf38', baseOpacity: 0.60, top: -90, right: -60, driftX: 34, driftY: 24, freq: 1 },       // 5.2 s
+    { size: 230, color: '#0a9bcb', baseOpacity: 0.60, top: -90, right: -60, driftX: 34, driftY: 24, freq: 1 },       // 5.2 s
     { size: 180, color: '#e7b65c', baseOpacity: 0.38, bottom: -80, left: -50, driftX: 30, driftY: -18, freq: 3 / 4 }, // 6.9 s
-    { size: 150, color: '#3a7a56', baseOpacity: 0.32, top: 0, left: '36%', driftX: -26, driftY: 26, freq: 2 / 3 },    // 7.8 s
+    { size: 150, color: '#2864d9', baseOpacity: 0.32, top: 0, left: '36%', driftX: -26, driftY: 26, freq: 2 / 3 },    // 7.8 s
   ], []);
 
   // ONE loop for all three blobs (see the header).

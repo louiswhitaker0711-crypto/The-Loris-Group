@@ -57,16 +57,16 @@ function keycapShadows(tone: KeycapTone, isDark: boolean): ShadowPair {
   if (tone === 'paper') {
     return isDark
       ? {
-        up: 'inset 0 1px 0 rgba(183,223,88,.35), inset 0 -3px 0 rgba(0,0,0,.5), 0 6px 12px -6px rgba(0,0,0,.6)',
-        down: 'inset 0 1px 0 rgba(183,223,88,.25), inset 0 -1px 0 rgba(0,0,0,.5), 0 2px 6px -4px rgba(0,0,0,.6)',
+        up: 'inset 0 1px 0 rgba(34,208,236,.35), inset 0 -3px 0 rgba(0,0,0,.5), 0 6px 12px -6px rgba(0,0,0,.6)',
+        down: 'inset 0 1px 0 rgba(34,208,236,.25), inset 0 -1px 0 rgba(0,0,0,.5), 0 2px 6px -4px rgba(0,0,0,.6)',
       }
       : {
-        up: 'inset 0 1px 0 rgba(255,255,255,.75), inset 0 -3px 0 rgba(16,45,37,.28), 0 6px 12px -6px rgba(16,45,37,.35)',
-        down: 'inset 0 1px 0 rgba(255,255,255,.55), inset 0 -1px 0 rgba(16,45,37,.28), 0 2px 6px -4px rgba(16,45,37,.35)',
+        up: 'inset 0 1px 0 rgba(255,255,255,.75), inset 0 -3px 0 rgba(12,35,64,.28), 0 6px 12px -6px rgba(12,35,64,.35)',
+        down: 'inset 0 1px 0 rgba(255,255,255,.55), inset 0 -1px 0 rgba(12,35,64,.28), 0 2px 6px -4px rgba(12,35,64,.35)',
       };
   }
   // Coloured faces: white top edge, black lip, a tinted drop shadow.
-  const glow = tone === 'green' ? 'rgba(16,185,129,.55)' : 'rgba(58,122,86,.55)';
+  const glow = tone === 'green' ? 'rgba(16,185,129,.55)' : 'rgba(40,100,217,.55)';
   return {
     up: `inset 0 1px 0 rgba(255,255,255,.45), inset 0 -3px 0 rgba(0,0,0,.35), 0 6px 12px -6px ${glow}`,
     down: `inset 0 1px 0 rgba(255,255,255,.3), inset 0 -1px 0 rgba(0,0,0,.35), 0 2px 6px -4px ${glow}`,

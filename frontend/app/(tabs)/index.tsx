@@ -105,7 +105,7 @@ const heroMinHeight = (insetTop: number) =>
 // line in the light theme runs this darker stop instead (5.0:1 on white,
 // 4.6:1 on greenBg). Icons, dots and chip fills keep colors.green.
 const GREEN_TEXT_LIGHT = '#047857';
-const brandLime = '#b7df58';
+const brandLime = '#22d0ec';
 
 // "This week" row wells — a 44px gradient tile per state (spec §4 Home 11:
 // the flat glyph rows get the same lit icon well the Quick actions grid uses).
@@ -1584,7 +1584,7 @@ const createStyles = (colors: any, isDark: boolean) => {
   gradeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11 },
   // Card title with a lit lime tick and a mono count, HUD style.
   hudTitle: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
-  hudTick: { width: 4, height: 14, borderRadius: 2, backgroundColor: brandLime, boxShadow: '0 0 8px rgba(183,223,88,0.8)' },
+  hudTick: { width: 4, height: 14, borderRadius: 2, backgroundColor: brandLime, boxShadow: '0 0 8px rgba(34,208,236,0.8)' },
   hudCount: { fontFamily: fonts.mono, fontSize: 11, color: colors.textMuted, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: colors.border },
   // COD 1 / COD 2: how much is marked off.
   codRow: { flexDirection: 'row', gap: 10, marginTop: 7 },
@@ -1623,7 +1623,7 @@ const createStyles = (colors: any, isDark: boolean) => {
     alignItems: 'center', justifyContent: 'center',
   },
   // The lit face — a gradient well throwing the brand drop shadow.
-  checkWellLit: { boxShadow: '0 6px 14px -6px rgba(36,76,59,0.55)' },
+  checkWellLit: { boxShadow: '0 6px 14px -6px rgba(29,79,168,0.55)' },
   // The "nothing on today" face of the same well: a muted brand tint with a
   // primary glyph and no drop (quiet reads as unlit, not as heavy).
   checkWellQuiet: {

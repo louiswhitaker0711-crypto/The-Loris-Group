@@ -53,7 +53,7 @@ type Placed = {
 };
 
 // One colour per generation (ring shading, avatar rings, legend).
-export const GEN_COLOURS = ['#b7df58', '#b7df58', '#4fd1c5', '#e7b65c', '#e0607e', '#a78bfa', '#60a5fa'];
+export const GEN_COLOURS = ['#22d0ec', '#22d0ec', '#4ade80', '#e7b65c', '#e0607e', '#a78bfa', '#60a5fa'];
 const genColour = (g: number) => GEN_COLOURS[Math.min(g, GEN_COLOURS.length - 1)];
 const genLabel = (g: number) => (g === 0 ? 'You' : `Gen ${g}`);
 
@@ -66,9 +66,9 @@ const PAD = 90;
 const MIN_SCALE = 0.12;
 const MAX_SCALE = 2.5;
 const OPEN_SCALE = 0.6;
-const CANVAS = '#050f0c';
+const CANVAS = '#040b15';
 // The map is dark in both themes, so its controls never use the theme's text colour.
-const INK_TEXT = '#eef4e6';
+const INK_TEXT = '#e7f0f9';
 const HOLD_MS = 220;         // touch: hold a person this long, then drag
 
 /** OwnerIQ's stage key → the short label it shows ("stage_3_plus" → "3+"). */
@@ -534,7 +534,7 @@ export default function TeamMapView({
             const g = i + 1;
             const on = highlight?.kind === 'gen' && highlight.value === g;
             return (
-              <TouchableOpacity key={g} style={[styles.genChip, { borderColor: genColour(g) }, on && { backgroundColor: 'rgba(238,244,230,0.14)' }]}
+              <TouchableOpacity key={g} style={[styles.genChip, { borderColor: genColour(g) }, on && { backgroundColor: 'rgba(231,240,249,0.14)' }]}
                 onPress={() => { setSelected(null); setHighlight(on ? null : { kind: 'gen', value: g }); }}
                 accessibilityLabel={`Generation ${g}: ${n} people`} testID={`spider-gen-${g}`}>
                 <View style={[styles.genDot, { backgroundColor: genColour(g), marginHorizontal: 0 }]} />
@@ -574,7 +574,7 @@ export default function TeamMapView({
                 value={findText}
                 onChangeText={setFindText}
                 placeholder="Type a name"
-                placeholderTextColor="rgba(159,184,168,0.7)"
+                placeholderTextColor="rgba(160,177,198,0.7)"
                 style={styles.findInput}
                 autoFocus
                 autoCorrect={false}
@@ -692,12 +692,12 @@ export default function TeamMapView({
 }
 
 
-const PANEL = 'rgba(12,32,26,0.95)';
+const PANEL = 'rgba(10,25,44,0.95)';
 
 const createStyles = (c: any) => StyleSheet.create({
   wrap: { flex: 1 },
   viewport: { flex: 1, overflow: 'hidden', backgroundColor: CANVAS, marginHorizontal: 12, marginBottom: 8, borderRadius: 18,
-    borderWidth: 1, borderColor: 'rgba(183,223,88,0.14)' },
+    borderWidth: 1, borderColor: 'rgba(34,208,236,0.14)' },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10 },
   emptyText: { fontFamily: fonts.body, color: c.textMuted },
   node: { position: 'absolute', width: NODE_W, alignItems: 'center' },
@@ -708,7 +708,7 @@ const createStyles = (c: any) => StyleSheet.create({
   pillDrop: { backgroundColor: brand.lime, borderColor: brand.lime },
   ghost: { position: 'absolute', left: 0, top: 0, width: NODE_W, alignItems: 'center', zIndex: 50 },
   ghostPill: { flexDirection: 'row', alignItems: 'center', gap: 5, maxWidth: NODE_W, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999,
-    backgroundColor: brand.lime, boxShadow: '0 8px 22px rgba(0,0,0,0.45), 0 0 18px rgba(183,223,88,0.5)' } as any,
+    backgroundColor: brand.lime, boxShadow: '0 8px 22px rgba(0,0,0,0.45), 0 0 18px rgba(34,208,236,0.5)' } as any,
   ghostText: { fontFamily: fonts.body, fontWeight: '800', fontSize: 12, color: brand.deep },
   hint: { position: 'absolute', top: 10, left: 10, right: 250, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6,
     height: 32, paddingHorizontal: 10, borderRadius: 10, backgroundColor: PANEL, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', maxWidth: 420 },
@@ -719,18 +719,18 @@ const createStyles = (c: any) => StyleSheet.create({
   teamTagText: { fontFamily: fonts.body, fontWeight: '800', fontSize: 8.5, letterSpacing: 0.6, color: brand.deep, textTransform: 'uppercase' },
   ring: { alignItems: 'center', justifyContent: 'center', backgroundColor: CANVAS, shadowOffset: { width: 0, height: 0 } },
   avatar: { alignItems: 'center', justifyContent: 'center' },
-  avatarCoach: { backgroundColor: '#163a2d' },
-  avatarBa: { backgroundColor: '#0e2620' },
-  avatarText: { fontFamily: fonts.body, fontWeight: '700', fontSize: 13, color: '#eef4e6', letterSpacing: 0.3 },
+  avatarCoach: { backgroundColor: '#10315d' },
+  avatarBa: { backgroundColor: '#0a1e37' },
+  avatarText: { fontFamily: fonts.body, fontWeight: '700', fontSize: 13, color: '#e7f0f9', letterSpacing: 0.3 },
   stage: { position: 'absolute', right: -6, bottom: -4, minWidth: 20, height: 18, paddingHorizontal: 4, borderRadius: 9,
     backgroundColor: CANVAS, borderWidth: 1.25, alignItems: 'center', justifyContent: 'center' },
-  stageText: { fontFamily: fonts.body, fontWeight: '800', fontSize: 9.5, color: '#eef4e6' },
+  stageText: { fontFamily: fonts.body, fontWeight: '800', fontSize: 9.5, color: '#e7f0f9' },
   pill: { marginTop: 7, maxWidth: NODE_W - 4, paddingHorizontal: 9, paddingVertical: 3, borderRadius: 999,
-    backgroundColor: '#0f2a22', borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)' },
-  pillText: { fontFamily: fonts.body, fontWeight: '600', fontSize: 11.5, color: '#eef4e6' },
+    backgroundColor: '#0b223e', borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)' },
+  pillText: { fontFamily: fonts.body, fontWeight: '600', fontSize: 11.5, color: '#e7f0f9' },
   controls: { position: 'absolute', top: 10, right: 10, flexDirection: 'row', gap: 6 },
-  find: { position: 'absolute', top: 52, right: 10, width: 280, maxWidth: '94%', padding: 8, borderRadius: 14, backgroundColor: 'rgba(7,23,15,0.96)', borderWidth: 1, borderColor: 'rgba(183,223,88,0.3)', zIndex: 20 },
-  findBox: { flexDirection: 'row', alignItems: 'center', gap: 8, height: 42, paddingHorizontal: 10, borderRadius: 10, backgroundColor: 'rgba(238,244,230,0.07)' },
+  find: { position: 'absolute', top: 52, right: 10, width: 280, maxWidth: '94%', padding: 8, borderRadius: 14, backgroundColor: 'rgba(7,18,30,0.96)', borderWidth: 1, borderColor: 'rgba(34,208,236,0.3)', zIndex: 20 },
+  findBox: { flexDirection: 'row', alignItems: 'center', gap: 8, height: 42, paddingHorizontal: 10, borderRadius: 10, backgroundColor: 'rgba(231,240,249,0.07)' },
   findInput: { flex: 1, fontFamily: fonts.body, fontSize: 15, color: INK_TEXT, padding: 0, outlineStyle: 'none' } as any,
   findRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44, paddingHorizontal: 8, borderRadius: 10 },
   findName: { flex: 1, fontFamily: fonts.bodySemibold, fontSize: 14, color: INK_TEXT },
@@ -756,19 +756,19 @@ const createStyles = (c: any) => StyleSheet.create({
   ranksSection: { fontFamily: fonts.body, fontWeight: '700', fontSize: 10, letterSpacing: 1, color: brand.sage,
     textTransform: 'uppercase', paddingHorizontal: 12, paddingTop: 8, paddingBottom: 4 },
   rankRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 6 },
-  rankRowOn: { backgroundColor: 'rgba(183,223,88,0.12)' },
+  rankRowOn: { backgroundColor: 'rgba(34,208,236,0.12)' },
   rankBadge: { minWidth: 26, height: 20, borderRadius: 10, borderWidth: 1.25, borderColor: brand.lime,
     alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
-  rankBadgeText: { fontFamily: fonts.body, fontWeight: '800', fontSize: 10, color: '#eef4e6' },
+  rankBadgeText: { fontFamily: fonts.body, fontWeight: '800', fontSize: 10, color: '#e7f0f9' },
   genDot: { width: 12, height: 12, borderRadius: 6, marginHorizontal: 7 },
-  rankLabel: { flex: 1, fontFamily: fonts.body, fontSize: 12.5, color: '#eef4e6' },
+  rankLabel: { flex: 1, fontFamily: fonts.body, fontSize: 12.5, color: '#e7f0f9' },
   rankCount: { fontFamily: fonts.mono, fontSize: 12, color: brand.lime },
   card: { position: 'absolute', left: 10, right: 10, bottom: 10, padding: 12, borderRadius: 16,
-    backgroundColor: PANEL, borderWidth: 1, borderColor: 'rgba(183,223,88,0.3)', gap: 10 },
+    backgroundColor: PANEL, borderWidth: 1, borderColor: 'rgba(34,208,236,0.3)', gap: 10 },
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  cardName: { fontFamily: fonts.display, fontSize: 16, color: '#eef4e6' },
+  cardName: { fontFamily: fonts.display, fontSize: 16, color: '#e7f0f9' },
   cardMeta: { fontFamily: fonts.body, fontSize: 12, color: brand.sage, marginTop: 2 },
-  cardNum: { fontFamily: fonts.body, fontWeight: '700', fontSize: 17, color: '#eef4e6' },
+  cardNum: { fontFamily: fonts.body, fontWeight: '700', fontSize: 17, color: '#e7f0f9' },
   cardNumT: { fontWeight: '400', fontSize: 12, color: brand.sage },
   cardNumL: { fontFamily: fonts.body, fontSize: 10, color: brand.sage },
   cardActions: { flexDirection: 'row', gap: 8 },

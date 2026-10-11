@@ -50,7 +50,7 @@ const POSTER_PLATE =
 
 // Soft amber→green bloom raked across the poster plate (the ink hero's own
 // light). Raw rgba, never a concatenated token.
-const BLOOM = ['rgba(231,182,92,0.30)', 'rgba(58,122,86,0.16)', 'rgba(5,15,11,0)'] as const;
+const BLOOM = ['rgba(231,182,92,0.30)', 'rgba(40,100,217,0.16)', 'rgba(5,12,21,0)'] as const;
 
 export function useCodVideos() {
   return useQuery({
@@ -183,12 +183,12 @@ const s = StyleSheet.create({
   playGlyph: { marginLeft: 3 },
   playWell: {
     width: 26, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center',
-    boxShadow: '0 4px 10px -3px rgba(58,122,86,0.55)',
+    boxShadow: '0 4px 10px -3px rgba(40,100,217,0.55)',
   },
   title: { flex: 1, fontFamily: fonts.display, fontSize: 14, letterSpacing: -0.2 },
   tagPill: {
     borderRadius: 8, paddingHorizontal: 7, paddingVertical: 3,
-    boxShadow: '0 4px 10px -4px rgba(58,122,86,0.65)',
+    boxShadow: '0 4px 10px -4px rgba(40,100,217,0.65)',
   },
   // Unbounded SemiBold — never add fontWeight to displayWide (faux-bold on web)
   tag: { fontFamily: fonts.displayWide, fontSize: 8, letterSpacing: 0.5, color: '#fff' },

@@ -30,17 +30,17 @@ import { showAlert } from '../../utils/showAlert';
 import { shareAvailability } from './availabilityPdf';
 
 const H = {
-  canvas: '#07170f',
-  panel: '#0d2419',
-  tile: '#102d25',
-  raised: '#163a2d',
-  line: 'rgba(183,223,88,0.14)',
-  lineSoft: 'rgba(238,244,230,0.07)',
-  text: '#eef4e6',
-  muted: '#9fb8a8',
-  faint: 'rgba(159,184,168,0.55)',
-  lime: '#b7df58',
-  onLime: '#102d25',
+  canvas: '#07121e',
+  panel: '#0c1c31',
+  tile: '#0c2340',
+  raised: '#10315d',
+  line: 'rgba(34,208,236,0.14)',
+  lineSoft: 'rgba(231,240,249,0.07)',
+  text: '#e7f0f9',
+  muted: '#a0b1c6',
+  faint: 'rgba(160,177,198,0.55)',
+  lime: '#22d0ec',
+  onLime: '#0c2340',
   green: '#34d399',
   greenBg: 'rgba(52,211,153,0.14)',
   red: '#f87171',
@@ -646,7 +646,7 @@ function BaTable({ rows, totals, wide, sort, onSort, showTeam, appUsers, onOpenP
         const open = app && onOpenPerson ? () => onOpenPerson(app.id) : undefined;
         return (
           <Pressable key={String(r.user.id)} onPress={open} disabled={!open}
-            style={(st: any) => [s.tr, !wide && { flexDirection: 'column', alignItems: 'stretch', gap: 8 }, st.hovered && open && { backgroundColor: 'rgba(238,244,230,0.04)' }]}
+            style={(st: any) => [s.tr, !wide && { flexDirection: 'column', alignItems: 'stretch', gap: 8 }, st.hovered && open && { backgroundColor: 'rgba(231,240,249,0.04)' }]}
             testID={`hub-ba-${r.user.id}`}>
             <View style={[{ flexDirection: 'row', alignItems: 'center' }, wide && { flex: 1 }]}>
               <View style={[s.person, { minWidth: wide ? 200 : 0 }]}>
@@ -735,11 +735,11 @@ const s = StyleSheet.create({
   face: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backfaceVisibility: 'hidden' },
   tileHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   tileLabel: { flex: 1, fontFamily: fonts.bodySemibold, fontSize: 12.5, color: H.muted },
-  tileIcon: { width: 26, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(183,223,88,0.08)' },
+  tileIcon: { width: 26, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(34,208,236,0.08)' },
   tileBottom: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
   tileValue: { fontFamily: fonts.display, fontSize: 28, letterSpacing: -0.8, color: H.text, fontVariant: ['tabular-nums'] as any },
   backValue: { fontFamily: fonts.display, fontSize: 20, color: H.text, fontVariant: ['tabular-nums'] as any },
-  trend: { flexDirection: 'row', alignItems: 'center', gap: 3, alignSelf: 'flex-start', marginTop: 5, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, backgroundColor: 'rgba(238,244,230,0.07)' },
+  trend: { flexDirection: 'row', alignItems: 'center', gap: 3, alignSelf: 'flex-start', marginTop: 5, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, backgroundColor: 'rgba(231,240,249,0.07)' },
   trendUp: { backgroundColor: 'rgba(52,211,153,0.12)' },
   trendDown: { backgroundColor: 'rgba(248,113,113,0.12)' },
   trendText: { fontFamily: fonts.mono, fontSize: 10.5, color: H.muted },
@@ -777,7 +777,7 @@ const s = StyleSheet.create({
   teamSlimSub: { fontFamily: fonts.body, fontSize: 11.5, color: H.muted, marginTop: 2 },
   teamSlimSales: { fontFamily: fonts.display, fontSize: 20, color: H.text, fontVariant: ['tabular-nums'] as any },
   teamSlimTarget: { fontFamily: fonts.mono, fontSize: 10, color: H.muted },
-  teamHover: { borderColor: H.lime, boxShadow: '0 0 0 1px rgba(183,223,88,0.35), 0 12px 30px rgba(0,0,0,0.35)' } as any,
+  teamHover: { borderColor: H.lime, boxShadow: '0 0 0 1px rgba(34,208,236,0.35), 0 12px 30px rgba(0,0,0,0.35)' } as any,
   teamTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
   teamLogo: { width: 46, height: 46, borderRadius: 23 },
   teamName: { fontFamily: fonts.displayWide, fontSize: 13.5, letterSpacing: 0.4, color: H.text, marginTop: 12, textTransform: 'uppercase' },
@@ -806,7 +806,7 @@ const s = StyleSheet.create({
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4, overflow: 'hidden' },
   leadTag: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999, backgroundColor: H.text },
   leadTagText: { fontFamily: fonts.bodySemibold, fontSize: 9.5, color: H.onLime },
-  teamTag: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, backgroundColor: 'rgba(238,244,230,0.08)', maxWidth: '100%' },
+  teamTag: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, backgroundColor: 'rgba(231,240,249,0.08)', maxWidth: '100%' },
   teamTagText: { fontFamily: fonts.bodySemibold, fontSize: 9.5, letterSpacing: 0.3, color: H.text },
   kcol: { width: 54, alignItems: 'center', gap: 2 },
   kcolCap: { fontFamily: fonts.mono, fontSize: 8.5, color: H.muted },
@@ -816,8 +816,8 @@ const s = StyleSheet.create({
   dheadLetter: { fontFamily: fonts.bodyBold, fontSize: 12, color: H.text },
   dheadCount: { fontFamily: fonts.mono, fontSize: 9.5, color: H.muted, marginTop: 2 },
   dt: { flex: 1, minWidth: 0, height: 50, borderRadius: 9, alignItems: 'center', justifyContent: 'center', gap: 2, borderWidth: 1 },
-  dtPlan: { backgroundColor: 'rgba(238,244,230,0.10)', borderColor: 'rgba(238,244,230,0.10)' },
-  dtDim: { backgroundColor: 'rgba(238,244,230,0.03)', borderColor: 'rgba(238,244,230,0.05)' },
+  dtPlan: { backgroundColor: 'rgba(231,240,249,0.10)', borderColor: 'rgba(231,240,249,0.10)' },
+  dtDim: { backgroundColor: 'rgba(231,240,249,0.03)', borderColor: 'rgba(231,240,249,0.05)' },
   dtGreen: { backgroundColor: H.greenBg, borderColor: 'rgba(52,211,153,0.55)' },
   dtRed: { backgroundColor: H.redBg, borderColor: 'rgba(248,113,113,0.55)' },
   dtAmber: { backgroundColor: 'rgba(231,182,92,0.12)', borderColor: 'rgba(231,182,92,0.5)' },

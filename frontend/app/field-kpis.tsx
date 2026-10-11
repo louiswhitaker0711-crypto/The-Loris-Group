@@ -77,7 +77,7 @@ const PRESETS = [
 
 
 const METRICS = [
-  { key: 'doors_knocked', label: 'Doors knocked', short: 'Doors', icon: 'walk' as const, color: '#8caf38' },
+  { key: 'doors_knocked', label: 'Doors knocked', short: 'Doors', icon: 'walk' as const, color: '#8b5cf6' },
   // The owner's Field IQ names: Doors / Spoken / Presented / Closed / Sign-ups.
   { key: 'spoken_to', label: 'Spoken', short: 'Spoken', icon: 'chatbubble-ellipses' as const, color: '#06b6d4' },
   { key: 'pitches_commenced', label: 'Presented', short: 'Presented', icon: 'megaphone' as const, color: '#f59e0b' },

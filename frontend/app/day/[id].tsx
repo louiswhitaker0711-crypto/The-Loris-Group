@@ -57,11 +57,11 @@ type ScoreTones = (typeof SCORE_TONES)[keyof typeof SCORE_TONES];
 /**
  * The coaching labels ("TODAY'S WIN" / "FOCUS FOR TOMORROW") are 9.5px mono
  * uppercase on the results DepthCard, so they need the same light/dark twins
- * as the score numerals: `primaryDark` (#2f6a4b) on the dark #102D25 card
+ * as the score numerals: `primaryDark` (#225bc3) on the dark #0c2340 card
  * measured 2.74:1 and read as dimmed-out placeholder text. These measure
  * 8.6:1 (light, on white) and 8.9:1 (dark, on the raised card).
  */
-const COACH_LABEL_TONE = { light: '#244c3b', dark: '#c5e37f' } as const;
+const COACH_LABEL_TONE = { light: '#1d4fa8', dark: '#5fe1f5' } as const;
 
 /** One graded dimension as an XP bar: label + count-up numeral over the track. */
 function ScoreBar({ label, value, colors, tones }: { label: string; value: number | null | undefined; colors: any; tones: ScoreTones }) {
@@ -187,7 +187,7 @@ export default function DayDetailScreen() {
              day is graded. On an UNGRADED day the next sibling is the bare
              "What you'll learn" SectionHead, whose gradient rule and glyph
              tops would sit INSIDE the ink (unreadable in light: the first
-             titleGradient stop #0b211c on ink #102d25 is 1.02:1). */
+             titleGradient stop #081a30 on ink #0c2340 is 1.02:1). */
           overlapNext={completed ? 18 : 0}
           cube={{ size: 104, opacity: 0.5, right: -32, top: -16 }}
           kicker={
