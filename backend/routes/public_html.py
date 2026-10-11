@@ -497,12 +497,12 @@ _BELLS_PAGE_HTML = r"""<!DOCTYPE html>
                 const lw = e.last_week_total;
                 if (lw == null) return null;
                 const ppw = e.prev_prev_week_total ?? null;
-                // What Good Looks Like: Super Green 10+, Green 8-9, Amber 6-7,
-                // Red 5 and under (core/week_bands.py — keep in step).
-                if (lw >= 10) return 'rgba(34,197,94,0.30)';
-                if (lw >= 8)  return 'rgba(34,197,94,0.18)';
-                if (lw >= 6)  return 'rgba(234,179,8,0.25)';
-                const alsoRedPrev = ppw != null && ppw <= 5;
+                // Traffic light: Super Green 20+, Green 15-19, Amber 8-14,
+                // Red under 8 (core/week_bands.py — keep in step).
+                if (lw >= 20) return 'rgba(34,197,94,0.30)';
+                if (lw >= 15) return 'rgba(34,197,94,0.18)';
+                if (lw >= 8)  return 'rgba(234,179,8,0.25)';
+                const alsoRedPrev = ppw != null && ppw <= 7;
                 return alsoRedPrev ? 'rgba(185,28,28,0.35)' : 'rgba(239,68,68,0.22)';
             }
 

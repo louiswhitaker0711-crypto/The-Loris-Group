@@ -227,7 +227,7 @@ def test_ramp_anchors_on_start_week_and_paused_rows_carry_no_number(monkeypatch)
     ramp = doc["ramp"]
     # The owner's What Good Looks Like bands: Amber, out of the red zone (7),
     # Green, Super Green.
-    assert ramp and ramp["targets"] == [6, 7, 8, 10]
+    assert ramp and ramp["targets"] == [8, 8, 15, 20]
     assert ramp["phase"] == "weeks"
     assert ramp["status"] == "complete", ramp
     assert ramp["completed_at"] == week3

@@ -39,6 +39,8 @@ BAM = "#3d2f63"       # BAM
 
 FIELD_START = "13:30"
 FIELD_END = "20:00"
+SATURDAY = 5
+SATURDAY_FIELD = ("10:00", "17:00")
 
 
 def _b(day, start, end, title, groups, color):
@@ -47,9 +49,14 @@ def _b(day, start, end, title, groups, color):
 
 
 def _day(day: int) -> list[dict]:
-    """One office day. The planning meeting starts half an hour earlier on
-    Monday and Saturday."""
-    planning_start = "09:00" if day in (0, 5) else "09:30"
+    """One office day. Monday's planning meeting starts half an hour earlier.
+    Saturday is a short day: sectors at 09:00, then the field 10:00 to 17:00."""
+    if day == SATURDAY:
+        return [
+            _b(day, "09:00", "09:30", "Sectors", ALL, NAVY),
+            _b(day, SATURDAY_FIELD[0], SATURDAY_FIELD[1], "Field", ALL, FIELD),
+        ]
+    planning_start = "09:00" if day == 0 else "09:30"
     return [
         # For anyone who wants to run an office: at least two leaders.
         _b(day, planning_start, "10:00", "Planning meeting", S4 + LD, GOLD),

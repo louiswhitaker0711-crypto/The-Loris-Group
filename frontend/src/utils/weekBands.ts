@@ -1,21 +1,21 @@
 /**
- * The owner's "What Good Looks Like" weekly tiers — sign-ups in one week.
+ * The owner's traffic light system — sign-ups in one week.
  *
- *   Super Green  10+
- *   Green        8–9
- *   Amber        6–7
- *   Red          5 and under
+ *   Super Green  20+
+ *   Green        15–19
+ *   Amber        8–14
+ *   Red          under 8
  *
- * "A Green Week" means Green or better (8+). Every screen that colour-codes
+ * "A Green Week" means Green or better (15+). Every screen that colour-codes
  * or counts a week by its sign-ups reads these, so the bands live in one
  * place.
  *
  * NOTE: the backend computes its own copies (Bells `green_pct`, the Green
  * Week badge, the Sales Path's GREEN_WEEK_SALES) — keep them in step.
  */
-export const SUPER_GREEN_WEEK_MIN = 10;
-export const GREEN_WEEK_MIN = 8;
-export const AMBER_WEEK_MIN = 6;
+export const SUPER_GREEN_WEEK_MIN = 20;
+export const GREEN_WEEK_MIN = 15;
+export const AMBER_WEEK_MIN = 8;
 /** Red is this many sign-ups or fewer. */
 export const RED_WEEK_MAX = AMBER_WEEK_MIN - 1;
 
@@ -39,5 +39,5 @@ export const WEEK_BAND_LABELS: Record<WeekBand, { name: string; range: string }>
   super_green: { name: 'Super Green', range: `${SUPER_GREEN_WEEK_MIN}+` },
   green: { name: 'Green', range: `${GREEN_WEEK_MIN}–${SUPER_GREEN_WEEK_MIN - 1}` },
   amber: { name: 'Amber', range: `${AMBER_WEEK_MIN}–${GREEN_WEEK_MIN - 1}` },
-  red: { name: 'Red', range: `${RED_WEEK_MAX} and under` },
+  red: { name: 'Red', range: `under ${AMBER_WEEK_MIN}` },
 };

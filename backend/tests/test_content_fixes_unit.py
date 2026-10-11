@@ -203,7 +203,7 @@ def test_manual_kpi_item_fixed_by_topic_even_after_reorder_and_edit_skipped():
     result = _run(db)
     r1 = next(r for r in db.training_manual.rows if r["_id"] == 1)
     r2 = next(r for r in db.training_manual.rows if r["_id"] == 2)
-    assert "80 spoken, 20 presented, 15 closed, 5 sign-ups" in r1["what_good_looks_like"]
+    assert "80 spoken, 20 presented, 15 closed, 3 sign-ups" in r1["what_good_looks_like"]
     assert "80 spoken" in r1["expected_outcome"]
     assert r2["what_good_looks_like"] == "Our bar: 50 pitches."
     assert result["fixed"] >= 1 and result["skipped_edited"] >= 1
