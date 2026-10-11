@@ -16,8 +16,8 @@
  *     box: { backgroundColor: c.background, color: c.text },
  *   });
  *
- * Mode is one of 'system' | 'light' | 'dark'. When 'system' (default), the
- * active palette follows the OS color scheme via Appearance.
+ * Mode is one of 'system' | 'light' | 'dark'. Light is the default; when
+ * 'system', the active palette follows the OS color scheme via Appearance.
  */
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Appearance, ColorSchemeName, Platform } from 'react-native';
@@ -193,9 +193,12 @@ type ThemeCtx = {
   setMode: (m: ThemeMode) => void;
 };
 
+// What people get until they pick a mode themselves in Profile.
+const DEFAULT_MODE: ThemeMode = 'light';
+
 const ThemeContext = createContext<ThemeCtx>({
   colors: lightColors,
-  mode: 'system',
+  mode: DEFAULT_MODE,
   effective: 'light',
   setMode: () => {},
 });
@@ -203,7 +206,7 @@ const ThemeContext = createContext<ThemeCtx>({
 const STORAGE_KEY = 'cg1.theme.mode';
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [mode, setModeState] = useState<ThemeMode>('system');
+  const [mode, setModeState] = useState<ThemeMode>(DEFAULT_MODE);
   const [systemScheme, setSystemScheme] = useState<ColorSchemeName>(Appearance.getColorScheme());
 
   // Load persisted mode on mount

@@ -26,7 +26,7 @@
 // backend's APP_NAME / ORG_NAME defaults (backend/core/brand.py).
 export const APP_NAME = 'The Loris Hub';
 export const APP_SHORT_NAME = 'The Loris Hub';
-export const ORG_NAME = 'Vertex Organisation';
+export const ORG_NAME = 'Ginger Leeds';
 
 // ── Raw brand palette ────────────────────────────────────────────────────────
 export const brand = {

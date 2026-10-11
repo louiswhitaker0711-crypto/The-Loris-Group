@@ -19,6 +19,7 @@ from bson import ObjectId
 from fastapi import APIRouter, HTTPException, Request
 
 from auth import get_current_user, get_subtree_ids, require_admin
+from core.brand import ORG_NAME
 from core.quality import LABELS, OVERALL_COLUMNS, RAG, parse_report, rag
 from database import db
 from owneriq_sync import ID_LINKED
@@ -71,7 +72,7 @@ async def import_quality(request: Request):
     office = await db.offices.find_one({"id": office_id}, {"name": 1})
     if not office:
         raise HTTPException(status_code=400, detail="Office not found")
-    parsed = parse_report(pages, body.get("office_label") or "Vertex Organisation")
+    parsed = parse_report(pages, body.get("office_label") or ORG_NAME)
     if not parsed["bas"]:
         raise HTTPException(status_code=400, detail="No BA rows found in the report tables")
     by_badge, by_name = await _badge_index(office_id)

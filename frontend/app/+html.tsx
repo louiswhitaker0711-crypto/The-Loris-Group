@@ -24,7 +24,7 @@ export default function Root({ children }: PropsWithChildren) {
             no browser chrome). iOS reads the apple-* tags + apple-touch-icon;
             Android/Chrome reads the web manifest. No push (web can't). */}
         <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#060e1a" />
+        <meta name="theme-color" content="#eef4fa" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -42,10 +42,10 @@ export default function Root({ children }: PropsWithChildren) {
               /* Fill the safe areas (status bar above, home indicator below)
                  with the page field colour so the whole screen reads as one
                  continuous background — no black bands framing the app.
-                 Pre-mount this is the dark abyss (colors.page, dark);
-                 ThemedStatusBar re-paints it at runtime to match the active
-                 theme (light users get the paper field). */
-              html, body { background-color: #060e1a; }
+                 Pre-mount this is the light page (colors.page, light), since
+                 light is the default; ThemedStatusBar re-paints it at runtime
+                 to match the active theme (dark users get the dark field). */
+              html, body { background-color: #eef4fa; }
 
               /* iOS WebKit "text autosizing" inflates font sizes ~10-15% in
                  installed standalone PWAs (not in Safari tabs), which made
