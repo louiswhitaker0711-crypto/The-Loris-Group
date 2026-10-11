@@ -24,9 +24,13 @@
 // ── Names ────────────────────────────────────────────────────────────────────
 // Every user-visible product/organisation name reads from here. Mirrors the
 // backend's APP_NAME / ORG_NAME defaults (backend/core/brand.py).
+// The app (the portal) is The Loris Hub; the team it belongs to is The Loris
+// Group. APP_SHORT_NAME and ORG_NAME are where screens name the TEAM ("… New
+// Starts" on Home, the "Mini …" team on Bells, the loading screen, posters).
+// The trading name printed on ID badges is separate: BADGE_ORG_NAME on the host.
 export const APP_NAME = 'The Loris Hub';
-export const APP_SHORT_NAME = 'The Loris Hub';
-export const ORG_NAME = 'Ginger Leeds';
+export const APP_SHORT_NAME = 'The Loris Group';
+export const ORG_NAME = 'The Loris Group';
 
 // ── Raw brand palette ────────────────────────────────────────────────────────
 export const brand = {
