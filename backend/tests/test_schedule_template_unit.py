@@ -46,7 +46,10 @@ def test_the_office_morning_runs_to_the_owners_timetable():
         assert blocks["Planning meeting"]["start_time"] == ("09:00" if day == 0 else "09:30")
         assert set(blocks["Planning meeting"]["groups"]) == {"s4", "ld"}
         assert blocks["Sector leaders meeting"]["start_time"] == "10:00"
-        assert blocks["COD workshops"]["start_time"] == "10:30" and len(blocks["COD workshops"]["groups"]) == 4
+        # 10:30 is the goals meeting on Monday and COD workshops the other days.
+        slot = blocks["Goals meeting" if day == 0 else "COD workshops"]
+        assert slot["start_time"] == "10:30" and len(slot["groups"]) == 4
+        assert ("COD workshops" in blocks) is (day != 0)
         assert blocks["Primetime"]["start_time"] == "11:00" and len(blocks["Primetime"]["groups"]) == 4
         assert (blocks["Morning Meeting"]["start_time"], blocks["Morning Meeting"]["end_time"]) == ("11:45", "12:15")
 

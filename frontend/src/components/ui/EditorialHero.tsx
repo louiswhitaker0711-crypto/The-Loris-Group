@@ -158,12 +158,11 @@ const DEFAULT_TITLE = 36;
 export const HERO_DEPTH = { cube: 0.35, orbs: 0.5, text: 0.85 } as const;
 
 /**
- * The Vertex X is drawn 86 % of its size×size box wide and 63 % tall
- * (VertexMark), so its body starts 7 % in from the box's sides and 18 % down
- * from its top.
+ * The mark is drawn 72 % of its size×size box, centred (VertexMark's
+ * MARK_WIDTH), so its body starts 14 % in from each side of the box.
  */
-const MARK_INSET_X = 0.07;
-const MARK_INSET_Y = 0.18;
+const MARK_INSET_X = 0.14;
+const MARK_INSET_Y = 0.14;
 /**
  * How far below the content's top edge the "head" reaches — a mono kicker
  * plus the first line of a displayBlack title. A cube whose body starts below
@@ -190,6 +189,8 @@ const CORNER_CUBE_MAX = 96;
  * i.e. comfortably inside the 22px radius at every yaw phase.
  */
 const CORNER_SEAT = 10;
+/** The same hold-in for marks bigger than CORNER_CUBE_MAX. */
+const LARGE_MARK_SEAT = 18;
 
 /**
  * Aurora's `intense` prop (×1.4 presence, blobs ×1.5) is being added by the
@@ -285,11 +286,15 @@ export function EditorialHero({
     // instead of being amputated by it (see CORNER_SEAT). The offsets are
     // measured to the cube's BOX, and the drawn body starts CUBE_BODY_INSET
     // inside that box, so the seat subtracts it back out.
-    const seated =
-      !topEdge && cube.right === undefined && cube.top === undefined && cube.size <= CORNER_CUBE_MAX;
-    const seat = (inset: number) => Math.round((CORNER_SEAT - cube.size * inset) * 10) / 10;
-    const right = cube.right ?? (seated ? seat(MARK_INSET_X) : -cube.size * 0.25);
-    const top = cube.top ?? (seated ? seat(MARK_INSET_Y) : -cube.size * 0.15);
+    // The mark is a logo, not an abstract shape: it is never cropped by the
+    // block's edge. Whatever offsets a screen asks for, the drawn body is held
+    // at least a seat's width inside the top and right edges (a little more
+    // for the big marks, so they don't look jammed into the corner).
+    const seatPad = cube.size <= CORNER_CUBE_MAX ? CORNER_SEAT : LARGE_MARK_SEAT;
+    const seat = (inset: number) => Math.round((seatPad - cube.size * inset) * 10) / 10;
+    const right = Math.max(cube.right ?? -Infinity, seat(MARK_INSET_X));
+    // A block that runs up under the status bar keeps the mark below it.
+    const top = Math.max(cube.top ?? -Infinity, seat(MARK_INSET_Y) + (topEdge ? insets.top : 0));
     // Distance from the block's right edge to the cube's drawn left edge,
     // less the padding the content already keeps.
     const derived = Math.max(
@@ -310,7 +315,7 @@ export function EditorialHero({
       right,
       top,
     };
-  }, [cube, bleed, padTop, topEdge]);
+  }, [cube, bleed, padTop, topEdge, insets.top]);
 
   // Paper blocks are solid and cast the depth shadow; ink/pop paint a gradient
   // inside the clip view (the outer stays transparent so the shadow-free
