@@ -8,6 +8,7 @@ import {
   getAccessToken,
   getRefreshToken,
   setAccessToken,
+  setAuthTokens,
   usesWebTokenFallback,
 } from '../auth/tokenStorage';
 
@@ -84,7 +85,11 @@ async function performRefresh(): Promise<RefreshOutcome> {
       return { kind: 'unavailable', reason: 'invalid-response' };
     }
 
-    await setAccessToken(newToken);
+    // The server renews the refresh token on every refresh; keep the new one so
+    // the sign-in keeps extending while the app is in use.
+    const newRefresh = res.data?.refresh_token;
+    if (newRefresh) await setAuthTokens(newToken, newRefresh);
+    else await setAccessToken(newToken);
     return { kind: 'ok', token: newToken };
   } catch (e: any) {
     // A refresh-token rejection is definitive session expiry. Clear durable
