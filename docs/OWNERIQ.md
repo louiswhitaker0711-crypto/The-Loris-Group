@@ -125,7 +125,7 @@ All times are UK time (`APP_TIMEZONE`). Nothing runs until `OWNERIQ_EMAIL` and `
 | When | What | Direction |
 | --- | --- | --- |
 | **Every hour** | **KPI sync:** yesterday's and today's door figures per BA (doors, spoken to, pitches started, pitches closed, sign-ups, points), for every company synced. Re-reading yesterday picks up OwnerIQ's same-day corrections | OwnerIQ → app |
-| Every hour, straight after | **Performance Hub sync:** this week and last week: each BA's weekly target and goal status, daily attendance and sign-ups, team names and leaders. Weekly goals go into Bells **unless someone typed a goal in the app**, which then always wins. Days nobody has filled in on Bells get the BA's OwnerIQ sign-ups as £12 sign-ups, flagged so a coach can correct the £12/£15+ split; once someone edits a day the sync leaves it alone. Also refreshes everyone's OwnerIQ stage for the spider diagram | OwnerIQ → app |
+| Every hour, straight after | **Performance Hub sync:** this week and last week: each BA's weekly target and goal status, daily attendance and sign-ups, team names and leaders. Weekly goals go into Bells **unless someone typed a goal in the app**, which then always wins. Days nobody has filled in on Bells get the BA's OwnerIQ sign-ups as Silver sign-ups, flagged so a coach can correct the Silver/Gold split and add The Round; once someone edits a day the sync leaves it alone. Also refreshes everyone's OwnerIQ stage for the spider diagram | OwnerIQ → app |
 | Every hour, straight after | **People sync:** compares who is active, who coaches whom, and who is a Coach (stage 3 and up) on both sides. With writes **off** it only works out the differences; nothing changes on either side | Both ways, only with writes on |
 | **Every 10 minutes** | **Timeline:** refreshes today's door logs between 10:00 and 22:00, and fills in one missing past day at a time, back eight weeks. Then the "two zeroes in a row" check, which sends one "Retrain needed" alert per person to the Owner and their Coaches | OwnerIQ → app |
 | **03:00 daily** | **Live Operations re-settle:** re-reads yesterday's whole Live Operations tree once, so late corrections replace the cached copy | OwnerIQ → app |
@@ -135,7 +135,7 @@ All times are UK time (`APP_TIMEZONE`). Nothing runs until `OWNERIQ_EMAIL` and `
 
 **Notes**
 
-- OwnerIQ doesn't split £12 and £15+ sign-ups, which is why Bells fills in £12 and asks coaches to correct it.
+- OwnerIQ doesn't split Silver and Gold sign-ups or record The Round, which is why Bells fills in Silver and asks coaches to correct it.
 - OwnerIQ can't take a goal or a sign-up back from the app, so goals typed in the app stay in the app.
 - With several companies, the KPI sync, Live Operations and Bells cover all of them. The **Performance Hub screen** shows one company: the first one OwnerIQ lists for your login.
 - Who sees what is decided on the server: Admins and Coach+ see the whole office in Live Operations, the Performance Hub and Field KPIs; a Coach sees their own team; a BA sees their own numbers.

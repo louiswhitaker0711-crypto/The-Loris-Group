@@ -77,4 +77,4 @@ Use the "Common errors" table in `docs/OWNERIQ.md`. Read Railway logs for lines 
 
 ## When you finish
 
-Summarise in a few lines: which companies sync and how offices map; how many people are linked (a count, no names); writes on or off; which screens now fill in; and what to watch in the first week (unlinked people, the £12/£15+ split on auto-filled Bells days).
+Summarise in a few lines: which companies sync and how offices map; how many people are linked (a count, no names); writes on or off; which screens now fill in; and what to watch in the first week (unlinked people, the Silver/Gold split and The Round on auto-filled Bells days).
