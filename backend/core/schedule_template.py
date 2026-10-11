@@ -49,7 +49,8 @@ def _b(day, start, end, title, groups, color):
 
 
 def _day(day: int) -> list[dict]:
-    """One office day. Monday's planning meeting starts half an hour earlier.
+    """One office day. Monday's planning meeting starts half an hour earlier,
+    and Monday's 10:30 slot is the goals meeting.
     Saturday is a short day: sectors at 09:00, then the field 10:00 to 17:00."""
     if day == SATURDAY:
         return [
@@ -62,8 +63,9 @@ def _day(day: int) -> list[dict]:
         _b(day, planning_start, "10:00", "Planning meeting", S4 + LD, GOLD),
         # Anyone coaching: for people who want to learn how to run a team.
         _b(day, "10:00", "10:30", "Sector leaders meeting", S4 + LD, NAVY),
-        # Everyone, all stages: a topic per stage, and sales coaching.
-        _b(day, "10:30", "11:00", "COD workshops", ALL, SKY),
+        # Everyone, all stages. Monday is the goals meeting; the other days
+        # are COD workshops: a topic per stage, and sales coaching.
+        _b(day, "10:30", "11:00", "Goals meeting" if day == 0 else "COD workshops", ALL, SKY),
         # Individual sales coaching.
         _b(day, "11:00", "11:45", "Primetime", ALL, PRIME),
         _b(day, "11:45", "12:15", "Morning Meeting", ALL, OLIVE),
