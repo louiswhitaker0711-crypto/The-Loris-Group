@@ -18,7 +18,8 @@
  * items on it.
  *
  * When it is paid (see payDates):
- *   sign-up fees    — the Wednesday 11 days after the week ends
+ *   sign-up fees    — the Wednesday 11 days after the working week ends
+ *                     (the week is Monday to Saturday)
  *   membership fees — a week after that (a 14-day cooling-off period)
  *   retention       — about 8 weeks after the week ends (the customer needs
  *                     4 weeks of deliveries within 6 weeks, then processing)
@@ -38,9 +39,11 @@ export type VertexFees = {
   retention_standard: number;
   /** Paid when a Gold customer is still ordering in their 4th week. */
   retention_target: number;
-  /** The office's (MC's) own fee per sign-up. Admins only: the server leaves
-   *  it out for everyone else, so it falls back to the default and is never shown. */
-  fee_mc: number;
+  /** The office's (MC's) own fee for a Silver sign-up. Admins only: the server
+   *  leaves it out for everyone else, and the screen never shows it to them. */
+  fee_mc_standard: number;
+  /** The office's (MC's) own fee for a Gold sign-up. Admins only, as above. */
+  fee_mc_target: number;
 };
 
 export const DEFAULT_FEES: VertexFees = {
@@ -49,7 +52,8 @@ export const DEFAULT_FEES: VertexFees = {
   fee_membership: 8,
   retention_standard: 5,
   retention_target: 8,
-  fee_mc: 0,
+  fee_mc_standard: 16,
+  fee_mc_target: 20,
 };
 
 export const FEE_KEYS = Object.keys(DEFAULT_FEES) as Array<keyof VertexFees>;
@@ -61,7 +65,8 @@ export const FEE_BOUNDS: Record<keyof VertexFees, [number, number]> = {
   fee_membership: [0, 1000],
   retention_standard: [0, 1000],
   retention_target: [0, 1000],
-  fee_mc: [0, 1000],
+  fee_mc_standard: [0, 1000],
+  fee_mc_target: [0, 1000],
 };
 
 /** What the campaign asks for. Shown beside a person's own numbers. */
@@ -177,7 +182,9 @@ export function retentionPay(silver: number, gold: number, ratePct: number, fees
 
 // ── When it is paid ────────────────────────────────────────────────────────
 
-/** Days from the week ending (a Sunday) to each payment. */
+/** Days from the Bells week ending (a Sunday) to each payment. The working
+ *  week is Monday to Saturday, so these land on the Wednesday 11 days after
+ *  the Saturday, the week after that, and about 8 weeks on. */
 export const PAY_TIMING = {
   /** Sign-up fees: the Wednesday after one full week has passed. */
   signUpDays: 10,

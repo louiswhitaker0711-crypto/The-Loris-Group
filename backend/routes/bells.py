@@ -1146,10 +1146,12 @@ async def list_bells(
         e["coach_name"] = (people.get(str(coach_id)) or {}).get("name") if coach_id else None
         e["stage_label"] = _stage_label((people.get(uid) or {}).get("owneriq_stage")) if uid else None
         if show_mc:
-            e["mc_fees"] = mc_fees(e.get("total_sales"), fees)
+            e["mc_fees"] = mc_fees(e.get("total_under30"), e.get("total_over30"), fees)
     if show_mc:
-        sum_totals["mc_fees"] = mc_fees(sum_totals["total_sales"], fees)
-        sum_totals["fee_mc"] = normalize_fees(fees)["fee_mc"]
+        sum_totals["mc_fees"] = mc_fees(sum_totals["total_under30"], sum_totals["total_over30"], fees)
+        _knobs = normalize_fees(fees)
+        sum_totals["fee_mc_standard"] = _knobs["fee_mc_standard"]
+        sum_totals["fee_mc_target"] = _knobs["fee_mc_target"]
 
     return {
         "week_ending": week_ending,

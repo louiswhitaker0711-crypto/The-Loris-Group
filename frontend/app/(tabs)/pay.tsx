@@ -369,7 +369,7 @@ function WeekCalculator({ fees, weekEnding, bells, hasBells, saved, update }: {
           {weekEnding ? <Text style={styles.panelAside}>Week ending {formatPayDate(weekEnding, APP_LOCALE)}</Text> : null}
         </View>
         <View style={styles.breakdown}>
-          <Line label="Sign-up fees" value={formatPayDate(dates.signUps, APP_LOCALE) || 'The Wednesday 11 days after the week ends'} testID="value-pay-date-signups" />
+          <Line label="Sign-up fees" value={formatPayDate(dates.signUps, APP_LOCALE) || 'The Wednesday 11 days after the Saturday'} testID="value-pay-date-signups" />
           <Line label="The Round" value={formatPayDate(dates.memberships, APP_LOCALE) || 'A week after the sign-up fees'} tone="teal" testID="value-pay-date-round" />
           <Line label="Week 4 payments" value={dates.retention ? `around ${formatPayDate(dates.retention, APP_LOCALE)}` : 'About 8 weeks after the week ends'} tone="amber" testID="value-pay-date-retention" />
         </View>
@@ -483,7 +483,8 @@ const RATE_GROUPS: Array<{ title: string; hint: string; fields: RateField[]; adm
     hint: 'What the office is paid for each sign-up. Only Admins see this, here and in the MC fees column on Bells.',
     adminOnly: true,
     fields: [
-      { key: 'fee_mc', label: 'MC fee per sign-up', unit: '£', help: 'What the office is paid for every sign-up, whatever the tier.' },
+      { key: 'fee_mc_standard', label: 'MC fee, Silver', unit: '£', help: 'What the office is paid for each Silver sign-up.' },
+      { key: 'fee_mc_target', label: 'MC fee, Gold', unit: '£', help: 'What the office is paid for each Gold sign-up.' },
     ],
   },
 ];
@@ -639,11 +640,7 @@ function RatesEditor({ officeId }: { officeId?: string }) {
         </View>
         <Pressable
           style={styles.linkBtn}
-          onPress={() => setDraft({
-            ...Object.fromEntries(Object.entries(DEFAULT_FEES).map(([k, v]) => [k, String(v)])),
-            // The office's own fee has no standard figure: keep what is there.
-            fee_mc: values.fee_mc,
-          })}
+          onPress={() => setDraft(Object.fromEntries(Object.entries(DEFAULT_FEES).map(([k, v]) => [k, String(v)])))}
         >
           <Ionicons name="refresh" size={14} color={colors.text} />
           <Text style={styles.linkBtnText}>Fill in the standard rates</Text>

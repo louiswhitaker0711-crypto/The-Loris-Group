@@ -232,7 +232,7 @@ function BellsScreen() {
               <View style={styles.kpi}>
                 <Text style={styles.kpiLabel}>MC fees</Text>
                 <Text style={styles.kpiValue}>{formatMoney(num(officeTotals.mc_fees))}</Text>
-                <Text style={styles.kpiSub} numberOfLines={1}>{formatMoney(num(officeTotals.fee_mc))} a sign-up · Admins only</Text>
+                <Text style={styles.kpiSub} numberOfLines={1}>{formatMoney(num(officeTotals.fee_mc_target))} {TIER.over30.short} · {formatMoney(num(officeTotals.fee_mc_standard))} {TIER.under30.short} · Admins only</Text>
               </View>
             )}
           </View>

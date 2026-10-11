@@ -198,14 +198,17 @@ def test_my_summary_splits_a_week_across_two_months(summary_db, monkeypatch):
     assert by_month["2026-09"]["weeks"] == 2 and by_month["2026-10"]["weeks"] == 1
 
 
-def test_mc_fee_is_a_knob_that_starts_at_zero_and_prices_every_sign_up_alike():
+def test_mc_fees_are_admin_only_knobs_priced_by_tier():
     from core.vertex_pay import ADMIN_ONLY_FEE_KEYS, mc_fees
-    # The office's own fee isn't known until the Owner enters it in Rates.
-    assert DEFAULT_FEES["fee_mc"] == 0 and "fee_mc" in ADMIN_ONLY_FEE_KEYS
-    assert mc_fees(5, None) == 0
-    assert mc_fees(5, {"fee_mc": 30}) == 150
-    assert mc_fees(13, {"fee_mc": 32.5}) == 422.5
-    assert mc_fees(None, None) == 0 and mc_fees(-3, {"fee_mc": 30}) == 0
-    assert normalize_fees({"fee_mc": "40"})["fee_mc"] == 40
-    assert normalize_fees({"fee_mc": 99999})["fee_mc"] == 0   # out of range → the default
-    assert clean_fee_update({"fee_mc": 28}) == {"fee_mc": 28}
+    # The office is paid £16 for a Silver and £20 for a Gold.
+    assert DEFAULT_FEES["fee_mc_standard"] == 16 and DEFAULT_FEES["fee_mc_target"] == 20
+    assert set(ADMIN_ONLY_FEE_KEYS) == {"fee_mc_standard", "fee_mc_target"}
+    assert mc_fees(3, 2, None) == 3 * 16 + 2 * 20
+    assert mc_fees(5, 0, {"fee_mc_standard": 30}) == 150
+    assert mc_fees(0, 13, {"fee_mc_target": 32.5}) == 422.5
+    assert mc_fees(None, None, None) == 0 and mc_fees(-3, -1, {"fee_mc_standard": 30}) == 0
+    assert normalize_fees({"fee_mc_target": "40"})["fee_mc_target"] == 40
+    assert normalize_fees({"fee_mc_standard": 99999})["fee_mc_standard"] == 16   # out of range → the default
+    # A document from before the fee was split by tier is ignored, not misread.
+    assert normalize_fees({"fee_mc": 30})["fee_mc_standard"] == 16
+    assert clean_fee_update({"fee_mc_standard": 18, "fee_mc_target": 28}) == {"fee_mc_standard": 18, "fee_mc_target": 28}

@@ -22,10 +22,11 @@ A sign-up that FAILS pays nothing: the customer cancels before their first
 delivery, the first delivery is more than 8 days away, the order is under
 £5, or there are no repeat items on it.
 
-The office (the Marketing Company, MC) is paid its own fee for every sign-up:
-`fee_mc`. It is the office's figure, not a BA's: Bells shows the MC fees
-column to Admins only, and the rates endpoint leaves the knob out for
-everyone else. It ships at 0 until the Owner enters it in Earnings → Rates.
+The office (the Marketing Company, MC) is paid its own fee for every sign-up,
+by tier: `fee_mc_standard` for a Silver (default £16) and `fee_mc_target` for
+a Gold (default £20). They are the office's figures, not a BA's: Bells shows
+the MC fees column to Admins only, and the rates endpoint leaves both knobs
+out for everyone else.
 
 Bells records, per day: `under30` = Silver sign-ups, `over30` = Gold
 sign-ups, `memberships` = sign-ups that took The Round. The field names are
@@ -49,11 +50,12 @@ DEFAULT_FEES: dict[str, float] = {
     "fee_membership": 8,
     "retention_standard": 5,
     "retention_target": 8,
-    "fee_mc": 0,
+    "fee_mc_standard": 16,
+    "fee_mc_target": 20,
 }
 
 # Knobs only an Admin is shown (the office's own income, not a BA's).
-ADMIN_ONLY_FEE_KEYS: tuple[str, ...] = ("fee_mc",)
+ADMIN_ONLY_FEE_KEYS: tuple[str, ...] = ("fee_mc_standard", "fee_mc_target")
 
 FEE_KEYS: tuple[str, ...] = tuple(DEFAULT_FEES)
 
@@ -64,7 +66,8 @@ _BOUNDS: dict[str, tuple[float, float]] = {
     "fee_membership": (0, 1000),
     "retention_standard": (0, 1000),
     "retention_target": (0, 1000),
-    "fee_mc": (0, 1000),
+    "fee_mc_standard": (0, 1000),
+    "fee_mc_target": (0, 1000),
 }
 _INT_KEYS: set[str] = set()
 
@@ -126,9 +129,13 @@ def clean_fee_update(body: Any) -> dict:
     return out
 
 
-def mc_fees(sign_ups: float, fees: Optional[dict]) -> float:
-    """The office's (MC's) fees for a number of sign-ups, at `fee_mc` each."""
-    return round(max(0.0, float(sign_ups or 0)) * float(normalize_fees(fees)["fee_mc"]), 2)
+def mc_fees(standard: float, target: float, fees: Optional[dict]) -> float:
+    """The office's (MC's) fees for a week: Silver sign-ups at
+    `fee_mc_standard`, Gold sign-ups at `fee_mc_target`."""
+    f = normalize_fees(fees)
+    standard = max(0.0, float(standard or 0))
+    target = max(0.0, float(target or 0))
+    return round(standard * float(f["fee_mc_standard"]) + target * float(f["fee_mc_target"]), 2)
 
 
 def sign_up_fees(standard: float, target: float, fees: Optional[dict], memberships: float = 0) -> dict:

@@ -65,9 +65,9 @@ DEFAULT_CONTENT = {
         "takes The Round membership, that adds £8. Quality pays too: when the "
         "customer is still ordering in their 4th week you earn £5 for a Silver "
         "and £8 for a Gold. A sign-up that fails pays nothing.\n\n"
-        "When it's paid: sign-up fees on the Wednesday 11 days after the week "
-        "ends, membership fees a week after that, and 4th-week payments about 8 "
-        "weeks after the sign-up. Your coach will walk you through it, and the "
+        "When it's paid: the week runs Monday to Saturday. Sign-up fees are "
+        "paid on the Wednesday 11 days after that Saturday, membership fees a "
+        "week after that, and 4th-week payments about 8 weeks after the sign-up. Your coach will walk you through it, and the "
         "Earnings Calculator shows what your week is worth."
     ),
     "week_one_note": (

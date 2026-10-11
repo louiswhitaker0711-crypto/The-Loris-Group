@@ -22,7 +22,7 @@ if str(BACKEND_DIR) not in sys.path:
 from routes import training_routes as tr  # noqa: E402
 from core.vertex_pay import ADMIN_ONLY_FEE_KEYS, DEFAULT_FEES  # noqa: E402
 
-# What everyone is shown: every knob except the office's own income (fee_mc),
+# What everyone is shown: every knob except the office's own income (the MC fees),
 # which only an Admin gets.
 SHARED_FEES = {k: v for k, v in DEFAULT_FEES.items() if k not in ADMIN_ONLY_FEE_KEYS}
 
@@ -69,7 +69,7 @@ def test_nothing_stored_gives_the_defaults(monkeypatch):
     assert out["office_name"] == "London"
     for k, v in SHARED_FEES.items():
         assert out[k] == v
-    assert "fee_mc" not in out          # a BA is never sent the office's fee
+    assert not any(k.startswith("fee_mc") for k in out)   # a BA is never sent the office's fees
     assert out["fee_standard"] == 12 and out["fee_target"] == 20 and out["fee_membership"] == 8
     assert out["retention_standard"] == 5 and out["retention_target"] == 8
 
@@ -159,15 +159,16 @@ def test_the_office_fee_is_sent_to_an_admin_only(monkeypatch):
     db = _db()
     _patch(monkeypatch, db)
     _run(db.offices.insert_one({"id": "off-ldn", "name": "London"}))
-    _run(db.commission_fees.insert_one({"office_id": "off-ldn", "fee_mc": 32}))
-    assert "fee_mc" not in _run(tr.get_commission_fees(None))      # the BA from _patch
+    _run(db.commission_fees.insert_one({"office_id": "off-ldn", "fee_mc_standard": 18, "fee_mc_target": 32}))
+    assert not any(k.startswith("fee_mc") for k in _run(tr.get_commission_fees(None)))   # the BA from _patch
 
     async def _coach(_request):
         return {"id": "u2", "role": "leader", "coach_plus": True, "office_id": "off-ldn"}
     monkeypatch.setattr(tr, "get_current_user", _coach)
-    assert "fee_mc" not in _run(tr.get_commission_fees(None))      # nor a Coach, Coach+ included
+    assert not any(k.startswith("fee_mc") for k in _run(tr.get_commission_fees(None)))   # nor a Coach, Coach+ included
 
     async def _admin(_request):
         return {"id": "u3", "role": "admin", "office_id": "off-ldn"}
     monkeypatch.setattr(tr, "get_current_user", _admin)
-    assert _run(tr.get_commission_fees(None))["fee_mc"] == 32
+    out = _run(tr.get_commission_fees(None))
+    assert out["fee_mc_standard"] == 18 and out["fee_mc_target"] == 32
