@@ -48,12 +48,24 @@ jobs:
         working-directory: backend
         run: python -c "import server"
 
+      # Each check's output is also kept in a file so that, when one fails,
+      # the last step can show the reason on the run's summary page.
       - name: Backend tests
         working-directory: backend
-        run: python -m pytest tests -q
+        run: set -o pipefail; python -m pytest tests -q --tb=short 2>&1 | tee /tmp/ci-backend-tests.log
 
       - name: Repo-root tests
-        run: python -m pytest tests -q
+        run: set -o pipefail; python -m pytest tests -q --tb=short 2>&1 | tee /tmp/ci-repo-tests.log
+
+      - name: Show why a check failed
+        if: failure()
+        working-directory: ${{ github.workspace }}
+        run: |
+          for f in /tmp/ci-*.log; do
+            [ -f "$f" ] || continue
+            body=$(tail -n 150 "$f" | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\r//g;s/\n/%0A/g')
+            echo "::error title=$(basename "$f" .log)::$body"
+          done
 
   frontend:
     runs-on: ubuntu-latest
@@ -76,11 +88,21 @@ jobs:
         run: yarn install --frozen-lockfile
 
       - name: Typecheck
-        run: npx tsc --noEmit
+        run: set -o pipefail; npx tsc --noEmit 2>&1 | tee /tmp/ci-typecheck.log
 
       - name: Web export builds
         # Same env as the Dockerfile web-builder stage: empty backend URL →
         # axios baseURL becomes "/api" (same-origin).
         env:
           EXPO_PUBLIC_BACKEND_URL: ""
-        run: npx expo export --platform web --non-interactive
+        run: set -o pipefail; npx expo export --platform web --non-interactive 2>&1 | tee /tmp/ci-web-export.log
+
+      - name: Show why a check failed
+        if: failure()
+        working-directory: ${{ github.workspace }}
+        run: |
+          for f in /tmp/ci-*.log; do
+            [ -f "$f" ] || continue
+            body=$(tail -n 150 "$f" | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\r//g;s/\n/%0A/g')
+            echo "::error title=$(basename "$f" .log)::$body"
+          done

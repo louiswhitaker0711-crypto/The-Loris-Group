@@ -1,10 +1,10 @@
 """Bells — the weekly sign-ups board: per-person, per-week entry with
 auto-calculated sign-up fees, totals and averages. Office-scoped.
 
-The day fields keep the original data model's names, re-meant for Vertex:
-`under30` = £12 Standard sign-ups, `over30` = £15+ (Target £15 / Premium £20)
-sign-ups. `memberships` is not used by Vertex — it stays on stored rows but is
-never shown, totalled into sign-ups or paid.
+The day fields keep the original data model's names:
+`under30` = Silver sign-ups (£5.00 to £9.99 order), `over30` = Gold sign-ups
+(£10+ order), `memberships` = sign-ups that took The Round. A membership is
+an add-on: it is paid (fee_membership) but never totalled into sign-ups.
 
 Data model (bells_entries collection):
     {
@@ -19,9 +19,9 @@ Data model (bells_entries collection):
         week_ending: str,             # Sunday date YYYY-MM-DD
         days: [                       # 7 entries Mon..Sun (0..6)
             {
-                over30: number | None,       # £15+ sign-ups
-                under30: number | None,      # £12 sign-ups
-                memberships: number | None,  # legacy, unused
+                over30: number | None,       # Gold sign-ups
+                under30: number | None,      # Silver sign-ups
+                memberships: number | None,  # of those, how many took The Round
                 status: "normal" | "nc" | "rt" | "off",  # nc=not counted, rt=returned, off=didn't work
             }
         ],
@@ -211,10 +211,11 @@ def _stage_label(value) -> Optional[str]:
 def compute_totals(entry: dict, fees: Optional[dict]) -> dict:
     """Derive all calculated fields from an entry + the office's fee schedule.
 
-    `earnings` is the BA's estimated sign-up fees for the week (Vertex pay,
-    core/vertex_pay.sign_up_fees): £12 sign-ups × fee_standard + £15+
-    sign-ups × fee_target. It is before the 3rd direct-debit bonus and any
-    leadership deduction — Bells records neither; the Pay tab adds them.
+    `earnings` is the BA's estimated UP-FRONT fees for the week
+    (core/vertex_pay.sign_up_fees): Silver sign-ups × fee_standard + Gold
+    sign-ups × fee_target + memberships × fee_membership. It is before the
+    week-4 retention payments and before any fails — Bells records neither;
+    the Earnings Calculator estimates the retention.
     `fees` may be None or an old-shape document: the defaults fill the gaps.
     """
     days = entry.get("days") or []
@@ -253,11 +254,11 @@ def compute_totals(entry: dict, fees: Optional[dict]) -> dict:
     )
     scoring_pct = round((in_days_with_sale / in_days_total) * 100) if in_days_total > 0 else 0
 
-    # Vertex sign-up fees: £12 sign-ups (under30) at fee_standard, £15+
-    # sign-ups (over30) at fee_target — the office's knobs, or the defaults
-    # when nothing is stored (core/vertex_pay.py). `memberships` is a legacy
-    # field Vertex doesn't use: it is kept on the row but never paid.
-    earnings_breakdown = sign_up_fees(u30, o30, fees)
+    # Up-front fees: Silver sign-ups (under30) at fee_standard, Gold sign-ups
+    # (over30) at fee_target, plus fee_membership for each one that took The
+    # Round — the office's knobs, or the defaults when nothing is stored
+    # (core/vertex_pay.py).
+    earnings_breakdown = sign_up_fees(u30, o30, fees, mem)
     earnings = earnings_breakdown["sign_up_fees"]
 
     aepd = round(earnings / days_worked, 2) if days_worked > 0 else 0.0
@@ -1644,7 +1645,7 @@ async def my_bells_summary(request: Request, week: Optional[str] = None, months:
     """The caller's OWN sign-ups, for the Pay tab — open to every role
     (GET /bells is leaders/admins only, but a trainee's own numbers are theirs).
 
-    Returns this week's £12 / £15+ counts from their Bells row plus sign-ups
+    Returns this week's Silver / Gold / membership counts from their Bells row plus sign-ups
     per calendar month for the last `months` months (current month included),
     each day counted in the month it falls in (a week can straddle two
     months). Read-only; the office's fee knobs ride along so the Pay tab can
@@ -1716,6 +1717,7 @@ async def my_bells_summary(request: Request, week: Optional[str] = None, months:
         "this_week": {
             "standard": t["total_under30"],
             "target": t["total_over30"],
+            "memberships": t["total_memberships"],
             "sign_ups": t["total_sales"],
             "days_worked": t["days_worked"],
             "earnings": t["earnings"],
@@ -2506,7 +2508,7 @@ async def public_bells_csv(office_slug: str, request: Request):
     w.writerow([
         "Name", "Role",
         "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun",
-        "Sign-ups", "£15+", "£12",
+        "Sign-ups", "Gold", "Silver", "The Round",
         "Days Worked", "Piece Avg", "BA fees (£)",
     ])
     for e in enriched:
@@ -2531,6 +2533,7 @@ async def public_bells_csv(office_slug: str, request: Request):
             e.get("total_sales") or 0,
             e.get("total_over30") or 0,
             e.get("total_under30") or 0,
+            e.get("total_memberships") or 0,
             e.get("days_worked") or 0,
             f"{(e.get('piece_average') or 0):.1f}",
             round(e.get("earnings") or 0),

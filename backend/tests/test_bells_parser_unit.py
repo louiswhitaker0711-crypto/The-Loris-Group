@@ -1,8 +1,9 @@
-"""WhatsApp Bells paste — Vertex meaning of the emoji report.
+"""WhatsApp Bells paste — what each emoji in the report means.
 
-🥇 = one £15+ sign-up (Target/Premium) → Bells `over30`
-🥈 = one £12 sign-up (Standard)        → Bells `under30`
-⭕️ = ignored (Vertex has no memberships) — never counted, never written.
+🥇 = one Gold sign-up (£10+ order)            → Bells `over30`
+🥈 = one Silver sign-up (£5.00 to £9.99)      → Bells `under30`
+⭕️ = that sign-up also took The Round         → Bells `memberships`
+     (an add-on: only counted on a line with a 🥇 or 🥈, never a sign-up itself)
 
 Pure in-memory: mongomock_motor, no network, no real Mongo.
 """
@@ -36,20 +37,26 @@ Owen 0
 """
 
 
-def test_gold_is_15_plus_silver_is_12_and_circles_are_ignored():
+def test_gold_and_silver_are_sign_ups_and_a_circle_is_a_membership_on_one():
     reps = {r.raw_name: r for r in bp.deterministic_parse(REPORT)}
     mason = reps["Mason"]
     assert (mason.over30, mason.under30, mason.sales_count) == (4, 2, 6)
-    assert mason.memberships == 0
+    assert mason.memberships == 2
     rosa = reps["Rosa"]
     assert (rosa.over30, rosa.under30, rosa.sales_count) == (1, 1, 2)
-    assert rosa.memberships == 0
-    assert reps["Owen"].sales_count == 0
+    assert rosa.memberships == 1
+    assert reps["Owen"].sales_count == 0 and reps["Owen"].memberships == 0
 
 
-def test_a_circle_alone_is_not_a_sign_up():
+def test_a_circle_alone_is_not_a_sign_up_or_a_membership():
     reps = bp.deterministic_parse("Tess 1\n⭕️\n🥈")
     assert reps[0].under30 == 1 and reps[0].over30 == 0 and reps[0].sales_count == 1
+    assert reps[0].memberships == 0     # the ⭕️ has no sign-up on its line
+
+
+def test_no_more_memberships_than_sign_ups_on_a_line():
+    reps = bp.deterministic_parse("Tess 1\n🥇⭕️⭕️")
+    assert reps[0].over30 == 1 and reps[0].memberships == 1
 
 
 def test_count_after_the_name_is_ignored_emojis_win():
@@ -87,7 +94,7 @@ def _patch(monkeypatch):
     return db
 
 
-def test_apply_writes_the_tiers_and_keeps_a_legacy_membership_value(monkeypatch):
+def test_apply_writes_the_tiers_and_the_memberships(monkeypatch):
     db = _patch(monkeypatch)
     uid = ObjectId()
     _run(db.users.insert_one({"_id": uid, "name": "Mason Reed", "office_id": "off-ldn"}))
@@ -106,8 +113,8 @@ def test_apply_writes_the_tiers_and_keeps_a_legacy_membership_value(monkeypatch)
     row = _run(db.bells_entries.find_one({"id": "row-1"}))
     day = row["days"][2]
     assert day["over30"] == 4 and day["under30"] == 2 and day["status"] == "in"
-    # The paste can't write memberships; the stored legacy value is left alone.
-    assert day["memberships"] == 1
+    # The report is the day's full picture: its membership count replaces the cell's.
+    assert day["memberships"] == 3
 
 
 def test_apply_creates_a_row_without_memberships_and_a_circle_only_day_stays_off(monkeypatch):

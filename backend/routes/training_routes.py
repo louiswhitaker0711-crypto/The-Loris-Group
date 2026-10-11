@@ -499,11 +499,11 @@ async def update_settings(request: Request, office: Optional[str] = None, apply_
 
 @router.get("/commission-fees")
 async def get_commission_fees(request: Request, office: Optional[str] = None):
-    """The office's Vertex pay knobs (core/vertex_pay.py): sign-up fees by
-    tier, the 3rd DD bonus, the leadership rule and the quality-payment rule.
-    Falls back to any office's doc, then to the defaults; an old-shape doc
-    (the previous nested pay model) yields the defaults for every knob it
-    lacks. `office_name` rides along for the editor's heading."""
+    """The office's pay knobs (core/vertex_pay.py): the up-front fee for a
+    Silver and a Gold sign-up, the fee for The Round, and the week-4
+    retention payment for each tier. Falls back to any office's doc, then to
+    the defaults; a doc from an earlier pay model yields the defaults for
+    every knob it lacks. `office_name` rides along for the editor's heading."""
     user = await get_current_user(request)
     oid = await resolve_office_id(request, user, office)
     fees = await db.commission_fees.find_one({"office_id": oid}, {"_id": 0})
@@ -522,7 +522,7 @@ async def get_commission_fees(request: Request, office: Optional[str] = None):
 
 @router.put("/commission-fees")
 async def update_commission_fees(request: Request, office: Optional[str] = None, apply_all: bool = False):
-    """Save the office's Vertex pay knobs. Only known knobs are stored (a
+    """Save the office's pay knobs. Only known knobs are stored (a
     Fees-editor round-trip's derived `office_name` and any legacy keys are
     dropped); an out-of-range value is a 400 naming the knob."""
     user = await require_admin(request)

@@ -783,7 +783,7 @@ export const apiService = {
     const qs = params.toString();
     return api.get('/bells/teams' + (qs ? `?${qs}` : ''));
   },
-  // The caller's own Bells numbers (any role) — this week's £12 / £15+
+  // The caller's own Bells numbers (any role) — this week's Silver / Gold
   // sign-ups + sign-ups per month, and the office's pay knobs. Feeds Pay.
   getMyBellsSummary: (months = 6) => api.get(`/bells/my-summary?months=${months}`),
 

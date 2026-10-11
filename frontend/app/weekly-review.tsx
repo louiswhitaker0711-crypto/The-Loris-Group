@@ -206,7 +206,7 @@ export default function WeeklyReviewScreen() {
               <View style={s.tileGrid}>
                 <Tile label="Piece avg" value={d.totals.piece_avg == null ? '—' : d.totals.piece_avg.toFixed(2)} s={s} />
                 <Tile label="Scoring" value={pct(d.totals.scoring_pct)} s={s} />
-                <Tile label="£15+ %" value={pct(d.totals.gold_pct)} s={s} />
+                <Tile label="Gold %" value={pct(d.totals.gold_pct)} s={s} />
                 <Tile label="BA days" value={num(d.totals.ba_days)} s={s} />
                 <Tile
                   label="Zero weeks"
@@ -236,7 +236,7 @@ export default function WeeklyReviewScreen() {
                       <View style={{ flex: 1 }}>
                         <Text style={s.rollerName}>{h.name}</Text>
                         <Text style={s.rollerMeta}>
-                          {h.sales} sign-up{h.sales === 1 ? '' : 's'} · {h.over30} at £15+ · {h.days_worked}d
+                          {h.sales} sign-up{h.sales === 1 ? '' : 's'} · {h.over30} Gold · {h.days_worked}d
                           {h.leader_name ? ` · ${h.leader_name}'s crew` : ''}
                         </Text>
                       </View>
@@ -519,7 +519,7 @@ function LeaderCard({
           <View style={s.tileGrid}>
             <Tile label="Piece avg" value={lw.piece_avg == null ? '—' : lw.piece_avg.toFixed(2)} s={s} />
             <Tile label="Scoring" value={pct(lw.scoring_pct)} s={s} />
-            <Tile label="£15+ %" value={pct(lw.gold_pct)} s={s} />
+            <Tile label="Gold %" value={pct(lw.gold_pct)} s={s} />
             <Tile label="BA days" value={num(lw.ba_days)} s={s} />
             <Tile label="Zero weeks" value={`${lw.reps_zero}/${lw.reps_worked}`} tone={lw.reps_zero > 0 ? 'bad' : 'good'} s={s} colors={colors} />
             {lw.own && <Tile label="Own sign-ups" value={num(lw.own.sales)} s={s} />}

@@ -12,8 +12,8 @@ This module mirrors that into the app every hour (from the OwnerIQ job):
     in the app (weekly_goal_source tracks who wrote it).
   • users.team_name / owneriq_team_id ← the OwnerIQ team the coach leads.
 And fills Bells from the daily KPI rows (`owneriq_kpis`): a day nobody has
-entered gets the BA's OwnerIQ sign-ups as £12 sign-ups (OwnerIQ has no
-£12/£15+ split), flagged so coaches can correct the split. A day we filled is
+entered gets the BA's OwnerIQ sign-ups as Silver sign-ups (OwnerIQ has no
+Silver/Gold split), flagged so coaches can correct the split. A day we filled is
 refreshed on later runs until someone edits it; an edited day is never touched.
 
 OwnerIQ users are linked to app users by users.owneriq_user_id, then the KPI
@@ -38,7 +38,7 @@ from owneriq_sync import ID_LINKED, OWNERIQ_API_BASE, OwnerIQError, _api_headers
 
 logger = logging.getLogger(__name__)
 
-BELLS_SOURCE_NOTE = "Filled from OwnerIQ as £12 sign-ups: check the £15+ split"
+BELLS_SOURCE_NOTE = "Filled from OwnerIQ as Silver sign-ups: check the Gold split"
 
 
 def _now() -> str:

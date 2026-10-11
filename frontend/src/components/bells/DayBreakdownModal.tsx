@@ -217,7 +217,9 @@ export default function DayBreakdownModal({ dayIdx, entries, weekEnding, onClose
       } else {
         const n = typeof raw === 'number' ? raw : (raw === '' ? null : Math.max(0, parseInt(String(raw)) || 0));
         (next as any)[field] = n;
-        if (next.status === 'off' && ((n || 0) > 0)) {
+        // Typing a sign-up count on an "off" day means they worked it. A
+        // membership alone doesn't: it is an add-on to a sign-up.
+        if (field !== 'memberships' && next.status === 'off' && ((n || 0) > 0)) {
           next.status = 'in';
         }
       }
@@ -237,14 +239,17 @@ export default function DayBreakdownModal({ dayIdx, entries, weekEnding, onClose
     const totalSales = inDays.reduce((s, r) => s + r.tot, 0);
     const totalOver30 = inDays.reduce((s, r) => s + (r.dayValue.over30 || 0), 0);
     const totalUnder30 = inDays.reduce((s, r) => s + (r.dayValue.under30 || 0), 0);
+    const totalMembers = inDays.reduce((s, r) => s + (r.dayValue.memberships || 0), 0);
     const dailyAvg = inDays.length > 0 ? totalSales / inDays.length : 0;
     // P/A — pitches per appointment? Or sales per attendant? Standard for
     // field sales: P/A = sales per person working (i.e. dailyAvg). We
     // expose it as a separate label since leaders track it that way.
     const pa = dailyAvg;
     const scoringPct = inDays.length > 0 ? Math.round((withSale.length / inDays.length) * 100) : 0;
-    // % of the day's sign-ups that were £15+ (Target/Premium)
+    // % of the day's sign-ups that were Gold
     const goldPct = totalSales > 0 ? Math.round((totalOver30 / totalSales) * 100) : 0;
+    // % of the day's sign-ups that took The Round
+    const roundPct = totalSales > 0 ? Math.min(100, Math.round((totalMembers / totalSales) * 100)) : 0;
     return {
       rows,
       working: inDays.length,
@@ -255,6 +260,7 @@ export default function DayBreakdownModal({ dayIdx, entries, weekEnding, onClose
       pa,
       scoringPct,
       goldPct,
+      roundPct,
     };
   }, [local]);
 
@@ -347,6 +353,10 @@ export default function DayBreakdownModal({ dayIdx, entries, weekEnding, onClose
               <Text style={styles.statLabel}>{`${TIER.over30.short} %`}</Text>
               <Text style={[styles.statValue, { color: dayTotals.goldPct >= 60 ? colors.primary : colors.text }]}>{dayTotals.goldPct}%</Text>
             </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statLabel}>{`${TIER.memberships.short} %`}</Text>
+              <Text style={[styles.statValue, { color: dayTotals.roundPct >= 75 ? colors.primary : colors.text }]}>{dayTotals.roundPct}%</Text>
+            </View>
           </View>
           <Text style={styles.hint}>
             {editMode
@@ -432,7 +442,7 @@ function ReadOnlyPersonDayRow({ name, day, total }: { name: string; day: Day; to
             day.status === 'ab' ? 'Absent' :
             day.status === 'nc' ? 'Not counted' :
             day.status === 'rt' ? `Retrain${(day.over30 || 0) + (day.under30 || 0) > 0 ? ` · ${signUps((day.over30 || 0) + (day.under30 || 0))} (not scored)` : ''}` :
-            `${TIER.over30.short}: ${day.over30 ?? 0} · ${TIER.under30.short}: ${day.under30 ?? 0}`
+            `${TIER.over30.short}: ${day.over30 ?? 0} · ${TIER.under30.short}: ${day.under30 ?? 0} · ${TIER.memberships.short}: ${day.memberships ?? 0}`
           }
         </Text>
       </View>
@@ -478,6 +488,7 @@ function EditablePersonDayRow({ name, role, dayName, day, saveState, onChange }:
       <View style={styles.editInputsRow}>
         <EditInput label={TIER.over30.long} a11y={`${name} ${dayName} ${TIER.over30.short} sign-ups`} value={day.over30} disabled={inputsDisabled} onChange={(v) => onChange('over30', v)} />
         <EditInput label={TIER.under30.long} a11y={`${name} ${dayName} ${TIER.under30.short} sign-ups`} value={day.under30} disabled={inputsDisabled} onChange={(v) => onChange('under30', v)} />
+        <EditInput label={TIER.memberships.long} a11y={`${name} ${dayName} ${TIER.memberships.short} members`} value={day.memberships} disabled={inputsDisabled} onChange={(v) => onChange('memberships', v)} />
       </View>
 
       <View style={styles.editStatusRow}>

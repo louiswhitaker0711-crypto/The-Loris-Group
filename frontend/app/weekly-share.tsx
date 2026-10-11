@@ -86,7 +86,7 @@ export default function BulletinsHubScreen() {
           iconBg={POSTER.forest}
           iconColor={POSTER.paper}
           title="Sign-ups Bulletin"
-          meta="Top 5 sign-ups · £15+ %"
+          meta="Top 5 sign-ups · Gold %"
           onOpen={goSales}
           onShare={goShareSales}
           styles={styles}

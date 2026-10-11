@@ -3,18 +3,20 @@
 import { APP_TZ } from '../../utils/appTime';
 
 /**
- * The two sign-up tiers a day row counts. The stored field names are legacy
- * (`over30` / `under30`) and the payload shape is unchanged — only the
+ * What a day row counts. The stored field names are legacy (`over30` /
+ * `under30` / `memberships`) and the payload shape is unchanged — only the
  * meaning is:
- *   over30  → £15+ = a Target (£15/month) or Premium (£20/month) gift
- *   under30 → £12  = a Standard (£12/month) gift
+ *   over30      → Gold   = a sign-up with a repeat weekly order of £10 or more
+ *   under30     → Silver = a sign-up with an order of £5.00 to £9.99
+ *   memberships → of those sign-ups, how many took The Round (the
+ *                 membership). An add-on: never a sign-up of its own.
  * Every label on the Bells screen reads from here so the wording stays in
- * one place. (`memberships` is still carried on the row but is not used by
- * Vertex and is never shown.)
+ * one place.
  */
 export const TIER = {
-  over30: { short: '£15+', long: '£15+ Target/Premium' },
-  under30: { short: '£12', long: '£12 Standard' },
+  over30: { short: 'Gold', long: 'Gold (£10+ order)' },
+  under30: { short: 'Silver', long: 'Silver (£5 to £9.99)' },
+  memberships: { short: 'Round', long: 'Took The Round' },
 } as const;
 
 /** "sign-up" / "sign-ups" for a count. */
@@ -108,18 +110,22 @@ export type Entry = {
   average_earnings_per_day: number;
   daily_totals?: number[];
   /**
-   * Estimated BA sign-up fees (the server's maths): fee_standard × £12
-   * sign-ups + fee_target × £15+ sign-ups, BEFORE the 3rd direct-debit bonus.
-   * Keys are optional so an older cached response (different shape) simply
-   * falls back to showing the total.
+   * Estimated BA up-front fees (the server's maths): fee_standard × Silver
+   * sign-ups + fee_target × Gold sign-ups + fee_membership × The Round
+   * members, BEFORE the week-4 payments and any fails. Keys are optional so
+   * an older cached response (different shape) simply falls back to showing
+   * the total.
    */
   earnings_breakdown?: {
     fee_standard?: number;
     fee_target?: number;
+    fee_membership?: number;
     standard_count?: number;
     target_count?: number;
+    membership_count?: number;
     standard_earnings?: number;
     target_earnings?: number;
+    membership_earnings?: number;
     sign_up_fees?: number;
   };
   /** Who they report to, and the stage they hold as OwnerIQ words it ("3", "3+"). */

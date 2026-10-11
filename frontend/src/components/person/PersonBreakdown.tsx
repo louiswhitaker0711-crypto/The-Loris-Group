@@ -304,7 +304,7 @@ export function PersonBreakdown({ id }: { id: string }) {
               <Ionicons name="cash-outline" size={15} color={P.lime} />
               <Text style={s.feesText}>
                 Sign-up fees{isThisWeek ? ' so far' : ''}: <Text style={s.feesStrong}>{formatMoney(week.sign_ups.sign_up_fees)}</Text>
-                {`  (${week.sign_ups.standard_count} × £12 · ${week.sign_ups.target_count} × £15+, from Bells)`}
+                {`  (${week.sign_ups.standard_count} Silver · ${week.sign_ups.target_count} Gold${(week.sign_ups as any).membership_count ? ` · ${(week.sign_ups as any).membership_count} in The Round` : ''}, from Bells)`}
               </Text>
             </View>
           ) : null}

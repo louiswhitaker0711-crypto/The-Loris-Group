@@ -289,8 +289,7 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
   const [cellEdit, setCellEdit] = useState<{ entry: Entry; dayIdx: number } | null>(null);
   const [cellO30, setCellO30] = useState('');
   const [cellU30, setCellU30] = useState('');
-  // Not used by Vertex and never shown — carried so a save passes the row's
-  // existing value straight back instead of wiping or inventing one.
+  // Of the day's sign-ups, how many took The Round (the membership).
   const [cellMem, setCellMem] = useState('');
   const [cellStatus, setCellStatus] = useState('off');
   const [cellSaving, setCellSaving] = useState(false);
@@ -324,6 +323,10 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
       memberships: clearing ? null : num(cellMem),
       status: cellStatus,
     };
+    // A membership is an add-on to a sign-up: never more of them than sign-ups.
+    if (nextDay.memberships != null) {
+      nextDay.memberships = Math.min(nextDay.memberships, (nextDay.over30 || 0) + (nextDay.under30 || 0)) || null;
+    }
     // Typing numbers on an untouched day means they worked it.
     if ((nextDay.over30 || nextDay.under30) && (cellStatus === 'off' || !cellStatus)) {
       nextDay.status = 'in';
@@ -623,15 +626,16 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
               <>
                 <View style={styles.ceNumRow}>
                   {([
-                    { label: TIER.over30.long, short: TIER.over30.short, value: cellO30, set: setCellO30 },
-                    { label: TIER.under30.long, short: TIER.under30.short, value: cellU30, set: setCellU30 },
+                    { label: TIER.over30.long, short: TIER.over30.short, noun: 'sign-ups', value: cellO30, set: setCellO30 },
+                    { label: TIER.under30.long, short: TIER.under30.short, noun: 'sign-ups', value: cellU30, set: setCellU30 },
+                    { label: TIER.memberships.long, short: TIER.memberships.short, noun: 'members', value: cellMem, set: setCellMem },
                   ] as const).map((f) => (
                     <View key={f.label} style={{ flex: 1 }}>
                       <Text style={styles.ceNumLabel}>{f.label}</Text>
                       <TextInput
                         value={f.value}
                         onChangeText={f.set}
-                        accessibilityLabel={`${cellEdit ? DAYS_LONG[cellEdit.dayIdx] : ''} ${f.short} sign-ups`}
+                        accessibilityLabel={`${cellEdit ? DAYS_LONG[cellEdit.dayIdx] : ''} ${f.short} ${f.noun}`}
                         style={styles.ceNumInput}
                         keyboardType="number-pad"
                         placeholder="—"

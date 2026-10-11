@@ -7,8 +7,9 @@ Currently only serves the Bells public share page, which:
   - Hits the existing JSON endpoint /api/public/bells/{slug} for data
   - Requires the same `?code=...` share code as the JSON endpoint
 
-Vertex vocabulary on this page: `total_sales` = sign-ups, `over30` = £15+
-(Target/Premium) sign-ups, `under30` = £12 (Standard) sign-ups, `earnings` =
+Vocabulary on this page: `total_sales` = sign-ups, `over30` = Gold (£10+
+order) sign-ups, `under30` = Silver (£5.00 to £9.99) sign-ups, `memberships`
+= sign-ups that took The Round, `earnings` =
 estimated BA fees in £. The API still carries membership fields; Vertex
 doesn't use memberships, so the page never shows them.
 """
@@ -506,7 +507,7 @@ _BELLS_PAGE_HTML = r"""<!DOCTYPE html>
             }
 
             // Total column count for the team header colspan
-            const TOTAL_COLS = 1 /* name */ + 2 /* LW/Goal */ + 7 /* days */ + 3 /* tot/days/PA */ + 1 /* £15+ % */ + 1 /* est. fees */;
+            const TOTAL_COLS = 1 /* name */ + 2 /* LW/Goal */ + 7 /* days */ + 3 /* tot/days/PA */ + 1 /* Gold % */ + 1 /* est. fees */;
 
             const rowsHtml = groups.map((g) => {
                 const tint = g.key === '__no_team__'
@@ -617,9 +618,10 @@ _BELLS_PAGE_HTML = r"""<!DOCTYPE html>
                             <div class="team-metric"><div class="team-metric-lbl">🍃 Green %</div><div class="team-metric-val">${team.green_pct ?? 0}%</div></div>
                         </div>
                         <div class="team-metrics">
-                            <div class="team-metric"><div class="team-metric-lbl">£15+</div><div class="team-metric-val">${team.total_over30 ?? 0}</div></div>
-                            <div class="team-metric"><div class="team-metric-lbl">£12</div><div class="team-metric-val">${team.total_under30 ?? 0}</div></div>
-                            <div class="team-metric"><div class="team-metric-lbl">£15+ %</div><div class="team-metric-val">${team.pct_over30 ?? 0}%</div></div>
+                            <div class="team-metric"><div class="team-metric-lbl">Gold</div><div class="team-metric-val">${team.total_over30 ?? 0}</div></div>
+                            <div class="team-metric"><div class="team-metric-lbl">Silver</div><div class="team-metric-val">${team.total_under30 ?? 0}</div></div>
+                            <div class="team-metric"><div class="team-metric-lbl">Gold %</div><div class="team-metric-val">${team.pct_over30 ?? 0}%</div></div>
+                            <div class="team-metric"><div class="team-metric-lbl">Round %</div><div class="team-metric-val">${team.pct_memberships ?? 0}%</div></div>
                         </div>
                         <div class="team-secondary">
                             <div class="team-sec">
@@ -675,9 +677,10 @@ _BELLS_PAGE_HTML = r"""<!DOCTYPE html>
                     <div class="chip"><div class="chip-lbl-row"><span class="chip-icon green">🍃</span><span class="chip-lbl">Green %</span></div><div class="chip-val">${t.green_pct ?? 0}%</div></div>
                 </div>
                 <div class="chips-row" style="margin-bottom:12px;">
-                    <div class="chip"><div class="chip-lbl">£15+</div><div class="chip-val">${t.total_over30 || 0}</div></div>
-                    <div class="chip"><div class="chip-lbl">£12</div><div class="chip-val">${t.total_under30 || 0}</div></div>
-                    <div class="chip"><div class="chip-lbl">£15+ %</div><div class="chip-val">${t.pct_over30 ?? 0}%</div></div>
+                    <div class="chip"><div class="chip-lbl">Gold</div><div class="chip-val">${t.total_over30 || 0}</div></div>
+                    <div class="chip"><div class="chip-lbl">Silver</div><div class="chip-val">${t.total_under30 || 0}</div></div>
+                    <div class="chip"><div class="chip-lbl">Gold %</div><div class="chip-val">${t.pct_over30 ?? 0}%</div></div>
+                    <div class="chip"><div class="chip-lbl">Round %</div><div class="chip-val">${t.pct_memberships ?? 0}%</div></div>
                 </div>
 
                 <div class="daily">
@@ -705,7 +708,7 @@ _BELLS_PAGE_HTML = r"""<!DOCTYPE html>
                                     <th>LW</th>
                                     <th>Goal</th>
                                     ${days.map(d => `<th>${d}</th>`).join('')}
-                                    <th>Tot</th><th>Days</th><th>P/A</th><th>£15+ %</th><th>Est. fees</th>
+                                    <th>Tot</th><th>Days</th><th>P/A</th><th>Gold %</th><th>Est. fees</th>
                                 </tr>
                             </thead>
                             <tbody>${rowsHtml}</tbody>
@@ -784,8 +787,8 @@ _BELLS_PAGE_HTML = r"""<!DOCTYPE html>
                     <div class="day-rep-row">
                         <div class="day-rep-name">${escapeHtml(r.name)}</div>
                         <div class="day-rep-stats">
-                            ${r.over30 > 0 ? `<span class="tier">${r.over30} × £15+</span>` : ''}
-                            ${r.under30 > 0 ? `<span class="tier">${r.under30} × £12</span>` : ''}
+                            ${r.over30 > 0 ? `<span class="tier">${r.over30} × Gold</span>` : ''}
+                            ${r.under30 > 0 ? `<span class="tier">${r.under30} × Silver</span>` : ''}
                         </div>
                     </div>`).join('');
 
@@ -803,9 +806,9 @@ _BELLS_PAGE_HTML = r"""<!DOCTYPE html>
                     <div class="day-tiles">
                         <div class="day-tile primary"><div class="day-tile-head"><span class="chip-icon primary">⚡</span><span class="day-tile-lbl">Sign-ups</span></div><div class="day-tile-val">${sales}</div></div>
                         <div class="day-tile"><div class="day-tile-head"><span class="day-tile-lbl">P/A</span></div><div class="day-tile-val">${pa}</div></div>
-                        <div class="day-tile"><div class="day-tile-head"><span class="day-tile-lbl">£15+</span></div><div class="day-tile-val">${over30}</div></div>
-                        <div class="day-tile"><div class="day-tile-head"><span class="day-tile-lbl">£12</span></div><div class="day-tile-val">${under30}</div></div>
-                        <div class="day-tile"><div class="day-tile-head"><span class="day-tile-lbl">£15+ %</span></div><div class="day-tile-val">${hiRate}%</div></div>
+                        <div class="day-tile"><div class="day-tile-head"><span class="day-tile-lbl">Gold</span></div><div class="day-tile-val">${over30}</div></div>
+                        <div class="day-tile"><div class="day-tile-head"><span class="day-tile-lbl">Silver</span></div><div class="day-tile-val">${under30}</div></div>
+                        <div class="day-tile"><div class="day-tile-head"><span class="day-tile-lbl">Gold %</span></div><div class="day-tile-val">${hiRate}%</div></div>
                         <div class="day-tile"><div class="day-tile-head"><span class="chip-icon green">🍃</span><span class="day-tile-lbl">Working</span></div><div class="day-tile-val">${working}</div></div>
                     </div>
                     <div class="day-section-title">BAs with sign-ups (${reps.length})</div>

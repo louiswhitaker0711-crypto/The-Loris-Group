@@ -27,7 +27,8 @@ def test_defaults_carry_the_playbook_content():
         assert day in week
     assert "100% Effort" in DEFAULT_CONTENT["welcome_message"]
     pay = DEFAULT_CONTENT["pay_notes"]
-    assert "£55 for a £12 standard sign-up" in pay and "3rd direct debit" in pay
+    assert "£12 for a Silver sign-up" in pay and "£20 for a Gold sign-up" in pay
+    assert "The Round" in pay and "4th week" in pay
 
 
 def test_contacts_are_roles_only_no_personal_details():

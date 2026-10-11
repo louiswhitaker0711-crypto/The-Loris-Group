@@ -217,7 +217,8 @@ async def person_breakdown(user_id: str, request: Request):
             "kpis": w.get("kpis"),
             "days": w.get("days") or [],
             "sign_ups": sign_up_fees(sum((d.get("under30") or 0) for d in days),
-                                     sum((d.get("over30") or 0) for d in days), fees) if days is not None else None,
+                                     sum((d.get("over30") or 0) for d in days), fees,
+                                     sum((d.get("memberships") or 0) for d in days)) if days is not None else None,
         })
 
     pin = await office_pin(person.get("office_id"), db)
