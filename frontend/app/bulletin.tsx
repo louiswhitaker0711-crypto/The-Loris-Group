@@ -31,6 +31,7 @@ import { BrandLoader } from '../src/components/ui/BrandLoader';
 import { useTabBarClearance } from '../src/customization/CustomTabBar';
 import { Aurora } from '../src/components/ui/Aurora';
 import { formatMoney } from '../src/utils/appTime';
+import { APP_NAME, ORG_NAME } from '../src/theme/brand';
 import {
   isoAddDays, lastWeekEndingISO as lastSundayISO, prettyWeekRange, prettyDate,
   posterWeekEnding, todayLong, POSTER, colorForName, initialsOf,
@@ -228,7 +229,7 @@ export default function BulletinScreen() {
             <Aurora />
             <Image source={{ uri: '/api/logo.png' }} style={styles.bannerLogo} resizeMode="contain" />
             <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={styles.bannerLabel}>Vertex Hub · Weekly Bulletin</Text>
+              <Text style={styles.bannerLabel}>{APP_NAME} · Weekly Bulletin</Text>
               <Text style={styles.bannerWeek}>w/e {prettyDate(weekEnding)} · All offices</Text>
             </View>
             <Ionicons name="trophy" size={28} color={POSTER.lime} />
@@ -457,7 +458,7 @@ export function buildBulletinHtml(b: Bulletin): string {
         <img src="${_logoUri || LOGO_URL}" style="height:30pt;width:auto;max-width:110pt;object-fit:contain;display:block;" />
         <div>
           <div style="color:${P.paper};font-weight:900;font-size:20pt;letter-spacing:1.5pt;text-transform:uppercase;">Weekly Bulletin</div>
-          <div style="font-family:${P.mono};color:${P.rule};font-size:8.5pt;font-weight:700;letter-spacing:1pt;margin-top:2pt;text-transform:uppercase;">Vertex Organisation · w/e ${escape(prettyDate(b.week_ending))}</div>
+          <div style="font-family:${P.mono};color:${P.rule};font-size:8.5pt;font-weight:700;letter-spacing:1pt;margin-top:2pt;text-transform:uppercase;">${escape(ORG_NAME)} · w/e ${escape(prettyDate(b.week_ending))}</div>
         </div>
       </div>
       <div style="background:${P.lime};color:${P.forest};padding:6pt 12pt;border-radius:6pt;font-weight:900;font-size:10pt;letter-spacing:0.6pt;text-align:right;line-height:1.1;">
@@ -514,7 +515,7 @@ export function buildBulletinHtml(b: Bulletin): string {
   <div style="background:${P.deep};padding:12pt 22pt;text-align:center;border-top:1pt solid ${P.mid};">
     <div style="display:inline-flex;align-items:center;gap:8pt;">
       <img src="${_logoUri || LOGO_URL}" style="height:16pt;width:auto;max-width:60pt;object-fit:contain;background:${P.forest};border-radius:4pt;padding:3pt 5pt;" />
-      <span style="font-family:${P.mono};color:${P.rule};font-size:8.5pt;font-weight:700;letter-spacing:1pt;text-transform:uppercase;">Vertex Organisation · ${escape(todayLong())}</span>
+      <span style="font-family:${P.mono};color:${P.rule};font-size:8.5pt;font-weight:700;letter-spacing:1pt;text-transform:uppercase;">${escape(ORG_NAME)} · ${escape(todayLong())}</span>
     </div>
   </div>
 </div>
@@ -568,7 +569,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 10,
     borderBottomWidth: 0.5, borderBottomColor: colors.border,
   },
-  boardRowFirst: { backgroundColor: 'rgba(183,223,88,0.10)' },
+  boardRowFirst: { backgroundColor: 'rgba(34,208,236,0.10)' },
   rankBadge: {
     backgroundColor: POSTER.mid, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 4,
     minWidth: 30, alignItems: 'center',

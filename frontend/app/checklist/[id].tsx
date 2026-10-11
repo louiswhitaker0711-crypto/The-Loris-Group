@@ -35,7 +35,7 @@ const gradeColor = (g: string | null) => {
  * Avg-Grade numeral tones. The raw status tokens fail on the white DepthCard
  * (#10B981 ~2.2:1, #D97706 ~3.4:1 — both under even the 3:1 large-text floor)
  * and the numeral is 26px Unbounded-Black, so light gets the darker twins
- * (5.5-6.5:1 on white) while dark keeps the bright stops (7-8:1 on #102D25).
+ * (5.5-6.5:1 on white) while dark keeps the bright stops (7-8:1 on #0c2340).
  * Same pattern as day/[id].tsx's SCORE_TONES.
  */
 const GRADE_TONES = {
@@ -46,7 +46,7 @@ const GRADE_TONES = {
 const confColor = (c: string) => {
   if (c === 'Independent') return { bg: '#DCFCE7', text: '#16A34A' };
   if (c === 'Assisted') return { bg: '#FEF9C3', text: '#CA8A04' };
-  return { bg: '#EAF2DA', text: '#56731B' };
+  return { bg: '#dbe9f6', text: '#086381' };
 };
 
 export default function ChecklistScreen() {
@@ -235,8 +235,8 @@ const createStyles = (colors: any) => StyleSheet.create({
   summaryBar: { marginTop: 2 },
   categorySection: { borderRadius: 20, marginBottom: 16, overflow: 'hidden' },
   // The printed section tab. Fill is set per theme at the call site: `ink`
-  // (#0e271f) is within a hair of the dark card face (#102D25), so in dark the
-  // band read as no band at all — dark uses `surfaceAlt` (#18392E) instead.
+  // (#0b1e38) is within a hair of the dark card face (#0c2340), so in dark the
+  // band read as no band at all — dark uses `surfaceAlt` (#11325f) instead.
   // Children stay inkText/inkMuted, which read on either fill.
   categoryHeader: {
     flexDirection: 'row', alignItems: 'center', gap: 8, padding: 14,

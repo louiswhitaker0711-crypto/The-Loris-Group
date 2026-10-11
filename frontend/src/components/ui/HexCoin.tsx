@@ -84,7 +84,7 @@ const P0 = Math.asin(SEED_DEG / MAX_DEG);            // phase that yields 8°
 const PERIOD_MS = 4800;                              // 2400 ms each way
 const PERSPECTIVE = 600;
 const SPEC_SKEW = -18;                               // specular band slant (deg)
-const INK = '#0b211c';
+const INK = '#081a30';
 
 type Metal = {
   face: readonly string[];  // face gradient, top-left → bottom-right
@@ -98,7 +98,7 @@ const METALS: Record<HexCoinTint, Metal> = {
   gold:   { face: GRADIENT_GOLD,   edge: '#8a6508', rim: '#fff7d1', glow: '#f0c53d', text: INK },
   silver: { face: GRADIENT_STEEL,  edge: '#4b4b5e', rim: '#ffffff', glow: '#c7c7dc', text: INK },
   bronze: { face: GRADIENT_BRONZE, edge: '#5e3210', rim: '#fbe3cc', glow: '#cd7f32', text: INK },
-  purple: { face: GRADIENT,        edge: '#0b211c', rim: '#e6f4c4', glow: '#8caf38', text: '#ffffff' },
+  purple: { face: GRADIENT,        edge: '#081a30', rim: '#c6eff7', glow: '#0a9bcb', text: '#ffffff' },
   teal:   { face: ['#a5f3fc', '#22d3ee', '#0e7490'], edge: '#0b4f63', rim: '#e0fbff', glow: '#22d3ee', text: INK },
   green:  { face: ['#a7f3d0', '#10b981', '#047857'], edge: '#03533c', rim: '#d7fbe9', glow: '#10b981', text: INK },
 };

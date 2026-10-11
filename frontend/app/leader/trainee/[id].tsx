@@ -240,7 +240,7 @@ export default function TraineeProgressScreen() {
       >
         <View style={[
           styles.statusIcon,
-          a.completed && { backgroundColor: a.passed_off ? '#2F6A4B' : '#22c55e' },
+          a.completed && { backgroundColor: a.passed_off ? '#225bc3' : '#22c55e' },
         ]}>
           {a.completed ? (
             <Ionicons
@@ -291,7 +291,7 @@ export default function TraineeProgressScreen() {
       >
         {/* Header card */}
         <View style={styles.summary}>
-          <View style={[styles.avatar, targetIsLeader && { backgroundColor: '#2F6A4B' }, isHireMode && { backgroundColor: '#d97706' }]}>
+          <View style={[styles.avatar, targetIsLeader && { backgroundColor: '#225bc3' }, isHireMode && { backgroundColor: '#d97706' }]}>
             <Text style={styles.avatarText}>
               {hireName.charAt(0).toUpperCase()}
             </Text>
@@ -306,7 +306,7 @@ export default function TraineeProgressScreen() {
             ]}>
               <Text style={[
                 styles.roleBadgeText,
-                { color: isHireMode ? '#d97706' : targetIsLeader ? '#2F6A4B' : '#0ea5e9' },
+                { color: isHireMode ? '#d97706' : targetIsLeader ? '#225bc3' : '#0ea5e9' },
               ]}>
                 {isHireMode ? 'UNASSIGNED' : targetIsLeader ? 'COACH' : 'BA'}
               </Text>
@@ -443,7 +443,7 @@ export default function TraineeProgressScreen() {
                   >
                     <View style={[
                       styles.statusIcon,
-                      completed && { backgroundColor: passedOff ? (colors as any).purple || '#2F6A4B' : (colors as any).green || '#22c55e' },
+                      completed && { backgroundColor: passedOff ? (colors as any).purple || '#225bc3' : (colors as any).green || '#22c55e' },
                     ]}>
                       <Ionicons
                         name={passedOff ? 'shield-checkmark' : (completed ? 'checkmark' : 'create-outline')}
@@ -561,8 +561,8 @@ const createStyles = (colors: any) => StyleSheet.create({
 
   adminHint: {
     marginTop: 18, padding: 12, borderRadius: 10,
-    backgroundColor: (colors.primary || '#244C3B') + '14',
-    borderWidth: 1, borderColor: (colors.primary || '#244C3B') + '33',
+    backgroundColor: (colors.primary || '#1d4fa8') + '14',
+    borderWidth: 1, borderColor: (colors.primary || '#1d4fa8') + '33',
     flexDirection: 'row', alignItems: 'center', gap: 8,
   },
   adminHintText: { fontSize: 11.5, color: colors.primary, fontWeight: '700', flex: 1, lineHeight: 16 },

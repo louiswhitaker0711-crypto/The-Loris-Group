@@ -188,8 +188,8 @@ PAGE_HTML = """<!doctype html>
 <meta name="robots" content="noindex, nofollow">
 <title>Active BAs — OwnerIQ × __APP__</title>
 <style>
-  :root { --bg:#0b211c; --card:#102d25; --line:#244c3b; --txt:#f0f4e9; --mut:#b9c9b8;
-          --green:#b7df58; --amber:#f5b942; --blue:#8fd3e8; --red:#f39a8f; }
+  :root { --bg:#081a30; --card:#0c2340; --line:#1d4fa8; --txt:#eef4fa; --mut:#bbc7d5;
+          --green:#22d0ec; --amber:#f5b942; --blue:#a5b4fc; --red:#f39a8f; }
   * { box-sizing:border-box; margin:0; }
   body { background:var(--bg); color:var(--txt); font:15px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; padding:20px 14px 60px; }
   .wrap { max-width:760px; margin:0 auto; }
@@ -197,7 +197,7 @@ PAGE_HTML = """<!doctype html>
   .sub { color:var(--mut); font-size:13px; margin-bottom:18px; }
   .pull { display:flex; gap:10px; align-items:center; margin-bottom:20px; flex-wrap:wrap; }
   button { font:inherit; border:0; border-radius:10px; cursor:pointer; font-weight:700; }
-  #pullBtn { background:var(--green); color:#102d25; padding:12px 22px; font-size:16px; }
+  #pullBtn { background:var(--green); color:#0c2340; padding:12px 22px; font-size:16px; }
   #pullBtn:disabled { opacity:.5; cursor:wait; }
   #csvBtn { background:var(--card); color:var(--blue); border:1px solid var(--line); padding:11px 16px; display:none; }
   #stamp { color:var(--mut); font-size:12px; }

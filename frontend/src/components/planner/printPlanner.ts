@@ -276,41 +276,41 @@ export function buildPlannerHtml({ ownerName, month, draft, traits, showGap }: P
     @page { size: A4; margin: 14mm 14mm 18mm 14mm; }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; color: #050F0C; font-size: 11.5pt; line-height: 1.45; }
-    header { border-bottom: 2px solid #2F6A4B; padding-bottom: 10px; margin-bottom: 18px; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; color: #040b15; font-size: 11.5pt; line-height: 1.45; }
+    header { border-bottom: 2px solid #225bc3; padding-bottom: 10px; margin-bottom: 18px; }
     header .h-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
-    header h1 { font-size: 20pt; margin: 0; color: #050F0C; }
-    header .month { font-size: 11pt; color: #3D5446; font-weight: 600; }
-    header .printed { font-size: 9pt; color: #6B8070; text-align: right; }
-    h2 { font-size: 13pt; margin: 18px 0 10px; padding-bottom: 4px; border-bottom: 1px solid #DDE7D4; color: #050F0C; }
-    h3 { font-size: 11pt; margin: 12px 0 6px; color: #234435; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+    header h1 { font-size: 20pt; margin: 0; color: #040b15; }
+    header .month { font-size: 11pt; color: #3b4e66; font-weight: 600; }
+    header .printed { font-size: 9pt; color: #6a7b90; text-align: right; }
+    h2 { font-size: 13pt; margin: 18px 0 10px; padding-bottom: 4px; border-bottom: 1px solid #d3e0ed; color: #040b15; }
+    h3 { font-size: 11pt; margin: 12px 0 6px; color: #184589; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
     section { break-inside: avoid; }
     .page-break { break-before: page; }
-    .muted { color: #6B8070; }
-    .meta { font-size: 10pt; color: #3D5446; margin: 0 0 8px; }
+    .muted { color: #6a7b90; }
+    .meta { font-size: 10pt; color: #3b4e66; margin: 0 0 8px; }
     .goal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .goal-cell { border: 1px solid #DDE7D4; border-radius: 8px; padding: 10px 12px; background: #F7FAF1; min-height: 60px; }
-    .goal-label { font-size: 9.5pt; color: #6B8070; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
-    .goal-value { font-size: 11pt; color: #050F0C; }
+    .goal-cell { border: 1px solid #d3e0ed; border-radius: 8px; padding: 10px 12px; background: #f4f8fc; min-height: 60px; }
+    .goal-label { font-size: 9.5pt; color: #6a7b90; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
+    .goal-value { font-size: 11pt; color: #040b15; }
     .subsection { margin-top: 8px; }
     table.data { width: 100%; border-collapse: collapse; margin-top: 4px; }
-    table.data th, table.data td { border: 1px solid #DDE7D4; padding: 6px 8px; text-align: left; vertical-align: top; }
-    table.data th { background: #F7FAF1; font-size: 9.5pt; color: #3D5446; text-transform: uppercase; letter-spacing: .04em; }
-    table.data tfoot td { background: #EDF3E4; }
+    table.data th, table.data td { border: 1px solid #d3e0ed; padding: 6px 8px; text-align: left; vertical-align: top; }
+    table.data th { background: #f4f8fc; font-size: 9.5pt; color: #3b4e66; text-transform: uppercase; letter-spacing: .04em; }
+    table.data tfoot td { background: #e4eef8; }
     table.data .r { text-align: right; }
     table.data .ck { text-align: center; width: 50px; }
-    table.data .dots { font-family: -apple-system, "Helvetica Neue", monospace; letter-spacing: 2px; color: #2F6A4B; width: 100px; }
+    table.data .dots { font-family: -apple-system, "Helvetica Neue", monospace; letter-spacing: 2px; color: #225bc3; width: 100px; }
     .kpi-row { display: flex; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
-    .kpi { flex: 1; min-width: 170px; border: 1px solid #DDE7D4; border-radius: 10px; padding: 10px 14px; background: #F7FAF1; }
-    .kpi.big { flex: 1; background: #f2f6e9; border-color: #aec879; }
-    .kpi-label { font-size: 9.5pt; color: #6B8070; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
-    .kpi-value { font-size: 22pt; font-weight: 800; color: #050F0C; font-variant-numeric: tabular-nums; }
+    .kpi { flex: 1; min-width: 170px; border: 1px solid #d3e0ed; border-radius: 10px; padding: 10px 14px; background: #f4f8fc; }
+    .kpi.big { flex: 1; background: #eaf2fa; border-color: #2dd7f2; }
+    .kpi-label { font-size: 9.5pt; color: #6a7b90; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+    .kpi-value { font-size: 22pt; font-weight: 800; color: #040b15; font-variant-numeric: tabular-nums; }
     .swot-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .swot-cell { border-radius: 8px; padding: 10px 12px; min-height: 80px; }
     .swot-cell.helpful { background: #ecfdf5; border: 1px solid #a7f3d0; }
     .swot-cell.unhelpful { background: #fef2f2; border: 1px solid #fecaca; }
-    .swot-label { font-size: 10pt; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; color: #050F0C; }
-    .swot-value { font-size: 10.5pt; color: #102D25; }
+    .swot-label { font-size: 10pt; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; color: #040b15; }
+    .swot-value { font-size: 10.5pt; color: #0c2340; }
     p { margin: 0 0 8px; }
   </style>
 </head>

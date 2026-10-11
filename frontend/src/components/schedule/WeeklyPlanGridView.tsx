@@ -30,7 +30,7 @@ const DAY_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Satur
 
 // Soft pastel fills + slightly stronger borders per day for a colorful but
 // professional look (and to differentiate columns when scrolled side-to-side)
-const DAY_TINTS = ['#fef3c7', '#e0f2fe', '#dcfce7', '#eef5dc', '#ccfbf1', '#fee2e2'];
+const DAY_TINTS = ['#fef3c7', '#e0f2fe', '#dcfce7', '#ede9fe', '#ccfbf1', '#fee2e2'];
 // Dark theme: the same hues as translucent washes over the raised card face,
 // so the header row still reads as six distinct columns without six bright
 // paper islands on the abyss.
@@ -38,9 +38,9 @@ const DAY_TINTS = ['#fef3c7', '#e0f2fe', '#dcfce7', '#eef5dc', '#ccfbf1', '#fee2
 // every wash — the amber and green stops are the tight ones.
 const DAY_TINTS_DARK = [
   'rgba(245,158,11,0.13)', 'rgba(14,165,233,0.18)', 'rgba(34,197,94,0.16)',
-  'rgba(140,175,56,0.20)', 'rgba(20,184,166,0.18)', 'rgba(239,68,68,0.18)',
+  'rgba(139,92,246,0.20)', 'rgba(20,184,166,0.18)', 'rgba(239,68,68,0.18)',
 ];
-const DAY_BARS = ['#f59e0b', '#0ea5e9', '#22c55e', '#8caf38', '#14b8a6', '#ef4444'];
+const DAY_BARS = ['#f59e0b', '#0ea5e9', '#22c55e', '#8b5cf6', '#14b8a6', '#ef4444'];
 /** Today's column (0 = Mon … 5 = Sat), or -1 when the shown week isn't this one. */
 function todayColumn(weekEnding?: string): number {
   const d = new Date();
@@ -55,18 +55,18 @@ function todayColumn(weekEnding?: string): number {
   return dow - 1;
 }
 /** Spec §4 P1 schedule — the today column wears a lime wash, never lime text. */
-const TODAY_TINT = 'rgba(183,223,88,0.10)';
+const TODAY_TINT = 'rgba(34,208,236,0.10)';
 /**
  * Dark theme only: today's HEADER cell takes the lime wash INSTEAD of its day
  * tint rather than on top of it — stacking both drops the day label under the
  * 7:1 the frozen header row has to hold.
  */
-const TODAY_TINT_HEAD_DARK = 'rgba(183,223,88,0.13)';
+const TODAY_TINT_HEAD_DARK = 'rgba(34,208,236,0.13)';
 
 const THEME_FIELDS: { key: string; label: string; icon: any; color: string }[] = [
   { key: 'expectations_1',         label: 'Expectations · 1',       icon: 'person-circle',  color: '#0ea5e9' },
   { key: 'expectations_2',         label: 'Expectations · 2',       icon: 'person-circle',  color: '#06b6d4' },
-  { key: 'leaders',                label: 'Coaches Theme',          icon: 'star',           color: '#2F6A4B' },
+  { key: 'leaders',                label: 'Coaches Theme',          icon: 'star',           color: '#2f6a4b' },
   { key: 'topic_theme',            label: 'Topic Theme',            icon: 'bulb',           color: '#f59e0b' },
   { key: 'customer_service_theme', label: 'Customer Service',       icon: 'heart',          color: '#e0607e' },
   { key: 'competition',            label: 'Competition',            icon: 'trophy',         color: '#dc2626' },
@@ -77,7 +77,7 @@ const THEME_FIELDS: { key: string; label: string; icon: any; color: string }[] =
 
 const STATS_FIELDS: { key: string; label: string; icon: any; color: string }[] = [
   { key: 'weekly_goal',       label: 'Weekly Goal',       icon: 'flag',               color: '#ef4444' },
-  { key: 'promotions',        label: 'Advancements',      icon: 'rocket-outline',     color: '#8caf38' },
+  { key: 'promotions',        label: 'Advancements',      icon: 'rocket-outline',     color: '#0a9bcb' },
   { key: 'personal_recruits', label: 'Personal Recruits', icon: 'person-add-outline', color: '#22c55e' },
 ];
 
@@ -279,31 +279,31 @@ export default function WeeklyPlanGridView({
     table, tr, td, tbody, thead { page-break-inside: avoid !important; break-inside: avoid !important; }
   }
   * { box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif; color: #050F0C; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif; color: #040b15; }
   h1 { font-size: 14pt; margin: 0 0 1pt 0; letter-spacing: 0.5pt; }
   .week-sub { font-size: 8.5pt; color: #6b7280; margin-bottom: 6pt; }
   .top-row { display: flex; gap: 10pt; margin-bottom: 6pt; }
-  .themes { flex: 2; border: 1pt solid #102D25; }
+  .themes { flex: 2; border: 1pt solid #0c2340; }
   .themes table { width: 100%; border-collapse: collapse; }
-  .themes td { border: 0.5pt solid #102D25; padding: 2.5pt 6pt; font-size: 8pt; }
-  .th-label { width: 30%; font-weight: 800; letter-spacing: 0.3pt; background: #EDF3E4; text-transform: uppercase; }
+  .themes td { border: 0.5pt solid #0c2340; padding: 2.5pt 6pt; font-size: 8pt; }
+  .th-label { width: 30%; font-weight: 800; letter-spacing: 0.3pt; background: #e4eef8; text-transform: uppercase; }
   .th-val { font-weight: 600; }
-  .stats { flex: 1; border: 1pt solid #102D25; padding: 5pt 8pt; }
-  .stats h3 { margin: 0 0 3pt 0; font-size: 8.5pt; letter-spacing: 0.5pt; text-transform: uppercase; color: #102D25; }
-  .stat-row { display: flex; justify-content: space-between; padding: 2pt 0; border-bottom: 0.5pt solid #BED393; font-size: 8pt; }
+  .stats { flex: 1; border: 1pt solid #0c2340; padding: 5pt 8pt; }
+  .stats h3 { margin: 0 0 3pt 0; font-size: 8.5pt; letter-spacing: 0.5pt; text-transform: uppercase; color: #0c2340; }
+  .stat-row { display: flex; justify-content: space-between; padding: 2pt 0; border-bottom: 0.5pt solid #65e2f5; font-size: 8pt; }
   .stat-row:last-child { border-bottom: none; }
   .stat-label { font-weight: 700; }
   .stat-val { font-weight: 800; }
-  .muted { color: #6B8070; }
-  table.grid { width: 100%; border-collapse: collapse; border: 1pt solid #102D25; table-layout: fixed; }
-  table.grid th, table.grid td { border: 0.5pt solid #102D25; padding: ${cellPadYPt}pt ${cellPadXPt}pt; vertical-align: top; }
-  table.grid th { background: #102D25; color: #fff; font-size: 8pt; font-weight: 800; letter-spacing: 0.4pt; text-align: center; }
-  .day-h { color: #050F0C !important; }
-  .row-label { width: 85pt; font-size: ${rowLabelFontPt}pt; font-weight: 800; letter-spacing: 0.3pt; text-transform: uppercase; background: #F7FAF1; }
+  .muted { color: #6a7b90; }
+  table.grid { width: 100%; border-collapse: collapse; border: 1pt solid #0c2340; table-layout: fixed; }
+  table.grid th, table.grid td { border: 0.5pt solid #0c2340; padding: ${cellPadYPt}pt ${cellPadXPt}pt; vertical-align: top; }
+  table.grid th { background: #0c2340; color: #fff; font-size: 8pt; font-weight: 800; letter-spacing: 0.4pt; text-align: center; }
+  .day-h { color: #040b15 !important; }
+  .row-label { width: 85pt; font-size: ${rowLabelFontPt}pt; font-weight: 800; letter-spacing: 0.3pt; text-transform: uppercase; background: #f4f8fc; }
   .cell { height: ${cellHeightPt}pt; font-size: 8pt; overflow: hidden; }
   .pres { font-weight: 800; font-size: ${presFontPt}pt; line-height: 1.1; ${squeeze ? 'white-space: nowrap; overflow: hidden; text-overflow: ellipsis;' : ''} }
-  .topic { font-size: ${topicFontPt}pt; font-style: italic; color: #3D5446; margin-top: 1pt; line-height: 1.1; ${squeeze ? 'white-space: nowrap; overflow: hidden; text-overflow: ellipsis;' : ''} }
-  .footer { font-size: 7pt; color: #6B8070; margin-top: 4pt; text-align: right; }
+  .topic { font-size: ${topicFontPt}pt; font-style: italic; color: #3b4e66; margin-top: 1pt; line-height: 1.1; ${squeeze ? 'white-space: nowrap; overflow: hidden; text-overflow: ellipsis;' : ''} }
+  .footer { font-size: 7pt; color: #6a7b90; margin-top: 4pt; text-align: right; }
 </style></head>
 <body>
   <h1>Weekly Plan</h1>
@@ -849,7 +849,7 @@ const createMRStyles = (colors: any) => StyleSheet.create({
   // Open at ~80% of the screen so the drag list has room — prevents the
   // "tiny sheet at the bottom that can't be dragged up" UX problem.
   sheet: { backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 14, paddingBottom: 24, height: '82%' },
-  handle: { alignSelf: 'center', width: 38, height: 4, backgroundColor: '#91B69E', borderRadius: 2, marginBottom: 8 },
+  handle: { alignSelf: 'center', width: 38, height: 4, backgroundColor: '#8ea8c8', borderRadius: 2, marginBottom: 8 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   title: { fontSize: 17, fontWeight: '900', color: colors.text, letterSpacing: 0.3 },
   sub: { fontSize: 11, color: colors.textMuted, marginVertical: 8, lineHeight: 16 },
@@ -946,7 +946,7 @@ const createStyles = (colors: any, isDark = false) => {
   // Light: ink on the pastel wash (≥12:1). Dark: the card's own text colour on
   // a translucent wash over the raised face (≥11:1) — never the pastel ink.
   dayHeaderText: {
-    fontSize: 11, fontWeight: '900', color: isDark ? colors.text : '#0B211C',
+    fontSize: 11, fontWeight: '900', color: isDark ? colors.text : '#081a30',
     letterSpacing: 0.6, textTransform: 'uppercase',
   },
   dataCell: {

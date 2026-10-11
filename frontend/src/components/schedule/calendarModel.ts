@@ -99,7 +99,7 @@ export function textOn(hex: string): string {
   if (!hex || !hex.startsWith('#')) return '#ffffff';
   const c = hex.length === 4 ? hex.slice(1).split('').map((x) => x + x).join('') : hex.slice(1);
   const r = parseInt(c.slice(0, 2), 16), g = parseInt(c.slice(2, 4), 16), b = parseInt(c.slice(4, 6), 16);
-  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6 ? '#0b211c' : '#ffffff';
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6 ? '#081a30' : '#ffffff';
 }
 
 export const REMINDER_OPTIONS: { value: number | null; label: string }[] = [
@@ -123,4 +123,4 @@ export function reminderLabel(v: number | null | undefined): string {
 
 // Office palette (the Owner's sheet) first, then brighter personal colours.
 export const OFFICE_COLOURS = ['#9a7600', '#4a2c10', '#4a2236', '#1d4468', '#2a6197', '#13284f', '#4f420a', '#2c5a26', '#22d3e6', '#3d2f63'];
-export const PERSONAL_COLOURS = ['#b7df58', '#4fd1c5', '#60a5fa', '#a78bfa', '#e0607e', '#e7b65c', '#f97316', '#94a3b8'];
+export const PERSONAL_COLOURS = ['#22d0ec', '#4ade80', '#60a5fa', '#a78bfa', '#e0607e', '#e7b65c', '#f97316', '#94a3b8'];

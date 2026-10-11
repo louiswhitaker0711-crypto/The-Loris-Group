@@ -12,7 +12,7 @@ import Animated, {
   Easing, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withTiming,
 } from 'react-native-reanimated';
 
-const COLORS = ['#b7df58', '#8caf38', '#3a7a56', '#e7b65c', '#f0f4e9', '#22d3ee', '#f59e0b', '#ec4899'];
+const COLORS = ['#22d0ec', '#0a9bcb', '#2864d9', '#e7b65c', '#eef4fa', '#22d3ee', '#f59e0b', '#ec4899'];
 
 function Piece({ index, durationMs }: { index: number; durationMs: number }) {
   const { width, height } = Dimensions.get('window');

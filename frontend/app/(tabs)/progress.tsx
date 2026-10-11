@@ -555,7 +555,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   journeyPointerIcon: {
     width: 40, height: 40, borderRadius: 13, alignItems: 'center', justifyContent: 'center',
-    boxShadow: '0 6px 14px -4px rgba(58,122,86,0.55)',
+    boxShadow: '0 6px 14px -4px rgba(40,100,217,0.55)',
   },
   journeyPointerTitle: { fontFamily: fonts.display, fontSize: 14.5, color: colors.text, letterSpacing: -0.2 },
   journeyPointerSub: { fontFamily: fonts.body, fontSize: 11.5, color: colors.textMuted, marginTop: 2, lineHeight: 15 },
@@ -586,7 +586,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   heroLink: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
   heroLinkWell: {
     width: 26, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center',
-    boxShadow: '0 4px 10px -3px rgba(58,122,86,0.55)',
+    boxShadow: '0 4px 10px -3px rgba(40,100,217,0.55)',
   },
   heroLinkText: { fontFamily: fonts.bodyBold, color: colors.primary, fontSize: 12.5, flexShrink: 1 },
 });

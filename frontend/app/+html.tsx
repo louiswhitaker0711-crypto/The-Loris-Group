@@ -7,7 +7,7 @@ export default function Root({ children }: PropsWithChildren) {
     <html lang="en" style={{ height: "100%" }}>
       <head>
         <meta charSet="utf-8" />
-        <title>Vertex Hub</title>
+        <title>The Loris Hub</title>
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
         {/* maximum-scale=1 stops iOS Safari from auto-zooming IN when you
             focus a sub-16px input (the annoying "page jumps in when I start
@@ -20,15 +20,15 @@ export default function Root({ children }: PropsWithChildren) {
           content="width=device-width, initial-scale=1, maximum-scale=1, shrink-to-fit=no, viewport-fit=cover"
         />
 
-        {/* PWA: installable "Vertex Hub" home-screen app (Vertex icon, standalone,
+        {/* PWA: installable "The Loris Hub" home-screen app (brand icon, standalone,
             no browser chrome). iOS reads the apple-* tags + apple-touch-icon;
             Android/Chrome reads the web manifest. No push (web can't). */}
         <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#061410" />
+        <meta name="theme-color" content="#eef4fa" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="apple-mobile-web-app-title" content="Vertex" />
+        <meta name="apple-mobile-web-app-title" content="TheLorisHub" />
         <link rel="apple-touch-icon" href="/icons/apple-touch-180.png" />
         {/*
           Disable body scrolling on web to make ScrollView components work correctly.
@@ -42,10 +42,10 @@ export default function Root({ children }: PropsWithChildren) {
               /* Fill the safe areas (status bar above, home indicator below)
                  with the page field colour so the whole screen reads as one
                  continuous background — no black bands framing the app.
-                 Pre-mount this is the dark abyss (colors.page, dark);
-                 ThemedStatusBar re-paints it at runtime to match the active
-                 theme (light users get the paper field). */
-              html, body { background-color: #061410; }
+                 Pre-mount this is the light page (colors.page, light), since
+                 light is the default; ThemedStatusBar re-paints it at runtime
+                 to match the active theme (dark users get the dark field). */
+              html, body { background-color: #eef4fa; }
 
               /* iOS WebKit "text autosizing" inflates font sizes ~10-15% in
                  installed standalone PWAs (not in Safari tabs), which made

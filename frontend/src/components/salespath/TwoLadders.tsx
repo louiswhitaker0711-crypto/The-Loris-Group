@@ -295,7 +295,7 @@ export function TwoLadders({ devSteps, salesSteps, devNext, salesNext, scrollY, 
   // NEXT UP rides a DepthCard, which is white in light mode and a raised plum
   // card in dark — so its accent has to flip; the ink block's never does.
   const dev: Accent = { ink: '#67e8f9', paper: isDark ? '#67e8f9' : '#0E7490', glow: '#22d3ee', tint: 'teal' };
-  const sales: Accent = { ink: '#d5e9a6', paper: isDark ? '#d5e9a6' : colors.primary, glow: '#8caf38', tint: 'purple' };
+  const sales: Accent = { ink: '#a0edf9', paper: isDark ? '#a0edf9' : colors.primary, glow: '#0a9bcb', tint: 'purple' };
 
   return (
     <EditorialHero
@@ -351,7 +351,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   node: { width: GUTTER, height: ROW_H, alignItems: 'center', justifyContent: 'center' },
   halo: { position: 'absolute', width: COIN, height: COIN, borderRadius: COIN / 2 },
   coinEmoji: { fontSize: 12 },
-  dotDone: { width: 10, height: 10, borderRadius: 5, boxShadow: '0 0 6px rgba(140,175,56,0.7)' },
+  dotDone: { width: 10, height: 10, borderRadius: 5, boxShadow: '0 0 6px rgba(10,155,203,0.7)' },
   dotUpcoming: {
     width: 8, height: 8, borderRadius: 4, borderWidth: 1.5,
     borderColor: 'rgba(255,255,255,0.35)', backgroundColor: 'transparent',
@@ -374,7 +374,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   // Locked rungs are dimmed by the CHIP, not by the row: 0.55 × the base
   // fill/border alphas (0.10 → 0.055, 0.18 → 0.10). Dimming the whole row
-  // instead dropped the label to ~#577D64 on the composited chip — 2.98:1
+  // instead dropped the label to ~#4f6e94 on the composited chip — 2.98:1
   // light / 2.81:1 dark, under the 4.5 floor — and this is the half of the
   // ladder that shows a rep what is still ahead of them.
   chipLocked: {
@@ -408,7 +408,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   goChip: {
     alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 3,
     marginTop: 6, paddingHorizontal: 9, paddingVertical: 3, borderRadius: 999,
-    boxShadow: '0 4px 10px rgba(58,122,86,0.35)',
+    boxShadow: '0 4px 10px rgba(40,100,217,0.35)',
   },
   nextGo: { fontSize: 11, fontFamily: fonts.bodyBold, color: '#fff' },
 });

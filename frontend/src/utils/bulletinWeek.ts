@@ -74,23 +74,23 @@ export function todayLong(): string {
  * Contrast: paper/rule text on forest/deep, forest text on lime.
  */
 export const POSTER = {
-  forest: '#102d25',
-  deep: '#0b211c',
-  mid: '#244c3b',
-  lime: '#b7df58',
-  limeDark: '#8caf38',
-  paper: '#f0f4e9',
-  card: '#f9faf4',
-  ink: '#17362b',
-  muted: '#50675a',
-  rule: '#cedbc7',
+  forest: '#0c2340',
+  deep: '#081a30',
+  mid: '#1d4fa8',
+  lime: '#22d0ec',
+  limeDark: '#0a9bcb',
+  paper: '#eef4fa',
+  card: '#f8fbfe',
+  ink: '#12294a',
+  muted: '#51657f',
+  rule: '#cbd8e6',
   amber: '#e7b65c',
   font: "'Fraunces', Georgia, 'Times New Roman', serif",
   mono: "ui-monospace, 'SF Mono', Menlo, Consolas, monospace",
 } as const;
 
 /** Initials-avatar backgrounds — all dark enough for white initials. */
-export const AVATAR_PALETTE = ['#4f6f2e', '#244c3b', '#3f6b2a', '#5a4a1f', '#1f4d5c', '#4a3a5c', '#6b3a2a', '#2f5d50'];
+export const AVATAR_PALETTE = ['#096c8d', '#1d4fa8', '#2259c0', '#5a4a1f', '#1f4d5c', '#4a3a5c', '#6b3a2a', '#2057b8'];
 
 export function colorForName(name: string): string {
   let h = 0;

@@ -98,7 +98,7 @@ export default function MyTraineesScreen() {
       onPress={() => router.push(`/leader/trainee/${t.id}`)}
       testID={`trainee-row-${t.id}`}
     >
-      <View style={[styles.avatar, t.role === 'leader' && { backgroundColor: '#2F6A4B' }]}>
+      <View style={[styles.avatar, t.role === 'leader' && { backgroundColor: '#225bc3' }]}>
         <Text style={styles.avatarText}>
           {(t.name || t.email || '?').charAt(0).toUpperCase()}
         </Text>
@@ -113,7 +113,7 @@ export default function MyTraineesScreen() {
           ]}>
             <Text style={[
               styles.roleBadgeText,
-              { color: t.role === 'leader' ? '#2F6A4B' : '#0ea5e9' },
+              { color: t.role === 'leader' ? '#225bc3' : '#0ea5e9' },
             ]}>
               {t.role === 'leader' ? 'COACH' : 'BA'}
             </Text>

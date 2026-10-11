@@ -13,7 +13,7 @@ Data model (collection: schedule_blocks):
         date: 'YYYY-MM-DD' | None,      # a one-off on that date; None repeats weekly
         kind: 'event' | 'task',         # tasks tick off per date (done_dates)
         reminder_minutes: int | None,   # minutes before start; None = no reminder
-        color: str,          # hex like '#3a7a56' (palette suggestion only)
+        color: str,          # hex like '#2864d9' (palette suggestion only)
         presenter: str | None,    # free-text, e.g. 'Mike'
         topic: str | None,        # short topic line
         details: str | None,      # longer notes / agenda
@@ -290,9 +290,9 @@ async def create_block(request: Request):
         for x in raw_ids:
             if isinstance(x, str) and x.strip():
                 core_leader_ids.append(x.strip())
-    color = (body.get("color") or "#3a7a56").strip()
+    color = (body.get("color") or "#2864d9").strip()
     if not color.startswith("#") or len(color) not in (4, 7):
-        color = "#3a7a56"
+        color = "#2864d9"
 
     now = datetime.now(timezone.utc).isoformat()
     block = {
@@ -378,7 +378,7 @@ async def update_block(block_id: str, request: Request):
     if "color" in updates:
         c = updates["color"] or ""
         if not c.startswith("#") or len(c) not in (4, 7):
-            updates["color"] = "#3a7a56"
+            updates["color"] = "#2864d9"
     if "title" in updates and not (updates["title"] or "").strip():
         raise HTTPException(status_code=400, detail="title cannot be empty")
 
@@ -447,7 +447,7 @@ async def duplicate_block(block_id: str, request: Request):
             "end_time": src.get("end_time"),
             "title": src.get("title"),
             "audience": src.get("audience") or "all",
-            "color": src.get("color") or "#3a7a56",
+            "color": src.get("color") or "#2864d9",
             "core_leader_ids": list(src.get("core_leader_ids") or []),
             "groups": list(src.get("groups") or []),
             "reminder_minutes": src.get("reminder_minutes", 5),

@@ -18,7 +18,7 @@ export const PRESET_LABELS: Record<string, string> = {
 /* Visual colour for each preset label (badge dot + chip border). Falls back
  * to neutral text colour for unknown presets. */
 export const PRESET_COLORS: Record<string, string> = {
-  '1-10': '#2F6A4B',
+  '1-10': '#225bc3',
   'Competent / Learnt / Not Learnt': '#059669',
   'Learnt / Not Learnt': '#2563EB',
   'Excellent / Average / Below Average': '#D97706',

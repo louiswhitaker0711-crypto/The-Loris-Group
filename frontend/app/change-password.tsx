@@ -65,7 +65,7 @@ export default function ChangePasswordScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={s.card}>
-          <VertexMark size={64} color={brand.lime} glow ripple={0} />
+          <VertexMark size={64} gradient glow />
           <Text style={s.kicker}>{APP_NAME} · one last step</Text>
           <Text style={s.title}>{first ? `Welcome, ${first}.` : 'Welcome.'}{'\n'}Choose your own password</Text>
           <Text style={s.lede}>
@@ -79,7 +79,7 @@ export default function ChangePasswordScreen() {
           <Field label="New password again" value={again} onChangeText={setAgain} show={show} testID="cp-again" onSubmit={submit} />
 
           <Pressable onPress={() => setShow((v) => !v)} style={s.showRow} accessibilityRole="checkbox" accessibilityState={{ checked: show }}>
-            <Ionicons name={show ? 'checkbox' : 'square-outline'} size={18} color={show ? brand.lime : '#9fb8a8'} />
+            <Ionicons name={show ? 'checkbox' : 'square-outline'} size={18} color={show ? brand.lime : '#a0b1c6'} />
             <Text style={s.showText}>Show passwords</Text>
           </Pressable>
 
@@ -116,7 +116,7 @@ function Field({ label, value, onChangeText, show, testID, autoFocus, onSubmit }
         autoCorrect={false}
         autoFocus={Platform.OS === 'web' && autoFocus}
         style={s.input}
-        placeholderTextColor="rgba(159,184,168,0.6)"
+        placeholderTextColor="rgba(160,177,198,0.6)"
         onSubmitEditing={onSubmit}
         returnKeyType={onSubmit ? 'done' : 'next'}
         testID={testID}
@@ -128,8 +128,8 @@ function Field({ label, value, onChangeText, show, testID, autoFocus, onSubmit }
 function Rule({ ok, text }: { ok: boolean; text: string }) {
   return (
     <View style={s.rule}>
-      <Ionicons name={ok ? 'checkmark-circle' : 'ellipse-outline'} size={15} color={ok ? brand.lime : '#9fb8a8'} />
-      <Text style={[s.ruleText, ok && { color: '#eef4e6' }]}>{text}</Text>
+      <Ionicons name={ok ? 'checkmark-circle' : 'ellipse-outline'} size={15} color={ok ? brand.lime : '#a0b1c6'} />
+      <Text style={[s.ruleText, ok && { color: '#e7f0f9' }]}>{text}</Text>
     </View>
   );
 }
@@ -137,23 +137,23 @@ function Rule({ ok, text }: { ok: boolean; text: string }) {
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: GRADIENT_INK_DARK[2] },
   scroll: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
-  card: { width: '100%', maxWidth: 440, alignItems: 'center', padding: 24, borderRadius: 24, backgroundColor: 'rgba(16,45,37,0.92)',
-    borderWidth: 1, borderColor: 'rgba(183,223,88,0.18)', boxShadow: '0 30px 70px rgba(0,0,0,0.5)' } as any,
+  card: { width: '100%', maxWidth: 440, alignItems: 'center', padding: 24, borderRadius: 24, backgroundColor: 'rgba(12,35,64,0.92)',
+    borderWidth: 1, borderColor: 'rgba(34,208,236,0.18)', boxShadow: '0 30px 70px rgba(0,0,0,0.5)' } as any,
   kicker: { fontFamily: fonts.mono, fontSize: 10.5, letterSpacing: 1.6, textTransform: 'uppercase', color: brand.lime, marginTop: 14 },
-  title: { fontFamily: fonts.display, fontSize: 24, lineHeight: 30, color: '#eef4e6', textAlign: 'center', marginTop: 8 },
-  lede: { fontFamily: fonts.body, fontSize: 13.5, lineHeight: 20, color: '#9fb8a8', textAlign: 'center', marginTop: 8 },
-  label: { fontFamily: fonts.mono, fontSize: 10, letterSpacing: 1.2, textTransform: 'uppercase', color: '#9fb8a8', marginBottom: 6 },
-  input: { height: 50, borderRadius: 12, paddingHorizontal: 14, backgroundColor: 'rgba(5,15,11,0.55)', borderWidth: 1, borderColor: 'rgba(183,223,88,0.22)',
-    fontFamily: fonts.body, fontSize: 16, color: '#eef4e6', outlineStyle: 'none' } as any,
+  title: { fontFamily: fonts.display, fontSize: 24, lineHeight: 30, color: '#e7f0f9', textAlign: 'center', marginTop: 8 },
+  lede: { fontFamily: fonts.body, fontSize: 13.5, lineHeight: 20, color: '#a0b1c6', textAlign: 'center', marginTop: 8 },
+  label: { fontFamily: fonts.mono, fontSize: 10, letterSpacing: 1.2, textTransform: 'uppercase', color: '#a0b1c6', marginBottom: 6 },
+  input: { height: 50, borderRadius: 12, paddingHorizontal: 14, backgroundColor: 'rgba(5,12,21,0.55)', borderWidth: 1, borderColor: 'rgba(34,208,236,0.22)',
+    fontFamily: fonts.body, fontSize: 16, color: '#e7f0f9', outlineStyle: 'none' } as any,
   showRow: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', marginTop: 12, minHeight: 32 },
-  showText: { fontFamily: fonts.body, fontSize: 13, color: '#eef4e6' },
+  showText: { fontFamily: fonts.body, fontSize: 13, color: '#e7f0f9' },
   rules: { alignSelf: 'stretch', gap: 6, marginTop: 10 },
   rule: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  ruleText: { fontFamily: fonts.body, fontSize: 12.5, color: '#9fb8a8' },
+  ruleText: { fontFamily: fonts.body, fontSize: 12.5, color: '#a0b1c6' },
   error: { alignSelf: 'stretch', fontFamily: fonts.bodySemibold, fontSize: 13, color: '#fca5a5', backgroundColor: 'rgba(248,113,113,0.12)',
     borderRadius: 10, padding: 10, marginTop: 14, overflow: 'hidden' },
   btn: { alignSelf: 'stretch', height: 52, borderRadius: 14, backgroundColor: brand.lime, alignItems: 'center', justifyContent: 'center', marginTop: 18 },
   btnText: { fontFamily: fonts.bodyBold, fontSize: 16, color: brand.forest },
   linkBtn: { marginTop: 14, minHeight: 32, justifyContent: 'center' },
-  linkText: { fontFamily: fonts.bodySemibold, fontSize: 13, color: '#9fb8a8' },
+  linkText: { fontFamily: fonts.bodySemibold, fontSize: 13, color: '#a0b1c6' },
 });

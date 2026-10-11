@@ -46,31 +46,31 @@ export type SummaryBoxConfig = {
 /* Visual presets — purple gradient: lighter for "Good", darker for "Great".
  *
  * These were the ONLY hard-coded light pastels left on this screen, so in dark
- * the four boxes floated as paper islands on the #061410 abyss (spec §2.5).
+ * the four boxes floated as paper islands on the #060e1a abyss (spec §2.5).
  * Each box now has a light AND a dark preset: light keeps its identity hue,
  * dark becomes a plum card RAISED above the abyss (never darker than it) with
  * the same Good-vs-Great reading — Good the quieter violet, Great the brighter.
  * Every label / bullet / input clears 4.5:1 on its own box in both themes
- * (measured: light 5.55–9.23, dark 5.37–14.95). primaryDark #2f6a4b is a fill,
- * never text in dark — the dark labels use primary #7fa032 / #c5e37f.
+ * (measured: light 5.55–9.23, dark 5.37–14.95). primaryDark #225bc3 is a fill,
+ * never text in dark — the dark labels use primary #0c8eb9 / #5fe1f5.
  */
 export const GOOD_STYLE: SummaryBoxStyle = {
-  bg: '#EAF2DA', border: '#2F6A4B', dot: '#2F6A4B', text: '#244C3B',
-  editBg: '#E7EFD7', editBorder: '#AEC879', hairline: '#BBD18E',
+  bg: '#dbe9f6', border: '#225bc3', dot: '#225bc3', text: '#1d4fa8',
+  editBg: '#d6e6f5', editBorder: '#2dd7f2', hairline: '#5be0f5',
 };
 export const GREAT_STYLE: SummaryBoxStyle = {
-  bg: '#E7EFD7', border: '#245B42', dot: '#245B42', text: '#1A4431',
-  editBg: '#DBE6C3', editBorder: '#8CAF38', hairline: '#B5CD85',
+  bg: '#d6e6f5', border: '#1f53ad', dot: '#1f53ad', text: '#153c74',
+  editBg: '#bfd7ef', editBorder: '#0a9bcb', hairline: '#47dcf3',
 };
 export const GOOD_STYLE_DARK: SummaryBoxStyle = {
-  bg: '#0D1E16', border: '#7fa032', dot: '#7fa032', text: '#DAE6C2',
-  editBg: '#08140F', editBorder: 'rgba(183,223,88,0.38)',
-  hairline: 'rgba(183,223,88,0.28)',
+  bg: '#0a192b', border: '#0c8eb9', dot: '#0c8eb9', text: '#bed7ef',
+  editBg: '#07111d', editBorder: 'rgba(34,208,236,0.38)',
+  hairline: 'rgba(34,208,236,0.28)',
 };
 export const GREAT_STYLE_DARK: SummaryBoxStyle = {
-  bg: '#11261C', border: '#c5e37f', dot: '#c5e37f', text: '#E5EED4',
-  editBg: '#0B1A13', editBorder: 'rgba(197,227,127,0.44)',
-  hairline: 'rgba(197,227,127,0.34)',
+  bg: '#0a203b', border: '#5fe1f5', dot: '#5fe1f5', text: '#d3e4f4',
+  editBg: '#091525', editBorder: 'rgba(95,225,245,0.44)',
+  hairline: 'rgba(95,225,245,0.34)',
 };
 
 const LIGHT_PALETTE: SummaryBoxPalette = { good: GOOD_STYLE, great: GREAT_STYLE };

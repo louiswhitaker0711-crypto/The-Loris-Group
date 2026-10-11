@@ -52,7 +52,7 @@ export default function Medal3DCanvas({ size = 56, tint = '#c9a227', children }:
       >
         <ambientLight intensity={0.55} />
         <directionalLight position={[3, 4, 5]} intensity={2.2} />
-        <directionalLight position={[-4, -2, 3]} intensity={0.7} color="#b7df58" />
+        <directionalLight position={[-4, -2, 3]} intensity={0.7} color="#22d0ec" />
         <pointLight position={[0, 0, 4]} intensity={0.9} color="#ffffff" />
         <Coin tint={tint} />
       </Canvas>

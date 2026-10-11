@@ -33,17 +33,17 @@ import { addDays, hourLabel, prettyDate, rangeLabel, startOfWeek, todayISO } fro
 import DateField from '../ui/DateField';
 
 const T = {
-  canvas: '#07170f',
-  tile: '#102d25',
-  raised: '#163a2d',
-  inset: 'rgba(5,15,11,0.45)',
-  line: 'rgba(183,223,88,0.14)',
-  lineSoft: 'rgba(238,244,230,0.07)',
-  text: '#eef4e6',
-  muted: '#9fb8a8',
-  faint: 'rgba(159,184,168,0.55)',
-  lime: '#b7df58',
-  onLime: '#102d25',
+  canvas: '#07121e',
+  tile: '#0c2340',
+  raised: '#10315d',
+  inset: 'rgba(5,12,21,0.45)',
+  line: 'rgba(34,208,236,0.14)',
+  lineSoft: 'rgba(231,240,249,0.07)',
+  text: '#e7f0f9',
+  muted: '#a0b1c6',
+  faint: 'rgba(160,177,198,0.55)',
+  lime: '#22d0ec',
+  onLime: '#0c2340',
   amber: '#e7b65c',
 };
 
@@ -541,8 +541,8 @@ function Strip({ ba, hours }: { ba: Ba; hours: Hour[] }) {
         const cell = ba.hours[String(h.hour)];
         const n = cell?.sales || 0;
         return (
-          <View key={h.hour} style={[st.stripCell, cell ? { backgroundColor: 'rgba(238,244,230,0.07)' } : null,
-            n > 0 ? { backgroundColor: `rgba(183,223,88,${0.3 + 0.7 * (n / most)})` } : null]}>
+          <View key={h.hour} style={[st.stripCell, cell ? { backgroundColor: 'rgba(231,240,249,0.07)' } : null,
+            n > 0 ? { backgroundColor: `rgba(34,208,236,${0.3 + 0.7 * (n / most)})` } : null]}>
             <Text style={[st.stripText, n > 0 && { color: T.onLime }]}>{n > 0 ? n : ''}</Text>
           </View>
         );
@@ -630,11 +630,11 @@ const st = StyleSheet.create({
   chart: { flexDirection: 'row', alignItems: 'flex-end', height: 172 },
   col: { flex: 1, minWidth: 0, alignItems: 'center', height: '100%', justifyContent: 'flex-end' },
   barValue: { fontFamily: fonts.bodyBold, fontSize: 12, color: T.muted, minHeight: 17, ...tab },
-  barTrack: { width: '86%', maxWidth: 96, height: 124, justifyContent: 'flex-end', borderRadius: 6, backgroundColor: 'rgba(238,244,230,0.03)' },
-  bar: { width: '100%', borderRadius: 6, backgroundColor: 'rgba(183,223,88,0.34)' },
+  barTrack: { width: '86%', maxWidth: 96, height: 124, justifyContent: 'flex-end', borderRadius: 6, backgroundColor: 'rgba(231,240,249,0.03)' },
+  bar: { width: '100%', borderRadius: 6, backgroundColor: 'rgba(34,208,236,0.34)' },
   barOn: { backgroundColor: T.lime },
   barLabel: { fontFamily: fonts.mono, fontSize: 10, color: T.muted, marginTop: 7, height: 14 },
-  hourBox: { marginTop: 12, padding: 12, borderRadius: 12, backgroundColor: 'rgba(183,223,88,0.06)', borderWidth: 1, borderColor: T.line },
+  hourBox: { marginTop: 12, padding: 12, borderRadius: 12, backgroundColor: 'rgba(34,208,236,0.06)', borderWidth: 1, borderColor: T.line },
   hourHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
   hourTitle: { fontFamily: fonts.display, fontSize: 17, color: T.text },
   tag: { paddingHorizontal: 8, height: 20, borderRadius: 10, justifyContent: 'center', backgroundColor: T.lime },
@@ -649,7 +649,7 @@ const st = StyleSheet.create({
   whoN: { minWidth: 22, height: 22, borderRadius: 11, textAlign: 'center', lineHeight: 22, overflow: 'hidden', fontFamily: fonts.bodyBold, fontSize: 12, color: T.onLime, backgroundColor: T.lime },
   more: { fontFamily: fonts.body, fontSize: 12, color: T.muted },
 
-  seg: { flexDirection: 'row', padding: 3, borderRadius: 11, backgroundColor: 'rgba(5,15,11,0.55)', borderWidth: 1, borderColor: T.lineSoft },
+  seg: { flexDirection: 'row', padding: 3, borderRadius: 11, backgroundColor: 'rgba(5,12,21,0.55)', borderWidth: 1, borderColor: T.lineSoft },
   segBtn: { minHeight: 30, paddingHorizontal: 12, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   segOn: { backgroundColor: T.lime },
   segText: { fontFamily: fonts.bodySemibold, fontSize: 12, color: T.muted },
@@ -665,7 +665,7 @@ const st = StyleSheet.create({
   big: { fontFamily: fonts.display, fontSize: 18, color: T.text, ...tab },
   cell: { fontFamily: fonts.body, fontSize: 13, color: T.muted, ...tab },
   strip: { flexDirection: 'row', gap: 2 },
-  stripCell: { flex: 1, minWidth: 0, height: 20, borderRadius: 4, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(238,244,230,0.025)' },
+  stripCell: { flex: 1, minWidth: 0, height: 20, borderRadius: 4, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(231,240,249,0.025)' },
   stripText: { fontFamily: fonts.bodyBold, fontSize: 10.5, color: T.muted },
   axisText: { flex: 1, minWidth: 0, textAlign: 'center', fontFamily: fonts.mono, fontSize: 9, color: T.faint },
   axisPhone: { paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: T.lineSoft },
@@ -681,7 +681,7 @@ const st = StyleSheet.create({
   pBand: { fontFamily: fonts.bodyBold, fontSize: 13, color: T.text },
   pBandSub: { fontFamily: fonts.mono, fontSize: 9.5, color: T.faint, marginTop: 1 },
   pValue: { textAlign: 'right', fontFamily: fonts.body, fontSize: 13, color: T.muted, ...tab },
-  diffBox: { marginTop: 12, padding: 12, borderRadius: 12, backgroundColor: 'rgba(183,223,88,0.06)', borderWidth: 1, borderColor: T.line, gap: 6 },
+  diffBox: { marginTop: 12, padding: 12, borderRadius: 12, backgroundColor: 'rgba(34,208,236,0.06)', borderWidth: 1, borderColor: T.line, gap: 6 },
   diffTitle: { fontFamily: fonts.mono, fontSize: 10.5, letterSpacing: 1.2, textTransform: 'uppercase', color: T.muted, marginBottom: 2 },
   diffRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   diffText: { flex: 1, fontFamily: fonts.bodySemibold, fontSize: 13, color: T.text },

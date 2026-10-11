@@ -223,9 +223,9 @@ const createStyles = (colors: any) => StyleSheet.create({
   // Pillar cards float on the field (white face + layered plum shadow).
   pillarCard: { borderRadius: 20, paddingHorizontal: 14, paddingVertical: 14, marginTop: 14 },
   pillarRule: { width: 28, height: 3, borderRadius: 2, marginBottom: 8 },
-  // `primary`, not `primaryDark`: in dark primaryDark (#2f6a4b) on the raised
+  // `primary`, not `primaryDark`: in dark primaryDark (#225bc3) on the raised
   // card measured 2.87:1 — every pillar name failed AA. `primary` is 5.6:1 in
-  // dark (#7fa032) and 6.55:1 in light (#2f6a4b on the white face).
+  // dark (#0c8eb9) and 6.55:1 in light (#225bc3 on the white face).
   pillarTitle: { fontFamily: fonts.displayWide, fontSize: 11, letterSpacing: 1.4, color: colors.primary, marginBottom: 6 },
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
   rowDivider: { borderTopWidth: 1, borderTopColor: colors.border },

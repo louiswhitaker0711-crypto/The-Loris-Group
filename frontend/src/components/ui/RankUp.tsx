@@ -92,7 +92,7 @@ export const RankUp = function RankUp() {
 
   return (
     <Pressable onPress={hide} style={[StyleSheet.absoluteFill, { zIndex: 10000 }]}>
-      <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: '#050f0c' }, dimStyle]}>
+      <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: '#040b15' }, dimStyle]}>
         {isLevelUp && <Aurora />}
       </Animated.View>
       {isLevelUp && <ParticleConfetti burstKey={burst} count={110} durationMs={3600} />}
@@ -104,7 +104,7 @@ export const RankUp = function RankUp() {
               style={{ position: 'absolute', width: 300, height: 300 }}
             />
           )}
-          <Animated.View style={[styles.wave, { borderColor: '#8caf38' }, waveStyle]} />
+          <Animated.View style={[styles.wave, { borderColor: '#0a9bcb' }, waveStyle]} />
           <Animated.View style={[styles.wave, { borderColor: '#e7b65c' }, wave2Style]} />
           <Animated.View style={badgeStyle}>
             {isLevelUp ? (
@@ -133,7 +133,7 @@ const styles = StyleSheet.create({
   center: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
   badge: {
     width: 108, height: 108, borderRadius: 32, alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#8caf38', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.7, shadowRadius: 26, elevation: 12,
+    shadowColor: '#0a9bcb', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.7, shadowRadius: 26, elevation: 12,
   },
   wave: { position: 'absolute', width: 108, height: 108, borderRadius: 54, borderWidth: 2.5 },
   title: {

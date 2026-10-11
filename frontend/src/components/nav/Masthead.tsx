@@ -120,7 +120,7 @@ const GUTTER = 16;
 const SLOT_GAP = 12;
 const CUBE_SIZE = 44;
 /** The Vertex X on the LIGHT masthead: brand green, a touch softer than the title. */
-const MASTHEAD_MARK_LIGHT = 'rgba(36,76,59,0.85)';
+const MASTHEAD_MARK_LIGHT = 'rgba(29,79,168,0.85)';
 const CHIP_SIZE = 36;
 const CONDENSE_PX = 120;        // scroll distance over which the title condenses
 const CONDENSE_SCALE = 0.72;

@@ -351,12 +351,12 @@ export default function AssessmentScreen() {
         {/* ── Hero ── */}
         <ParallaxHero scrollY={scrollY} style={styles.heroWrap}>
           <LinearGradient
-            colors={isDark ? GRADIENT_PANEL : (['#e1ebce', '#eef4e3', '#f9fbf5'] as const)}
+            colors={isDark ? GRADIENT_PANEL : (['#ccdff2', '#e4eef8', '#f8fbfd'] as const)}
             start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
             style={styles.hero}
           >
             <Aurora dim={!isDark} />
-            <GlowOrb size={180} color="#8caf38" opacity={isDark ? 0.45 : 0.22} style={{ top: -70, right: -50 }} />
+            <GlowOrb size={180} color="#0a9bcb" opacity={isDark ? 0.45 : 0.22} style={{ top: -70, right: -50 }} />
             <View style={styles.heroRow}>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={styles.traineeName} numberOfLines={1}>{assessment.new_hire_name}</Text>
@@ -731,7 +731,7 @@ const createStyles2 = (colors: any) => StyleSheet.create({
   // Hero
   heroWrap: {
     borderRadius: 20, marginBottom: 18,
-    shadowColor: '#2f6a4b', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.28, shadowRadius: 14, elevation: 5,
+    shadowColor: '#225bc3', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.28, shadowRadius: 14, elevation: 5,
   },
   hero: { borderRadius: 20, padding: 16, overflow: 'hidden', borderWidth: 1, borderColor: colors.border },
   heroRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },

@@ -180,15 +180,15 @@ export default function TimePickerSheet({
 }
 
 const createStyles = (colors: any) => StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(11, 33, 28,0.45)', justifyContent: 'flex-end' },
+  backdrop: { flex: 1, backgroundColor: 'rgba(8, 26, 48,0.45)', justifyContent: 'flex-end' },
   sheet: { backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 8 },
-  grip: { alignSelf: 'center', width: 40, height: 5, borderRadius: 999, backgroundColor: '#91B69E', marginBottom: 6 },
+  grip: { alignSelf: 'center', width: 40, height: 5, borderRadius: 999, backgroundColor: '#8ea8c8', marginBottom: 6 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingVertical: 8 },
   title: { fontSize: 16, fontWeight: '800', color: colors.text },
   cancel: { fontSize: 14, fontWeight: '700', color: colors.textMuted },
   done: { fontSize: 15, fontWeight: '800', color: colors.primary },
 
-  previewRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 6, marginHorizontal: 18, borderRadius: 10, backgroundColor: 'rgba(58, 122, 86, 0.07)' },
+  previewRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 6, marginHorizontal: 18, borderRadius: 10, backgroundColor: 'rgba(40, 100, 217, 0.07)' },
   previewText: { fontSize: 18, fontWeight: '800', color: colors.text, fontVariant: ['tabular-nums'] as any, letterSpacing: 0.5 },
 
   cols: { flexDirection: 'row', height: 280, paddingHorizontal: 16, paddingTop: 12, gap: 12 },

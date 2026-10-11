@@ -125,9 +125,9 @@ export default function DuplicateDaySheet({
 }
 
 const createDup = (colors: any) => StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(11, 33, 28,0.45)', justifyContent: 'flex-end' },
+  backdrop: { flex: 1, backgroundColor: 'rgba(8, 26, 48,0.45)', justifyContent: 'flex-end' },
   sheet: { backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 8, paddingHorizontal: 18 },
-  grip: { alignSelf: 'center', width: 40, height: 5, borderRadius: 999, backgroundColor: '#91B69E', marginBottom: 12 },
+  grip: { alignSelf: 'center', width: 40, height: 5, borderRadius: 999, backgroundColor: '#8ea8c8', marginBottom: 12 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
   headIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   headTitle: { fontSize: 15, fontWeight: '800', color: colors.text },

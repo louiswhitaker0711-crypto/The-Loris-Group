@@ -52,7 +52,7 @@ const THEMES_FIELDS: { key: string; label: string; placeholder: string }[] = [
 // Side-panel stats (numbers / short text)
 const STATS_FIELDS: { key: string; label: string; placeholder: string; icon: any; color: string }[] = [
   { key: 'weekly_goal',       label: 'Weekly Goal',       placeholder: 'e.g. 95',  icon: 'flag',         color: '#ef4444' },
-  { key: 'promotions',        label: 'Advancements',      placeholder: 'e.g. 1',   icon: 'rocket-outline', color: '#8caf38' },
+  { key: 'promotions',        label: 'Advancements',      placeholder: 'e.g. 1',   icon: 'rocket-outline', color: '#0a9bcb' },
   { key: 'personal_recruits', label: 'Personal Recruits', placeholder: 'e.g. 2',   icon: 'person-add-outline', color: '#22c55e' },
 ];
 
@@ -394,7 +394,7 @@ export default function WeeklyPlanView() {
     const s = draft.status;
     if (s === 'published') return { bg: '#dcfce7', fg: '#166534', label: 'Published' };
     if (s === 'preview') return { bg: '#fef3c7', fg: '#92400e', label: 'Preview' };
-    return { bg: '#EAF2DA', fg: '#21583F', label: 'Draft' };
+    return { bg: '#dbe9f6', fg: '#1e51a8', label: 'Draft' };
   })();
 
   const onPublish = () => {
@@ -1393,7 +1393,7 @@ const WARN_FG = (isDark: boolean) => (isDark ? '#FCD68A' : '#92400e');
 const createStyles = (colors: any, isDark = false) => {
   // Hairlines inside a card face: a black wash disappears on the dark card.
   const hair = isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.06)';
-  const fillWash = isDark ? 'rgba(183,223,88,0.10)' : 'rgba(58,122,86,0.05)';
+  const fillWash = isDark ? 'rgba(34,208,236,0.10)' : 'rgba(40,100,217,0.05)';
   return StyleSheet.create({
   // The screen root never paints page colour (spec §2.5) — the loader sits on
   // the PageField like everything else.
@@ -1427,7 +1427,7 @@ const createStyles = (colors: any, isDark = false) => {
   pickerClose: { padding: 4 },
   pickerSubtitle: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, marginBottom: 14, lineHeight: 17 },
   pickerRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12, paddingHorizontal: 14, borderRadius: 12, marginBottom: 6, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  // Dark primary (#7fa032) only gives white 3.2:1; primaryDark is a FILL token
+  // Dark primary (#0c8eb9) only gives white 3.2:1; primaryDark is a FILL token
   // and lands white at 6.55:1 (spec §2.3 — never use it as TEXT).
   pickerRowSelected: { backgroundColor: isDark ? colors.primaryDark : colors.primary, borderColor: isDark ? colors.primaryDark : colors.primary },
   pickerRowText: { fontFamily: fonts.bodySemibold, fontSize: 14, fontWeight: '700', color: colors.text },
@@ -1463,7 +1463,7 @@ const createStyles = (colors: any, isDark = false) => {
   heroBtnPrimary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: colors.primary, borderRadius: 12, paddingVertical: 13 },
   heroBtnPrimaryText: { fontFamily: fonts.bodySemibold, color: colors.onPrimary, fontSize: 14, fontWeight: '800' },
   heroBtnRow: { flexDirection: 'row', gap: 8 },
-  heroBtnLight: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 11, borderRadius: 12, borderWidth: 1, borderColor: `${colors.primary}30`, backgroundColor: 'rgba(58, 122, 86, 0.06)' },
+  heroBtnLight: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 11, borderRadius: 12, borderWidth: 1, borderColor: `${colors.primary}30`, backgroundColor: 'rgba(40, 100, 217, 0.06)' },
   heroBtnLightText: { fontFamily: fonts.bodySemibold, fontSize: 12, fontWeight: '700', color: colors.primary },
   heroDismiss: { alignSelf: 'center', paddingVertical: 4, paddingHorizontal: 8 },
   heroDismissText: { fontSize: 12, color: colors.textMuted, fontWeight: '600', textDecorationLine: 'underline' },
@@ -1475,7 +1475,7 @@ const createStyles = (colors: any, isDark = false) => {
   themeReadValue: { fontSize: 13, color: colors.text, paddingVertical: 2 },
   themesEmptyHint: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, marginBottom: 8, fontStyle: 'italic' },
   themeChipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
-  themeChip: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 5, paddingHorizontal: 9, borderRadius: 999, borderWidth: 1, borderColor: `${colors.primary}30`, backgroundColor: 'rgba(58, 122, 86, 0.05)' },
+  themeChip: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 5, paddingHorizontal: 9, borderRadius: 999, borderWidth: 1, borderColor: `${colors.primary}30`, backgroundColor: 'rgba(40, 100, 217, 0.05)' },
   themeChipText: { fontFamily: fonts.bodyMedium, fontSize: 11, fontWeight: '600', color: colors.primary },
 
   // Weekly Stats card (Goal / Leaders / ER's / Sales / Advancements)
@@ -1521,7 +1521,7 @@ const createStyles = (colors: any, isDark = false) => {
   addDayLink: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 7, paddingHorizontal: 4 },
   addDayLinkText: { fontSize: 11, fontWeight: '600', color: colors.textMuted },
   addDayRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, paddingVertical: 6, paddingHorizontal: 4 },
-  addDayChip: { paddingVertical: 4, paddingHorizontal: 10, borderRadius: 999, borderWidth: 1, borderColor: `${colors.primary}30`, backgroundColor: 'rgba(58, 122, 86, 0.05)' },
+  addDayChip: { paddingVertical: 4, paddingHorizontal: 10, borderRadius: 999, borderWidth: 1, borderColor: `${colors.primary}30`, backgroundColor: 'rgba(40, 100, 217, 0.05)' },
   addDayChipText: { fontSize: 11, fontWeight: '700', color: colors.primary },
 
   // Fill · single-day view
@@ -1536,7 +1536,7 @@ const createStyles = (colors: any, isDark = false) => {
   oneOffSection: { marginTop: 4, marginBottom: 8, padding: 10, borderRadius: 12, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.border, backgroundColor: colors.surface },
   oneOffSectionTitle: { fontSize: 10, fontWeight: '800', color: colors.textMuted, letterSpacing: 0.4, textTransform: 'uppercase', marginBottom: 7 },
   oneOffChipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  oneOffChip: { flexDirection: 'row', alignItems: 'center', gap: 3, maxWidth: '100%', paddingVertical: 4, paddingHorizontal: 9, borderRadius: 999, borderWidth: 1, borderColor: `${colors.primary}30`, backgroundColor: 'rgba(58, 122, 86, 0.05)' },
+  oneOffChip: { flexDirection: 'row', alignItems: 'center', gap: 3, maxWidth: '100%', paddingVertical: 4, paddingHorizontal: 9, borderRadius: 999, borderWidth: 1, borderColor: `${colors.primary}30`, backgroundColor: 'rgba(40, 100, 217, 0.05)' },
   oneOffChipText: { fontSize: 11, fontWeight: '700', color: colors.primary, flexShrink: 1 },
 
   // Structure view
@@ -1569,7 +1569,7 @@ const createStyles = (colors: any, isDark = false) => {
   publishRow: { flexDirection: 'row', gap: 10, marginTop: 8 },
   btnPrimary: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: colors.primary, borderRadius: 12, paddingVertical: 14 },
   btnPrimaryText: { fontFamily: fonts.bodySemibold, color: colors.onPrimary, fontSize: 14, fontWeight: '800' },
-  btnSecondary: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12, borderWidth: 1, borderColor: colors.primary, backgroundColor: 'rgba(58, 122, 86, 0.06)' },
+  btnSecondary: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12, borderWidth: 1, borderColor: colors.primary, backgroundColor: 'rgba(40, 100, 217, 0.06)' },
   btnSecondaryText: { color: colors.primary, fontSize: 13, fontWeight: '800' },
 
   btnLight: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border },
@@ -1581,13 +1581,13 @@ const createStyles = (colors: any, isDark = false) => {
 };
 
 const createMat = (colors: any) => StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(11, 33, 28,0.45)', justifyContent: 'flex-end' },
+  backdrop: { flex: 1, backgroundColor: 'rgba(8, 26, 48,0.45)', justifyContent: 'flex-end' },
   sheet: { backgroundColor: colors.background, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 18 },
-  grip: { alignSelf: 'center', width: 40, height: 5, borderRadius: 999, backgroundColor: '#91B69E', marginBottom: 8 },
+  grip: { alignSelf: 'center', width: 40, height: 5, borderRadius: 999, backgroundColor: '#8ea8c8', marginBottom: 8 },
   title: { fontSize: 15, fontWeight: '800', color: colors.text, marginBottom: 4 },
   sub: { fontSize: 11, color: colors.textMuted, lineHeight: 16, marginBottom: 12 },
   opt: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 10, borderRadius: 8, marginBottom: 4, borderWidth: 1, borderColor: 'transparent' },
-  optSel: { backgroundColor: 'rgba(58, 122, 86, 0.06)', borderColor: 'rgba(58, 122, 86, 0.18)' },
+  optSel: { backgroundColor: 'rgba(40, 100, 217, 0.06)', borderColor: 'rgba(40, 100, 217, 0.18)' },
   optText: { fontSize: 13, color: colors.text, fontWeight: '600' },
 });
 

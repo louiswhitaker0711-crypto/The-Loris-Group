@@ -98,7 +98,7 @@ Other user-visible names that grep finds and that are easy to miss:
 
 `frontend/src/components/ui/Decor.tsx` and a few backgrounds use Vertex's halftone-dot motif. Restyle or remove them if they don't suit your brand.
 
-**Not used by the app:** `frontend/assets/brand/*.svg` (Vertex's source artwork) and `frontend/scripts/brand_assets.py` (the script that drew it; it only runs on Windows with Microsoft Edge). Don't confuse it with `frontend/scripts/badge_template.py`, which draws the neutral badge template. Delete them, or keep your own source artwork in that folder instead.
+**In this copy:** the logo is the TLG monogram. Its outline lives in `frontend/src/components/ui/brandMarkGeometry.ts` (one SVG path plus the logo's gradient), which `VertexMark` draws in one colour by default or in the logo's own gradient with the `gradient` prop. The source artwork is `frontend/assets/brand/tlg-mark.svg`; every PNG in the table above was rendered from that same path. Vertex's source artwork and the script that drew it have been removed. `frontend/scripts/badge_template.py`, which draws the neutral badge template, is unchanged.
 
 ## 3. Colours
 

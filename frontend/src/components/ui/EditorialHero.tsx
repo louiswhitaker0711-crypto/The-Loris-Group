@@ -435,7 +435,7 @@ export function EditorialHero({
 
 // ── Nebula ───────────────────────────────────────────────────────────────────
 /** Brand green that reads on a near-white card (light paper blocks only). */
-const PAPER_MARK = 'rgba(36,76,59,0.62)';
+const PAPER_MARK = 'rgba(29,79,168,0.62)';
 
 /**
  * Aurora's settled frame, painted once. Same three radial blobs, same colours,
@@ -450,9 +450,9 @@ type NebulaBlob = {
 
 /** Aurora's three blobs, verbatim (Aurora.tsx `blobs`). */
 const NEBULA_BLOBS: readonly NebulaBlob[] = [
-  { size: 230, color: '#8caf38', baseOpacity: 0.60, top: -90, right: -60 },
+  { size: 230, color: '#0a9bcb', baseOpacity: 0.60, top: -90, right: -60 },
   { size: 180, color: '#e7b65c', baseOpacity: 0.38, bottom: -80, left: -50 },
-  { size: 150, color: '#3a7a56', baseOpacity: 0.32, top: 0, left: '36%' },
+  { size: 150, color: '#2864d9', baseOpacity: 0.32, top: 0, left: '36%' },
 ];
 
 function StaticNebula({ dim, intense }: { dim?: boolean; intense?: boolean }) {

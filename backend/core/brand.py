@@ -13,16 +13,16 @@ ORG_NAME = (os.environ.get("ORG_NAME") or "").strip() or "Vertex Organisation"
 
 # Palette (mirrors the frontend theme). The logo is a lime wordmark on a
 # transparent background, so it only ever sits on FOREST.
-FOREST = "#102d25"
-DEEP = "#0b211c"
-MID = "#244c3b"
-LIME = "#b7df58"        # accent — always dark text (INK/FOREST) on it
-LIME_DARK = "#8caf38"
-PAPER = "#f0f4e9"
-CARD = "#f9faf4"
-INK = "#17362b"
-MUTED = "#50675a"
-RULE = "#cedbc7"
+FOREST = "#0c2340"
+DEEP = "#081a30"
+MID = "#1d4fa8"
+LIME = "#22d0ec"        # accent — always dark text (INK/FOREST) on it
+LIME_DARK = "#0a9bcb"
+PAPER = "#eef4fa"
+CARD = "#f8fbfe"
+INK = "#12294a"
+MUTED = "#51657f"
+RULE = "#cbd8e6"
 
 # Appended to every AI prompt whose output people read (reports, coaching,
 # planner coach, daily breakdown, conversation reviews, quizzes, letters).

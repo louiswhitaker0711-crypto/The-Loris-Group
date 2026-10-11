@@ -16,8 +16,8 @@
  *     box: { backgroundColor: c.background, color: c.text },
  *   });
  *
- * Mode is one of 'system' | 'light' | 'dark'. When 'system' (default), the
- * active palette follows the OS color scheme via Appearance.
+ * Mode is one of 'system' | 'light' | 'dark'. Light is the default; when
+ * 'system', the active palette follows the OS color scheme via Appearance.
  */
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Appearance, ColorSchemeName, Platform } from 'react-native';
@@ -37,9 +37,9 @@ export { fonts, GRADIENT, GRADIENT_FULL, GRADIENT_SOFT, GRADIENT_PANEL, GRADIENT
 // titles / glows in dark mode instead.
 export const lightColors = {
   // Primary — the brand green; white text on it 9.7:1, 8.7:1 on the paper page
-  primary: brand.mid,           // #244c3b
-  primaryLight: '#336e4d',      // 4.5:1+ on every light surface
-  primaryDark: brand.forest,    // #102d25
+  primary: brand.mid,           // #1d4fa8
+  primaryLight: '#245dca',      // 4.5:1+ on every light surface
+  primaryDark: brand.forest,    // #0c2340
   // Text/icons ON a solid `primary` / `accent` fill. White in light; in dark
   // the fills are light greens, so the type flips to deep forest.
   onPrimary: '#FFFFFF',         // 9.7:1 on primary
@@ -47,39 +47,39 @@ export const lightColors = {
 
   // Page field — the ONE owner of the page colour (painted by PageField,
   // mounted once in app/_layout.tsx). "Ink on paper."
-  page: brand.paper,            // #f0f4e9
+  page: brand.paper,            // #eef4fa
   // background = CARD face, surface = secondary/inset panel + sheets + sticky
   // chrome (near-white so surface-filled cards still float on the field),
   // surfaceAlt = tracks / chips / tiles. All three MUST stay 6-digit hex —
   // 64 sites concatenate a hex alpha onto them (`colors.surface + 'CC'`).
-  background: brand.card,       // #f9faf4
-  surface: '#F4F7EE',
-  surfaceAlt: '#E4EBDB',
+  background: brand.card,       // #f8fbfe
+  surface: '#f0f5fa',
+  surfaceAlt: '#dbe6f0',
 
   // Text — forest ink (contrast measured on the page field, not on the card)
-  text: brand.ink,              // #17362b 11.8:1
-  textSecondary: '#2F4A3D',     // 8.7:1
-  textMuted: brand.muted,       // #50675a 5.5:1 on page, 5.8:1 on card
+  text: brand.ink,              // #12294a 11.8:1
+  textSecondary: '#2a425e',     // 8.7:1
+  textMuted: brand.muted,       // #51657f 5.5:1 on page, 5.8:1 on card
   textLight: '#FFFFFF',
 
   // Ink — the printed dark block (hero blocks, tab bar, segment rails).
   // Deliberately the same idea in both themes; the field/cards flip.
-  ink: brand.forest,            // #102d25
+  ink: brand.forest,            // #0c2340
   inkText: brand.paper,         // 13.2:1 on ink
   inkMuted: brand.sage,         // 8.3:1 on ink
   // Glass — chips/rows sitting ON ink or pop blocks only (never on the page).
   // House rule on light glass: `text` / `textSecondary` only — never
   // textMuted or primary as body type.
-  glass: 'rgba(240,244,233,0.80)',
+  glass: 'rgba(238,244,250,0.80)',
   glassBorder: 'rgba(255,255,255,0.85)',
   // Glow — text glow, focus rings, XP tip halo
-  glow: 'rgba(140,175,56,0.45)',
-  trackBg: '#DCE5D2',
+  glow: 'rgba(10,155,203,0.45)',
+  trackBg: '#d1deeb',
   // Depth — layered forest shadow (boxShadow string: rnw → CSS, RN 0.81 new-arch → native)
-  depthShadow: '0 14px 30px -10px rgba(16,45,37,0.28), 0 2px 6px rgba(16,45,37,0.10), inset 0 1px 0 rgba(255,255,255,0.7)',
+  depthShadow: '0 14px 30px -10px rgba(12,35,64,0.28), 0 2px 6px rgba(12,35,64,0.10), inset 0 1px 0 rgba(255,255,255,0.7)',
   // The Vertex X / loader dots: forest on light surfaces; markOnInk on dark blocks.
-  markColor: '#244c3b',
-  markOnInk: '#b7df58',
+  markColor: '#1d4fa8',
+  markOnInk: '#22d0ec',
   // Title / section-head type on light surfaces: solid brand green (8.7:1 on
   // the page). Three identical stops so every GradientText call site keeps working.
   titleGradient: [brand.mid, brand.mid, brand.mid] as readonly string[],
@@ -99,48 +99,48 @@ export const lightColors = {
   redBg: '#FEE2E2',
 
   // Neutrals — hairlines that read on the card AND on the field
-  border: brand.rule,           // #cedbc7
-  borderDark: '#A9BE9F',
-  shadow: 'rgba(16, 45, 37, 0.22)',
+  border: brand.rule,           // #cbd8e6
+  borderDark: '#9eb4ce',
+  shadow: 'rgba(12, 35, 64, 0.22)',
 
   // Accent
-  accent: '#56731B',            // olive lime — text-safe on light (4.5:1+)
+  accent: '#086381',            // olive lime — text-safe on light (4.5:1+)
   info: '#2563A8',
 };
 
 // Dark — deep forest surfaces, lime accent. Avoids true #000.
 export const darkColors: typeof lightColors = {
-  primary: '#7FA032',           // 4.9:1 on the card, 6.3:1 on the page
-  primaryLight: brand.lime,     // #b7df58 9.6:1 on the card
-  primaryDark: '#2F6A4B',       // fills with white text (6.4:1)
+  primary: '#0c8eb9',           // 4.9:1 on the card, 6.3:1 on the page
+  primaryLight: brand.lime,     // #22d0ec 9.6:1 on the card
+  primaryDark: '#225bc3',       // fills with white text (6.4:1)
   onPrimary: brand.deep,        // 5.6:1 on the dark primary (white would be 3.0:1)
   onAccent: brand.deep,         // 11:1 on lime
 
   // Abyss page + RAISED forest cards (cards lift above the field like in light mode).
   // Still 6-digit hex: ~64 sites concatenate an alpha onto them.
-  page: '#061410',
-  background: brand.forest,     // #102d25 card, raised
-  surface: '#0C241D',           // secondary panel / sheet / sticky chrome
-  surfaceAlt: '#18392E',
+  page: '#060e1a',
+  background: brand.forest,     // #0c2340 card, raised
+  surface: '#0b1c30',           // secondary panel / sheet / sticky chrome
+  surfaceAlt: '#11325f',
 
   // Text — paper + sage
   text: brand.paper,            // 13.2:1 on card
-  textSecondary: '#C8D6C2',     // 9.7:1 on card
-  textMuted: '#9DB09A',         // 6.4:1 on card
+  textSecondary: '#c0cfdd',     // 9.7:1 on card
+  textMuted: '#9cabbe',         // 6.4:1 on card
   textLight: '#FFFFFF',
 
   // Ink block sits BELOW the raised card and a hair above the abyss page; the
   // lime rim DepthCard draws on a dark ink face keeps it reading as a block.
-  ink: brand.deep,              // #0b211c
+  ink: brand.deep,              // #081a30
   inkText: brand.paper,
   inkMuted: brand.sage,         // 9.6:1 on dark ink
   glass: 'rgba(255,255,255,0.06)',
   glassBorder: 'rgba(255,255,255,0.14)',
-  glow: 'rgba(183,223,88,0.55)',
-  trackBg: '#0A1D17',
-  depthShadow: '0 18px 40px -12px rgba(0,0,0,0.7), 0 0 0 1px rgba(183,223,88,0.16)',
-  markColor: '#b7df58',
-  markOnInk: '#b7df58',
+  glow: 'rgba(34,208,236,0.55)',
+  trackBg: '#091727',
+  depthShadow: '0 18px 40px -12px rgba(0,0,0,0.7), 0 0 0 1px rgba(34,208,236,0.16)',
+  markColor: '#22d0ec',
+  markOnInk: '#22d0ec',
   // Titles take the lime itself at night: 9.6:1 on a card, 11:1+ on the page.
   titleGradient: [brand.lime, brand.lime, brand.lime] as readonly string[],
 
@@ -156,8 +156,8 @@ export const darkColors: typeof lightColors = {
   redBg: 'rgba(239, 68, 68, 0.15)',
 
   // Neutrals — forest lines
-  border: '#24483A',
-  borderDark: '#3D6A55',
+  border: '#1a4a96',
+  borderDark: '#375880',
   shadow: 'rgba(0, 0, 0, 0.6)',
 
   // Accent
@@ -193,9 +193,12 @@ type ThemeCtx = {
   setMode: (m: ThemeMode) => void;
 };
 
+// What people get until they pick a mode themselves in Profile.
+const DEFAULT_MODE: ThemeMode = 'light';
+
 const ThemeContext = createContext<ThemeCtx>({
   colors: lightColors,
-  mode: 'system',
+  mode: DEFAULT_MODE,
   effective: 'light',
   setMode: () => {},
 });
@@ -203,7 +206,7 @@ const ThemeContext = createContext<ThemeCtx>({
 const STORAGE_KEY = 'cg1.theme.mode';
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [mode, setModeState] = useState<ThemeMode>('system');
+  const [mode, setModeState] = useState<ThemeMode>(DEFAULT_MODE);
   const [systemScheme, setSystemScheme] = useState<ColorSchemeName>(Appearance.getColorScheme());
 
   // Load persisted mode on mount

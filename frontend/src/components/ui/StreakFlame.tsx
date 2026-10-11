@@ -13,7 +13,7 @@
  * UNLIT chip used to paint `colors.surfaceAlt` wherever it stood, so the same
  * element read oppositely between themes on the Home hero's ink block — a
  * bright lilac sticker on near-black in light (11.5:1 against the block), a
- * #18392E panel at 1.49:1 in dark — and disagreed with the glass bell chip
+ * #11325f panel at 1.49:1 in dark — and disagreed with the glass bell chip
  * 60px above it. Inside an EditorialHero ink/pop block it is glass now (like
  * XPBar's tone='auto', it reads `useHeroSurface()`, so no call site changes).
  * On light glass the house rule is `text`/`textSecondary`, never inkText: a
@@ -53,7 +53,7 @@ export function StreakFlame({ compact = false }: { compact?: boolean }) {
   //
   // DARK glass is only 6 % white, so the chip shows the hero's nebula through
   // it: measured on Home's dark hero the fill runs rgb(63,55,143) →
-  // rgb(58,108,86), where inkMuted is 4.45 → 2.76:1 — under AA at the bright
+  // rgb(36,94,206), where inkMuted is 4.45 → 2.76:1 — under AA at the bright
   // end. The 11px label therefore takes inkText there (5.35 → 8.62:1) and the
   // hierarchy is carried by the icon, which is not text.
   const chipBg = onInk ? colors.glass : colors.surfaceAlt;

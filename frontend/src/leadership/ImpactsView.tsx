@@ -35,7 +35,7 @@ type Props = {
 // each COD stage to life; they stay browsable here as the library.
 const STAGE_META: Record<number, { label: string; color: string }> = {
   1: { label: 'Stage 1 · Foundation', color: '#10b981' },
-  2: { label: 'Stage 2 · Self Management', color: '#8caf38' },
+  2: { label: 'Stage 2 · Self Management', color: '#0a9bcb' },
   3: { label: 'Stage 3 · Leader', color: '#e0607e' },
   4: { label: 'Stage 4 · Team Builder', color: '#f59e0b' },
   5: { label: 'Stage SL · Sector/Site Leader', color: '#ef4444' },

@@ -29,7 +29,7 @@ import * as Sharing from 'expo-sharing';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useColors } from '../src/theme/ThemeContext';
-import { fonts } from '../src/theme/brand';
+import { APP_NAME, fonts } from '../src/theme/brand';
 import { apiService } from '../src/api/client';
 import { remoteImageDataUri } from '../src/utils/remoteImageDataUri';
 import { BrandLoader } from '../src/components/ui/BrandLoader';
@@ -217,7 +217,7 @@ export default function ShareBulletinsScreen() {
     const nav: any = navigator;
     try {
       if (nav.canShare?.({ files }) && nav.share) {
-        await nav.share({ files, title: 'Vertex Hub · Weekly Bulletins' });
+        await nav.share({ files, title: `${APP_NAME} · Weekly Bulletins` });
         setHasShared(true);
       }
     } catch (e: any) {

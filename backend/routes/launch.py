@@ -58,7 +58,7 @@ _HTML = f"""<!doctype html>
     --forest:{B.FOREST}; --deep:{B.DEEP}; --mid:{B.MID};
     --lime:{B.LIME}; --lime-dark:{B.LIME_DARK};
     --paper:{B.PAPER}; --rule:{B.RULE};
-    --on-dark-muted:#b9c9b8;
+    --on-dark-muted:#bbc7d5;
     --display:{B.FONT_HEADING}; --body:{B.FONT_BODY};
     color-scheme:dark;
   }}
@@ -66,7 +66,7 @@ _HTML = f"""<!doctype html>
   body {{ margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
     padding:28px 16px; font-family:var(--body); color:var(--paper);
     background:
-      radial-gradient(900px 480px at 50% -8%, rgba(183,223,88,.10) 0%, transparent 60%),
+      radial-gradient(900px 480px at 50% -8%, rgba(34,208,236,.10) 0%, transparent 60%),
       linear-gradient(180deg, var(--forest) 0%, var(--deep) 100%);
     background-color:var(--forest);
   }}
@@ -80,9 +80,9 @@ _HTML = f"""<!doctype html>
     padding:16px; border-radius:14px; border:1px solid transparent; cursor:pointer;
     font-family:var(--body); font-size:16px; font-weight:700; text-decoration:none; margin-bottom:12px; }}
   .btn-primary {{ background:var(--lime); color:var(--forest); box-shadow:0 10px 30px rgba(0,0,0,.25); }}
-  .btn-primary:hover {{ background:#c4e86d; }}
+  .btn-primary:hover {{ background:#4bddf4; }}
   .btn-primary:active {{ transform:translateY(1px); background:var(--lime-dark); }}
-  .steps {{ text-align:left; background:var(--mid); border:1px solid rgba(206,219,199,.18); border-radius:16px;
+  .steps {{ text-align:left; background:var(--mid); border:1px solid rgba(203,216,230,.18); border-radius:16px;
     padding:16px 18px; margin-top:26px; }}
   .steps h2 {{ font-family:var(--display); font-size:16px; font-weight:600; margin:0 0 12px; color:var(--paper); }}
   .step {{ display:flex; gap:11px; align-items:flex-start; margin-bottom:11px; font-size:13px; color:var(--on-dark-muted); line-height:1.5; }}

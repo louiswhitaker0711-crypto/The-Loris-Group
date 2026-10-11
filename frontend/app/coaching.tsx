@@ -1214,7 +1214,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   // token concat) so the chip doesn't resize when it becomes active.
   stageChipActiveDark: {
     backgroundColor: colors.surfaceAlt,
-    boxShadow: '0 6px 14px -5px rgba(0,0,0,0.6), 0 0 0 1.5px rgba(197,227,127,0.85)',
+    boxShadow: '0 6px 14px -5px rgba(0,0,0,0.6), 0 0 0 1.5px rgba(95,225,245,0.85)',
   },
   stageChipText: { fontFamily: fonts.bodySemibold, fontSize: 12, fontWeight: '700', color: colors.text },
   stageDot: { width: 7, height: 7, borderRadius: 4 },

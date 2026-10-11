@@ -1,10 +1,7 @@
 /**
- * Vertex X geometry — the logo's mark, as numbers.
- *
- * The Vertex Organisation logo's X: two solid lime blades on the left, and a
- * halftone dot field on the right whose dots shrink towards the arm tips.
- * This mirrors frontend/scripts/brand_assets.py (which writes the static
- * SVG/PNG assets), so the live mark and the icons are the same drawing.
+ * Geometry kept from the original mark. The app's logo is now drawn from
+ * brandMarkGeometry.ts; this file is still used for the halftone dot texture
+ * (dotField, used by Decor.tsx). The X shapes below are no longer rendered.
  *
  * The X lives in a 490 × 360 box: two 45° strokes, 130 wide, crossing at
  * (245, 180). Everything is computed once at import.

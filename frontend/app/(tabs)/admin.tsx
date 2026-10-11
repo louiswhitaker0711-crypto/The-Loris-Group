@@ -1057,8 +1057,8 @@ const createStyles = (colors: any) => StyleSheet.create({
   container: { flex: 1 },
   // The ink segment rail replaces the old underlined tab strip — no page-wide
   // white band above the field any more (the rail IS the chrome).
-  // marginBottom is deliberately generous: in DARK the ink rail (#0e271f) and
-  // the paper office rail below it (trackBg #07110C) are only a few points
+  // marginBottom is deliberately generous: in DARK the ink rail (#0b1e38) and
+  // the paper office rail below it (trackBg #060e19) are only a few points
   // apart on the abyss, so without real air they read as one doubled rail.
   tabBar: { marginHorizontal: 16, marginTop: 10, marginBottom: 10 },
   // One-segment fallback (plain admin): the rail's own label treatment —
@@ -1147,7 +1147,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   // rgba literal, never a token concat) so the pill doesn't resize on tap.
   filterPillActiveDark: {
     backgroundColor: colors.surfaceAlt,
-    boxShadow: '0 6px 14px -5px rgba(0,0,0,0.6), 0 0 0 1.5px rgba(197,227,127,0.85)',
+    boxShadow: '0 6px 14px -5px rgba(0,0,0,0.6), 0 0 0 1.5px rgba(95,225,245,0.85)',
   },
   filterPillText: { fontFamily: fonts.bodySemibold, fontSize: 13, fontWeight: '600', color: colors.textSecondary },
   filterCount: { backgroundColor: colors.surfaceAlt, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 10, minWidth: 22, alignItems: 'center' },
@@ -1190,7 +1190,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   sectionTitle: { fontFamily: fonts.display, fontSize: 18, fontWeight: '600', color: colors.text, marginBottom: 16 },
   gmCard: { borderRadius: 20, marginBottom: 14 },
   gmPress: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 15 },
-  gmIcon: { width: 42, height: 42, borderRadius: 13, alignItems: 'center', justifyContent: 'center', boxShadow: '0 6px 14px -6px rgba(16,45,37,0.75)' },
+  gmIcon: { width: 42, height: 42, borderRadius: 13, alignItems: 'center', justifyContent: 'center', boxShadow: '0 6px 14px -6px rgba(12,35,64,0.75)' },
   gmTitle: { fontFamily: fonts.display, fontSize: 14.5, fontWeight: '800', color: colors.text },
   gmSub: { fontSize: 11.5, color: colors.textMuted, marginTop: 2 },
   pendingBadge: {

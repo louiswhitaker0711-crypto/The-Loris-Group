@@ -7,7 +7,7 @@
  *     target={50}
  *     label="Sales"
  *     unit=""
- *     accent="#2F6A4B"     // centre numeral colour (the arc is always the XP gradient)
+ *     accent="#225bc3"     // centre numeral colour (the arc is always the XP gradient)
  *     size={82} stroke={9} // callers passing a size keep it; default 104
  *     hapticTicks
  *   />

@@ -844,7 +844,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   completedPillText: { color: '#fff', fontSize: 11, fontWeight: '800', letterSpacing: 0.4 },
   gradingBanner: {
     flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start',
-    backgroundColor: colors.primary || '#244C3B', paddingHorizontal: 10, paddingVertical: 5,
+    backgroundColor: colors.primary || '#1d4fa8', paddingHorizontal: 10, paddingVertical: 5,
     borderRadius: 14, marginTop: 8,
   },
   gradingBannerText: { color: colors.onPrimary, fontSize: 11, fontWeight: '700', letterSpacing: 0.3 },
@@ -859,10 +859,10 @@ const createStyles = (colors: any) => StyleSheet.create({
   passOffHelp: { fontSize: 11.5, color: colors.textMuted, marginTop: 8, lineHeight: 16, fontStyle: 'italic' },
   section: { marginTop: 14, marginHorizontal: 12, borderRadius: 18, overflow: 'hidden' },
   // The card's printed head tab. The fill is set per theme by <Section>:
-  // `surfaceAlt` (#E4EBDB) is a hair off the light page field (#F0F4E9), so in
+  // `surfaceAlt` (#dbe6f0) is a hair off the light page field (#eef4fa), so in
   // light the head read as a strip of background and the card looked like it
   // started at its white body. Light tints from the card face instead
-  // (`surface`), dark keeps `surfaceAlt` (a real step up from the #102D25 face).
+  // (`surface`), dark keeps `surfaceAlt` (a real step up from the #0c2340 face).
   sectionHeadBar: { paddingHorizontal: 14, paddingVertical: 13 },
   sectionRule: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 2 },
   sectionTitle: { fontFamily: fonts.displayWide, fontSize: 12, color: colors.text, letterSpacing: 0.6 },
@@ -878,7 +878,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   ladderMetChip: { backgroundColor: colors.primary + '1A', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2.5 },
   // Below the >=11px Unbounded floor (spec §2.4) — mono instead. `primary`
   // (not primaryDark) so the chip clears 4.5:1 in dark too: primaryDark
-  // #2f6a4b on the dark card measured 2.7:1.
+  // #225bc3 on the dark card measured 2.7:1.
   ladderMetChipText: { fontFamily: fonts.monoSemibold, fontSize: 9.5, letterSpacing: 0.8, color: colors.primary },
   segBar: { marginHorizontal: 14, marginTop: 14 },
   readyBtn: { marginTop: 18, borderRadius: 14 },
@@ -925,8 +925,8 @@ const createStyles = (colors: any) => StyleSheet.create({
   // Self-rate-Stage-3 explainer banner
   selfRateBanner: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 8,
-    backgroundColor: (colors.primary || '#244C3B') + '14',
-    borderWidth: 1, borderColor: (colors.primary || '#244C3B') + '33',
+    backgroundColor: (colors.primary || '#1d4fa8') + '14',
+    borderWidth: 1, borderColor: (colors.primary || '#1d4fa8') + '33',
     padding: 10, borderRadius: 10, marginBottom: 12,
   },
   selfRateBannerText: { flex: 1, fontSize: 12, lineHeight: 17, color: colors.primary, fontWeight: '600' },

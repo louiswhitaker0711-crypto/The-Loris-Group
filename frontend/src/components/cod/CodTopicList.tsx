@@ -45,19 +45,19 @@ import { GRADIENT } from '../../theme/brand';
 import { DepthCard } from '../ui/DepthCard';
 
 // Pillar hues, per theme. DARK uses the bright table (every entry clears 3:1 on
-// the raised forest card face #102d25); LIGHT uses darkened twins because the
+// the raised forest card face #0c2340); LIGHT uses darkened twins because the
 // bright cyan/amber/green sample 2.8 / 2.2 / 2.6:1 on a white card — under the
 // 3:1 a meaningful graphic needs, so the strip marking a rep's pillar was
 // effectively invisible (review R2).
 const PILLAR_COLORS: Record<string, string> = {
-  'The Standard': '#b7df58',        // brand lime (9.6:1 on the forest card)
+  'The Standard': '#22d0ec',        // brand lime (9.6:1 on the forest card)
   'Commercial Craft': '#0ea5e9',
   'Self Leadership': '#f59e0b',
   'People Leadership': '#10b981',
   'Digital & Data': '#ef4444',
 };
 const PILLAR_COLORS_LIGHT: Record<string, string> = {
-  'The Standard': '#2F6A4B',        // brand green, 6.2:1 on the card
+  'The Standard': '#225bc3',        // brand green, 6.2:1 on the card
   'Commercial Craft': '#0284C7',    // 4.1:1 (bright #0ea5e9 was 2.8:1)
   'Self Leadership': '#C2740A',     // 3.6:1 (bright #f59e0b was 2.2:1)
   'People Leadership': '#059669',   // 3.8:1 (bright #10b981 was 2.6:1)
@@ -65,7 +65,7 @@ const PILLAR_COLORS_LIGHT: Record<string, string> = {
 };
 
 // Deepest brand green — the direction every gradient end is darkened toward.
-const SHADE_INK = '#050f0c';
+const SHADE_INK = '#040b15';
 
 /**
  * Opaque blend of two 6-digit hex colours (t = 0 → a, 1 → b). Tokens are read,
@@ -88,7 +88,7 @@ function mix(a: string, b: string, t: number): string {
  */
 const barStops = (hue: string, dark: boolean) => (dark
   // On the dark card the ends must stay lifted or they sink into the face (at
-  // 0.22 the darkest stop still measures ≥3.1:1 on #102D25); on white they can
+  // 0.22 the darkest stop still measures ≥3.1:1 on #0c2340); on white they can
   // go deep, which is what keeps every stop ≥3:1 there (8.7–12.7:1).
   ? [mix(hue, SHADE_INK, 0.1), hue, mix(hue, SHADE_INK, 0.22)] as const
   : [mix(hue, SHADE_INK, 0.28), hue, mix(hue, SHADE_INK, 0.46)] as const);

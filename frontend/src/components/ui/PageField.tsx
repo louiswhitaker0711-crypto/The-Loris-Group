@@ -137,7 +137,7 @@ export function PageField() {
     const list: BlobSpec[] = [
       {
         id: 'pf-blob-violet',
-        size: 460, color: '#8caf38',
+        size: 460, color: '#0a9bcb',
         baseOpacity: dark ? 0.34 : 0.16,
         freq: 1, driftX: 40, driftY: 26, offset: 0,          // 13.0 s
         top: -140, right: -160,
@@ -154,7 +154,7 @@ export function PageField() {
       // Dark only: a magenta nebula mid-field so the abyss isn't flat black.
       list.push({
         id: 'pf-blob-magenta',
-        size: 320, color: '#3a7a56',
+        size: 320, color: '#2864d9',
         baseOpacity: 0.20,
         freq: 5 / 6, driftX: 24, driftY: -22, offset: 0,      // 15.6 s
         top: '34%', left: '30%',

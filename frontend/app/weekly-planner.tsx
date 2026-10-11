@@ -1715,11 +1715,11 @@ const createStyles = (colors: any) => StyleSheet.create({
   dayDotText: { fontSize: 8, fontWeight: '800', color: colors.textMuted },
   lockBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#fef3c7', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7, marginBottom: 8, borderWidth: 1, borderColor: '#fde68a' },
   lockBannerText: { flex: 1, fontSize: 11, fontWeight: '700', color: '#92400e', lineHeight: 15 },
-  goalPill: { minWidth: 34, alignItems: 'center', paddingVertical: 3, paddingHorizontal: 7, borderRadius: 999, backgroundColor: 'rgba(58, 122, 86, 0.08)', borderWidth: 1, borderColor: `${colors.primary}25` },
+  goalPill: { minWidth: 34, alignItems: 'center', paddingVertical: 3, paddingHorizontal: 7, borderRadius: 999, backgroundColor: 'rgba(40, 100, 217, 0.08)', borderWidth: 1, borderColor: `${colors.primary}25` },
   goalPillText: { fontFamily: fonts.mono, fontSize: 11, fontWeight: '800', color: colors.primary },
 
   // Crew schedule/goal sheet
-  sheetBackdrop: { flex: 1, backgroundColor: 'rgba(11, 33, 28, 0.45)', justifyContent: 'flex-end' },
+  sheetBackdrop: { flex: 1, backgroundColor: 'rgba(8, 26, 48, 0.45)', justifyContent: 'flex-end' },
   sheet: { backgroundColor: colors.background, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 18, paddingBottom: 28 },
   sheetHandle: { width: 36, height: 4, backgroundColor: colors.border, borderRadius: 2, alignSelf: 'center', marginBottom: 10 },
   sheetTitle: { fontFamily: fonts.display, fontSize: 17, fontWeight: '800', color: colors.text },

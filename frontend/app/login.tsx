@@ -32,8 +32,8 @@ const ink = darkColors;
 // a translucent face, so the face must be near-opaque plum: the rim then reads
 // as a 1.5 px brand edge plus a faint diagonal tint, never as a magenta block,
 // and inkText/inkMuted keep ≥7:1 on it. Literal rgba — no token concatenation.
-const FORM_FILL = 'rgba(8,26,20,0.84)';
-const CHIP_FILL = 'rgba(8,26,20,0.80)';
+const FORM_FILL = 'rgba(8,20,34,0.84)';
+const CHIP_FILL = 'rgba(8,20,34,0.80)';
 
 type FocusField = 'email' | 'password' | 'resetEmail' | 'resetCode' | 'newPassword' | 'confirmPassword' | null;
 
@@ -170,13 +170,13 @@ export default function LoginScreen() {
         onScroll={onScroll}
         scrollEventThrottle={16}
       >
-        {/* Hero: the Vertex X + editorial title. Lags, shrinks and fades as
+        {/* Hero: the brand mark + editorial title. Lags, shrinks and fades as
             the form slides up over it (ParallaxHero). */}
         <Reveal index={0}>
         <ParallaxHero scrollY={scrollY}>
         <View style={styles.logoSection}>
           <View style={styles.markStage}>
-            <VertexMark size={200} color={brand.lime} glow ripple={4} />
+            <VertexMark size={200} gradient glow />
           </View>
           <GradientText
             colors={GRADIENT_TEXT}
@@ -463,7 +463,7 @@ const styles = StyleSheet.create({
   // (a glass DepthCard casts no shadow of its own). Literal rgba shadows.
   formHalo: {
     width: '100%', maxWidth: 440, alignSelf: 'center', borderRadius: 25.5,
-    boxShadow: '0 28px 60px -24px rgba(0,0,0,0.75), 0 0 46px rgba(140,175,56,0.30)',
+    boxShadow: '0 28px 60px -24px rgba(0,0,0,0.75), 0 0 46px rgba(10,155,203,0.30)',
   },
   form: { borderRadius: 24, padding: 20 },
   // Editorial rule above the card title (SectionHead's 28×3 eyebrow).
@@ -477,7 +477,7 @@ const styles = StyleSheet.create({
   },
   // Dark well: sunken on the glass, brand border, purple focus glow.
   inputWrapper: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(5,15,11,0.55)',
+    flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(5,12,21,0.55)',
     borderRadius: 14, borderWidth: 1, borderColor: ink.border, paddingHorizontal: 14, gap: 10,
   },
   inputWrapperFocused: {
@@ -517,7 +517,7 @@ const styles = StyleSheet.create({
   // opaque `ink.surface` hex (set via DepthCard `fill`).
   resetHalo: {
     width: '100%', maxWidth: 420, alignSelf: 'center', borderRadius: 21.5,
-    boxShadow: '0 30px 70px -20px rgba(0,0,0,0.85), 0 0 40px rgba(140,175,56,0.25)',
+    boxShadow: '0 30px 70px -20px rgba(0,0,0,0.85), 0 0 40px rgba(10,155,203,0.25)',
   },
   resetCard: { borderRadius: 20, padding: 24 },
   resetClose: { position: 'absolute', top: 12, right: 12, zIndex: 10, padding: 4 },

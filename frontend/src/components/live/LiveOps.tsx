@@ -28,17 +28,17 @@ import { addDays, todayISO } from '../../utils/calendarDates';
 import { useTabBarClearance } from '../../customization/CustomTabBar';
 
 const L = {
-  canvas: '#07170f',
-  panel: '#0d2419',
-  tile: '#102d25',
-  raised: '#163a2d',
-  line: 'rgba(183,223,88,0.14)',
-  lineSoft: 'rgba(238,244,230,0.07)',
-  text: '#eef4e6',
-  muted: '#9fb8a8',
-  faint: 'rgba(159,184,168,0.55)',
-  lime: '#b7df58',
-  onLime: '#102d25',
+  canvas: '#07121e',
+  panel: '#0c1c31',
+  tile: '#0c2340',
+  raised: '#10315d',
+  line: 'rgba(34,208,236,0.14)',
+  lineSoft: 'rgba(231,240,249,0.07)',
+  text: '#e7f0f9',
+  muted: '#a0b1c6',
+  faint: 'rgba(160,177,198,0.55)',
+  lime: '#22d0ec',
+  onLime: '#0c2340',
   green: '#34d399',
   red: '#f87171',
   redText: '#fca5a5',
@@ -369,7 +369,7 @@ export function LiveSector({ id, initialDate }: { id: string; initialDate?: stri
               {members.length === 0 ? <Text style={[s.note, { padding: 18 }]}>Nobody in this sector yet.</Text> : null}
               {members.map((m) => (
                 <Pressable key={String(m.id)} onPress={() => router.push(`/live-ba?id=${m.id}&date=${date}&sector=${id}` as never)}
-                  style={(st: any) => [s.tr, !wide && { flexDirection: 'column', alignItems: 'stretch', gap: 10 }, st.hovered && { backgroundColor: 'rgba(238,244,230,0.04)' }]}
+                  style={(st: any) => [s.tr, !wide && { flexDirection: 'column', alignItems: 'stretch', gap: 10 }, st.hovered && { backgroundColor: 'rgba(231,240,249,0.04)' }]}
                   testID={`live-ba-${m.id}`}>
                   <View style={[s.person, wide && { flex: 1 }]}>
                     <Avatar p={m} size={38} />
@@ -521,7 +521,7 @@ export function LiveBa({ id, initialDate, sectorId }: { id: string; initialDate?
 const s = StyleSheet.create({
   shell: { backgroundColor: L.canvas, borderRadius: 20, padding: 14, borderWidth: 1, borderColor: L.line },
   refresh: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'center', marginTop: 12, paddingHorizontal: 12, minHeight: 34 },
-  refreshText: { fontFamily: fonts.mono, fontSize: 10.5, letterSpacing: 0.6, color: '#6b8070' },
+  refreshText: { fontFamily: fonts.mono, fontSize: 10.5, letterSpacing: 0.6, color: '#6a7b90' },
   bar: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12, flexWrap: 'wrap' },
   heading: { fontFamily: fonts.displayWide, fontSize: 13, letterSpacing: 0.8, textTransform: 'uppercase', color: L.text },
   navBtn: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: L.tile, borderWidth: 1, borderColor: L.lineSoft },
@@ -546,11 +546,11 @@ const s = StyleSheet.create({
   kpiValue: { fontFamily: fonts.display, fontSize: 18, color: L.text, fontVariant: ['tabular-nums'] as any },
 
   card: { backgroundColor: L.tile, borderRadius: 18, borderWidth: 1, borderColor: 'rgba(52,211,153,0.28)', padding: 18, minHeight: 400 },
-  cardHover: { borderColor: L.lime, boxShadow: '0 0 0 1px rgba(183,223,88,0.35), 0 12px 30px rgba(0,0,0,0.35)' } as any,
+  cardHover: { borderColor: L.lime, boxShadow: '0 0 0 1px rgba(34,208,236,0.35), 0 12px 30px rgba(0,0,0,0.35)' } as any,
   cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   campaign: { flex: 1, fontFamily: fonts.mono, fontSize: 9.5, letterSpacing: 1, textTransform: 'uppercase', color: L.muted },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12, minHeight: 26 },
-  chip: { paddingHorizontal: 9, paddingVertical: 3, borderRadius: 999, backgroundColor: 'rgba(238,244,230,0.06)', borderWidth: 1, borderColor: 'transparent' },
+  chip: { paddingHorizontal: 9, paddingVertical: 3, borderRadius: 999, backgroundColor: 'rgba(231,240,249,0.06)', borderWidth: 1, borderColor: 'transparent' },
   chipOn: { backgroundColor: 'rgba(52,211,153,0.08)', borderColor: 'rgba(52,211,153,0.6)' },
   chipText: { fontFamily: fonts.bodySemibold, fontSize: 11, color: L.muted },
   cardName: { fontFamily: fonts.display, fontSize: 23, lineHeight: 28, color: L.text, marginTop: 14 },
@@ -592,7 +592,7 @@ const s = StyleSheet.create({
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 },
   leadTag: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, backgroundColor: L.text },
   leadTagText: { fontFamily: fonts.bodySemibold, fontSize: 9.5, color: L.onLime },
-  sharedTag: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, backgroundColor: 'rgba(238,244,230,0.1)' },
+  sharedTag: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, backgroundColor: 'rgba(231,240,249,0.1)' },
   sharedTagText: { fontFamily: fonts.bodySemibold, fontSize: 9.5, color: L.text },
   cells: { flexDirection: 'row' },
   cell: { flex: 1, alignItems: 'center', gap: 4, minWidth: 0 },
