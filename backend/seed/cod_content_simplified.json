@@ -1,6 +1,6 @@
 {
  "1|5-Step Sign-Up Process": {
-  "trainee_content": "The 5 Steps are the backbone of every conversation: Introduction, Present the Problem, The Solution, The Close, Rehash. You run them in the right order, every time, without skipping a step. It should sound confident and natural, never like a script.\n\nThe order matters because each step earns the next one. When a close falls flat, it's almost always because a step got skipped.",
+  "trainee_content": "The 5 Steps are the backbone of every conversation: Introduction, Presentation, Short Story, Close, Rehash. You run them in the right order, every time, without skipping a step. It should sound confident and natural, never like a script.\n\nThe order matters because each step earns the next one. When a close falls flat, it's almost always because a step got skipped.",
   "what_good_looks_like": [
    "Runs the full sign-up process in order, no steps missed",
    "Sounds confident and natural, not rehearsed",
@@ -48,7 +48,7 @@
   }
  },
  "1|Clear Close": {
-  "trainee_content": "Interest is not a result \u2014 commitment is. You close clearly and with confidence, turning the supporter's interest into a real commitment.\n\nNo trailing off. No hoping they offer it themselves. Be direct, slow down, hold eye contact, ask for the long term \u2014 then tell them what happens next. You ask cleanly, then you stay comfortable in the silence that follows.",
+  "trainee_content": "Interest is not a result \u2014 commitment is. You close clearly and with confidence, turning the customer's interest into a real commitment.\n\nNo trailing off. No hoping they offer it themselves. Be direct, slow down, hold eye contact, ask for the long term \u2014 then tell them what happens next. You ask cleanly, then you stay comfortable in the silence that follows.",
   "what_good_looks_like": [
    "Closes clearly and confidently \u2014 turns interest into real commitment",
    "Asks for the sign-up directly instead of waiting for it to be offered",
@@ -57,7 +57,7 @@
   "how_measured": [
    "Roleplay: the close gets asked out loud, not hinted at",
    "Field watch: how many interested conversations turn into sign-ups",
-   "Sign-ups where the supporter knew exactly what they agreed to"
+   "Sign-ups where the customer knew exactly what they agreed to"
   ],
   "leader_coaching_notes": [
    "Most new starters talk right past the close \u2014 coach the stop",
@@ -104,7 +104,7 @@
   ],
   "how_measured": [
    "Watch them on high days and low days",
-   "Composure in front of supporters when things go wrong",
+   "Composure in front of customers when things go wrong",
    "Effort stays the same no matter the results"
   ],
   "leader_coaching_notes": [
@@ -240,7 +240,7 @@
   }
  },
  "1|Quality KPIs": {
-  "trainee_content": "Volume without quality is borrowed money \u2014 it comes back to bite you.\n\nKnow the quality KPIs and why hitting them matters: 70%+ Welcome Calls answered, 1st payment 85%+, 3rd payment 70%+. Then show the actions that keep sign-ups high quality: set the right expectations, capture the right details, and sign the right supporter for the right reasons.",
+  "trainee_content": "Volume without quality is borrowed money \u2014 it comes back to bite you.\n\nKnow the quality KPIs and why hitting them matters: average order value \u00a313+, 2.5+ drop days, fails under 10%, 75%+ taking The Round and 75%+ still ordering in their 4th week. Then show the actions that keep sign-ups high quality: set the right expectations, capture the right details, and sign the right customer for the right reasons.",
   "what_good_looks_like": [
    "Can name the quality KPIs and say why they matter",
    "Shows the actions that keep sign-ups high quality",
@@ -264,20 +264,20 @@
   }
  },
  "1|Question Handling": {
-  "trainee_content": "A question is usually interest in disguise.\n\nWhen a supporter raises a concern: listen first, use the systems, and find the real worry underneath \u2014 Feel, Relate, Felt, Found, Re-close. Then check the worry is gone before you re-close.\n\nAnswer the wrong question and you lose the sign-up \u2014 even when your answer was right.",
+  "trainee_content": "A question is usually interest in disguise.\n\nWhen a customer raises a concern: listen first, use the systems, and find the real worry underneath \u2014 smile and agree, relate, Feel \u00b7 Felt \u00b7 Found, re-impulse, close. Then check the worry is gone before you re-close.\n\nAnswer the wrong question and you lose the sign-up \u2014 even when your answer was right.",
   "what_good_looks_like": [
    "Listens first \u2014 finds the real worry under the question",
    "Uses the systems instead of making up answers",
    "Checks the worry is gone before re-closing"
   ],
   "how_measured": [
-   "Roleplay the concerns we can address: other charities, one-off, bank details, online, more information",
+   "Roleplay the common objections: the supermarket, the price, speaking to a partner, not much milk",
    "Watch in the field: calm and structured when questioned",
    "How often they re-close after handling a question"
   ],
   "leader_coaching_notes": [
    "Teach the pattern: listen, answer, check, re-close",
-   "Drill Feel, Relate, Felt, Found, Re-close on each concern we can address",
+   "Drill the objection cycle on each of the common objections",
    "Coach listening \u2014 most BAs answer the wrong question"
   ],
   "assessment_prompts": {
@@ -441,9 +441,9 @@
    "Switches angle mid-conversation when the first close doesn't land"
   ],
   "how_measured": [
-   "Roleplay: same pitch, three different supporter types",
+   "Roleplay: same pitch, three different customer types",
    "Watch them in the field: which close did they pick and why",
-   "Close rate across different types of supporters"
+   "Close rate across different types of customers"
   ],
   "leader_coaching_notes": [
    "Name the closes together \u2014 shared words make coaching specific",
@@ -451,8 +451,8 @@
    "Drill the switch: first close misses, what now?"
   ],
   "assessment_prompts": {
-   "knowledge": "Why do different supporters need different closes?",
-   "skill": "Give me three closes for three different supporters, right now.",
+   "knowledge": "Why do different customers need different closes?",
+   "skill": "Give me three closes for three different customers, right now.",
    "consistency": "Are you switching closes every day out there, or falling back on one?",
    "independence": "Do you pick the close yourself in the moment, without a prompt?"
   }
@@ -602,7 +602,7 @@
   }
  },
  "2|Profitability": {
-  "trainee_content": "You know your personal breakeven and the industry averages you need to hit to represent the brand. And you use those numbers to decide what matters each day.\n\nBreakeven is your needs divided by \u00a355 \u2014 the BA fee for a standard \u00a312 sign-up \u2014 turned into sign-ups a week. A professional knows exactly what a day has to produce \u2014 and plans backward from that number.",
+  "trainee_content": "You know your personal breakeven and the industry averages you need to hit to represent the brand. And you use those numbers to decide what matters each day.\n\nBreakeven is your needs divided by \u00a312 \u2014 the up-front fee for a Silver, the lowest-paying sign-up \u2014 turned into sign-ups a week. A professional knows exactly what a day has to produce \u2014 and plans backward from that number.",
   "what_good_looks_like": [
    "Knows personal breakeven cold",
    "Knows the industry averages needed to represent the brand",
@@ -626,16 +626,16 @@
   }
  },
  "2|Rehash & Consolidation": {
-  "trainee_content": "The sign-up isn't done when they say yes.\n\nAfter the yes, remind them of the impact and the value. Make sure they fully understand what they agreed to \u2014 the Pop Quiz: monthly amount, how often, the start date (1st / 8th / 15th / 22nd) and why NDCS makes a Welcome Call. Then the 3 Thank You's. Leave them feeling good about the decision.\n\nConsolidation is where quality is made. A confident supporter stays. A confused one cancels.",
+  "trainee_content": "The sign-up isn't done when they say yes.\n\nAfter the yes, remind them of the impact and the value. Make sure they fully understand what they agreed to \u2014 the app, the welcome leaflet and the Pop Quiz: first delivery, delivery days, the latest they can make changes and payment day. Then the closing statements. Leave them feeling good about the decision.\n\nConsolidation is where quality is made. A confident customer stays. A confused one cancels.",
   "what_good_looks_like": [
-   "Reminds the supporter of impact and value after the yes",
-   "Confirms they understand: what they agreed to, amounts, how often, dates",
-   "Leaves the supporter feeling good about their decision"
+   "Reminds the customer of impact and value after the yes",
+   "Confirms they understand: their order, delivery days, cut-off and payment day",
+   "Leaves the customer feeling good about their decision"
   ],
   "how_measured": [
-   "Quality KPIs: donations stick, cancellations low",
+   "Quality KPIs: customers stay, cancellations low",
    "Watched consolidations cover every confirmation point",
-   "Zero supporter callbacks or confusion complaints"
+   "Zero customer callbacks or confusion complaints"
   ],
   "leader_coaching_notes": [
    "Watch the 60 seconds AFTER the yes \u2014 that's the module",
@@ -643,7 +643,7 @@
    "Roleplay the confirmation checklist until it's automatic"
   ],
   "assessment_prompts": {
-   "knowledge": "What happens after the supporter says yes? Walk me through it.",
+   "knowledge": "What happens after the customer says yes? Walk me through it.",
    "skill": "Show me a consolidation \u2014 in the field or in roleplay.",
    "consistency": "Do you consolidate every sign-up, every day?",
    "independence": "Do you do it without a coach reminding you?"
@@ -1501,7 +1501,7 @@
   "what_good_looks_like": [
    "Teaches the why behind each step, not just the what",
    "BAs they coach use the psychology naturally. It never sounds scripted",
-   "Keeps it ethical: the supporter feels good about saying yes"
+   "Keeps it ethical: the customer feels good about saying yes"
   ],
   "how_measured": [
    "A BA they coached can explain the psychology back correctly",
@@ -1744,7 +1744,7 @@
    "Retrains same day; escalates when the fix doesn't stick"
   ],
   "how_measured": [
-   "Sector quality KPIs (donations, cancellations) stay on standard",
+   "Sector quality KPIs (fails, 4th weeks) stay on standard",
    "Same-day retrain record for problems found",
    "No conduct problems surfacing later that they should have caught"
   ],

@@ -57,8 +57,8 @@ const tableWidth = (showMc: boolean) =>
 
 // Traffic light: a dot beside the name, from last week's sign-ups.
 // Applies to everyone with ≥4 prior weeks on bells.
-// The owner's weekly tiers (src/utils/weekBands.ts): Red 5 and under,
-// Amber 6-7, Green 8-9, Super Green 10+.
+// The owner's weekly tiers (src/utils/weekBands.ts): Red under 8,
+// Amber 8-14, Green 15-19, Super Green 20+.
 // Deep red = red last week AND red the week before.
 function trafficLight(e: Entry): { color: string; label: string } | undefined {
   // Admins run the office — they aren't measured by the rep traffic light.

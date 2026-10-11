@@ -22,9 +22,10 @@ def test_defaults_pass_the_editor_validation():
 
 def test_defaults_carry_the_playbook_content():
     week = DEFAULT_CONTENT["week_one_note"]
-    for day in ("BA Academy Day 1", "BA Academy Day 2", "Practical Learning Day",
-                "First Days on Badge", "Badge Development & Consolidation", "Independent Growth"):
+    for day in ("Induction Day", "Product knowledge", "First day in the field",
+                "G.I.F.T.S", "Closing, taking control, rehash", "Independent Growth"):
         assert day in week
+    assert "in the field 13:30 to 20:00" in week
     assert "100% Effort" in DEFAULT_CONTENT["welcome_message"]
     pay = DEFAULT_CONTENT["pay_notes"]
     assert "£12 for a Silver sign-up" in pay and "£20 for a Gold sign-up" in pay
@@ -34,7 +35,7 @@ def test_defaults_carry_the_playbook_content():
 def test_contacts_are_roles_only_no_personal_details():
     for c in DEFAULT_CONTENT["contacts"]:
         assert not c["email"]
-        assert c["phone"] in ("", "020 4587 3738")  # the charity's Welcome Call line only
+        assert c["phone"] == ""
     blob = " ".join(str(v) for v in DEFAULT_CONTENT.values())
     assert not re.search(r"[\w.+-]+@[\w-]+\.[\w.]+", blob)
 

@@ -48,7 +48,7 @@ const RHYTHM = [
 const PILLARS = [
   {
     name: 'Commercial Craft', icon: 'briefcase' as const, color: '#0ea5e9',
-    desc: 'The technical skills of the role. How you execute the sign-up process, engage supporters, handle questions, close confidently, and maintain quality under pressure. This is the foundation of performance.',
+    desc: 'The technical skills of the role. How you execute the sign-up process, engage customers, handle questions, close confidently, and maintain quality under pressure. This is the foundation of performance.',
   },
   {
     name: 'Self Leadership', icon: 'person' as const, color: '#f59e0b',

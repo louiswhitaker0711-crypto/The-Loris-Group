@@ -234,7 +234,7 @@ async def build_team(user_ids: list[str], team_name: str, iso_from: str, iso_to:
 # ── AI narrative ────────────────────────────────────────────────────────────
 _SYSTEM = (
     "You are a sharp, supportive performance coach for self-employed Brand "
-    "Ambassadors (BAs) who fundraise door to door. You write concise, specific "
+    "Ambassadors (BAs) who sign up customers door to door. You write concise, specific "
     "performance reviews from the NUMBERS PROVIDED ONLY — never invent figures. "
     "The funnel, by its Field IQ names, is: doors knocked → spoken (spoken_to) → "
     "presented (pitches_commenced) → closed (pitches_closed) → sign-ups (sales). "

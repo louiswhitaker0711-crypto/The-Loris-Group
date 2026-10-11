@@ -8,7 +8,7 @@ assessment grading, exam submit, streak activity).
 
 Performance-first catalog (per the owner, 2026-07-12):
     day-sales ladder   sign-up(1) → bell(3) → gong(5) → superstar(10)
-    personal weeks     Green Week (8+, the owner's What Good Looks Like
+    personal weeks     Green Week (15+, the owner's traffic light system
                        Green — core/week_bands.py) / 20 / 30 personal
                        sign-ups in one bells week
     leadership         Team Builder (someone reports to you),
@@ -51,7 +51,7 @@ DAY_SALES_TIERS = [
     (10, "superstar_10"),
 ]
 
-# Personal-week ladder. The first rung is the owner's Green Week (8+
+# Personal-week ladder. The first rung is the owner's Green Week (15+
 # sign-ups — "What Good Looks Like"); 20 and 30 are stretch goals above it.
 # The stored key stays "personal_12" (existing user_badges rows use it).
 PERSONAL_WEEK_TIERS = [

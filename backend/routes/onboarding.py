@@ -42,8 +42,7 @@ def _now() -> str:
 DEFAULT_CONTENT = {
     # Drawn from the office playbook (First 2 Weeks, Our Expectations, the
     # daily routine and the BA pay rules). Contacts are role titles only —
-    # an admin adds the names and numbers; the one number shipped is the
-    # charity's Welcome Call line printed in the playbook.
+    # an admin adds the names and numbers.
     "welcome_title": "Welcome to the team.",
     "welcome_message": (
         "On Day 1 you'll get a full overview of the business, the direct sales "
@@ -71,16 +70,23 @@ DEFAULT_CONTENT = {
         "Earnings Calculator shows what your week is worth."
     ),
     "week_one_note": (
-        "Day 1 (Monday): BA Academy Day 1 · Office based (12:30 PM – 6:30 PM)\n"
-        "Day 2 (Tuesday): BA Academy Day 2 · Office based (1:00 PM – 5:30 PM)\n"
-        "Day 3 (Wednesday): Practical Learning Day · Field based (10:00 AM – 5:30 PM) "
-        "— shadow your coach\n"
-        "Days 4–5 (Thursday & Friday): First Days on Badge (10:30 AM – 8:30 PM) — "
-        "with your mentor by your side\n"
-        "Day 6 (Saturday): Badge Development & Consolidation (9:00 AM – 5:30 PM)\n"
+        "Day 1: Induction Day — the business, the industry, our role and the "
+        "story of the company\n"
+        "Day 2: Product knowledge — the story, the products, the sign-up process, "
+        "the app and rehash, and the sales systems\n"
+        "Day 3: First day in the field — the script 10/10/10, the map, your call "
+        "back tracker, the Law of Averages\n"
+        "Day 4: G.I.F.T.S, the objection cycle, qualifiers\n"
+        "Day 5: Closing, taking control, rehash\n"
+        "Day 6 (Saturday): Finish the week strong, break the day down, plan next week\n"
         "2nd week: Independent Growth\n\n"
-        "Every morning: phone charged + Field IQ working · collect presenter cards & "
-        "collateral · recruitment update from admin · review your plan for the day. "
+        "The office day, Monday to Friday: planning meeting 09:30 (09:00 on "
+        "Monday) · sector leaders meeting 10:00 · COD workshops 10:30 · "
+        "Primetime 11:00 · morning meeting 11:45 · in the field 13:30 to 20:00. "
+        "Saturday: sectors 09:00, in the field 10:00 to 17:00.\n\n"
+        "Every morning: phone charged + Field IQ working · collect pitch cards, "
+        "welcome leaflets & call back trackers · recruitment update from admin · "
+        "review your plan for the day. "
         "After each day your coach goes through the day with you — that's not a "
         "test, it's how we make sure you're supported."
     ),
@@ -88,8 +94,6 @@ DEFAULT_CONTENT = {
         {"name": "Marketing Director (the MD)", "role": "Office leadership", "phone": "", "email": ""},
         {"name": "Assistant Director", "role": "Office leadership", "phone": "", "email": ""},
         {"name": "Admin Recruiter", "role": "Support team", "phone": "", "email": ""},
-        {"name": "NDCS Welcome Call line", "role": "The number donors save as NDCS",
-         "phone": "020 4587 3738", "email": ""},
     ],
     "updated_at": None,
 }

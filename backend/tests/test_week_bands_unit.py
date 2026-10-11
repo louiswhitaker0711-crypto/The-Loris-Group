@@ -2,7 +2,7 @@
 display names — the numbers and words every weekly green count and every
 Stage 4/5 report read.
 
-    Super Green 10+ · Green 8–9 · Amber 6–7 · Red 5 and under
+    Super Green 20+ · Green 15–19 · Amber 8–14 · Red under 8
     (a Green Week is Green or better)
 """
 import sys
@@ -15,22 +15,22 @@ if str(BACKEND_DIR) not in sys.path:
 from core import week_bands as wb  # noqa: E402
 
 
-def test_bands_follow_what_good_looks_like():
-    assert [wb.week_band(n) for n in (0, 5, 6, 7, 8, 9, 10, 25)] == [
+def test_bands_follow_the_traffic_light_system():
+    assert [wb.week_band(n) for n in (0, 7, 8, 14, 15, 19, 20, 35)] == [
         "red", "red", "amber", "amber", "green", "green", "super_green", "super_green",
     ]
     assert wb.week_band(None) == "red"
-    assert wb.is_green_week(8) and wb.is_green_week(10)
-    assert not wb.is_green_week(7)
-    assert wb.RED_EXIT_WEEK_SALES == 7  # "Must achieve 7 sign ups in a week to come out of red zone"
+    assert wb.is_green_week(15) and wb.is_green_week(20)
+    assert not wb.is_green_week(14)
+    assert wb.RED_EXIT_WEEK_SALES == 8  # 8 sign-ups in a week takes you out of the red zone
 
 
 def test_every_green_week_reads_the_one_threshold():
     from core import achievements, sales_path
-    assert sales_path.GREEN_WEEK_SALES == wb.GREEN_WEEK_SALES == 8
-    assert achievements.PERSONAL_WEEK_TIERS[0] == (8, "personal_12")
+    assert sales_path.GREEN_WEEK_SALES == wb.GREEN_WEEK_SALES == 15
+    assert achievements.PERSONAL_WEEK_TIERS[0] == (15, "personal_12")
     # Ramp: Amber, out of the red zone, Green, Super Green.
-    assert sales_path.DEFAULT_RAMP_TARGETS == [6, 7, 8, 10]
+    assert sales_path.DEFAULT_RAMP_TARGETS == [8, 8, 15, 20]
     bells_src = (BACKEND_DIR / "routes" / "bells.py").read_text(encoding="utf-8")
     assert ">= 12:" not in bells_src
     assert bells_src.count(">= GREEN_WEEK_SALES") == 3

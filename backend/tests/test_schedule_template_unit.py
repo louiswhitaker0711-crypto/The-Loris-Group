@@ -15,15 +15,15 @@ def _mins(t):
     return int(h) * 60 + int(m)
 
 
-def test_week_is_monday_to_friday_and_well_formed():
-    assert {b["day_of_week"] for b in VERTEX_WEEK} == {0, 1, 2, 3, 4}
+def test_week_is_monday_to_saturday_and_well_formed():
+    assert {b["day_of_week"] for b in VERTEX_WEEK} == {0, 1, 2, 3, 4, 5}
     for b in VERTEX_WEEK:
         assert _mins(b["end_time"]) > _mins(b["start_time"]), b
         assert b["groups"], b
 
 
 def test_lanes_never_double_book():
-    for day in range(5):
+    for day in range(6):
         for lane in ("s4", "ld", "s2", "s1"):
             spans = sorted((_mins(b["start_time"]), _mins(b["end_time"]))
                            for b in VERTEX_WEEK if b["day_of_week"] == day and lane in b["groups"])
@@ -32,9 +32,30 @@ def test_lanes_never_double_book():
 
 
 def test_every_day_ends_in_the_field():
-    for day in range(5):
+    for day in range(6):
         last = max((b for b in VERTEX_WEEK if b["day_of_week"] == day), key=lambda b: _mins(b["start_time"]))
         assert last["title"] == "Field" and set(last["groups"]) == {"s4", "ld", "s2", "s1"}
+        # Monday to Friday 13:30 to 20:00; Saturday is the short day.
+        assert (last["start_time"], last["end_time"]) == (("10:00", "17:00") if day == 5 else ("13:30", "20:00"))
+
+
+def test_the_office_morning_runs_to_the_owners_timetable():
+    for day in range(5):
+        blocks = {b["title"]: b for b in VERTEX_WEEK if b["day_of_week"] == day}
+        # The planning meeting starts at 09:00 on Monday, 09:30 otherwise.
+        assert blocks["Planning meeting"]["start_time"] == ("09:00" if day == 0 else "09:30")
+        assert set(blocks["Planning meeting"]["groups"]) == {"s4", "ld"}
+        assert blocks["Sector leaders meeting"]["start_time"] == "10:00"
+        assert blocks["COD workshops"]["start_time"] == "10:30" and len(blocks["COD workshops"]["groups"]) == 4
+        assert blocks["Primetime"]["start_time"] == "11:00" and len(blocks["Primetime"]["groups"]) == 4
+        assert (blocks["Morning Meeting"]["start_time"], blocks["Morning Meeting"]["end_time"]) == ("11:45", "12:15")
+
+
+def test_saturday_is_sectors_then_the_field():
+    sat = [b for b in VERTEX_WEEK if b["day_of_week"] == 5]
+    assert [(b["title"], b["start_time"], b["end_time"]) for b in sat] == [
+        ("Sectors", "09:00", "09:30"), ("Field", "10:00", "17:00"),
+    ]
 
 
 def test_stage_and_role_place_people_in_lanes():

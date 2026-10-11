@@ -359,7 +359,7 @@ function HubView({
         )}
         lede={hasLessons
           ? 'Short lessons on the campaign and how to talk about it. Then prove it on the exam.'
-          : 'The pitch, the quality standards, the Welcome Call and the Cycle of Development — all in one place.'}
+          : 'The product, the pitch, the quality standards and the Cycle of Development — all in one place.'}
       >
         {hasLessons && (
         <View style={styles.heroProgressRow}>

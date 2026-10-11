@@ -15,12 +15,12 @@ from core.brand import BRITISH_ENGLISH, SELF_EMPLOYED_TERMS
 HOUSE_MANTRA = (
     "High standards\n"
     "High intensity\n"
-    "Learn today, lead tomorrow 🌱"
+    "Tomorrow is a new day 🌱"
 )
 HOUSE_GOALS = (
     "📈 Hit the weekly target\n"
-    "📈 70%+ Welcome Calls completed\n"
-    "📈 70%+ reaching their 3rd payment"
+    "📈 Fails under 10%\n"
+    "📈 75%+ in The Round and reaching their 4th week"
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -44,11 +44,11 @@ Momentum is building. Leaders are stepping up, and the standard is rising. Stay 
 
 High standards.
 High intensity.
-Learn today, lead tomorrow.
+Tomorrow is a new day.
 
 📈 Hit the weekly target
-📈 70%+ Welcome Calls completed
-📈 70%+ reaching their 3rd payment
+📈 Fails under 10%
+📈 75%+ in The Round and reaching their 4th week
 
 Who's ready to elevate and close strong? 🫡
 
@@ -65,18 +65,18 @@ Great work today 🙌 Bells are ringing 🛎️, leaders are leading 👨‍✈�
 
 High standards
 High intensity
-Learn today, lead tomorrow 🌱
+Tomorrow is a new day 🌱
 
 📈 Hit the weekly target
-📈 70%+ Welcome Calls completed
-📈 70%+ reaching their 3rd payment
+📈 Fails under 10%
+📈 75%+ in The Round and reaching their 4th week
 
 Who's stepping up to finish the week with a BANG?! 💥
 """
 
 SYSTEM_MESSAGE = (
     "You write punchy, emoji-rich WhatsApp messages for the coaches and Owner "
-    "of a door-to-door fundraising office. "
+    "of a door-to-door sales office. "
     "Keep it tight and scannable. " + BRITISH_ENGLISH + " " + SELF_EMPLOYED_TERMS
 )
 
@@ -112,7 +112,7 @@ def build_daily_breakdown_prompt(
 
     return (
         "You are writing an END-OF-DAY WhatsApp breakdown for a high-energy "
-        "door-to-door fundraising office. The message is posted to a group with "
+        "door-to-door sales office. The message is posted to a group with "
         "the entire network (coaches + Brand Ambassadors + new BAs). Match this house tone "
         "EXACTLY — energetic, masculine, growth-mindset, motivational without "
         "being cringey.\n\n"

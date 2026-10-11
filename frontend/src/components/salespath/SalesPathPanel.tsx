@@ -63,7 +63,7 @@ const PODIUM_METAL: Record<number, readonly string[]> = { 1: GRADIENT_GOLD, 2: G
 const LEVEL_ARC: Record<number, string> = {
   1: "Everyone starts here. You're learning the role — what you earn this week says nothing about what you'll earn next month.",
   2: `Your first Green Week — ${GREEN_WEEK_MIN}+ sign-ups in one week. Real money starts here, and most people get here quickly.`,
-  3: `15 sign-ups a week is your normal now — well past the ${GREEN_WEEK_MIN}-a-week Green Week. Steady, strong money.`,
+  3: `Green Weeks are your normal now — ${GREEN_WEEK_MIN}+ sign-ups, week after week. Steady, strong money.`,
   4: "2+ sign-ups on 8 out of 10 days at a 15-a-week pace. You're one of the top earners now.",
   5: '2+ sign-ups on 9 out of 10 days, month after month. The biggest earnings in the field.',
   6: 'The best of the best — the people everyone else learns from, and paid like it.',

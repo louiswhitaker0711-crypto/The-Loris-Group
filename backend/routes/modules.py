@@ -676,7 +676,7 @@ async def _get_or_create_quiz(m: dict, user: Optional[dict] = None) -> Optional[
         "- Practical (what would you DO), not trivia about wording.\n"
         "- Company vocabulary: say 'coach' for the person developing you (NEVER "
         "'manager', 'supervisor' or 'boss'), 'BA' for Brand Ambassadors (never 'rep', "
-        "'staff' or 'employee'), 'sign-up' for a sale, 'supporter' for a donor, "
+        "'staff' or 'employee'), 'sign-up' for a sale, 'customer' for the person who signs up, "
         "'sector' for a working area.\n"
         'Return JSON: {"questions":[{"question":"...","choices":["a","b","c","d"],"answer":0}]}\n\n'
         f"MODULE: {m.get('topic')}\n\nCONTENT:\n{content[:6000]}\n\n"

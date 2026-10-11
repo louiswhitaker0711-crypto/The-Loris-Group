@@ -3,7 +3,7 @@
 Two ladders, one person: the COD business-development stages (leadership can
 move fast) and this sales proficiency ladder (sales mastery compounds over
 time), with a 30-day ramp-up runway at the front that gets a new starter
-to their first Green Week (8+ sign-ups — the owner's "What Good Looks Like"
+to their first Green Week (15+ sign-ups — the owner's "What Good Looks Like"
 Green, core/week_bands.py). Principle: skill = demonstrated capability, not
 tenure or title.
 
@@ -13,7 +13,7 @@ behind every rule: docs/sales-development-path.md.
 
 Levels (names verbatim from the slide):
     1 Beginner      default at provisioning
-    2 Competency    first Green Week (8+) after training, + Stage-1
+    2 Competency    first Green Week (15+) after training, + Stage-1
                     Commercial Craft at Deliver
     3 Proficiency   3+ Green Weeks, scoring ≥70% and piece average ≥3.0 over
                     the trailing 20 field days, + Stage-2 Commercial Craft
@@ -74,7 +74,7 @@ def sales_path_office_enabled(office_id: str | None) -> bool:
 # ── Constants ───────────────────────────────────────────────────────────────
 
 # The company-wide "Green" weekly threshold (GREEN_WEEK_SALES, imported
-# above) is the owner's What Good Looks Like Green: 8+ sign-ups in a week.
+# above) is the owner's traffic-light Green: 15+ sign-ups in a week.
 # Bells' green %, the Green Week badge and this ramp all read the one
 # constant in core/week_bands.py.
 
@@ -105,7 +105,7 @@ LEVEL_BADGE_KEYS = {n: f"sales_{v['key']}" for n, v in LEVELS.items()}
 TYPICAL_WEEKS = {1: "1–3", 2: "2–10", 3: "4–25", 4: "10–25", 5: "13–38", 6: "25–100"}
 
 PROFICIENCY_GREEN_WEEKS = 3
-# Green (8+/week) is the MINIMUM standard (the ramp graduates through it),
+# Green (15+/week) is the MINIMUM standard (the ramp graduates through it),
 # so the ladder above Competency runs at 3.0 sign-ups per day worked — the
 # owner's daily minimum of 3 sign-ups a day from Day 4 (seed_data.DAY_TARGETS).
 # What separates the top levels is consistency (the scoring bar), not pace.
@@ -151,10 +151,10 @@ ANCHOR_WAIVER_BEFORE = (os.environ.get("SALES_PATH_ANCHOR_WAIVER_BEFORE") or "20
 
 # Ramp — graded from the START WEEK: week 1 is the week they start (BA
 # Academy + first field days — sign-ups count from day one, at least Amber
-# expected), week 2's 7 (out of the red zone, per the owner's playbook) is
-# the WORST CASE not the aim, week 3's 8 is the expected minimum (Green),
-# week 4's 10 is Super Green. Admin-tunable per office; the Green Week
-# finish line itself always keys on GREEN_WEEK_SALES.
+# expected), week 2's Amber floor (8, out of the red zone) is the WORST CASE
+# not the aim, week 3's 15 is the expected minimum (Green), week 4's 20 is
+# Super Green. Admin-tunable per office; the Green Week finish line itself
+# always keys on GREEN_WEEK_SALES.
 DEFAULT_RAMP_TARGETS = [AMBER_WEEK_SALES, RED_EXIT_WEEK_SALES, GREEN_WEEK_SALES, SUPER_GREEN_WEEK_SALES]
 
 # ── Admin-editable content ──────────────────────────────────────────────────
@@ -175,7 +175,7 @@ DEFAULT_CONTENT = {
     "level_arc": {
         "1": "Everyone starts here. You're learning the role — what you earn this week says nothing about what you'll earn next month.",
         "2": f"Your first Green Week — {GREEN_WEEK_SALES} sign-ups in one week. Real earnings start here, and most people get here quickly.",
-        "3": "3 sign-ups a day is your normal now — Super Green weeks, well past the Green minimum. Steady, strong earnings.",
+        "3": "3 sign-ups a day is your normal now — Green weeks, week after week. Steady, strong earnings.",
         "4": "2+ sign-ups on 8 out of 10 days at a 3-a-day pace. You're one of the top earners now.",
         "5": "2+ sign-ups on 9 out of 10 days, month after month. The biggest earnings in the field.",
         "6": "The best of the best — the people everyone else learns from, and earning like it.",

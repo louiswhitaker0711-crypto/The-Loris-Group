@@ -54,7 +54,7 @@ def role_label(role: str | None) -> str:
 SELF_EMPLOYED_TERMS = (
     "TERMINOLOGY: everyone here is self-employed — never use employment language. "
     "Say Brand Ambassador (BA) or the network, never staff, employee, worker or "
-    "workforce. Say supporter, not customer; sign-up(s) for a count of sales. "
+    "workforce. Say customer, never donor or supporter; sign-up(s) for a count of sales. "
     "Recruit/appoint, not hire (new starter, not new hire); opportunity/career/role, "
     "not job or employment; earnings/fees/commission/performance-based pay, not "
     "salary or wages; incentives, not bonus; advancement, not promotion; "

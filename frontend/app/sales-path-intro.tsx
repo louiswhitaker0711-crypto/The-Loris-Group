@@ -61,7 +61,7 @@ const LEVELS = [
     fallback: `Your first Green Week — ${GREEN_WEEK_MIN}+ sign-ups in one week. Real money starts here, and most people get here quickly.` },
   { n: 3, emoji: '🥈', name: 'Proficiency', weeks: '4–25',
     takes: '3 Green Weeks, a 15-a-week pace (3 sign-ups a day), 2+ sign-ups on 14 of your last 20 days out, and your Stage 2 sales skills signed off.',
-    fallback: `15 sign-ups a week is your normal now — well past the ${GREEN_WEEK_MIN}-a-week Green Week. Steady, strong money.` },
+    fallback: `Green Weeks are your normal now — ${GREEN_WEEK_MIN}+ sign-ups, week after week. Steady, strong money.` },
   { n: 4, emoji: '🥇', name: 'Advanced', weeks: '10–25',
     takes: '2+ sign-ups on 16 of your last 20 days out — 8 in every 10 — at the 15-a-week pace (3 sign-ups a day).',
     fallback: "2+ sign-ups on 8 out of 10 days at a 15-a-week pace. You're one of the top earners now." },
@@ -84,7 +84,7 @@ const FALLBACK_META = {
 };
 
 // The Traffic Light System — the owner's "What Good Looks Like" weekly tiers
-// (src/utils/weekBands.ts: Super Green 10+, Green 8–9, Amber 6–7, Red 5 and
+// (src/utils/weekBands.ts: Super Green 20+, Green 15–19, Amber 8–14, Red
 // under). Kicks in AFTER the ramp-up weeks are done.
 //
 // `color` is the SIGNAL colour: the accent rail and the wash, where the vivid

@@ -66,7 +66,7 @@ export function BrandedSplash() {
       </LinearGradient>
 
       {/* Tagline */}
-      <Text style={styles.tagline}>LEARN TODAY, LEAD TOMORROW.</Text>
+      <Text style={styles.tagline}>TOMORROW IS A NEW DAY.</Text>
 
       {/* The logo's dot trail as the loading indicator */}
       <View style={styles.spinnerWrap}>

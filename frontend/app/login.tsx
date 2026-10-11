@@ -193,7 +193,7 @@ export default function LoginScreen() {
           >
             {APP_NAME}
           </GradientText>
-          <Text style={styles.appSubtitle}>Learn today, lead tomorrow.</Text>
+          <Text style={styles.appSubtitle}>Tomorrow is a new day.</Text>
         </View>
         </ParallaxHero>
         </Reveal>

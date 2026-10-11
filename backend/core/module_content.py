@@ -21,10 +21,10 @@ class ModuleEnrichment(TypedDict):
 
 STAGE_2_CONTENT: Dict[str, ModuleEnrichment] = {
     "Understanding Direct Sales": {
-        "trainee_content": "Door-to-door fundraising is the model of taking a cause straight to the people who can support it — face-to-face, without middlemen. You'll learn how it differs from online giving and TV appeals, why building rapport is the engine of every sign-up, and how the Law of Averages turns activity into predictable results. Master the full sales cycle from approach to close, and the communication skills that turn cold doors into warm conversations.",
+        "trainee_content": "Door-to-door direct sales is the model of taking a product straight to the people who will use it — face-to-face, without middlemen. You'll learn how it differs from online and TV advertising, why building rapport is the engine of every sign-up, and how the Law of Averages turns activity into predictable results. Master the full sales cycle from approach to close, and the communication skills that turn cold doors into warm conversations.",
         "what_good_looks_like": [
-            "Explains door-to-door fundraising vs. online and TV appeals in 30 seconds",
-            "Speaks confidently about why our model works for the supporter",
+            "Explains door-to-door direct sales vs. online and TV advertising in 30 seconds",
+            "Speaks confidently about why our model works for the customer",
             "Can recite the Law of Averages and apply it to daily activity",
             "Demonstrates each stage of the sales cycle in roleplay",
             "Builds rapport in the first 60 seconds at the door",
@@ -44,9 +44,9 @@ STAGE_2_CONTENT: Dict[str, ModuleEnrichment] = {
     # principle. With no enrichment key, the specific seed text wins at
     # office-seed time. Live offices are healed by core/content_fixes.py.
     "Industry Reach": {
-        "trainee_content": "The face-to-face fundraising industry is vast and dynamic. You'll explore its scale, the major players, and where we sit within it. Knowing how we differentiate from competitors lets you talk to supporters with conviction and use the right value proposition for each conversation. The industry is bigger than the office you walk into — you're part of something growing.",
+        "trainee_content": "The face-to-face direct sales industry is vast and dynamic. You'll explore its scale, the major players, and where we sit within it. Knowing how we differentiate from competitors lets you talk to customers with conviction and use the right value proposition for each conversation. The industry is bigger than the office you walk into — you're part of something growing.",
         "what_good_looks_like": [
-            "Describes the size and scope of the face-to-face fundraising industry",
+            "Describes the size and scope of the face-to-face direct sales industry",
             "Names key competitors and how we differ",
             "Articulates our unique value proposition cleanly",
             "Uses industry terminology correctly in conversations",
@@ -239,7 +239,7 @@ STAGE_2_CONTENT: Dict[str, ModuleEnrichment] = {
         ],
     },
     "Creating Your Own Network": {
-        "trainee_content": "A strong professional network is one of the most undervalued assets in this business. You'll learn the value of building real connections — with teammates, mentors, supporters, and industry contacts — and how to nurture them over time. The network you build now becomes the recruiting pipeline, support system, and opportunity engine of the leader you become later.",
+        "trainee_content": "A strong professional network is one of the most undervalued assets in this business. You'll learn the value of building real connections — with teammates, mentors, customers, and industry contacts — and how to nurture them over time. The network you build now becomes the recruiting pipeline, support system, and opportunity engine of the leader you become later.",
         "what_good_looks_like": [
             "Actively seeks networking opportunities at every event",
             "Builds genuine, give-first connections",
@@ -275,7 +275,7 @@ STAGE_2_CONTENT: Dict[str, ModuleEnrichment] = {
         "what_good_looks_like": [
             "Adapts approach and pace to a new territory's profile",
             "Reads local signals (housing, signs, traffic) quickly",
-            "Builds rapport with diverse supporter types",
+            "Builds rapport with diverse customer types",
             "Manages time and travel efficiently across areas",
             "Carries lessons from one territory to the next",
         ],
@@ -396,9 +396,9 @@ STAGE_3_CONTENT: Dict[str, ModuleEnrichment] = {
         "trainee_content": "Strong leaders run their map like a portfolio. You'll learn to plan territories, optimise routes, prioritise the highest-leverage areas, and ensure every hour spent in the field is producing. Efficient map management is the difference between burning the team out and compounding their output across the same time and energy.",
         "what_good_looks_like": [
             "Plans logical, efficient coverage across territories",
-            "Prioritises high-potential areas and supporters",
+            "Prioritises high-potential areas and customers",
             "Adapts the plan when conditions change",
-            "Understands supporter density and travel-time maths",
+            "Understands customer density and travel-time maths",
             "Uses mapping tools and data to guide decisions",
         ],
         "leader_coaching_notes": [

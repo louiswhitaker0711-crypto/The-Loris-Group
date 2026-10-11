@@ -60,7 +60,7 @@ class CoachResponse(BaseModel):
 # ─── Prompt builders ───────────────────────────────────────────────────────
 
 
-SWOT_PROMPT = """You are a leadership coach for a network of self-employed Brand Ambassadors who fundraise door to door.
+SWOT_PROMPT = """You are a leadership coach for a network of self-employed Brand Ambassadors who sign up customers door to door.
 The user is filling out a Monthly Planner SWOT analysis. Their role: {role}.
 
 Their current entries (may be partial or empty):
@@ -84,7 +84,7 @@ Respond ONLY with valid JSON in this shape (omit keys that aren't in `targets`):
 """
 
 
-GAP_PROMPT = """You are a leadership coach for a network of self-employed Brand Ambassadors who fundraise door to door.
+GAP_PROMPT = """You are a leadership coach for a network of self-employed Brand Ambassadors who sign up customers door to door.
 The coach rated themselves on the leadership trait "{trait}" with a score of {score}/5.
 {score_descriptor}
 

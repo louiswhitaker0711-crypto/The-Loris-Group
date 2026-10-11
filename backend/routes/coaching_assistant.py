@@ -137,7 +137,7 @@ def _format_snippet(d: dict) -> str:
     return "\n".join(parts)
 
 
-SYSTEM_PROMPT = """You are the **Leadership Hub Coaching Assistant** for a network of self-employed Brand Ambassadors (BAs) who fundraise door to door.
+SYSTEM_PROMPT = """You are the **Leadership Hub Coaching Assistant** for a network of self-employed Brand Ambassadors (BAs) who sign up customers door to door.
 
 Your role is to help coaches and BAs coach more effectively. You ground EVERY answer in the impacts (coaching topics) that the user has access to — these are passages from the office's Impact Booklet and Leadership Development Toolkit.
 

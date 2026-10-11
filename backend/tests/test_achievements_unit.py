@@ -36,21 +36,21 @@ def test_sales_badges_use_worked_sales_not_memberships_or_stale_statuses():
     stale_off_sales = [
         {"status": "off", "over30": 10, "under30": 10, "memberships": 0},
     ]
-    # The owner's What Good Looks Like: Green is 8-9 sign-ups a week, Amber
-    # 6-7 — so 8 earns the Green Week badge and 7 does not.
+    # The owner's traffic light: Green is 15-19 sign-ups a week, Amber 8-14 —
+    # so 15 earns the Green Week badge and 14 does not.
     green_week = [
-        {"status": "in", "over30": 1, "under30": 1, "memberships": 20}
-        for _ in range(4)
+        {"status": "in", "over30": 2, "under30": 1, "memberships": 20}
+        for _ in range(5)
     ]
-    amber_week = green_week[:3] + [{"status": "in", "over30": 1, "under30": 0, "memberships": 0}]
+    amber_week = green_week[:4] + [{"status": "in", "over30": 1, "under30": 1, "memberships": 0}]
     superstar_green_week = green_week + [
         {"status": "in", "over30": 6, "under30": 6, "memberships": 0},
     ]
 
     assert achievements._sales_badge_keys(membership_only) == []
     assert achievements._sales_badge_keys(stale_off_sales) == []
-    assert achievements._sales_badge_keys(amber_week) == ["first_sale"]
-    assert achievements._sales_badge_keys(green_week) == ["first_sale", "personal_12"]
+    assert achievements._sales_badge_keys(amber_week) == ["first_sale", "first_bell"]
+    assert achievements._sales_badge_keys(green_week) == ["first_sale", "first_bell", "personal_12"]
     assert achievements._sales_badge_keys(superstar_green_week) == [
         "first_sale",
         "first_bell",

@@ -227,14 +227,14 @@ def test_ramp_anchors_on_start_week_and_paused_rows_carry_no_number(monkeypatch)
     ramp = doc["ramp"]
     # The owner's What Good Looks Like bands: Amber, out of the red zone (7),
     # Green, Super Green.
-    assert ramp and ramp["targets"] == [6, 7, 8, 10]
+    assert ramp and ramp["targets"] == [8, 8, 15, 20]
     assert ramp["phase"] == "weeks"
     assert ramp["status"] == "complete", ramp
     assert ramp["completed_at"] == week3
     paused = [w for w in ramp["weekly"] if w["paused"]]
     assert paused and all(w["week"] is None for w in paused)
     graded = [w for w in ramp["weekly"] if not w["paused"]]
-    assert graded and graded[0]["week"] == 1 and graded[0]["target"] == 6
+    assert graded and graded[0]["week"] == 1 and graded[0]["target"] == 8
 
 
 def test_ramp_counts_the_start_week_itself(monkeypatch):
@@ -246,12 +246,12 @@ def test_ramp_counts_the_start_week_itself(monkeypatch):
     week1 = sp._forward_sunday(start_d)
     if week1 >= sp._current_sunday_iso():
         return
-    _bells_week(db, uid, week1, _days([2, 2, 3, 0, 0, 0, 0]))  # 7 sign-ups — Amber
+    _bells_week(db, uid, week1, _days([3, 3, 3, 0, 0, 0, 0]))  # 9 sign-ups — Amber
     doc = _run(sp.recompute_sales_path(uid, notify=False))
     ramp = doc["ramp"]
     w1 = next(w for w in ramp["weekly"] if w["week"] == 1)
-    assert w1["met"] and w1["target"] == 6
-    assert ramp["status"] in ("on_track", "behind")  # not complete: no Green (8+) yet
+    assert w1["met"] and w1["target"] == 8
+    assert ramp["status"] in ("on_track", "behind")  # not complete: no Green (15+) yet
 
 
 # ── NEXT UP progress (the live counter) ─────────────────────────────────────
