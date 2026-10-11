@@ -109,8 +109,8 @@ STAGE_1_MODULES = [
 
     # ── Commercial Craft ───────────────────────────────────────────────────
     _s1("Commercial Craft", "5-Step Sign-Up Process",
-        "The 5 Steps are the spine of every conversation: Introduction, Present the Problem, The Solution, The "
-        "Close, Rehash. You run the full sign-up process in the correct order without missing any steps — and it sounds confident and conversational, never rehearsed. The order exists "
+        "The 5 Steps are the spine of every conversation: Introduction, Presentation, Short Story, Close, "
+        "Rehash. You run the full sign-up process in the correct order without missing any steps — and it sounds confident and conversational, never rehearsed. The order exists "
         "because each step earns the next one; skipping a step is why closes fall flat.",
         ["Runs the full sign-up process in the correct order without missing any steps",
          "Sounds confident and conversational, not rehearsed",
@@ -137,7 +137,7 @@ STAGE_1_MODULES = [
          "Film a roleplay and let them see their own first three seconds"]),
     _s1("Commercial Craft", "Clear Close",
         "Interest is not a result — commitment is. You close the sign-up clearly and confidently, turning the "
-        "supporter's interest into a clear commitment. No trailing off, no hoping they volunteer; you ask, "
+        "customer's interest into a clear commitment. No trailing off, no hoping they volunteer; you ask, "
         "cleanly, and you're comfortable in the silence that follows. Close with clarity: direct, slow, warm, "
         "long term — then tell them what happens next.",
         ["Closes clearly and confidently — turns interest into a clear commitment",
@@ -145,23 +145,23 @@ STAGE_1_MODULES = [
          "Comfortable with silence after the ask"],
         ["Roleplay: the close is asked, not implied",
          "Field observation: conversion of interested conversations",
-         "Sign-ups where the supporter knew exactly what they agreed to"],
+         "Sign-ups where the customer knew exactly what they agreed to"],
         ["Most new starters talk past the close — coach the stop",
          "Drill three clean closing lines until one feels natural",
          "Debrief 'almosts': was the close actually asked?"]),
     _s1("Commercial Craft", "Question Handling",
         "Questions are interest wearing a disguise. You handle common questions and campaign-specific objections "
         "by listening, using the systems, understanding the real concern underneath, and checking it's resolved "
-        "before re-closing — Feel, Relate, Felt, Found, Re-close. Answering the wrong question loses the sign-up "
+        "before re-closing — smile and agree, relate, Feel · Felt · Found, re-impulse, close. Answering the wrong question loses the sign-up "
         "even when the answer is right.",
         ["Listens first — finds the real concern under the stated question",
          "Uses the systems rather than improvising answers",
          "Checks the concern is resolved before re-closing"],
-        ["Roleplay the concerns we can address: other charities, one-off, bank details, online, more information",
+        ["Roleplay the common objections: the supermarket, the price, speaking to a partner, not much milk",
          "Field observation: composure and structure when questioned",
          "Re-close rate after a handled question"],
         ["Teach the pattern: listen → answer → check → re-close",
-         "Drill Feel, Relate, Felt, Found, Re-close on each concern we can address",
+         "Drill the objection cycle on each of the common objections",
          "Coach listening — most BAs answer the wrong question"]),
     _s1("Commercial Craft", "Impulses",
         "The impulses are why people act now rather than later — G.I.F.T.S: Generosity, Indifference, Feel Good "
@@ -227,7 +227,7 @@ STAGE_1_MODULES = [
          "Separates personal circumstances from professional performance",
          "Steady presence — teammates can't read the bad day off them"],
         ["Observation across high days and low days",
-         "Composure in front of supporters when things go wrong",
+         "Composure in front of customers when things go wrong",
          "Consistency of effort regardless of results"],
         ["Coach the pattern, never the single bad moment",
          "Model it yourself — regulation is caught as much as taught",
@@ -305,8 +305,8 @@ STAGE_1_MODULES = [
     _s1("Digital & Data", "Quality KPIs",
         "Volume without quality is borrowed money. You can articulate the quality KPIs and why achieving them "
         "matters — and you show the actions that maintain high-quality sign-ups: right expectations set, right "
-        "details captured, right supporter signed for the right reasons. The quality KPIs: 70%+ Welcome Calls "
-        "answered, 1st payment 85%+, 3rd payment 70%+.",
+        "details captured, right customer signed for the right reasons. The quality KPIs: average order value "
+        "£13+, 2.5+ drop days, fails under 10%, 75%+ taking The Round and 75%+ still ordering in their 4th week.",
         ["Can articulate the quality KPIs and why they matter",
          "Shows the actions that maintain high-quality sign-ups",
          "Sets right expectations so sign-ups stick"],
@@ -361,9 +361,9 @@ STAGE_2_MODULES = [
         ["Uses close variations confidently, not one memorised script",
          "Reads the person and adapts in real time",
          "Switches angles mid-conversation when the first close doesn't land"],
-        ["Roleplay: same pitch, three different supporter types",
+        ["Roleplay: same pitch, three different customer types",
          "Field observation of close selection",
-         "Close rate across supporter demographics"],
+         "Close rate across customer demographics"],
         ["Name the closes together — a shared vocabulary makes coaching specific",
          "Debrief real doors: which close, why, what else would have worked?",
          "Drill the switch: first close misses, what now?"]),
@@ -382,16 +382,16 @@ STAGE_2_MODULES = [
          "Rotate them deliberately through contrasting territories"]),
     _module("Commercial Craft", "Rehash & Consolidation",
         "The sign-up isn't finished when they say yes. You reinforce impact and value clearly, confirm full "
-        "understanding — what they agreed to, amounts, frequency, dates — and leave the supporter feeling good about "
-        "the decision — the Pop Quiz (monthly amount, frequency, start date: 1st / 8th / 15th / 22nd, why NDCS makes a "
-        "Welcome Call) and the 3 Thank You's. Consolidation is where quality is made: a confident supporter stays, "
+        "understanding — their order, delivery days, the 8pm cut-off and payment day — and leave the customer feeling "
+        "good about the decision: the app, the welcome leaflet, the Pop Quiz (first delivery, delivery days, the latest "
+        "they can make changes, payment day) and the closing statements. Consolidation is where quality is made: a confident customer stays, "
         "a confused one cancels.",
         ["Reinforces impact and value clearly after the yes",
-         "Confirms full understanding: what they agreed to, amounts, frequency, dates",
-         "Leaves the supporter feeling good about their decision"],
-        ["Quality KPIs: donations stick, cancellations low",
+         "Confirms full understanding: their order, delivery days, cut-off and payment day",
+         "Leaves the customer feeling good about their decision"],
+        ["Quality KPIs: customers stay, cancellations low",
          "Observed consolidations cover every confirmation point",
-         "Supporter callbacks and confusion complaints at zero"],
+         "Customer callbacks and confusion complaints at zero"],
         ["Watch the 60 seconds AFTER the yes — that's the module",
          "Tie their cancellation numbers to consolidation habits",
          "Roleplay the confirmation checklist until it's automatic"]),
@@ -451,8 +451,8 @@ STAGE_2_MODULES = [
          "Coach one step per week until all eight are habits"]),
     _module("Self Leadership", "Profitability",
         "You know your personal breakeven and the industry averages required to represent the brand, and you use "
-        "those numbers to guide daily priorities, decisions, and actions. Breakeven is your needs ÷ £55 (the BA fee "
-        "for a standard £12 sign-up), turned into sign-ups a week. A professional knows exactly what a day must "
+        "those numbers to guide daily priorities, decisions, and actions. Breakeven is your needs ÷ £12 (the up-front "
+        "fee for a Silver, the lowest-paying sign-up), turned into sign-ups a week. A professional knows exactly what a day must "
         "produce — and plans backward from it.",
         ["Knows personal breakeven cold",
          "Knows the industry averages required to represent the brand",
@@ -866,13 +866,13 @@ STAGE_4_MODULES = [
 
     # ── Commercial Craft ───────────────────────────────────────────────────
     _sx(4, "Commercial Craft", "Teaching Advanced Sign-Up Psychology",
-        "At Stage 4 you can teach the psychology behind supporter decision-making — why people say yes, what builds "
+        "At Stage 4 you can teach the psychology behind customer decision-making — why people say yes, what builds "
         "trust in seconds, and how urgency works without pressure — and coach BAs to apply it naturally, ethically, "
         "and effectively. This is elevated, next-level sign-up skill: not running the 5 Steps yourself, but making "
         "the reasoning behind them transferable.",
         ["Teaches the why behind each step, not just the what",
          "BAs coached by them apply psychology naturally — it never sounds scripted",
-         "Keeps it ethical: influence that leaves the supporter feeling good about the decision"],
+         "Keeps it ethical: influence that leaves the customer feeling good about the decision"],
         ["A BA they coached explains the psychology back correctly",
          "Roleplay observation: their teaching lands in the BA's next live pitch",
          "Quality metrics hold or rise as skills advance"],
@@ -1146,7 +1146,7 @@ STAGE_SL_MODULES = [
         ["Spots quality drift in the field, not in next week's report",
          "Corrects conduct issues immediately and directly",
          "Retrains same-day; escalates when correction doesn't hold"],
-        ["Sector quality KPIs (donations, cancellations) stay on standard",
+        ["Sector quality KPIs (fails, 4th weeks) stay on standard",
          "Same-day retrain record for issues found",
          "Zero conduct issues surfacing later that they should have caught"],
         ["Ask for the last quality issue they caught and what they did",
