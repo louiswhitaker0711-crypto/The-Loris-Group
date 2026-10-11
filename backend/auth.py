@@ -40,6 +40,14 @@ def hash_password(password: str) -> str:
 def verify_password(plain: str, hashed: str) -> bool:
     return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
 
+# How long someone stays signed in without opening the app. The refresh token
+# is renewed every time it is used (routes/auth_routes.py, /auth/refresh), so a
+# person who keeps using the app is never asked to sign in again; after this
+# many days away they are. Logging out, a password change or an admin reset
+# still ends every session at once (session_version).
+REFRESH_TOKEN_DAYS = 30
+
+
 def create_access_token(user_id: str, email: str, session_version: int = 0) -> str:
     return pyjwt.encode(
         {
@@ -53,14 +61,14 @@ def create_refresh_token(user_id: str, session_version: int = 0) -> str:
     return pyjwt.encode(
         {
             "sub": user_id, "ver": int(session_version or 0),
-            "exp": datetime.now(timezone.utc) + timedelta(days=7), "type": "refresh",
+            "exp": datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_DAYS), "type": "refresh",
         },
         JWT_SECRET, algorithm=JWT_ALGORITHM
     )
 
 def set_auth_cookies(response: Response, access_token: str, refresh_token: str):
     response.set_cookie(key="access_token", value=access_token, httponly=True, secure=COOKIE_SECURE, samesite="lax", max_age=86400, path="/")
-    response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=COOKIE_SECURE, samesite="lax", max_age=604800, path="/")
+    response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=COOKIE_SECURE, samesite="lax", max_age=REFRESH_TOKEN_DAYS * 86400, path="/")
 
 # What an account still on the shared starter password may call.
 STARTER_PASSWORD_ALLOWED = ("/auth/me", "/auth/change-password", "/auth/logout")

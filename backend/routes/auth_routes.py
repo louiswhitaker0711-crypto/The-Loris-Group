@@ -627,14 +627,13 @@ async def refresh_token(request: Request, response: Response):
             raise HTTPException(status_code=401, detail="Session revoked")
         user_id = str(user["_id"])
         new_access = create_access_token(user_id, user["email"], session_version)
-        # Keep refresh behavior identical to login, including the production
+        # Renew the refresh token as well, so the sign-in lasts as long as the
+        # app keeps being used (REFRESH_TOKEN_DAYS without opening it ends it).
+        # Cookies are set exactly as at login, including the production
         # Secure-cookie policy configured centrally in auth.py.
-        response.set_cookie(
-            key="access_token", value=new_access, httponly=True,
-            secure=COOKIE_SECURE,
-            samesite="lax", max_age=86400, path="/",
-        )
-        return {"message": "Token refreshed", "token": new_access}
+        new_refresh = create_refresh_token(user_id, session_version)
+        set_auth_cookies(response, new_access, new_refresh)
+        return {"message": "Token refreshed", "token": new_access, "refresh_token": new_refresh}
     except (pyjwt.InvalidTokenError, InvalidId, KeyError, TypeError, ValueError):
         raise HTTPException(status_code=401, detail="Invalid refresh token")
 
