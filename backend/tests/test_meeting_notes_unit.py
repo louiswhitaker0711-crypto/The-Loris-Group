@@ -44,3 +44,45 @@ def test_raw_notes_only_for_writers():
     note = _note(["s1"])
     assert "raw_notes" not in mn._public(note, _ba("stage_1"))
     assert "raw_notes" in mn._public(note, {"id": "a", "role": "admin", "office_id": OFFICE})
+
+
+def test_pdf_storage_id_never_leaves_the_server():
+    note = {**_note(["s1"]), "pdf": {"gridfs_id": "abc123", "file_name": "plan.pdf", "file_size": 10}}
+    out = mn._public(note, _ba("stage_1"))
+    assert out["pdf"] == {"file_name": "plan.pdf", "file_size": 10}
+    assert out["title"] == "Meeting" and out["cod_topics"] == []
+
+
+def test_only_real_pdfs_are_accepted():
+    import base64
+    import pytest
+    from fastapi import HTTPException
+    ok = base64.b64encode(b"%PDF-1.4 hello").decode()
+    assert mn._decode_pdf("data:application/pdf;base64," + ok).startswith(b"%PDF-")
+    with pytest.raises(HTTPException):
+        mn._decode_pdf(base64.b64encode(b"<html><script>").decode())
+
+
+def test_cod_topics_are_checked_against_the_cod():
+    import asyncio
+    from mongomock_motor import AsyncMongoMockClient
+    fake = AsyncMongoMockClient()["t"]
+    asyncio.run(fake.coaching_impacts.insert_many([
+        {"id": "t1", "title": "Example topic one", "stage": 1},
+        {"id": "t3", "title": "Example topic three", "stage": 3},
+    ]))
+    real_db = mn.db
+    mn.db = fake
+    try:
+        out = asyncio.run(mn.clean_topics(["t3", "nope", "t1", "t3"]))
+    finally:
+        mn.db = real_db
+    assert out == [{"id": "t3", "title": "Example topic three", "stage": 3},
+                   {"id": "t1", "title": "Example topic one", "stage": 1}]
+
+
+def test_recap_prompt_mentions_topics_and_pdf():
+    note = {"title": "Goals", "block_title": "Morning meeting", "date": "2026-10-12",
+            "cod_topics": [{"id": "t1", "title": "Example topic", "stage": 1}]}
+    p = mn.recap_prompt(note, "", True)
+    assert "Example topic" in p and "PDF" in p and "Notes:" not in p
