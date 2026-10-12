@@ -513,7 +513,7 @@ export default function PrimetimeDayBlock({
         <View style={styles.absentRow}>
           <Ionicons name="remove-circle-outline" size={13} color={colors.textMuted} />
           <Text style={styles.absentTxt}>
-            Absent: {absent.map((p) => p.name).join(', ')}
+            Not scheduled: {absent.map((p) => p.name).join(', ')}
           </Text>
         </View>
       )}

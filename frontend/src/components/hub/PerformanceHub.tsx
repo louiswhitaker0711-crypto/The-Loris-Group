@@ -575,9 +575,9 @@ function DayTile({ d, i, small }: { d?: Day; i: number; small: boolean }) {
     if (d.has_sale) { box = s.dtGreen; top = <Text style={[s.dtNum, { color: H.green }]}>{d.sales_count ?? 0}</Text>; labStyle = [s.dtLabel, { color: H.green }]; }
     else { box = s.dtRed; top = <Text style={[s.dtNum, { color: H.redText }]}>0</Text>; labStyle = [s.dtLabel, { color: H.redText }]; }
   } else if (st === 'absent') {
-    box = s.dtAmber; top = <Ionicons name="close" size={14} color={H.amber} />; lab = small ? 'Abs' : 'Absent'; labStyle = [s.dtLabel, { color: H.amber }];
+    box = s.dtBlack; top = <Ionicons name="close" size={14} color="#ffffff" />; lab = small ? 'X' : 'No show'; labStyle = [s.dtLabel, { color: '#ffffff' }];
   } else if (st === 'not_present' || st === 'planned_out') {
-    box = s.dtDim; top = <Ionicons name={st === 'planned_out' ? 'calendar-clear-outline' : 'ban-outline'} size={13} color={H.faint} />; labStyle = [s.dtLabel, { color: H.faint }];
+    box = s.dtGrey; top = <Ionicons name={st === 'planned_out' ? 'calendar-clear-outline' : 'ban-outline'} size={13} color={H.faint} />; lab = small ? 'NS' : 'Not sched.'; labStyle = [s.dtLabel, { color: H.faint }];
   } else {   // planned_in (a day still to come)
     top = <Ionicons name="calendar-outline" size={13} color={H.text} />;
   }
@@ -676,8 +676,8 @@ function Legend({ open, onClose }: { open: boolean; onClose: () => void }) {
   const items: { d: Day; i: number; title: string; text: string }[] = [
     { d: { date: '', weekday: '', phase: 'past', status: 'present', has_sale: true, sales_count: 4 }, i: 0, title: 'In & made sales', text: 'The BA was in the field. The green number is their sign-ups.' },
     { d: { date: '', weekday: '', phase: 'past', status: 'present', has_sale: false, sales_count: 0 }, i: 1, title: 'In & no sales', text: 'The BA was in the field. A red 0 means no sign-ups.' },
-    { d: { date: '', weekday: '', phase: 'past', status: 'not_present' }, i: 2, title: 'Not in', text: 'Planned out and stayed out.' },
-    { d: { date: '', weekday: '', phase: 'past', status: 'absent' }, i: 3, title: 'Absent', text: 'Planned in but did not go out.' },
+    { d: { date: '', weekday: '', phase: 'past', status: 'not_present' }, i: 2, title: 'Not scheduled', text: 'Planned the day off (grey).' },
+    { d: { date: '', weekday: '', phase: 'past', status: 'absent' }, i: 3, title: 'No show', text: 'Planned in but did not go out (black).' },
     { d: { date: '', weekday: '', phase: 'past', status: 'na' }, i: 4, title: 'Not applicable', text: 'The BA could not set this day. Left out of the figures.' },
     { d: { date: '', weekday: '', phase: 'past', status: 'not_set', in_field: true, sales_count: 1 }, i: 5, title: 'Not set', text: 'No plan was set. A red number means they went out and that is their sign-ups.' },
     { d: { date: '', weekday: '', phase: 'future', status: 'planned_in' }, i: 6, title: 'Planned in', text: 'A day still to come that they plan to work.' },
@@ -820,6 +820,8 @@ const s = StyleSheet.create({
   dtDim: { backgroundColor: 'rgba(231,240,249,0.03)', borderColor: 'rgba(231,240,249,0.05)' },
   dtGreen: { backgroundColor: H.greenBg, borderColor: 'rgba(52,211,153,0.55)' },
   dtRed: { backgroundColor: H.redBg, borderColor: 'rgba(248,113,113,0.55)' },
+  dtGrey: { backgroundColor: 'rgba(148,163,184,0.22)', borderColor: 'rgba(148,163,184,0.40)' },
+  dtBlack: { backgroundColor: '#000000', borderColor: 'rgba(255,255,255,0.35)' },
   dtAmber: { backgroundColor: 'rgba(231,182,92,0.12)', borderColor: 'rgba(231,182,92,0.5)' },
   dtNum: { fontFamily: fonts.bodyBold, fontSize: 15, lineHeight: 17 },
   dtLabel: { fontFamily: fonts.bodySemibold, fontSize: 9.5, color: H.text },

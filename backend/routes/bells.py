@@ -107,9 +107,10 @@ def _normalize_days(raw) -> list:
         memberships = _num_or_none(d.get("memberships"))
         raw_status = d.get("status")
         # Legacy 'normal' and any unknown/missing status default to 'off'.
-        # 'ab' = Absent (scheduled but didn't show) — treated like off for
-        # scoring purposes but distinct in the UI.
-        if raw_status not in ("in", "nc", "rt", "off", "ab", "pc"):
+        # 'ab' = Not scheduled (planned a day off: grey, never counts against
+        # them). 'ns' = No show (planned in, didn't go out: black, counts
+        # against reliability like an unplanned day off).
+        if raw_status not in ("in", "nc", "rt", "off", "ab", "pc", "ns"):
             raw_status = "off"
         # Auto-promote: typing any number > 0 flips 'off' -> 'in'.
         # AB is left as-is — admin must explicitly toggle to In if data is added.
@@ -263,9 +264,9 @@ def compute_totals(entry: dict, fees: Optional[dict]) -> dict:
 
     aepd = round(earnings / days_worked, 2) if days_worked > 0 else 0.0
 
-    # Reliability: Mon–Sat days "in" / Mon–Sat days not pre-authorised off.
-    # AB / RT / PC = valid pre-determined day off — excluded from denominator.
-    # "off" / "nc" on a non-Sunday = unauthorised absence (counts against).
+    # Reliability: Mon–Sat days "in" / Mon–Sat days they planned to work.
+    # AB (not scheduled) / RT / PC = excluded from the denominator.
+    # "off" / "nc" / "ns" (no show) on a non-Sunday count against.
     # Sunday (index 6) is always excluded.
     _auth_off = {"ab", "rt", "pc"}
     mon_sat = days[:6]
@@ -1286,28 +1287,9 @@ async def upsert_bell(request: Request):
 
     existing = await db.bells_entries.find_one(filt, {"_id": 0})
 
-    # ── Absence guard (non-admins) ───────────────────────────────────────
-    # Marking someone Ab (or clearing an Ab) is the office owner's call —
-    # leaders request absences via the Weekly Planner and the owner approves
-    # (routes/absences.py). So for non-admin callers any day-status change
-    # to or from 'ab' is silently reverted to what's on the sheet; every
-    # other field (sales numbers, in/off/rt/nc/pc, BE, WG) saves normally.
-    # This is what makes passcode-free self-reporting safe.
+    # Not scheduled (ab) is everyone's own call: they're self-employed and
+    # plan their own days, so nobody needs the owner's approval to set it.
     absence_changes_blocked = False
-    if user.get("role") != "admin" and not user.get("is_super_admin"):
-        existing_days = _normalize_days((existing or {}).get("days"))
-        for i in range(min(len(days), len(existing_days))):
-            cur_s = existing_days[i].get("status")
-            new_s = days[i].get("status")
-            if new_s == "ab" and cur_s != "ab":
-                days[i]["status"] = cur_s
-                # An Ab attempt wipes the day's numbers client-side; restore them.
-                for k in ("over30", "under30", "memberships"):
-                    days[i][k] = existing_days[i].get(k)
-                absence_changes_blocked = True
-            elif cur_s == "ab" and new_s != "ab":
-                days[i] = dict(existing_days[i])
-                absence_changes_blocked = True
 
     if not existing:
         entry = {

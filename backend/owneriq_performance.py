@@ -165,6 +165,64 @@ def _day_untouched(day: dict) -> bool:
             and day.get("status") in (None, "off", "normal"))
 
 
+# OwnerIQ's plan for a day → the Bells day status. Grey "Not scheduled" (ab)
+# for a day they planned out; black "No show" (ns) for a day they planned in
+# but didn't go out. Anything else leaves the day alone.
+OWNERIQ_DAY_STATUS = {"not_present": "ab", "planned_out": "ab", "absent": "ns"}
+
+
+def schedule_status_updates(days: list, owneriq_days: list, set_before: dict) -> dict:
+    """{day index: new status} for one Bells row from OwnerIQ's day plan.
+
+    Only a day nobody has touched in the app (off, no numbers) or one this
+    sync set before and nobody has changed since is written; a day someone
+    changed in the app keeps their change. A day OwnerIQ no longer plans out
+    goes back to off if we were the ones who set it."""
+    out: dict = {}
+    for od in owneriq_days or []:
+        try:
+            idx = date.fromisoformat(str(od.get("date"))[:10]).weekday()
+        except Exception:
+            continue
+        if idx > 5:
+            continue
+        cur = days[idx] if idx < len(days) else _empty_day()
+        ours = set_before.get(str(idx))
+        want = OWNERIQ_DAY_STATUS.get(str(od.get("status") or ""))
+        if want:
+            if cur.get("status") == want:
+                continue
+            if _day_untouched(cur) or (ours and cur.get("status") == ours):
+                out[idx] = want
+        elif ours and cur.get("status") == ours:
+            out[idx] = "off"
+    return out
+
+
+async def apply_schedule(user: dict, week_ending: str, owneriq_days: list) -> int:
+    entry = await _bells_entry(user, week_ending)
+    if not entry:
+        return 0
+    days = list(entry.get("days") or [])
+    while len(days) < 7:
+        days.append(_empty_day())
+    set_before = dict(entry.get("owneriq_status_days") or {})
+    updates = schedule_status_updates(days, owneriq_days, set_before)
+    if not updates:
+        return 0
+    for idx, st in updates.items():
+        day = dict(days[idx] or {})
+        day["status"] = st
+        days[idx] = day
+        if st == "off":
+            set_before.pop(str(idx), None)
+        else:
+            set_before[str(idx)] = st
+    await db.bells_entries.update_one({"id": entry["id"]}, {"$set": {
+        "days": days, "owneriq_status_days": set_before, "updated_at": _now()}})
+    return len(updates)
+
+
 async def fill_bells(iso_from: str, iso_to: str) -> dict:
     """Fill Bells days from OwnerIQ daily KPIs (see module docstring)."""
     users = {str(u["_id"]): u async for u in db.users.find({"deleted": {"$ne": True}},
@@ -237,7 +295,7 @@ async def _apply_week(payload: dict, link: dict[str, dict], apply_teams: bool) -
                 {"$set": {"team_name": name[:40], "owneriq_team_id": t.get("id"),
                           "team_name_source": "owneriq"}})
             teams_set += res.modified_count
-    stats = goals = 0
+    stats = goals = schedule_days = 0
     for row in payload.get("users") or []:
         oid = str((row.get("user") or {}).get("id"))
         u = link.get(oid)
@@ -261,6 +319,11 @@ async def _apply_week(payload: dict, link: dict[str, dict], apply_teams: bool) -
                 "synced_at": _now(),
             }}, upsert=True)
         stats += 1
+        # Their Field IQ plan for the week → Not scheduled / No show on Bells.
+        try:
+            schedule_days += await apply_schedule(u, week_ending, row.get("days") or [])
+        except Exception as ex:
+            logger.warning("OwnerIQ schedule → Bells failed for %s: %s", oid, ex)
         target = k.get("sales_target")
         if target is not None:
             entry = await _bells_entry(u, week_ending)
@@ -269,7 +332,8 @@ async def _apply_week(payload: dict, link: dict[str, dict], apply_teams: bool) -
                 await db.bells_entries.update_one({"id": entry["id"]}, {"$set": {
                     "weekly_goal": target, "weekly_goal_source": "owneriq", "updated_at": _now()}})
                 goals += 1
-    return {"week_ending": week_ending, "stats": stats, "goals": goals, "teams": teams_set}
+    return {"week_ending": week_ending, "stats": stats, "goals": goals, "teams": teams_set,
+            "schedule_days": schedule_days}
 
 
 async def sync_performance(weeks: int = 2, bells_weeks: int = 1) -> dict:
@@ -283,16 +347,32 @@ async def sync_performance(weeks: int = 2, bells_weeks: int = 1) -> dict:
         link = await link_users(client, token)
         out["linked_users"] = len(link)
         for mc_id in await _company_ids(client, token):
-            for i in range(weeks):
+            # -1 = next week, so the week being planned already shows who
+            # planned which days in Field IQ.
+            for i in range(-1, weeks):
                 ws = (this_monday - timedelta(weeks=i)).isoformat()
-                payload = await _performance(client, token, mc_id, ws)
-                # Keep the whole view for the app's Performance Hub screen.
                 try:
-                    from owneriq_hub import store as _store_hub
-                    await _store_hub("mc", str(mc_id), ws, payload)
+                    payload = await _performance(client, token, mc_id, ws)
+                except OwnerIQError as ex:
+                    if i < 0:   # next week may not exist yet in OwnerIQ: not an error
+                        logger.info("OwnerIQ next week not read: %s", ex)
+                        continue
+                    raise
+                # Keep the whole view for the app's Performance Hub screen
+                # (this week and earlier; next week is only for the plan).
+                if i >= 0:
+                    try:
+                        from owneriq_hub import store as _store_hub
+                        await _store_hub("mc", str(mc_id), ws, payload)
+                    except Exception as ex:
+                        logger.warning("OwnerIQ hub copy failed: %s", ex)
+                try:
+                    res = await _apply_week(payload, link, apply_teams=(i == 0))
                 except Exception as ex:
-                    logger.warning("OwnerIQ hub copy failed: %s", ex)
-                res = await _apply_week(payload, link, apply_teams=(i == 0))
+                    if i < 0:   # next week may not exist yet in OwnerIQ: not an error
+                        logger.info("OwnerIQ next week not applied: %s", ex)
+                        continue
+                    raise
                 out["weeks"].append({"mc": mc_id, **res})
     bells_from = (this_monday - timedelta(weeks=bells_weeks - 1)).isoformat()
     out["bells"] = await fill_bells(bells_from, today.isoformat())

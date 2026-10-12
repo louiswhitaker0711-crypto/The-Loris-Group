@@ -1068,6 +1068,10 @@ async def set_crew_member_plan(member_id: str, request: Request):
     # stays locked after MONDAY 10:30 AM (app time) of the planning week.
     is_admin = bool(me.get("is_super_admin") or me.get("role") == "admin")
     locked = (not is_admin) and datetime.now(APP_TZ) > _crew_lock_deadline(week_ending)
+    # Days are self-employed people's own call: a Coach marks "Not scheduled"
+    # straight onto Bells like the owner does. No approval, no lock on days;
+    # only the goal still locks at Monday 10:30.
+    direct_days = True
 
     from routes.bells import _normalize_days
     now_iso = datetime.now(timezone.utc).isoformat()
@@ -1097,16 +1101,11 @@ async def set_crew_member_plan(member_id: str, request: Request):
             s = str(s or "").strip().lower()
             cur = days[i].get("status")
             if s == "ab":
-                if is_admin:
+                if is_admin or direct_days:
                     days[i]["status"] = "ab"
                 elif cur != "ab":
                     requested_ab.append(i)
             elif s == "off" and cur == "ab":
-                if locked:
-                    raise HTTPException(
-                        status_code=403,
-                        detail="Schedule locked (Mon 10:30) — ask your office admin to clear an approved absence.",
-                    )
                 days[i]["status"] = "off"
 
     update: dict = {"days": days, "updated_at": now_iso}
@@ -1170,9 +1169,9 @@ async def set_crew_member_plan(member_id: str, request: Request):
                 if isinstance(statuses_in, list):
                     for i, s in enumerate(statuses_in[:6]):
                         s = str(s or "").strip().lower()
-                        if s == "ab" and is_admin:
+                        if s == "ab":
                             days[i]["status"] = "ab"
-                        elif s == "off" and days[i].get("status") == "ab" and not locked:
+                        elif s == "off" and days[i].get("status") == "ab":
                             days[i]["status"] = "off"
                 update["days"] = days
                 await db.bells_entries.update_one({"id": existing["id"]}, {"$set": update})
@@ -1187,13 +1186,13 @@ async def set_crew_member_plan(member_id: str, request: Request):
     # ── Absence request bookkeeping ──────────────────────────────────────
     from routes.absences import submit_absence_request
     pending_request = None
-    if not is_admin and isinstance(statuses_in, list):
+    if not is_admin and not direct_days and isinstance(statuses_in, list):
         # requested_ab is the FULL desired pending set for this member+week:
         # deselecting a pending day drops it, empty set cancels the request.
         pending_request = await submit_absence_request(
             me, target, week_ending, requested_ab, body.get("absence_reason") or "")
-    elif is_admin:
-        # An admin marking Ab directly settles any pending request those
+    else:
+        # Marking days directly settles any pending request those
         # days were waiting on — no ghost approvals left behind.
         pending = await db.absence_requests.find_one(
             {"target_user_id": target_id, "week_ending": week_ending, "status": "pending"})
@@ -1698,7 +1697,7 @@ async def weekly_planner_stats(week: str, request: Request, user_id: Optional[st
         for i in range(6):
             d = pdays[i] if i < len(pdays) and isinstance(pdays[i], dict) else {}
             s = str(d.get("status") or "off").lower()
-            statuses.append(s if s in ("in", "off", "rt", "nc", "ab", "pc") else "off")
+            statuses.append(s if s in ("in", "off", "rt", "nc", "ab", "pc", "ns") else "off")
         preq = pending_req_by_user.get(uid)
         dreq = decided_req_by_user.get(uid)
         crew.append({

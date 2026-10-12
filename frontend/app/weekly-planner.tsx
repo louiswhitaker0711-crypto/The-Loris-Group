@@ -10,7 +10,8 @@ import { useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { lightColors } from '../src/theme/ThemeContext';
 import { Kicker } from '../src/components/ui/PillTabs';
-import { useColors, fonts } from '../src/theme/ThemeContext';
+import { useColors, useTheme, fonts } from '../src/theme/ThemeContext';
+import { statusSquare } from '../src/utils/dayStatus';
 import { BrandLoader } from '../src/components/ui/BrandLoader';
 import { Aurora } from '../src/components/ui/Aurora';
 import { Breathe } from '../src/components/ui/Breathe';
@@ -64,7 +65,7 @@ const EIGHT_STEPS = [
 const WIZARD_STEPS: { title: string; hint: string }[] = [
   { title: 'Review last week', hint: 'The numbers are pulled in for you — add your wins and what you learned.' },
   { title: "This week's goals", hint: 'Team & personal sign-up targets, P/A and scoring — they sync straight to Bells.' },
-  { title: 'Crew schedules & goals', hint: 'Give every crew member a goal and mark any absences. Absences go to the office owner for approval.' },
+  { title: 'Crew schedules & goals', hint: "Their days come in from Field IQ. Give everyone a goal and fix any day that's wrong." },
   { title: 'Meetings & recruitment', hint: 'Plan the meetings, calls, education and recruitment goals for the week.' },
   { title: 'Self review', hint: '8 Steps, your own development, and who you are developing.' },
   { title: 'Focus & finish', hint: "Set this week's focuses and the bigger picture — then share the plan." },
@@ -331,6 +332,7 @@ function useStyles() {
 export default function WeeklyPlannerScreen() {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const effectiveDark = useTheme().effective === 'dark';
   // Taps during scroll/momentum must stop the scroll, not focus a note field.
   const { scrollProps, contentProps } = useScrollGuard();
   const tabBarClearance = useTabBarClearance();
@@ -614,11 +616,12 @@ export default function WeeklyPlannerScreen() {
   const canCrewEdit = canEdit;
   // Which selected Ab days are new requests (not yet on Bells)?
   const approvedAb = (i: number) => crewEdit?.day_statuses?.[i] === 'ab';
-  const pendingSelection = crewDays.some((s, i) => s === 'ab' && !approvedAb(i));
+  const pendingSelection = false && crewDays.some((s, i) => s === 'ab' && !approvedAb(i));
   // A reason is mandatory whenever a NEW absence is being requested — the
   // owner approves or denies off the back of it. Admins write AB directly and
   // don't need one.
-  const crewReasonOk = isAdmin || !pendingSelection || crewReason.trim().length >= 3;
+  // Self-employed: days are set directly, no reason or approval needed.
+  const crewReasonOk = true;
   const crewMut = useMutation({
     mutationFn: () => apiService.setCrewMemberPlan(crewEdit!.user_id, {
       week_ending: week,
@@ -628,11 +631,7 @@ export default function WeeklyPlannerScreen() {
     }).then((r) => r.data),
     onSuccess: (data: any) => {
       invalidateGoalQueries(queryClient);
-      if (data?.pending_request && !isAdmin) {
-        centerNotice.success('Absence requested', 'The office owner has been notified and will approve or deny it.');
-      } else {
-        toast.success('Saved');
-      }
+      toast.success('Saved');
       setCrewEdit(null);
     },
     onError: (e: any) => showAlert('Could not save', e?.response?.data?.detail || 'Try again'),
@@ -1020,13 +1019,13 @@ export default function WeeklyPlannerScreen() {
                 enforces this too; admins stay exempt. */}
             <Card icon="people-outline" title="Crew">
               {canCrewEdit && (statsQ.data?.crew || []).length > 0 && (
-                <Text style={styles.crewHint}>Tap a name to set their weekly goal & request absences</Text>
+                <Text style={styles.crewHint}>Days come in from Field IQ. Tap a name to set their goal or change a day.</Text>
               )}
               {crewLocked && (
                 <View style={styles.lockBanner}>
                   <Ionicons name="lock-closed" size={13} color="#92400e" />
                   <Text style={styles.lockBannerText}>
-                    Goals locked (Mon 10:30 AM). You can still request absences — they go to the office owner for approval.
+                    Goals locked (Mon 10:30). Days can still be changed.
                   </Text>
                 </View>
               )}
@@ -1045,22 +1044,16 @@ export default function WeeklyPlannerScreen() {
                     <Text style={styles.memberMeta}>
                       {m.last ? `Last wk ${fmt(m.last.total)} / goal ${fmt(m.last.goal)}` : 'Last wk —'}
                     </Text>
-                    {pendDays.length > 0 && (
-                      <Text style={styles.memberPending}>⏳ Absence requested — awaiting owner approval</Text>
-                    )}
-                    {pendDays.length === 0 && m.last_decision?.status === 'denied' && (
-                      <Text style={styles.memberDenied}>Absence request denied</Text>
-                    )}
+
                   </View>
                   <View style={styles.dayDots}>
                     {['M', 'T', 'W', 'T', 'F', 'S'].map((l, i) => {
-                      // Predictive view: any non-Ab day reads as planned In.
-                      // Approved Ab = red A · requested (pending) = amber A?
-                      const ab = m.day_statuses?.[i] === 'ab';
-                      const pend = !ab && pendDays.includes(i);
+                      // Planned in = filled · Not scheduled = grey · No show = black.
+                      const st = m.day_statuses?.[i];
+                      const sq = statusSquare(st, effectiveDark);
                       return (
-                        <View key={i} style={[styles.dayDot, !ab && !pend && styles.dayDotOn, ab && styles.dayDotAb, pend && styles.dayDotPending]}>
-                          <Text style={[styles.dayDotText, { color: ab ? '#dc2626' : pend ? '#b45309' : colors.onPrimary }]}>{ab ? 'A' : pend ? 'A?' : l}</Text>
+                        <View key={i} style={[styles.dayDot, !sq && styles.dayDotOn, sq && { backgroundColor: sq.bg, borderColor: sq.border }]}>
+                          <Text style={[styles.dayDotText, { color: sq ? sq.fg : colors.onPrimary }]}>{st === 'ns' ? 'X' : l}</Text>
                         </View>
                       );
                     })}
@@ -1413,9 +1406,7 @@ export default function WeeklyPlannerScreen() {
             <View style={styles.sheetHandle} />
             <Text style={styles.sheetTitle}>{crewEdit?.name}</Text>
             <Text style={styles.sheetSub}>
-              Week ending {shortDate(week)}{isAdmin
-                ? ' — absences & goal go straight onto their Bells row.'
-                : ' — the goal goes on their Bells row; absences are sent to the office owner for approval.'}
+              Week ending {shortDate(week)} — their days come from Field IQ; anything you change here goes straight onto their Bells row.
             </Text>
 
             {/* Predictive week plan: the toggle speaks In / Ab — no 'off',
@@ -1424,15 +1415,13 @@ export default function WeeklyPlannerScreen() {
                 entered, so it can never count as a 0-scoring In-day); only
                 Ab lands on the Bells sheet. For leaders, a NEW Ab becomes a
                 pending request (amber) until the owner approves it. */}
-            <Text style={styles.smallFieldLabel}>Week plan — tap to toggle In / Ab</Text>
+            <Text style={styles.smallFieldLabel}>Week plan — tap a day to switch In / Not scheduled</Text>
             <View style={styles.sheetDaysRow}>
               {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((l, i) => {
                 const ab = crewDays[i] === 'ab';
                 const isApproved = approvedAb(i);
-                const isPendingAb = ab && !isApproved && !isAdmin;
-                // After the lock, an approved Ab can only be cleared by the
-                // office admin — tapping it does nothing for a leader.
-                const frozen = crewLocked && isApproved;
+                const isPendingAb = false && isApproved;
+                const frozen = false;
                 return (
                   <TouchableOpacity
                     key={l}
@@ -1447,18 +1436,16 @@ export default function WeeklyPlannerScreen() {
                     onPress={() => setCrewDays((cur) => cur.map((cs, si) =>
                       si === i ? (cs === 'ab' ? 'off' : 'ab') : cs))}
                   >
-                    <Text style={[styles.sheetDayChipText, { color: ab ? (isPendingAb ? '#b45309' : '#dc2626') : '#fff' }]}>{l}</Text>
-                    <Text style={[styles.sheetDayChipState, { color: ab ? (isPendingAb ? '#b45309' : '#dc2626') : 'rgba(255,255,255,0.9)' }]}>
-                      {isPendingAb ? 'AB?' : ab ? 'AB' : 'IN'}
+                    <Text style={[styles.sheetDayChipText, { color: ab ? '#475569' : '#fff' }]}>{l}</Text>
+                    <Text style={[styles.sheetDayChipState, { color: ab ? '#475569' : 'rgba(255,255,255,0.9)' }]}>
+                      {ab ? 'OFF' : 'IN'}
                     </Text>
                   </TouchableOpacity>
                 );
               })}
             </View>
             <Text style={styles.sheetLockNote}>
-              {isAdmin
-                ? '"In" is the plan — on Bells the day stays blank until sign-ups are entered, so it never counts as a 0. Only Ab is written to the sheet.'
-                : '"In" is the plan — the Bells day stays blank until sign-ups are entered. New absences (amber) go to the office owner for approval before they land on Bells.\n🔒 Goals lock Monday 10:30 AM — absences can be requested any time.'}
+              {'"In" is the plan: the Bells day stays blank until sign-ups are entered, so it never counts as a 0. Not scheduled shows grey on Bells and never counts against them. Goals lock Monday 10:30; days can change any time.'}
             </Text>
 
             {/* Reason — required context for the owner's approve/deny call */}
@@ -1833,7 +1820,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   sheetDaysRow: { flexDirection: 'row', gap: 6, marginTop: 2 },
   sheetDayChip: { flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: 10, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   sheetDayChipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
-  sheetDayChipAb: { backgroundColor: '#fee2e2', borderColor: '#fecaca' },
+  sheetDayChipAb: { backgroundColor: '#d9dee5', borderColor: '#c3cad4' },
   sheetDayChipText: { fontFamily: fonts.bodySemibold, fontSize: 11, fontWeight: '800', color: colors.textMuted },
   sheetDayChipState: { fontFamily: fonts.mono, fontSize: 8.5, fontWeight: '900', letterSpacing: 0.5, marginTop: 1 },
   sheetLockNote: { fontFamily: fonts.body, fontSize: 10.5, color: colors.textMuted, marginTop: 8, lineHeight: 15 },

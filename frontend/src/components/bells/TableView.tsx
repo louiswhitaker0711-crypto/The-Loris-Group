@@ -11,6 +11,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { teamColor, NO_TEAM_TINT } from '../../utils/teamColors';
 import { toast } from '../../utils/toast';
 import { Day, Entry, MIN_AB_REASON, TIER, isInDay, dayTotal } from './types';
+import { DAY_STATUS_LABEL, DAY_STATUS_SHORT, NO_NUMBER_STATUSES, statusSquare } from '../../utils/dayStatus';
 import { APP_LOCALE, APP_TZ, formatMoney } from '../../utils/appTime';
 import { centerNotice } from '../../utils/centerNotice';
 import { APP_SHORT_NAME } from '../../theme/brand';
@@ -194,7 +195,8 @@ function cellForDay(d: Day, c: typeof colors, dark: boolean): DayLook {
   const amber = dark ? '#fcd34d' : '#b45309';
   const green = dark ? '#86efac' : '#166534';
   if (d.status === 'off') return { text: '–', fg: c.textMuted };
-  if (d.status === 'ab') return { text: 'AB', fg: red };
+  const sq = statusSquare(d.status, dark);
+  if (sq) return { text: DAY_STATUS_SHORT[d.status], fg: sq.fg, bg: sq.bg };
   if (d.status === 'nc') return { text: 'NC', fg: c.textMuted };
   if (d.status === 'pc') return { text: 'PC', fg: dark ? '#67e8f9' : '#0e7490' };
   const tot = (d.over30 || 0) + (d.under30 || 0);
@@ -283,9 +285,9 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
 
   // ── Tap-a-cell editing — the table is the sheet, so it edits like one.
   // Opens a small editor for that person+day: sign-up numbers + status.
-  // Absences stay owner-gated: non-admins get a "Request AB" button that
-  // fires the approval flow instead of writing to the sheet.
-  const isAdminUser = user?.role === 'admin';
+  // Not scheduled is everyone's own call (self-employed): anyone who can
+  // edit the sheet sets it directly, no approval step.
+  const isAdminUser = true;
   const [cellEdit, setCellEdit] = useState<{ entry: Entry; dayIdx: number } | null>(null);
   const [cellO30, setCellO30] = useState('');
   const [cellU30, setCellU30] = useState('');
@@ -316,7 +318,7 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
     if (!cellEdit || !weekEnding) return;
     const { entry, dayIdx } = cellEdit;
     const num = (s: string) => (s.trim() === '' ? null : Math.max(0, parseInt(s, 10) || 0));
-    const clearing = ['off', 'nc', 'ab', 'pc'].includes(cellStatus);
+    const clearing = NO_NUMBER_STATUSES.includes(cellStatus);
     const nextDay: Day = {
       over30: clearing ? null : num(cellO30),
       under30: clearing ? null : num(cellU30),
@@ -346,7 +348,7 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
         days,
       });
       if ((res.data as any)?.absence_changes_blocked) {
-        toast.error('Absence changes need the owner’s approval — use Request AB instead');
+        toast.error('That day could not be changed. Try again.');
       } else {
         toast.success('Saved');
       }
@@ -602,11 +604,11 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
               <View style={styles.abDetailBox}>
                 <View style={styles.abDetailHead}>
                   <Ionicons name="calendar-outline" size={13} color="#b45309" />
-                  <Text style={styles.abDetailHeadText}>Approved absence</Text>
+                  <Text style={styles.abDetailHeadText}>Not scheduled</Text>
                 </View>
                 {!!abDetail.reason && <Text style={styles.abDetailReason}>“{abDetail.reason}”</Text>}
                 <Text style={styles.abDetailMeta}>
-                  {abDetail.decided_by_name ? `Approved by ${abDetail.decided_by_name}` : 'Approved'}
+                  {abDetail.decided_by_name ? `Set by ${abDetail.decided_by_name}` : 'Set'}
                   {abDetail.decided_at ? ` · ${absDateTime(abDetail.decided_at)}` : ''}
                 </Text>
                 {!!abDetail.requested_by && (
@@ -640,19 +642,19 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
                         keyboardType="number-pad"
                         placeholder="—"
                         placeholderTextColor={colors.textMuted}
-                        editable={!['off', 'nc', 'ab', 'pc'].includes(cellStatus)}
+                        editable={!NO_NUMBER_STATUSES.includes(cellStatus)}
                       />
                     </View>
                   ))}
                 </View>
                 <View style={styles.ceStatusRow}>
-                  {(['in', 'off', 'rt', 'nc', 'pc', ...(isAdminUser ? ['ab'] : [])] as string[]).map((s) => (
+                  {(['in', 'off', 'ab', 'ns', 'rt', 'nc', 'pc'] as string[]).map((s) => (
                     <TouchableOpacity
                       key={s}
                       style={[styles.ceStatusChip, cellStatus === s && styles.ceStatusChipActive]}
                       onPress={() => setCellStatus(s)}
                     >
-                      <Text style={[styles.ceStatusChipText, cellStatus === s && { color: colors.onPrimary }]}>{s.toUpperCase()}</Text>
+                      <Text style={[styles.ceStatusChipText, cellStatus === s && { color: colors.onPrimary }]}>{s === 'ab' || s === 'ns' ? DAY_STATUS_LABEL[s] : s.toUpperCase()}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
