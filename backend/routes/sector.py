@@ -305,3 +305,80 @@ async def my_setup(user_id: str, iso: Optional[str] = None) -> Optional[dict]:
     d = await db.sector_days.find_one({"user_id": str(user_id), "date": iso or today_iso()}, {"_id": 0, "setup": 1})
     s = (d or {}).get("setup")
     return {**s, "kpi": kpi_text(s)} if s else None
+
+
+# ── Through the field day: reminders built from each person's set-up ────────
+# Weekdays (field 13:30–20:00): 15:00, 16:30 and 19:00 (the 6pm reset sits
+# between). Saturday (field 10:00–17:00): 12:00, 14:00 and 16:00. Only people
+# with a set-up for today get them; numbers come from OwnerIQ / Bells, so they
+# are as fresh as the last sync.
+WEEKDAY_SLOTS = ((15, 0, "early"), (16, 30, "mid"), (19, 0, "late"))
+SATURDAY_SLOTS = ((12, 0, "early"), (14, 0, "mid"), (16, 0, "late"))
+_KPI_FIELD = {"doors": "doors", "spoken": "spoken", "pitched": "pitched", "closes": "closed"}
+
+
+def nudge_text(setup: dict, now: dict, slot: str) -> tuple[str, str]:
+    """(title, body) for one person at one point in the day."""
+    goal = setup.get("goal")
+    hit = int(now.get("hit") or 0)
+    parts = []
+    if goal is not None:
+        parts.append(f"{hit}/{goal} sign-ups")
+    m, t = setup.get("kpi_metric"), setup.get("kpi_target")
+    if m and t is not None and _KPI_FIELD.get(m):
+        parts.append(f"{int(now.get(_KPI_FIELD[m]) or 0)}/{t} {KPI_METRICS[m]}")
+    elif m:
+        parts.append(f"KPI: {kpi_text(setup)}")
+    if setup.get("focus"):
+        parts.append(f"Focus: {setup['focus']}")
+    if goal is not None and hit >= goal and goal > 0:
+        return "🔥 Goal hit", f"{hit}/{goal} — go for one more. " + " · ".join(parts[1:])
+    title = {"early": "🎯 Check in", "mid": "📊 Halfway check", "late": "⏱️ Last stretch"}[slot]
+    if slot == "late" and goal is not None:
+        title = f"⏱️ {max(0, goal - hit)} more to hit your goal"
+    return title, " · ".join(parts)
+
+
+async def field_nudge_tick(slot: str) -> int:
+    from core.push import send_push_to_user
+    iso = today_iso()
+    docs = [d async for d in db.sector_days.find({"date": iso, "setup": {"$ne": None}}, {"_id": 0})]
+    if not docs:
+        return 0
+    live = await _prefill([d["user_id"] for d in docs], iso)
+    sent = 0
+    for d in docs:
+        s = d.get("setup") or {}
+        if s.get("goal") is None and not s.get("kpi_metric") and not s.get("focus"):
+            continue
+        title, body = nudge_text(s, live.get(d["user_id"]) or {}, slot)
+        try:
+            await send_push_to_user(d["user_id"], title, body, {"type": "field_nudge", "url": "/field-reset"})
+            sent += 1
+        except Exception as ex:
+            logger.warning("field nudge failed for %s: %s", d["user_id"], ex)
+    return sent
+
+
+async def breakdown_prompt_tick() -> int:
+    """After the field (20:15 weekdays, 17:15 Saturday): ask everyone who had
+    a set-up or was out today to fill in what they're proud of and what
+    they'll change."""
+    from core.push import send_push_to_user
+    iso = today_iso()
+    ids = {d["user_id"] async for d in db.sector_days.find({"date": iso}, {"user_id": 1})}
+    async for r in db.owneriq_kpis.find({"date": iso, "cg1_user_id": {"$ne": None}, "test_mode": {"$ne": True},
+                                        "cg1_matched_by": {"$ne": "name"}}, {"cg1_user_id": 1, "doors_knocked": 1}):
+        if int(r.get("doors_knocked") or 0) > 0:
+            ids.add(str(r["cg1_user_id"]))
+    done = {d["user_id"] async for d in db.sector_days.find(
+        {"date": iso, "breakdown.proud": {"$nin": ["", None]}, "breakdown.change": {"$nin": ["", None]}}, {"user_id": 1})}
+    sent = 0
+    for uid in ids - done:
+        try:
+            await send_push_to_user(uid, "📝 Breakdown", "What are you proud of today, and what will you change tomorrow?",
+                                    {"type": "field_nudge", "url": "/sector?mode=breakdown"})
+            sent += 1
+        except Exception as ex:
+            logger.warning("breakdown prompt failed for %s: %s", uid, ex)
+    return sent

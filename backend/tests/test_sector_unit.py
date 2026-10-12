@@ -49,3 +49,14 @@ def test_inputs_are_checked():
         sec.clean_setup({"kpi_metric": "vibes"})
     with pytest.raises(HTTPException):
         sec.clean_breakdown({"doors": "lots"})
+
+
+def test_field_nudges_use_the_set_up_and_live_numbers():
+    setup = {"goal": 4, "kpi_metric": "spoken", "kpi_target": 70, "focus": "handling objections"}
+    title, body = sec.nudge_text(setup, {"hit": 1, "spoken": 30}, "mid")
+    assert title == "📊 Halfway check"
+    assert body == "1/4 sign-ups · 30/70 spoken · Focus: handling objections"
+    title, _ = sec.nudge_text(setup, {"hit": 2, "spoken": 55}, "late")
+    assert title == "⏱️ 2 more to hit your goal"
+    title, body = sec.nudge_text(setup, {"hit": 4, "spoken": 60}, "late")
+    assert title == "🔥 Goal hit" and body.startswith("4/4 — go for one more.")

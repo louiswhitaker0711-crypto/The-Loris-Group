@@ -888,6 +888,34 @@ async def _startup_work():
             except Exception as ex:
                 logger.error(f"6pm reset push failed: {ex}")
 
+        # ── Through the field day: set-up check-ins, then the breakdown ask ──
+        def _nudge_job(slot):
+            async def _run():
+                try:
+                    from routes.sector import field_nudge_tick
+                    logger.info(f"field_nudge {slot}: {await field_nudge_tick(slot)} sent")
+                except Exception as ex:
+                    logger.error(f"field nudge failed: {ex}")
+            return _run
+
+        from routes.sector import WEEKDAY_SLOTS, SATURDAY_SLOTS
+        for _days, _slots in (("mon-fri", WEEKDAY_SLOTS), ("sat", SATURDAY_SLOTS)):
+            for _h, _m, _slot in _slots:
+                scheduler.add_job(_nudge_job(_slot), "cron", day_of_week=_days, hour=_h, minute=_m,
+                                  id=f"field_nudge_{_days}_{_h:02d}{_m:02d}", replace_existing=True)
+
+        async def _breakdown_prompt():
+            try:
+                from routes.sector import breakdown_prompt_tick
+                logger.info(f"breakdown prompt: {await breakdown_prompt_tick()} sent")
+            except Exception as ex:
+                logger.error(f"breakdown prompt failed: {ex}")
+
+        scheduler.add_job(_breakdown_prompt, "cron", day_of_week="mon-fri", hour=20, minute=15,
+                          id="breakdown_prompt_weekday", replace_existing=True)
+        scheduler.add_job(_breakdown_prompt, "cron", day_of_week="sat", hour=17, minute=15,
+                          id="breakdown_prompt_sat", replace_existing=True)
+
         scheduler.add_job(
             _field_reset_push,
             "cron",
