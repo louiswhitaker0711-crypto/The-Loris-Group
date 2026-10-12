@@ -79,7 +79,50 @@ async def _team_has_junior_leader(user: dict) -> bool:
     return cnt > 0
 
 
+async def _team_has_stage3(user: dict) -> bool:
+    """True if anyone below `user` on their team is OwnerIQ Stage 3 or above."""
+    from core.schedule_template import stage_num
+    from core.cod_access import TEAM_STAGE_FOR_3_PLUS
+    uid = str(user.get("id") or user.get("_id") or "")
+    if not uid:
+        return False
+    try:
+        obj_ids = [ObjectId(s) for s in await get_subtree_ids(uid) if s != uid]
+    except Exception:
+        return False
+    if not obj_ids:
+        return False
+    async for u in db.users.find({"_id": {"$in": obj_ids}, "deleted": {"$ne": True}}, {"owneriq_stage": 1}):
+        n = stage_num(u.get("owneriq_stage"))
+        if n is not None and n >= TEAM_STAGE_FOR_3_PLUS:
+            return True
+    return False
+
+
+async def _owneriq_unlocked(user: dict) -> Optional[set]:
+    """COD stages open to this person by their OwnerIQ stage (core/cod_access),
+    or None when they have no OwnerIQ stage (older role rules apply)."""
+    from core.schedule_template import stage_num
+    from core.cod_access import unlocked_stages
+    n = stage_num(user.get("owneriq_stage"))
+    if n is None:
+        return None
+    return unlocked_stages(n, n < 3.5 and await _team_has_stage3(user))
+
+
 async def _is_stage_unlocked(user: dict, stage: int) -> bool:
+    """Admins: every stage. Anyone with an OwnerIQ stage: core/cod_access
+    (up to their own stage, plus 3+ with a Stage 3 on their team). Without
+    an OwnerIQ stage, the older rules below."""
+    if (user.get("role") or "").lower() == "admin":
+        return True
+    by_oiq = await _owneriq_unlocked(user)
+    if by_oiq is not None:
+        return stage in by_oiq
+    return await _is_stage_unlocked_by_role(user, stage)
+
+
+async def _is_stage_unlocked_by_role(user: dict, stage: int) -> bool:
     """Returns True if `user` is allowed to view+score modules at this stage.
 
     Rules (per latest product spec):
@@ -276,19 +319,7 @@ async def get_module(module_id: str, request: Request):
         raise HTTPException(status_code=404, detail="Module not found")
     if not _module_in_scope(user, m):
         raise HTTPException(status_code=403, detail="Module belongs to a different office")
-    stage = int(m.get("stage") or 0)
-    role = (user.get("role") or "").lower()
-    if role == "admin":
-        pass  # always allowed
-    elif role == "leader":
-        # Leaders can always READ Stage 2 (to coach trainees) and Stage 3
-        # (for personal growth). Stage 4 remains admin-only.
-        if stage in (4, 6):
-            raise HTTPException(status_code=403, detail="Stage not unlocked")
-    else:
-        # Trainee — still gated behind Stage 2 unlock logic.
-        if not await _is_stage_unlocked(user, stage):
-            raise HTTPException(status_code=403, detail="Stage not unlocked")
+    await _check_module_read(user, m)
     return _strip_id(m)
 
 
@@ -473,8 +504,15 @@ async def _dims_user_can_grade(user: dict, target_user_id: str, stage: int) -> s
                 if target and (target.get("role") or "").lower() == "leader":
                     return set(_ALL_DIMS)
         return set()
-    if stage == 4:
-        return set()  # admin already short-circuited
+    if stage in (4, 5, 6):
+        # Stage 3+, 4 and 5: a Coach who has the stage open may self-claim
+        # Know/Do, and grade people below them on their team.
+        if role == "leader" and await _is_stage_unlocked(user, stage):
+            if target_user_id == uid:
+                return set(_SELF_DIMS)
+            if target_user_id in await get_subtree_ids(uid):
+                return set(_ALL_DIMS)
+        return set()
     return set()
 
 
@@ -621,16 +659,13 @@ async def _check_module_read(user: dict, m: dict) -> None:
         raise HTTPException(status_code=403, detail="Module belongs to a different office")
     stage = int(m.get("stage") or 0)
     role = (user.get("role") or "").lower()
-    if role == "admin":
+    if role == "admin" or await _is_stage_unlocked(user, stage):
         return
-    if role == "leader":
-        if stage in (4, 6):
-            raise HTTPException(status_code=403, detail="Stage not unlocked")
-        if stage == 5 and not await _is_stage_unlocked(user, 5):
-            raise HTTPException(status_code=403, detail="Stage not unlocked")
+    # Coaches always read Stages 1-2 (they coach them). Without an OwnerIQ
+    # stage, a Coach also reads Stage 3 for their own growth (older rule).
+    if role == "leader" and (stage in (1, 2) or (stage == 3 and await _owneriq_unlocked(user) is None)):
         return
-    if not await _is_stage_unlocked(user, stage):
-        raise HTTPException(status_code=403, detail="Stage not unlocked")
+    raise HTTPException(status_code=403, detail="Stage not unlocked")
 
 
 async def _get_or_create_quiz(m: dict, user: Optional[dict] = None) -> Optional[dict]:
@@ -1096,6 +1131,7 @@ async def my_stage_status(request: Request):
             "day_number", {"new_hire_id": hire_id, "passed_off": True}
         )
 
+    oiq = None if is_admin else await _owneriq_unlocked(user)
     s2_unlocked = await _is_stage_unlocked(user, 2)
     s3_unlocked = await _is_stage_unlocked(user, 3)
     s4_unlocked = await _is_stage_unlocked(user, 4)
@@ -1107,7 +1143,14 @@ async def my_stage_status(request: Request):
     #  • Trainees see Stage 2 (locked or active) and Stage 3 (always locked teaser); Stage 4 hidden.
     #  • Leaders see Stages 2/3 (Stage 3 may be locked teaser); Stage 4 hidden.
     #  • Admins see everything.
-    if is_admin:
+    s5_visible = is_leader or is_admin
+    s6_visible = is_admin
+    if oiq is not None:
+        from core.cod_access import visible_stages
+        vis = visible_stages(oiq)
+        s2_visible, s3_visible, s4_visible = 2 in vis, 3 in vis, 4 in vis
+        s5_visible, s6_visible = 5 in vis, 6 in vis
+    elif is_admin:
         s2_visible, s3_visible, s4_visible = True, True, True
     elif is_leader:
         s2_visible, s3_visible, s4_visible = True, True, False
@@ -1153,10 +1196,9 @@ async def my_stage_status(request: Request):
         "stage_2_visible": s2_visible,
         "stage_3_visible": s3_visible,
         "stage_4_visible": s4_visible,
-        # Stage 3+ (stored 5) shows for, and is unlocked for, leaders/admins.
-        "stage_5_visible": is_leader or is_admin,
-        # Stage 5 Business Owner (stored 6) — like Stage 4.
-        "stage_6_visible": s4_visible,
+        # Stage 3+ is stored as 5 and Stage 5 (Business Owner) as 6.
+        "stage_5_visible": s5_visible,
+        "stage_6_visible": s6_visible,
         "stage_2_unlocked": s2_unlocked,
         "stage_3_unlocked": s3_unlocked,
         "stage_4_unlocked": s4_unlocked,
