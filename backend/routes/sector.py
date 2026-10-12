@@ -10,7 +10,7 @@ Set-up (morning / sector):        Breakdown (end of day):
 The breakdown's doors / spoken / pitched / closed come from OwnerIQ for that
 day and "hit" from Bells (or OwnerIQ), so a Coach only adds the words. The
 next day's set-up is prompted from the breakdown: the focus suggestion is
-yesterday's "Change", and the KPI suggestion is the step furthest behind the
+yesterday's "Change" (a suggestion, never filled in), and the KPI suggestion is the step furthest behind the
 Law of Averages. Each person can be sent their own set-up as a push.
 
 Collection `sector_days`, one per (user_id, date):
