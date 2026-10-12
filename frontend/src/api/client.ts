@@ -1161,7 +1161,7 @@ export const apiService = {
     api.post<any>(`/module-progress/${moduleId}/pass-off`, { passed_off: passedOff, note }, { params: { target_user_id: targetUserId } }),
   // Manual editor — Stage 2/3/4 module CRUD (admin only). Auth piggy-backs on
   // the user's normal Bearer/cookie session via the backend's _check_auth.
-  adminListModules: (stage: 2 | 3 | 4 | 5, officeId?: string | null) =>
+  adminListModules: (stage: 1 | 2 | 3 | 4 | 5 | 6, officeId?: string | null) =>
     api.get<{ stage: number; office_id: string | null; is_global: boolean; items: Array<any> }>(
       `/manual-editor/modules`,
       { params: { stage, ...(officeId !== undefined ? { office_id: officeId === null ? '__global__' : officeId } : {}) } }),
