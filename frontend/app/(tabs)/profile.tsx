@@ -262,11 +262,24 @@ export default function ProfileScreen() {
     changePwMut.mutate();
   };
 
-  const compressImage = async (uri: string): Promise<string> => {
-    // Resize to max 400x400 and compress to JPEG at 60% quality
+  const compressImage = async (uri: string, width?: number, height?: number): Promise<string> => {
+    // Crop the centre square, then resize to 400x400 JPEG at 60% quality.
+    // The picker's own square crop doesn't run in the installed web app, so a
+    // portrait or landscape photo would otherwise be squashed to fit.
+    let w = width || 0;
+    let h = height || 0;
+    if (!w || !h) {
+      const probe = await ImageManipulator.manipulateAsync(uri, []);
+      w = probe.width;
+      h = probe.height;
+    }
+    const side = Math.min(w, h);
+    const crop = w !== h
+      ? [{ crop: { originX: Math.floor((w - side) / 2), originY: Math.floor((h - side) / 2), width: side, height: side } }]
+      : [];
     const manipulated = await ImageManipulator.manipulateAsync(
       uri,
-      [{ resize: { width: 400, height: 400 } }],
+      [...crop, { resize: { width: 400, height: 400 } }],
       { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG, base64: true }
     );
     return manipulated.base64 || '';
@@ -287,7 +300,8 @@ export default function ProfileScreen() {
     });
 
     if (!result.canceled && result.assets[0].uri) {
-      const base64 = await compressImage(result.assets[0].uri);
+      const asset = result.assets[0];
+      const base64 = await compressImage(asset.uri, asset.width, asset.height);
       if (base64) uploadImage(base64);
     }
   };
@@ -306,7 +320,8 @@ export default function ProfileScreen() {
     });
 
     if (!result.canceled && result.assets[0].uri) {
-      const base64 = await compressImage(result.assets[0].uri);
+      const asset = result.assets[0];
+      const base64 = await compressImage(asset.uri, asset.width, asset.height);
       if (base64) uploadImage(base64);
     }
   };
