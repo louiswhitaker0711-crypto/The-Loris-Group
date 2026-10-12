@@ -7,9 +7,14 @@
  * day pages (Sectors = the day's Sector box, Customer Service = the Morning
  * Meeting's Customer Service box, and so on), so filling it in here or on a
  * day page is the same thing.
+ *
+ * Rows, their order, names and times are each person's own (Edit rows,
+ * saved by /weekly-planners/sheet-layout); the day pages follow the same
+ * order. Nothing here changes the office timetable.
  */
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Modal, Pressable, Switch, ActivityIndicator } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Print from 'expo-print';
 import { useColors, fonts } from '../../theme/ThemeContext';
@@ -33,19 +38,17 @@ export const SHEET_HEADER: { id: string; label: string }[] = [
   { id: 'social', label: 'Social' },
 ];
 
-// Grid rows → the day-box key each one saves into.
-export const SHEET_ROWS: { key: string; label: string }[] = [
-  { key: 'sector', label: 'Sectors' },
-  { key: 'leaders_meeting', label: 'Coaches' },
-  { key: 'stage1', label: 'Stage 1' },
-  { key: 'stage2', label: 'Stage 2' },
-  { key: 'sales_impact', label: 'Sales impact' },
-  { key: 'morning_cs', label: 'Customer service' },
-  { key: 'morning_news', label: 'News and Bells' },
-  { key: 'morning_topic', label: 'Topic' },
-  { key: 'product_coaching', label: 'Product coaching' },
-  { key: 'appointments', label: 'Appointments' },
-];
+// One row of a person's layout: the day box it saves into, its name, an
+// optional HH:MM time and whether it shows on the sheet.
+export type SheetRow = { key: string; label: string; time: string; on_sheet: boolean };
+
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+export const rowTitle = (r: SheetRow) => (r.time ? `${r.time} · ${r.label}` : r.label);
+// Timed rows first, earliest first; untimed rows keep their order after them.
+export const sortByTime = (rows: SheetRow[]) => {
+  const timed = rows.filter((r) => r.time).sort((a, b) => a.time.localeCompare(b.time));
+  return [...timed, ...rows.filter((r) => !r.time)];
+};
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -72,11 +75,12 @@ function weekLabel(weekEnding: string): string {
   return new Date(y, m - 1, d).toLocaleDateString(APP_LOCALE, { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-export function buildWeeklySheetHtml(review: Review, days: Days, weekEnding: string, ownerName: string): string {
+export function buildWeeklySheetHtml(review: Review, days: Days, weekEnding: string, ownerName: string, layout: SheetRow[]): string {
+  const sheetRows = layout.filter((r) => r.on_sheet);
   const head = SHEET_HEADER.map((h) => `<tr><th>${esc(h.label)}</th><td>${br(headerValue(review, h.id))}</td></tr>`).join('');
   const dayHead = DAYS.map((d) => `<th>${d}</th>`).join('');
-  const rows = SHEET_ROWS.map((r) => `<tr>${DAYS.map((_, i) =>
-    `<td><div class="lbl">${esc(r.label)}</div>${br(days?.[String(i)]?.[r.key])}</td>`).join('')}</tr>`).join('');
+  const rows = sheetRows.map((r) => `<tr>${DAYS.map((_, i) =>
+    `<td><div class="lbl">${esc(rowTitle(r))}</div>${br(days?.[String(i)]?.[r.key])}</td>`).join('')}</tr>`).join('');
   return `<!doctype html><html><head><meta charset="utf-8"/>
 <title>Weekly plan · ${esc(ownerName)} · w/e ${esc(weekLabel(weekEnding))}</title>
 <style>
@@ -100,8 +104,8 @@ export function buildWeeklySheetHtml(review: Review, days: Days, weekEnding: str
 </body></html>`;
 }
 
-export async function printWeeklySheet(review: Review, days: Days, weekEnding: string, ownerName: string) {
-  const html = buildWeeklySheetHtml(review, days, weekEnding, ownerName);
+export async function printWeeklySheet(review: Review, days: Days, weekEnding: string, ownerName: string, layout: SheetRow[]) {
+  const html = buildWeeklySheetHtml(review, days, weekEnding, ownerName, layout);
   try {
     await Print.printAsync({ html });
   } catch {
@@ -109,25 +113,36 @@ export async function printWeeklySheet(review: Review, days: Days, weekEnding: s
   }
 }
 
-export default function WeeklySheet({ review, days, canEdit, onReview, onDay, onPrint }: {
+export default function WeeklySheet({ review, days, canEdit, layout, onSaveLayout, onReview, onDay, onPrint }: {
   review: Review;
   days: Days;
   canEdit: boolean;
+  layout: SheetRow[];
+  onSaveLayout: (rows: SheetRow[]) => Promise<void>;
   onReview: (patch: Review) => void;
   onDay: (day: number, key: string, v: string) => void;
   onPrint: () => void;
 }) {
   const c = useColors();
   const s = useMemo(() => styles(c), [c]);
+  const [editing, setEditing] = useState(false);
+  const sheetRows = layout.filter((r) => r.on_sheet);
   return (
     <View>
       <View style={s.topRow}>
         <Text style={s.hint}>Your weekly sheet. Each box is the same box as on the day pages.</Text>
+        <TouchableOpacity onPress={() => setEditing(true)} style={s.printBtn} accessibilityRole="button" testID="weekly-sheet-rows">
+          <Ionicons name="reorder-four-outline" size={15} color={c.primary} />
+          <Text style={s.printTxt}>Edit rows</Text>
+        </TouchableOpacity>
         <TouchableOpacity onPress={onPrint} style={s.printBtn} accessibilityRole="button" testID="weekly-sheet-print">
           <Ionicons name="print-outline" size={15} color={c.primary} />
           <Text style={s.printTxt}>Print</Text>
         </TouchableOpacity>
       </View>
+      {editing && (
+        <RowEditor layout={layout} onClose={() => setEditing(false)} onSave={onSaveLayout} />
+      )}
 
       <View style={s.headTable}>
         {SHEET_HEADER.map((h, i) => (
@@ -153,11 +168,11 @@ export default function WeeklySheet({ review, days, canEdit, onReview, onDay, on
               <View key={d} style={[s.dayHead, s.col]}><Text style={s.dayHeadTxt}>{d}</Text></View>
             ))}
           </View>
-          {SHEET_ROWS.map((r) => (
+          {sheetRows.map((r) => (
             <View key={r.key} style={s.gridRow}>
               {DAYS.map((d, i) => (
                 <View key={d} style={[s.cell, s.col]}>
-                  <Text style={s.cellLabel}>{r.label}</Text>
+                  <Text style={s.cellLabel}>{rowTitle(r)}</Text>
                   <TextInput
                     style={s.cellInput}
                     value={days?.[String(i)]?.[r.key] || ''}
@@ -173,6 +188,104 @@ export default function WeeklySheet({ review, days, canEdit, onReview, onDay, on
         </View>
       </ScrollView>
     </View>
+  );
+}
+
+// Edit rows: order (up/down or sort by time), name, time, on the sheet or not.
+function RowEditor({ layout, onClose, onSave }: {
+  layout: SheetRow[];
+  onClose: () => void;
+  onSave: (rows: SheetRow[]) => Promise<void>;
+}) {
+  const c = useColors();
+  const s = useMemo(() => styles(c), [c]);
+  const insets = useSafeAreaInsets();
+  const [rows, setRows] = useState<SheetRow[]>(() => layout.map((r) => ({ ...r })));
+  const [saving, setSaving] = useState(false);
+  const badTime = rows.some((r) => r.time && !TIME_RE.test(r.time));
+
+  const set = (i: number, patch: Partial<SheetRow>) =>
+    setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  const move = (i: number, by: number) => setRows((rs) => {
+    const j = i + by;
+    if (j < 0 || j >= rs.length) return rs;
+    const next = [...rs];
+    [next[i], next[j]] = [next[j], next[i]];
+    return next;
+  });
+  const save = async () => {
+    if (badTime) return;
+    setSaving(true);
+    try {
+      await onSave(rows);
+      onClose();
+    } catch {
+      toast.error('Could not save your rows', 'Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal visible animationType="slide" onRequestClose={onClose}>
+      <View style={[s.edRoot, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 8 }]}>
+        <View style={s.edHead}>
+          <Text style={s.edTitle}>Your rows</Text>
+          <TouchableOpacity onPress={onClose} hitSlop={8} accessibilityRole="button">
+            <Text style={s.edCancel}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={s.hint}>
+          Just for you: the order, names and times of your rows on the sheet and the day pages. Times are 24-hour, like 10:30, and can be left blank.
+        </Text>
+        <View style={s.edActions}>
+          <TouchableOpacity onPress={() => setRows(sortByTime)} style={s.printBtn} accessibilityRole="button">
+            <Ionicons name="time-outline" size={15} color={c.primary} />
+            <Text style={s.printTxt}>Sort by time</Text>
+          </TouchableOpacity>
+        </View>
+        <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled">
+          {rows.map((r, i) => {
+            const timeBad = !!r.time && !TIME_RE.test(r.time);
+            return (
+              <View key={r.key} style={s.edRow}>
+                <View style={s.edMove}>
+                  <TouchableOpacity onPress={() => move(i, -1)} disabled={i === 0} hitSlop={6} accessibilityLabel={`Move ${r.label} up`}>
+                    <Ionicons name="chevron-up" size={20} color={i === 0 ? c.border : c.primary} />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => move(i, 1)} disabled={i === rows.length - 1} hitSlop={6} accessibilityLabel={`Move ${r.label} down`}>
+                    <Ionicons name="chevron-down" size={20} color={i === rows.length - 1 ? c.border : c.primary} />
+                  </TouchableOpacity>
+                </View>
+                <TextInput
+                  value={r.time}
+                  onChangeText={(v) => set(i, { time: v.replace(/[^0-9:]/g, '').slice(0, 5) })}
+                  placeholder="--:--"
+                  placeholderTextColor={c.textMuted}
+                  style={[s.edTime, timeBad && { borderColor: c.red }]}
+                  keyboardType="numbers-and-punctuation"
+                  accessibilityLabel={`${r.label} time`}
+                />
+                <TextInput
+                  value={r.label}
+                  onChangeText={(v) => set(i, { label: v.slice(0, 40) })}
+                  style={s.edLabel}
+                  accessibilityLabel="Row name"
+                />
+                <View style={s.edSheet}>
+                  <Text style={s.edSheetTxt}>Sheet</Text>
+                  <Switch value={r.on_sheet} onValueChange={(v) => set(i, { on_sheet: v })} />
+                </View>
+              </View>
+            );
+          })}
+        </ScrollView>
+        {badTime ? <Text style={[s.hint, { color: c.red }]}>Times need to look like 09:30 or 13:30.</Text> : null}
+        <Pressable onPress={save} disabled={saving || badTime} style={[s.edSave, (saving || badTime) && { opacity: 0.5 }]} accessibilityRole="button">
+          {saving ? <ActivityIndicator color={c.onPrimary} /> : <Text style={s.edSaveTxt}>Save rows</Text>}
+        </Pressable>
+      </View>
+    </Modal>
   );
 }
 
@@ -194,5 +307,18 @@ const styles = (c: any) => StyleSheet.create({
   dayHeadTxt: { fontFamily: fonts.bodySemibold, fontSize: 12, letterSpacing: 0.5, textTransform: 'uppercase', color: c.text },
   cell: { minHeight: 84, paddingHorizontal: 8, paddingTop: 6, paddingBottom: 4, borderBottomWidth: 1, borderBottomColor: c.border },
   cellLabel: { fontFamily: fonts.bodySemibold, fontSize: 9.5, letterSpacing: 0.4, textTransform: 'uppercase', color: c.textMuted },
+  edRoot: { flex: 1, backgroundColor: c.page, paddingHorizontal: 16 },
+  edHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
+  edTitle: { fontFamily: fonts.display, fontSize: 20, color: c.text },
+  edCancel: { fontFamily: fonts.bodySemibold, fontSize: 14, color: c.primary },
+  edActions: { flexDirection: 'row', gap: 8, marginVertical: 10 },
+  edRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: c.border },
+  edMove: { alignItems: 'center' },
+  edTime: { width: 64, borderWidth: 1, borderColor: c.border, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 8, fontFamily: fonts.body, fontSize: 14, color: c.text, backgroundColor: c.background, textAlign: 'center' },
+  edLabel: { flex: 1, minWidth: 0, borderWidth: 1, borderColor: c.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontFamily: fonts.body, fontSize: 14, color: c.text, backgroundColor: c.background },
+  edSheet: { alignItems: 'center' },
+  edSheetTxt: { fontFamily: fonts.body, fontSize: 10, color: c.textMuted },
+  edSave: { marginTop: 10, borderRadius: 12, paddingVertical: 13, alignItems: 'center', backgroundColor: c.primary },
+  edSaveTxt: { fontFamily: fonts.bodyBold, fontSize: 15, color: c.onPrimary },
   cellInput: { flex: 1, minHeight: 56, fontFamily: fonts.body, fontSize: 13, color: c.text, paddingTop: 2, textAlignVertical: 'top' },
 });

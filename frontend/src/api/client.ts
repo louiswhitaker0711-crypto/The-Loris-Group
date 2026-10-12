@@ -896,6 +896,10 @@ export const apiService = {
     api.get(`/weekly-planners/${week}`, { params: user_id ? { user_id } : undefined }),
   upsertWeeklyPlanner: (week: string, body: any) =>
     api.put(`/weekly-planners/${week}`, body),
+  // Your own weekly-sheet rows: order, labels, times, and which show on the sheet.
+  getSheetLayout: () => api.get('/weekly-planners/sheet-layout'),
+  putSheetLayout: (rows: { key: string; label: string; time: string; on_sheet: boolean }[]) =>
+    api.put('/weekly-planners/sheet-layout', { rows }),
   weeklyPlannerStats: (week: string, user_id?: string) =>
     api.get(`/weekly-planners/${week}/stats`, { params: user_id ? { user_id } : undefined }),
   bellsReadout: (week: string, day: number) =>
