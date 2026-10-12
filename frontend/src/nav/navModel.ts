@@ -31,6 +31,8 @@ const ROUTE_TITLES: Record<string, [string, IconName]> = {
   'owneriq-import': ['Add from OwnerIQ', 'git-network-outline'],
   'meeting-notes': ['Meeting notes', 'document-text-outline'],
   'meeting-recaps': ['Meeting recaps', 'albums-outline'],
+  'field-reset': ['6pm reset', 'refresh-circle-outline'],
+  'bells-paste': ['Paste from WhatsApp', 'clipboard-outline'],
   module: ['Module', 'book-outline'],
   leadership: ['My Progress', 'footsteps-outline'],
   bells: ['Bells', 'notifications-outline'],

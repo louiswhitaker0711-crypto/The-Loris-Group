@@ -129,3 +129,52 @@ def test_apply_creates_a_row_without_memberships_and_a_circle_only_day_stays_off
     day = row["days"][1]
     assert day["memberships"] is None
     assert day["status"] == "off"   # a membership alone is not a working sign-up day
+
+
+# ── Plain-text reports (no emojis), Oct 2026 ────────────────────────────────
+
+def _counts(text):
+    return {r.raw_name: (r.over30, r.under30, r.memberships) for r in bp.deterministic_parse(text)}
+
+
+def test_one_person_per_line_with_letters():
+    assert _counts("Mason 2G 1S 1R\nRosa 1G\nJo 3S 2R") == {
+        "Mason": (2, 1, 1), "Rosa": (1, 0, 0), "Jo": (0, 3, 2)}
+
+
+def test_words_with_numbers_after():
+    assert _counts("Mason - Gold 2, Silver 1, Round 1\nRosa: Gold 1 Silver 0 Round 1") == {
+        "Mason": (2, 1, 1), "Rosa": (1, 0, 1)}
+
+
+def test_numbers_before_words_and_letters_before_numbers():
+    assert _counts("Mason 2 gold 1 silver 1 round\nRosa 1 silver") == {"Mason": (2, 1, 1), "Rosa": (0, 1, 0)}
+    assert _counts("Mason G2 S1 R1\nRosa G1") == {"Mason": (2, 1, 1), "Rosa": (1, 0, 0)}
+
+
+def test_blocks_with_one_word_per_sign_up():
+    assert _counts("Mason\nGold\nSilver + Round\nGold\n\nRosa\nS\nG R") == {
+        "Mason": (2, 1, 1), "Rosa": (1, 1, 1)}
+
+
+def test_two_word_names_and_rounds_never_exceed_sign_ups():
+    assert _counts("Mary Jane 1G 1S\nSam Example 1G 3R") == {"Mary Jane": (1, 1, 0), "Sam Example": (1, 0, 1)}
+
+
+def test_a_pasted_day_is_left_alone_by_the_owneriq_sync(monkeypatch):
+    db = _patch(monkeypatch)
+    uid = ObjectId()
+    _run(db.users.insert_one({"_id": uid, "name": "Mason Reed", "office_id": "off-ldn"}))
+    days = [{"over30": None, "under30": None, "memberships": None, "status": "off"} for _ in range(7)]
+    days[2] = {"over30": None, "under30": 3, "memberships": None, "status": "in"}
+    _run(db.bells_entries.insert_one({
+        "id": "row-2", "office_id": "off-ldn", "user_id": str(uid), "user_name": "Mason Reed",
+        "week_ending": "2026-10-04", "days": days, "owneriq_days": {"2": 3},
+    }))
+    req = bp.ApplyRequest(date="2026-09-30", office_id="off-ldn", reps=[
+        bp.ApplyRep(user_id=str(uid), user_name="Mason Reed", over30=2, under30=1, memberships=1),
+    ])
+    _run(bp.apply_bulk(req, _Req()))
+    row = _run(db.bells_entries.find_one({"id": "row-2"}))
+    assert "2" not in (row.get("owneriq_days") or {})
+    assert row["days"][2]["over30"] == 2 and row["days"][2]["under30"] == 1

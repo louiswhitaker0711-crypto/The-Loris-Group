@@ -988,6 +988,15 @@ export const apiService = {
   writeMeetingRecap: (noteId: string) => api.post(`/meeting-notes/${noteId}/recap`, {}, { timeout: 120_000 }),
   publishMeetingRecap: (noteId: string, body: { publish: boolean; notify?: boolean }) => api.post(`/meeting-notes/${noteId}/publish`, body),
   meetingRecapLibrary: (topicId?: string) => api.get('/meeting-notes/library', { params: topicId ? { topic_id: topicId } : {} }),
+  // The 6pm reset
+  getMyFieldReset: () => api.get('/field-reset/today'),
+  saveMyFieldReset: (body: { more_signups: number; kpi: string; focus: string }) => api.put('/field-reset/today', body),
+  getTeamFieldResets: (date?: string) => api.get('/field-reset/team', { params: date ? { date } : {} }),
+  // Bells: paste the WhatsApp report
+  parseBellsWhatsapp: (text: string, officeId?: string) => api.post('/bells/parse-whatsapp', { text, office_id: officeId }),
+  applyBellsBulk: (body: { date: string; office_id: string; reps: Array<{ user_id: string | null; user_name: string; raw_name?: string; over30: number; under30: number; memberships: number }> }) =>
+    api.post('/bells/apply-bulk', body),
+  bellsParseRoster: (officeId?: string) => api.get('/bells/parse-roster', { params: officeId ? { office_id: officeId } : {} }),
   scanWeeklyNotes: (data: { uri: string; name?: string; type?: string }) => {
     const form = new FormData();
     // @ts-ignore — RN FormData accepts {uri,name,type}

@@ -37,6 +37,7 @@ from routes.media import router as media_router
 from routes.training_routes import router as training_router
 from routes.bells import router as bells_router
 from routes.bells_parser import router as bells_parser_router
+from routes.field_reset import router as field_reset_router
 from routes.public_html import router as public_html_router
 from routes.roster_share import router as roster_share_router
 from routes.schedule import router as schedule_router
@@ -133,6 +134,7 @@ api_router.include_router(media_router)
 api_router.include_router(training_router)
 api_router.include_router(bells_router)
 api_router.include_router(bells_parser_router)
+api_router.include_router(field_reset_router)
 api_router.include_router(schedule_router)
 api_router.include_router(agenda_router)
 api_router.include_router(monthly_planners_router)
@@ -873,6 +875,26 @@ async def _startup_work():
                 id=f"primetime_nudge_{_slot_h:02d}{_slot_m:02d}",
                 replace_existing=True,
             )
+
+        # ── The 6pm reset (Mon-Fri 18:00 UK) ──────────────────────────────
+        # Everyone out in the field: how many more, which number, what focus.
+        async def _field_reset_push():
+            try:
+                from routes.field_reset import reset_push_tick
+                sent = await reset_push_tick()
+                logger.info(f"field_reset: pushed {sent} people")
+            except Exception as ex:
+                logger.error(f"6pm reset push failed: {ex}")
+
+        scheduler.add_job(
+            _field_reset_push,
+            "cron",
+            day_of_week="mon-fri",
+            hour=18,
+            minute=0,
+            id="field_reset_6pm",
+            replace_existing=True,
+        )
 
         scheduler.add_job(
             _weekly_planner_nudge,
