@@ -980,10 +980,14 @@ export const apiService = {
     }),
   // Meeting notes and recaps (Schedule → a meeting → Meeting notes).
   getMeetingNote: (blockId: string, date: string) => api.get('/meeting-notes', { params: { block_id: blockId, date } }),
-  saveMeetingNote: (body: { block_id: string; date: string; raw_notes?: string; recap?: string }) => api.put('/meeting-notes', body),
+  saveMeetingNote: (body: { block_id: string; date: string; raw_notes?: string; recap?: string; title?: string; cod_topic_ids?: string[] }) => api.put('/meeting-notes', body),
+  uploadMeetingPdf: (body: { block_id: string; date: string; file_b64: string; file_name: string }) =>
+    api.post('/meeting-notes/pdf', body, { timeout: 120_000 }),
+  removeMeetingPdf: (noteId: string) => api.delete(`/meeting-notes/${noteId}/pdf`),
+  meetingPdf: (noteId: string) => api.get(`/meeting-notes/${noteId}/pdf`, { timeout: 120_000 }),
   writeMeetingRecap: (noteId: string) => api.post(`/meeting-notes/${noteId}/recap`, {}, { timeout: 120_000 }),
   publishMeetingRecap: (noteId: string, body: { publish: boolean; notify?: boolean }) => api.post(`/meeting-notes/${noteId}/publish`, body),
-  meetingRecapLibrary: () => api.get('/meeting-notes/library'),
+  meetingRecapLibrary: (topicId?: string) => api.get('/meeting-notes/library', { params: topicId ? { topic_id: topicId } : {} }),
   scanWeeklyNotes: (data: { uri: string; name?: string; type?: string }) => {
     const form = new FormData();
     // @ts-ignore — RN FormData accepts {uri,name,type}

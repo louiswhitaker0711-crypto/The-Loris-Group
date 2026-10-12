@@ -5,7 +5,7 @@
  *  Meeting recaps. */
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, Pressable, ActivityIndicator, Switch } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
@@ -17,9 +17,13 @@ import { toast } from '../src/utils/toast';
 import { showAlert } from '../src/utils/showAlert';
 import { useKeyboardInset } from '../src/hooks/useKeyboardInset';
 import { APP_LOCALE } from '../src/utils/appTime';
+import { CodTopicPicker, CodTopic } from '../src/components/meeting/CodTopicPicker';
+import { pickPdf, openPdfBase64, reservePdfWindow } from '../src/utils/pdfFile';
+import { codStageLabel } from '../src/components/cod/stageOrder';
 
 type Note = {
-  id: string; block_title: string; date: string; raw_notes?: string; recap: string;
+  id: string; block_title: string; title?: string; date: string; raw_notes?: string; recap: string;
+  cod_topics?: CodTopic[]; pdf?: { file_name: string; file_size: number } | null;
   status: 'draft' | 'published'; published_at?: string | null; created_by_name?: string;
 };
 
@@ -47,12 +51,15 @@ export default function MeetingNotesScreen() {
     enabled: !!blockId && !!date,
   });
   const canWrite = !!q.data?.can_write;
-  const title = q.data?.block?.title || 'Meeting';
+  const router = useRouter();
+  const blockTitle = q.data?.block?.title || 'Meeting';
   const [note, setNote] = useState<Note | null>(null);
   const [notes, setNotes] = useState('');
   const [recap, setRecap] = useState('');
   const [editing, setEditing] = useState(false);
-  const [busy, setBusy] = useState<'' | 'save' | 'scan' | 'ai' | 'publish'>('');
+  const [busy, setBusy] = useState<'' | 'save' | 'scan' | 'ai' | 'publish' | 'pdf'>('');
+  const [title, setTitle] = useState('');
+  const [topicIds, setTopicIds] = useState<string[]>([]);
   const [notify, setNotify] = useState(true);
 
   useEffect(() => {
@@ -60,11 +67,13 @@ export default function MeetingNotesScreen() {
     setNote(n);
     setNotes(n?.raw_notes || '');
     setRecap(n?.recap || '');
+    setTitle(n?.title && n.title !== n.block_title ? n.title : '');
+    setTopicIds((n?.cod_topics || []).map((t) => t.id));
     setEditing(!!q.data?.can_write && !n?.recap);
   }, [q.data]);
 
   const save = async (extra: { raw_notes?: string; recap?: string }) => {
-    const r = await apiService.saveMeetingNote({ block_id: blockId, date, ...extra });
+    const r = await apiService.saveMeetingNote({ block_id: blockId, date, title, cod_topic_ids: topicIds, ...extra });
     setNote(r.data);
     return r.data as Note;
   };
@@ -90,6 +99,40 @@ export default function MeetingNotesScreen() {
       toast.success('Notes read from the photo');
     } catch (e) { showAlert('Could not read the photo', errText(e, 'Try again.')); }
     finally { setBusy(''); }
+  };
+
+  const onPickPdf = async () => {
+    try {
+      const f = await pickPdf();
+      if (!f) return;
+      setBusy('pdf');
+      const r = await apiService.uploadMeetingPdf({ block_id: blockId, date, file_b64: f.b64, file_name: f.name });
+      setNote(r.data);
+      if (!title && r.data?.title && r.data.title !== r.data.block_title) setTitle(r.data.title);
+      toast.success('PDF attached');
+    } catch (e) { showAlert('Could not attach the PDF', errText(e, 'Try again.')); }
+    finally { setBusy(''); }
+  };
+
+  const onRemovePdf = async () => {
+    if (!note) return;
+    setBusy('pdf');
+    try { const r = await apiService.removeMeetingPdf(note.id); setNote(r.data); toast.success('PDF removed'); }
+    catch (e) { showAlert('Could not remove the PDF', errText(e, 'Try again.')); }
+    finally { setBusy(''); }
+  };
+
+  const onOpenPdf = async () => {
+    if (!note?.pdf) return;
+    const reserved = reservePdfWindow();
+    try {
+      const r = await apiService.meetingPdf(note.id);
+      const problem = await openPdfBase64(r.data.file_b64, r.data.file_name || 'meeting.pdf', reserved);
+      if (problem) showAlert('Could not open', problem);
+    } catch (e) {
+      try { reserved?.close(); } catch {}
+      showAlert('Could not open the PDF', errText(e, 'Try again.'));
+    }
   };
 
   const onAi = async () => {
@@ -124,12 +167,34 @@ export default function MeetingNotesScreen() {
   }
 
   const published = note?.status === 'published';
+  const shownTitle = (note?.title && note.title !== blockTitle) ? note.title : blockTitle;
+  const canAi = notes.trim().length >= 20 || !!note?.pdf;
+  const topics = note?.cod_topics || [];
+  const extras = (topics.length > 0 || note?.pdf) ? (
+    <View style={{ gap: 8 }}>
+      {topics.length > 0 && (
+        <View style={s.row}>
+          {topics.map((t) => (
+            <Pressable key={t.id} onPress={() => router.push(`/cod/${t.id}` as any)} style={s.chip} accessibilityRole="link">
+              <Text style={s.chipText}>COD {codStageLabel(t.stage)} · {t.title}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+      {note?.pdf && (
+        <Pressable onPress={onOpenPdf} style={s.ghost} accessibilityRole="button" testID="meeting-open-pdf">
+          <Ionicons name="document-attach-outline" size={15} color={c.primary} />
+          <Text style={s.ghostText} numberOfLines={1}>Open the PDF · {note.pdf.file_name}</Text>
+        </Pressable>
+      )}
+    </View>
+  ) : null;
 
   return (
     <ScrollView style={s.page} contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 40 + kb }]} keyboardShouldPersistTaps="handled">
       <View style={s.head}>
-        <Text style={s.title}>{title}</Text>
-        <Text style={s.muted}>{date ? longDate(date) : ''}{q.data?.block?.start_time ? ` · ${q.data.block.start_time}` : ''}</Text>
+        <Text style={s.title}>{shownTitle}</Text>
+        <Text style={s.muted}>{shownTitle !== blockTitle ? `${blockTitle} · ` : ''}{date ? longDate(date) : ''}{q.data?.block?.start_time ? ` · ${q.data.block.start_time}` : ''}</Text>
         {canWrite && note && (
           <View style={[s.pill, { backgroundColor: published ? c.green : c.surface }]}>
             <Text style={[s.pillText, { color: published ? c.onPrimary : c.textSecondary }]}>{published ? 'Published' : 'Draft'}</Text>
@@ -140,6 +205,7 @@ export default function MeetingNotesScreen() {
       {/* The recap, as everyone reads it */}
       {!!recap && !editing && (
         <View style={s.card}>
+          {extras}
           <MarkdownBody text={recap} colors={c} />
           {canWrite && (
             <Pressable onPress={() => setEditing(true)} style={s.ghost} accessibilityRole="button">
@@ -151,14 +217,51 @@ export default function MeetingNotesScreen() {
       )}
 
       {!recap && !canWrite && (
-        <View style={s.card}><Text style={s.muted}>No recap for this meeting yet.</Text></View>
+        <View style={s.card}>
+          {published && extras}
+          {!published && <Text style={s.muted}>No recap for this meeting yet.</Text>}
+        </View>
       )}
 
       {canWrite && editing && (
         <>
           <View style={s.card}>
-            <Text style={s.h}>1. Your notes</Text>
-            <Text style={s.muted}>Type or paste them, or read them from a photo of handwritten notes. Only Coaches and the Owner see these.</Text>
+            <Text style={s.h}>1. The meeting</Text>
+            <Text style={s.label}>Title</Text>
+            <TextInput
+              value={title}
+              onChangeText={setTitle}
+              placeholder={blockTitle}
+              placeholderTextColor={c.textMuted}
+              style={s.input}
+              maxLength={120}
+            />
+            <Text style={s.label}>PDF</Text>
+            {note?.pdf ? (
+              <View style={s.row}>
+                <Pressable onPress={onOpenPdf} style={s.ghost} accessibilityRole="button">
+                  <Ionicons name="document-attach-outline" size={15} color={c.primary} />
+                  <Text style={s.ghostText} numberOfLines={1}>{note.pdf.file_name}</Text>
+                </Pressable>
+                <Pressable onPress={onPickPdf} disabled={!!busy} style={s.ghost} accessibilityRole="button">
+                  <Text style={s.ghostText}>Replace</Text>
+                </Pressable>
+                <Pressable onPress={onRemovePdf} disabled={!!busy} style={s.ghost} accessibilityRole="button">
+                  <Text style={[s.ghostText, { color: c.textMuted }]}>Remove</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <Pressable onPress={onPickPdf} disabled={!!busy} style={s.ghost} accessibilityRole="button" testID="meeting-add-pdf">
+                {busy === 'pdf' ? <ActivityIndicator size="small" color={c.primary} /> : <Ionicons name="cloud-upload-outline" size={15} color={c.primary} />}
+                <Text style={s.ghostText}>Upload a PDF</Text>
+              </Pressable>
+            )}
+            <Text style={s.muted}>Everyone who can read the recap can open the PDF too.</Text>
+            <Text style={s.label}>COD topics</Text>
+            <Text style={s.muted}>Tap a stage to see its topics, and tick the ones this meeting covered. The recap shows on those topics in the COD.</Text>
+            <CodTopicPicker selected={topicIds} onChange={setTopicIds} />
+            <Text style={[s.label, { marginTop: 6 }]}>Your notes</Text>
+            <Text style={s.muted}>Type or paste them, or read them from a photo of handwritten notes. Optional if you've added a PDF. Only Coaches and the Owner see these.</Text>
             <TextInput
               value={notes}
               onChangeText={setNotes}
@@ -173,7 +276,7 @@ export default function MeetingNotesScreen() {
                 {busy === 'scan' ? <ActivityIndicator size="small" color={c.primary} /> : <Ionicons name="camera-outline" size={15} color={c.primary} />}
                 <Text style={s.ghostText}>Read a photo</Text>
               </Pressable>
-              <Pressable onPress={onAi} disabled={!!busy || notes.trim().length < 20} style={[s.btn, (busy || notes.trim().length < 20) && { opacity: 0.5 }]} accessibilityRole="button">
+              <Pressable onPress={onAi} disabled={!!busy || !canAi} style={[s.btn, (busy || !canAi) && { opacity: 0.5 }]} accessibilityRole="button">
                 {busy === 'ai' ? <ActivityIndicator size="small" color={c.onPrimary} /> : <Ionicons name="sparkles-outline" size={15} color={c.onPrimary} />}
                 <Text style={s.btnText}>Write the recap with AI</Text>
               </Pressable>
@@ -247,5 +350,7 @@ const styles = (c: any) => StyleSheet.create({
   btn: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 14, paddingVertical: 11, borderRadius: 12, backgroundColor: c.primary },
   btnText: { fontFamily: fonts.bodyBold, fontSize: 14, color: c.onPrimary },
   ghost: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: c.border, alignSelf: 'flex-start' },
-  ghostText: { fontFamily: fonts.bodySemibold, fontSize: 13.5, color: c.primary },
+  ghostText: { fontFamily: fonts.bodySemibold, fontSize: 13.5, color: c.primary, flexShrink: 1 },
+  chip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface },
+  chipText: { fontFamily: fonts.bodySemibold, fontSize: 12.5, color: c.text },
 });
