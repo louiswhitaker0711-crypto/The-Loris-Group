@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { showAlert } from '../../utils/showAlert';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Platform, KeyboardAvoidingView, Modal, Pressable,  } from 'react-native';
+import { DAY_STATUS_LABEL, DAY_STATUS_SHORT, statusSquare } from '../../utils/dayStatus';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import { lightColors } from '../../theme/ThemeContext';
@@ -23,7 +24,8 @@ export default function DayBreakdownModal({ dayIdx, entries, weekEnding, onClose
   const [editMode, setEditMode] = useState(false);
   const editLock = useBellsEditLock();
   const { user } = useAuth();
-  const isAdminUser = user?.role === 'admin';
+  // Not scheduled is everyone's own call (self-employed): no approval step.
+  const isAdminUser = true || user?.role === 'admin';
 
   // AB request sheet (non-admins). Absences are the office owner's call, so
   // tapping AB here fires a REQUEST rather than writing AB to the sheet — the
@@ -178,14 +180,14 @@ export default function DayBreakdownModal({ dayIdx, entries, weekEnding, onClose
           return;
         }
       }
-      const willClear = raw === 'off' || raw === 'nc' || raw === 'ab';
+      const willClear = raw === 'off' || raw === 'nc' || raw === 'ab' || raw === 'ns';
       const d = target?.dayValue;
       const hasData = !!d && (
         (d.over30 != null && d.over30 > 0) ||
         (d.under30 != null && d.under30 > 0)
       );
       if (willClear && hasData && d) {
-        const label = raw === 'off' ? 'Off' : raw === 'nc' ? 'NC' : 'AB';
+        const label = raw === 'off' ? 'Off' : raw === 'nc' ? 'NC' : DAY_STATUS_LABEL[String(raw)] || String(raw);
         const total = (d.over30 || 0) + (d.under30 || 0);
         showAlert(
           `Mark as ${label}?`,
@@ -211,7 +213,7 @@ export default function DayBreakdownModal({ dayIdx, entries, weekEnding, onClose
       const next: Day = { ...p.dayValue };
       if (field === 'status') {
         next.status = String(raw);
-        if (next.status === 'off' || next.status === 'nc' || next.status === 'ab') {
+        if (next.status === 'off' || next.status === 'nc' || next.status === 'ab' || next.status === 'ns') {
           next.over30 = null; next.under30 = null; next.memberships = null;
         }
       } else {
@@ -431,15 +433,17 @@ function ReadOnlyPersonDayRow({ name, day, total }: { name: string; day: Day; to
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const inStatus = isInDay(day);
-  const badgeColor = day.status === 'off' ? colors.textMuted : day.status === 'ab' ? '#dc2626' : day.status === 'nc' ? '#6b7280' : day.status === 'rt' ? '#d97706' : inStatus && total > 0 ? colors.primary : colors.textMuted;
-  const badgeText = day.status === 'off' ? 'Off' : day.status === 'ab' ? 'AB' : day.status === 'nc' ? 'NC' : day.status === 'rt' ? 'RT' : `${total}`;
+  const sq = statusSquare(day.status, false);
+  const badgeColor = sq ? sq.bg : day.status === 'off' ? colors.textMuted : day.status === 'nc' ? '#6b7280' : day.status === 'rt' ? '#d97706' : inStatus && total > 0 ? colors.primary : colors.textMuted;
+  const badgeText = sq ? DAY_STATUS_SHORT[day.status] : day.status === 'off' ? 'Off' : day.status === 'nc' ? 'NC' : day.status === 'rt' ? 'RT' : `${total}`;
   return (
     <View style={styles.personRow}>
       <View style={{ flex: 1 }}>
         <Text style={styles.personName}>{name}</Text>
         <Text style={styles.personMeta}>
           {day.status === 'off' ? 'Day off' :
-            day.status === 'ab' ? 'Absent' :
+            day.status === 'ab' ? 'Not scheduled' :
+            day.status === 'ns' ? 'No show' :
             day.status === 'nc' ? 'Not counted' :
             day.status === 'rt' ? `Retrain${(day.over30 || 0) + (day.under30 || 0) > 0 ? ` · ${signUps((day.over30 || 0) + (day.under30 || 0))} (not scored)` : ''}` :
             `${TIER.over30.short}: ${day.over30 ?? 0} · ${TIER.under30.short}: ${day.under30 ?? 0} · ${TIER.memberships.short}: ${day.memberships ?? 0}`
@@ -447,7 +451,7 @@ function ReadOnlyPersonDayRow({ name, day, total }: { name: string; day: Day; to
         </Text>
       </View>
       <View style={[styles.personBadge, { backgroundColor: badgeColor }]}>
-        <Text style={[styles.personBadgeText, badgeColor === colors.primary && { color: colors.onPrimary }]}>{badgeText}</Text>
+        <Text style={[styles.personBadgeText, badgeColor === colors.primary && { color: colors.onPrimary }, sq && { color: sq.fg }]}>{badgeText}</Text>
       </View>
     </View>
   );
@@ -466,8 +470,9 @@ function EditablePersonDayRow({ name, role, dayName, day, saveState, onChange }:
   const nc = day.status === 'nc';
   const rt = day.status === 'rt';
   const ab = day.status === 'ab';
+  const ns = day.status === 'ns';
   const total = inStatus ? ((day.over30 || 0) + (day.under30 || 0)) : 0;
-  const inputsDisabled = off || nc;
+  const inputsDisabled = off || nc || ab || ns;
   const roleLabel = role === 'trainee' ? 'BA' : role === 'leader' ? 'C' : '';
 
   return (
@@ -480,8 +485,8 @@ function EditablePersonDayRow({ name, role, dayName, day, saveState, onChange }:
           {saveState === 'saved' && <Ionicons name="checkmark-circle" size={14} color={colors.primary} />}
           {saveState === 'error' && <Ionicons name="alert-circle" size={14} color="#b91c1c" />}
         </View>
-        <View style={[styles.editRowTotal, { backgroundColor: off ? colors.textMuted : nc ? '#6b7280' : rt ? '#d97706' : total > 0 ? colors.primary : colors.borderDark }]}>
-          <Text style={[styles.editRowTotalText, !off && !nc && !rt && total > 0 && { color: colors.onPrimary }]}>{off ? 'Off' : nc ? 'NC' : rt ? 'RT' : total}</Text>
+        <View style={[styles.editRowTotal, { backgroundColor: statusSquare(day.status, false)?.bg || (off ? colors.textMuted : nc ? '#6b7280' : rt ? '#d97706' : total > 0 ? colors.primary : colors.borderDark) }]}>
+          <Text style={[styles.editRowTotalText, !off && !nc && !rt && total > 0 && { color: colors.onPrimary }, (ab || ns) && { color: statusSquare(day.status, false)!.fg }]}>{ab || ns ? DAY_STATUS_SHORT[day.status] : off ? 'Off' : nc ? 'NC' : rt ? 'RT' : total}</Text>
         </View>
       </View>
 
@@ -494,7 +499,8 @@ function EditablePersonDayRow({ name, role, dayName, day, saveState, onChange }:
       <View style={styles.editStatusRow}>
         <EditStatusChip active={inStatus} label="In" onPress={() => onChange('status', 'in')} />
         <EditStatusChip active={off} label="Off" onPress={() => onChange('status', off ? 'in' : 'off')} />
-        <EditStatusChip active={ab} label="AB" onPress={() => onChange('status', ab ? 'in' : 'ab')} />
+        <EditStatusChip active={ab} label="Not scheduled" onPress={() => onChange('status', ab ? 'in' : 'ab')} />
+        <EditStatusChip active={ns} label="No show" onPress={() => onChange('status', ns ? 'in' : 'ns')} />
         <EditStatusChip active={rt} label="RT" onPress={() => onChange('status', rt ? 'in' : 'rt')} />
         <EditStatusChip active={nc} label="NC" onPress={() => onChange('status', nc ? 'in' : 'nc')} />
       </View>

@@ -14,7 +14,6 @@ import * as Clipboard from 'expo-clipboard';
 import { useColors, useTheme, lightColors, fonts, GRADIENT } from '../../src/theme/ThemeContext';
 import { apiService } from '../../src/api/client';
 import { useAuth } from '../../src/auth/AuthContext';
-import { useActiveOffice } from '../../src/office/ActiveOfficeContext';
 import { ChoiceSheet, ChoiceOption } from '../../src/components/ChoiceSheet';
 import PressableScale from '../../src/components/ui/PressableScale';
 import { Skeleton } from '../../src/components/ui/Skeleton';
@@ -82,15 +81,6 @@ export default function AdminScreen() {
     queryKey: ['offices'],
     queryFn: () => apiService.getOffices().then(r => r.data),
     enabled: !!isSuperAdmin,
-  });
-  // Pending crew-absence requests from leaders' weekly planners
-  const { officeId: activeOfficeId } = useActiveOffice();
-  // Scoped to the same office the approvals screen shows, so the badge count
-  // always matches what you'll find when you tap through.
-  const { data: absPending } = useQuery({
-    queryKey: ['absence-pending-count', activeOfficeId || 'home'],
-    queryFn: () => apiService.absenceRequestsPendingCount(activeOfficeId).then((r) => r.data),
-    refetchInterval: 60_000,
   });
 
 
@@ -402,7 +392,6 @@ export default function AdminScreen() {
   type Tool = { key: string; icon: React.ComponentProps<typeof Ionicons>['name']; title: string; sub: string; onPress: () => void; badge?: number; testID?: string };
   const tools: Tool[] = [
     { key: 'review', icon: 'podium-outline', title: 'Monday Review', sub: "Last week's numbers and plans", onPress: () => router.push('/weekly-review' as any) },
-    { key: 'absences', icon: 'calendar-outline', title: 'Absence Approvals', sub: 'Approve or decline absences', badge: absPending?.pending || 0, onPress: () => router.push('/absence-approvals' as any) },
     { key: 'goals', icon: 'flag-outline', title: 'Goal Planner', sub: 'KPI and Rock suggestions', onPress: () => router.push('/planner-goal-menu') },
     usesExternalBadgeMaker
       ? { key: 'badges', icon: 'ribbon-outline', title: 'Badges', sub: 'Opens your badge maker in a new tab', testID: 'admin-badges', onPress: openBadgeMaker }

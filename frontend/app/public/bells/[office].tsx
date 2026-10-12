@@ -403,7 +403,8 @@ function TableView({ entries }: { entries: Entry[] }) {
   const cellForDay = (d: Day): { text: string; color: string } => {
     if (!d) return { text: '—', color: '#6a7b90' };
     if (d.status === 'off') return { text: '—', color: '#6a7b90' };
-    if (d.status === 'ab') return { text: 'ab', color: '#dc2626' };
+    if (d.status === 'ab') return { text: 'NS', color: '#64748b' };
+    if (d.status === 'ns') return { text: 'X', color: '#111111' };
     if (d.status === 'nc') return { text: 'nc', color: '#6b7280' };
     if (d.status === 'pc') return { text: 'pc', color: '#0891b2' };
     const tot = (d.over30 || 0) + (d.under30 || 0);

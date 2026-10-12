@@ -26,7 +26,7 @@ const DAY_LABEL: Record<string, string> = {
   monday: 'M', tuesday: 'T', wednesday: 'W', thursday: 'T', friday: 'F', saturday: 'S', sunday: 'S',
 };
 const STATUS_LABEL: Record<string, string> = {
-  present: 'In', not_present: 'Not in', absent: 'Absent', not_set: 'Not set', na: '—',
+  present: 'In', not_present: 'Not scheduled', absent: 'No show', not_set: 'Not set', na: '—',
 };
 const TEAM_PREVIEW = 6;
 
