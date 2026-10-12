@@ -390,6 +390,14 @@ async def _startup_work():
     except Exception:
         logger.exception("content fixes sweep failed (continuing)")
 
+    # The Owner's Law of Averages (120 / 70 / 25 pitched / 15 / 4+): once per
+    # database, over Campaign Knowledge, impacts, the BA Academy and targets.
+    try:
+        from core.loa_targets import run_loa_update
+        await run_loa_update(db)
+    except Exception:
+        logger.exception("Law of Averages update failed (continuing)")
+
     await db.users.create_index("email", unique=True)
     # Primetime reads the whole office's week on every Home render, and writes
     # upsert by (office, week, day, person). One compound index serves both.

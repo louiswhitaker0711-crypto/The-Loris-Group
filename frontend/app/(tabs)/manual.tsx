@@ -568,7 +568,7 @@ export default function ManualScreen() {
     // still be cleared); the field itself stays in the data.
     const KPI_FIELDS = [
       { key: 'target_introductions', label: 'Spoken' },
-      { key: 'target_presentations', label: 'Presented' },
+      { key: 'target_presentations', label: 'Pitched' },
       { key: 'target_short_stories', label: 'Short Stories' },
       { key: 'target_closes', label: 'Closed' },
       { key: 'target_sales', label: 'Sign-ups' },
@@ -852,7 +852,7 @@ export default function ManualScreen() {
                 <View style={styles.section}>
                   <SectionHead style={styles.sectionHead}>KPI Targets</SectionHead>
                   <View style={styles.targetsGrid}>
-                    {[{ l: 'Spoken', v: dayTarget.target_introductions }, { l: 'Presented', v: dayTarget.target_presentations }, { l: 'Short Stories', v: dayTarget.target_short_stories }, { l: 'Closed', v: dayTarget.target_closes }, { l: 'Sign-ups', v: dayTarget.target_sales }].filter(t => t.v > 0).map((t, ti) => (
+                    {[{ l: 'Spoken', v: dayTarget.target_introductions }, { l: 'Pitched', v: dayTarget.target_presentations }, { l: 'Short Stories', v: dayTarget.target_short_stories }, { l: 'Closed', v: dayTarget.target_closes }, { l: 'Sign-ups', v: dayTarget.target_sales }].filter(t => t.v > 0).map((t, ti) => (
                       <DepthCard key={t.l} sheen={false} index={ti} style={styles.targetItem}>
                         <StatBlock value={t.v} label={t.l} size={26} align="left" />
                       </DepthCard>

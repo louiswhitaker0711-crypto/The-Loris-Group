@@ -31,7 +31,7 @@ import { BrandLoader } from '../src/components/ui/BrandLoader';
 import { useTabBarClearance } from '../src/customization/CustomTabBar';
 import { Aurora } from '../src/components/ui/Aurora';
 import { formatMoney } from '../src/utils/appTime';
-import { APP_NAME, ORG_NAME } from '../src/theme/brand';
+import { ORG_NAME } from '../src/theme/brand';
 import {
   isoAddDays, lastWeekEndingISO as lastSundayISO, prettyWeekRange, prettyDate,
   posterWeekEnding, todayLong, POSTER, colorForName, initialsOf,
@@ -229,7 +229,7 @@ export default function BulletinScreen() {
             <Aurora />
             <Image source={{ uri: '/api/logo.png' }} style={styles.bannerLogo} resizeMode="contain" />
             <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={styles.bannerLabel}>{APP_NAME} · Weekly Bulletin</Text>
+              <Text style={styles.bannerLabel}>{ORG_NAME} Bulletin</Text>
               <Text style={styles.bannerWeek}>w/e {prettyDate(weekEnding)} · All offices</Text>
             </View>
             <Ionicons name="trophy" size={28} color={POSTER.lime} />

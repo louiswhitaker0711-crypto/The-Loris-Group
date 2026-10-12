@@ -82,7 +82,7 @@ const SKILLS = [
 const KPIS: Array<[string, string, string, number]> = [
   // [field, label, targetField, max]
   ['kpi_introductions', 'Spoken', 'target_introductions', 200],
-  ['kpi_presentations', 'Presented', 'target_presentations', 60],
+  ['kpi_presentations', 'Pitched', 'target_presentations', 60],
   ['kpi_short_stories', 'Short Stories', 'target_short_stories', 30],
   ['kpi_closes', 'Closed', 'target_closes', 50],
   ['kpi_sales', 'Sign-ups', 'target_sales', 20],

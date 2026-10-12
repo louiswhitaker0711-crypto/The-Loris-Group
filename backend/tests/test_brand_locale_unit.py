@@ -43,12 +43,12 @@ def _no_old_brand(text: str):
         assert word not in text, word
 
 
-def test_defaults_are_vertex_and_uk():
+def test_defaults_are_the_loris_group_and_uk():
     # Only the defaults are pinned — a deployment may override any of them.
     if not os.environ.get("APP_NAME"):
-        assert brand.APP_NAME == "Vertex Hub"
+        assert brand.APP_NAME == "The Loris Hub"
     if not os.environ.get("ORG_NAME"):
-        assert brand.ORG_NAME == "Vertex Organisation"
+        assert brand.ORG_NAME == "The Loris Group"
     if not os.environ.get("APP_TIMEZONE"):
         assert APP_TZ_NAME == "Europe/London"
 

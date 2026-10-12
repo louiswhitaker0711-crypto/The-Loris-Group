@@ -300,7 +300,7 @@
 "topic": "Daily Funnel Targets",
 "old_wgll": "Teach 90 doors x 3 laps, 45 spoken to, 15 pitches, 12 closes, 10 on phone, 4-8 signups.",
 "old_eo": "Understands what a fully trained day should look like.",
-"new_wgll": "Show a full BA day from the Weekly K.P.I Tracker — doors 120–140, spoken 80–90, presented 20–25, closed 15–20, flow 5–7, sign-ups 3–5 — then today's shadow day goals: 20 introductions, 10 presentations and 2 closes of their own. Check the count at lunch, not just end of day.",
+"new_wgll": "Show a full BA day from the Weekly K.P.I Tracker — doors 120, spoken 70, pitched 25, closed 15, flow 5–7, sign-ups 4+ — then today's shadow day goals: 20 introductions, 10 presentations and 2 closes of their own. Check the count at lunch, not just end of day.",
 "new_eo": "You know what a full day looks like — and your shadow day goals: 20 introductions, 10 presentations, 2 closes, tracked by lunch."
 },
 {
@@ -468,7 +468,7 @@
 "topic": "Close",
 "old_wgll": "Push stronger closes against the day targets.",
 "old_eo": "Shows improved close timing and commitment language.",
-"new_wgll": "Push Closing with Clarity against today's targets — 15 closes, 3 sign-ups: be direct and clear, slow down and speak up, eye contact and gratitude, ask confidently for the long term ('Can we count on your support as well?'), then tell them what happens next. Count every ask and debrief each one at the corner.",
+"new_wgll": "Push Closing with Clarity against today's targets — 15 closes, 4 sign-ups: be direct and clear, slow down and speak up, eye contact and gratitude, ask confidently for the long term ('Can we count on your support as well?'), then tell them what happens next. Count every ask and debrief each one at the corner.",
 "new_eo": "You ask clearly and confidently — long term, no mumbling or trailing off — 15 times today."
 },
 {
@@ -532,7 +532,7 @@
 "topic": "Close",
 "old_wgll": "Close should be confident and well-timed.",
 "old_eo": "Closes effectively and independently.",
-"new_wgll": "Assess close timing against today's targets — 15 closes, 3 sign-ups: are they reading the right moment, or closing on a clock? The difference is the whole skill.",
+"new_wgll": "Assess close timing against today's targets — 15 closes, 4 sign-ups: are they reading the right moment, or closing on a clock? The difference is the whole skill.",
 "new_eo": "You read the right moment and close on it — confident, well-timed, on your own."
 },
 {
@@ -620,8 +620,8 @@
 "topic": "Daily KPI Standard",
 "old_wgll": "Benchmark: 40+ pitches, 3+ deals, 80%+ valid-sale rate for the day.",
 "old_eo": "Meets or exceeds the Day 5 KPI benchmark.",
-"new_wgll": "Hold the daily minimum from the Weekly K.P.I Tracker: 120 doors, 80 spoken, 20 presented, 15 closed, 5 flow, 3 sign-ups — with quality protected, every donor rehashed and ready for the Welcome Call. Have them check the count at lunch and at 3pm — a gap you catch at noon is coachable; a gap you find at 7pm is just a miss.",
-"new_eo": "You hit the daily minimum — 80 spoken, 20 presented, 15 closed, 3 sign-ups, every one rehashed — and you track it yourself through the day."
+"new_wgll": "Hold the daily minimum from the Weekly K.P.I Tracker: 120 doors, 70 spoken, 25 pitched, 15 closed, 5 flow, 4 sign-ups — with quality protected, every donor rehashed and ready for the Welcome Call. Have them check the count at lunch and at 3pm — a gap you catch at noon is coachable; a gap you find at 7pm is just a miss.",
+"new_eo": "You hit the daily minimum — 70 spoken, 25 pitched, 15 closed, 4 sign-ups, every one rehashed — and you track it yourself through the day."
 },
 {
 "day_number": 7,
@@ -652,8 +652,8 @@
 "topic": "Replicate the Day",
 "old_wgll": "Hit the Day 5 KPI benchmark again — not a one-off — proving the performance is repeatable.",
 "old_eo": "Hits 40+ pitches, 3+ deals for a second consecutive day.",
-"new_wgll": "The proof of repeatability: hit the daily minimum again — 80 spoken, 20 presented, 15 closed, 3 sign-ups — back to back. One good day is luck. Two in a row is a pattern.",
-"new_eo": "You hit the daily minimum two days running — 80 spoken, 20 presented, 15 closed, 3 sign-ups — proving yesterday wasn't luck."
+"new_wgll": "The proof of repeatability: hit the daily minimum again — 70 spoken, 25 pitched, 15 closed, 4 sign-ups — back to back. One good day is luck. Two in a row is a pattern.",
+"new_eo": "You hit the daily minimum two days running — 70 spoken, 25 pitched, 15 closed, 4 sign-ups — proving yesterday wasn't luck."
 },
 {
 "day_number": 8,

@@ -153,7 +153,7 @@ export default function DayDetailScreen() {
     ? [
         // The owner's Field IQ names (introductions = Spoken, etc.).
         ['spoken', dayTarget?.target_introductions],
-        ['presented', dayTarget?.target_presentations],
+        ['pitched', dayTarget?.target_presentations],
         ['sign-ups', dayTarget?.target_sales],
       ]
     : [];
