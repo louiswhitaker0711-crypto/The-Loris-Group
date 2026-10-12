@@ -178,3 +178,17 @@ def test_a_pasted_day_is_left_alone_by_the_owneriq_sync(monkeypatch):
     row = _run(db.bells_entries.find_one({"id": "row-2"}))
     assert "2" not in (row.get("owneriq_days") or {})
     assert row["days"][2]["over30"] == 2 and row["days"][2]["under30"] == 1
+
+
+def test_the_office_report_format_with_diamonds_bold_names_and_a_title():
+    # The office's real layout (placeholder names): a dated title, *bold*
+    # names, one line per sign-up; 💎 counts as Gold; the digit and 📸 after
+    # the medal are notes, not counts.
+    report = (
+        "*Example Team* 12/10\n\n"
+        "*Alex* 2\n🥇2📸\n🥈3📸\n\n"
+        "*Sam* 5\n💎2📸⭕️\n🥇1📸\n🥈3📸\n🥈3📸⭕️\n💎2📸⭕️\n\n"
+        "*jo* 2\n🥇2📸\n💎3📸⭕️\n \n"
+        "*Kit* 1\n💎3📸\n"
+    )
+    assert _counts(report) == {"Alex": (1, 1, 0), "Sam": (3, 2, 3), "jo": (2, 0, 1), "Kit": (1, 0, 0)}

@@ -90,7 +90,7 @@ class ParseResponse(BaseModel):
 # Deterministic emoji parser
 # ─────────────────────────────────────────────────────────────────────────────
 
-GOLD_RX = re.compile(r"\U0001F947")          # 🥇 = Gold sign-up (over30)
+GOLD_RX = re.compile(r"[\U0001F947\U0001F48E]")  # 🥇 (or 💎, the office's top orders) = Gold sign-up (over30)
 SILVER_RX = re.compile(r"\U0001F948")        # 🥈 = Silver sign-up (under30)
 MEMBER_RX = re.compile(r"[\u2B55\U0001F534]")  # ⭕️ (or 🔴) = that sign-up took The Round
 ANY_EMOJI_RX = re.compile(
@@ -99,7 +99,11 @@ ANY_EMOJI_RX = re.compile(
 
 
 def _strip_emojis(s: str) -> str:
-    return ANY_EMOJI_RX.sub("", s).strip()
+    # Also drops WhatsApp's *bold*, _italic_ and ~strike~ markers.
+    return re.sub(r"[*_~]", "", ANY_EMOJI_RX.sub("", s)).strip()
+
+
+_DATE_RX = re.compile(r"\b\d{1,2}[/.\-]\d{1,2}(?:[/.\-]\d{2,4})?\b")
 
 
 def _has_sale_emoji(line: str) -> bool:
@@ -267,6 +271,8 @@ def deterministic_parse(text: str) -> List[ParsedRep]:
         )
         confidence = 1.0 if noise == 0 else 0.7
 
+        if sales_count == 0 and len(block) == 1 and _DATE_RX.search(block[0]):
+            continue  # a title line like "*Team* 12/10", not a person
         reps.append(ParsedRep(
             raw_name=name,
             over30=over30,
