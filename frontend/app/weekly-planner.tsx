@@ -18,7 +18,7 @@ import { Breathe } from '../src/components/ui/Breathe';
 import PressableScale from '../src/components/ui/PressableScale';
 import PlannerLoaReview from '../src/components/planner/PlannerLoaReview';
 import PrimetimeDayBlock from '../src/components/planner/PrimetimeDayBlock';
-import WeeklySheet, { printWeeklySheet, dayOrder, DayTimeInput, type SheetRow } from '../src/components/planner/WeeklySheet';
+import { RowEditor, dayOrder, DayTimeInput, type SheetRow } from '../src/components/planner/DayLayout';
 import { planningTarget } from '../src/utils/officeDay';
 import { useAuth } from '../src/auth/AuthContext';
 import { apiService } from '../src/api/client';
@@ -355,7 +355,7 @@ export default function WeeklyPlannerScreen() {
   // ?day=0..5 (e.g. from the Home hero) opens straight onto that day's page;
   // otherwise open on the day being planned, so after 6pm you land on
   // tomorrow ready to fill it in.
-  const [tab, setTab] = useState<'week' | 'sheet' | number | 'notes'>(() => {
+  const [tab, setTab] = useState<'week' | number | 'notes'>(() => {
     const d = parseInt(String(params.day ?? ''), 10);
     if (Number.isFinite(d) && d >= 0 && d <= 5) return d;
     if (targetUserId) return 'week';
@@ -387,7 +387,8 @@ export default function WeeklyPlannerScreen() {
     enabled: showWeekTab,
   });
 
-  // The viewer's own row order and times (the Sheet tab and the day pages).
+  // The viewer's own box order and usual times on the day pages.
+  const [editingRows, setEditingRows] = useState(false);
   const layoutQ = useQuery({
     queryKey: ['sheet-layout'],
     queryFn: () => apiService.getSheetLayout().then((r) => r.data as { rows: SheetRow[] }),
@@ -400,7 +401,7 @@ export default function WeeklyPlannerScreen() {
   // turns out to be a trainee (e.g. a leader opening a trainee's plan via
   // ?user_id=), correct onto a real tab instead of showing an empty Week page.
   useEffect(() => {
-    if (!showWeekTab && (tab === 'week' || tab === 'sheet')) {
+    if (!showWeekTab && tab === 'week') {
       const wd = (new Date().getDay() + 6) % 7;
       setTab(wd <= 5 ? wd : 'notes');
     }
@@ -815,11 +816,6 @@ export default function WeeklyPlannerScreen() {
           {showWeekTab && (
             <PressableScale style={[styles.tabChip, tab === 'week' && styles.tabChipActive]} onPress={() => setTab('week')}>
               <Text style={[styles.tabChipText, tab === 'week' && styles.tabChipTextActive]}>Week</Text>
-            </PressableScale>
-          )}
-          {showWeekTab && (
-            <PressableScale style={[styles.tabChip, tab === 'sheet' && styles.tabChipActive]} onPress={() => setTab('sheet')}>
-              <Text style={[styles.tabChipText, tab === 'sheet' && styles.tabChipTextActive]}>Sheet</Text>
             </PressableScale>
           )}
           {DAY_LABELS.map((d, i) => (
@@ -1264,7 +1260,23 @@ export default function WeeklyPlannerScreen() {
                     return renderDayCard({ ...f, label: time ? `${time} · ${row.label}` : row.label }, tab);
                   })}
                 </View>
-                <Text style={styles.layoutHint}>The clock on a box sets a time for this day only and puts it on your Schedule. Order, names, default times and which boxes show: Sheet → Edit rows.</Text>
+                <View style={styles.layoutRow}>
+                  <Text style={[styles.layoutHint, { flex: 1 }]}>The clock on a box sets a time for this day only and puts it on your Schedule.</Text>
+                  <TouchableOpacity onPress={() => setEditingRows(true)} style={styles.layoutBtn} accessibilityRole="button" testID="planner-edit-rows">
+                    <Ionicons name="reorder-four-outline" size={14} color={colors.primary} />
+                    <Text style={styles.layoutBtnText}>Edit rows</Text>
+                  </TouchableOpacity>
+                </View>
+                {editingRows && (
+                  <RowEditor
+                    layout={layoutRows}
+                    onClose={() => setEditingRows(false)}
+                    onSave={async (rows) => {
+                      const res = await apiService.putSheetLayout(rows);
+                      queryClient.setQueryData(['sheet-layout'], res.data);
+                    }}
+                  />
+                )}
               </>
             ) : (
               <>
@@ -1328,24 +1340,6 @@ export default function WeeklyPlannerScreen() {
               </>
             )}
           </>
-        )}
-
-        {tab === 'sheet' && wizard === null && (
-          <WeeklySheet
-            review={draft.review}
-            days={draft.days}
-            canEdit={canEdit}
-            onReview={(patch) => setReview(patch as Partial<Review>)}
-            onDay={setDayField}
-            times={draft.times || {}}
-            onTime={setDayTime}
-            layout={layoutRows}
-            onSaveLayout={async (rows) => {
-              const res = await apiService.putSheetLayout(rows);
-              queryClient.setQueryData(['sheet-layout'], res.data);
-            }}
-            onPrint={() => printWeeklySheet(draft.review, draft.days, week, targetName, layoutRows, draft.times || {})}
-          />
         )}
 
         {tab === 'notes' && (
@@ -1756,6 +1750,9 @@ const createStyles = (colors: any) => StyleSheet.create({
   shell: { width: '100%', maxWidth: 1240, alignSelf: 'center' },
   kicker: { marginTop: 8, marginBottom: 10 },
   layoutHint: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, marginTop: 2, marginBottom: 8 },
+  layoutRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
+  layoutBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, minHeight: 32, borderRadius: 9, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background },
+  layoutBtnText: { fontFamily: fonts.bodySemibold, fontSize: 12.5, color: colors.primary },
   cardGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 12 },
   cardGrow: { flexGrow: 1, flexBasis: 380, minWidth: 260, marginBottom: 0 },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, marginTop: 4 },
