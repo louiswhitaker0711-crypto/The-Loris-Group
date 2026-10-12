@@ -16,7 +16,7 @@
  * No ribbons, coins, glows or gradients. Copy, queries, handlers and
  * navigation are unchanged.
  */
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   RefreshControl,
@@ -33,7 +33,7 @@ import { CodTopicList } from '../src/components/cod/CodTopicList';
 import { SalesPathPanel } from '../src/components/salespath/SalesPathPanel';
 import { TwoLadders, salesNextFrom, salesStepsFrom, LadderStep } from '../src/components/salespath/TwoLadders';
 import { StageVideo, useCodVideos } from '../src/components/cod/StageVideo';
-import { COD_STAGE_ORDER, codStageIsBefore, codStageShortName } from '../src/components/cod/stageOrder';
+import { COD_STAGE_ORDER, codStageIsBefore, codStageShortName, codStageLabel, furthestCodStage } from '../src/components/cod/stageOrder';
 import { usePullToRefresh } from '../src/components/ui/PullRefresh';
 import { useParallaxScroll } from '../src/components/ui/Parallax';
 import { DepthCard } from '../src/components/ui/DepthCard';
@@ -217,6 +217,14 @@ export default function LeadershipScreen() {
     enabled: isAuthorized,
   });
   const codVideosQ = useCodVideos();
+  // Open on the furthest stage this person has (by OwnerIQ stage), once.
+  const pickedStage = React.useRef(false);
+  useEffect(() => {
+    const ss: any = stageStatusQ.data;
+    if (!ss || pickedStage.current) return;
+    pickedStage.current = true;
+    setStage(furthestCodStage(COD_STAGE_ORDER.filter((n) => n === 1 || ss[`stage_${n}_unlocked`]), 1) as 1 | 2 | 3 | 4 | 5 | 6);
+  }, [stageStatusQ.data]);
   const checksQ = useQuery({
     queryKey: ['cod-checks'],
     queryFn: () => apiService.getPendingChecks().then((r) => r.data.checks),
@@ -311,7 +319,7 @@ export default function LeadershipScreen() {
           : true;
   const visibleStages = COD_STAGE_ORDER.filter(stageVisible) as Array<1 | 2 | 3 | 4 | 5 | 6>;
   const stageItems = visibleStages.map((s) => {
-    const locked = s === 5 && !stageStatusQ.data?.stage_5_unlocked;
+    const locked = s !== 1 && !!stageStatusQ.data && !(stageStatusQ.data as any)[`stage_${s}_unlocked`];
     return { key: String(s), label: STAGE_META[s].toggle, locked };
   });
 
@@ -348,7 +356,7 @@ export default function LeadershipScreen() {
               key: `d${n}`,
               label: codStageShortName(n),
               state: n === stage ? 'current'
-                : (n === 3 && !stageStatusQ.data?.stage_3_unlocked) || (n === 5 && !stageStatusQ.data?.stage_5_unlocked)
+                : n !== 1 && !(stageStatusQ.data as any)?.[`stage_${n}_unlocked`]
                   ? 'locked'
                   : codStageIsBefore(n, stage) ? 'done' : 'upcoming',
             }));
@@ -518,37 +526,20 @@ export default function LeadershipScreen() {
             from the My Team tab (tree view). The all-stages drill-in screen is
             wired into every tree-row tap. */}
 
-        {/* Stage 3 soft-locked banner — leaders without a junior leader see a
-            teaser explaining what unlocks Stage 3 fully. They CAN still
-            self-rate Knowledge & Skill on each module while locked. Only
-            shown when viewing Stage 3 (Stage 2 has no equivalent lock). */}
-        {stage === 3 && stageStatusQ.data && !stageStatusQ.data.stage_3_unlocked && (
+        {/* Locked-stage banner: stages open by OwnerIQ stage (backend
+            core/cod_access.py). A locked stage can still be previewed. */}
+        {stage !== 1 && stageStatusQ.data && !(stageStatusQ.data as any)[`stage_${stage}_unlocked`] && (
           <DepthCard style={styles.lockedBanner}>
             <View style={styles.lockedInner}>
               <Keycap size={40} radius={13}>
                 <Ionicons name="lock-closed" size={20} color={colors.textMuted} />
               </Keycap>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={styles.lockedTitle}>Stage 3 — preview mode</Text>
+                <Text style={styles.lockedTitle}>Stage {codStageLabel(stage)} — preview</Text>
                 <Text style={styles.lockedBody}>
-                  You can rate yourself on <Text style={styles.lockedStrong}>Knowledge</Text> and <Text style={styles.lockedStrong}>Skill</Text> on every module. Consistency, Independence and pass-off come from your direct coach or admin once you've got a coach on your team.
-                </Text>
-              </View>
-            </View>
-          </DepthCard>
-        )}
-
-        {/* Stage 3+ locked banner — shown only if the server reports it locked. */}
-        {stage === 5 && stageStatusQ.data && !stageStatusQ.data.stage_5_unlocked && (
-          <DepthCard style={styles.lockedBanner}>
-            <View style={styles.lockedInner}>
-              <Keycap size={40} radius={13}>
-                <Ionicons name="map" size={20} color={colors.textMuted} />
-              </Keycap>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={styles.lockedTitle}>Stage 3+ — for Coaches</Text>
-                <Text style={styles.lockedBody}>
-                  The Core Leader / Coach stage opens for Coaches. Talk to the Owner about stepping up. You can preview the items meanwhile.
+                  {stage === 5
+                    ? 'Stage 3+ opens when OwnerIQ has you at Stage 3+, or when you have a Stage 3 on your team. You can preview the items meanwhile.'
+                    : `Stage ${codStageLabel(stage)} opens when OwnerIQ has you at Stage ${codStageLabel(stage)}. You can preview the items meanwhile.`}
                 </Text>
               </View>
             </View>
