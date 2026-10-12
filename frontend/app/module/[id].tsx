@@ -41,7 +41,7 @@ const DIMENSIONS: Array<{ key: 'knowledge' | 'skill' | 'consistency' | 'independ
 // COD 2026 Proof Ladder — the grader. Mirrors backend LADDER_RUNGS.
 const LADDER: Array<{ value: number; label: string; blurb: string; coachOnly: boolean }> = [
   { value: 1, label: 'Know', blurb: 'Can explain it simply', coachOnly: false },
-  { value: 2, label: 'Do', blurb: 'Can execute it effectively in the office', coachOnly: false },
+  { value: 2, label: 'Do', blurb: 'Can execute it effectively in the office', coachOnly: true },
   { value: 3, label: 'Deliver', blurb: 'Hits the standard under pressure in the field', coachOnly: true },
   { value: 4, label: 'Teach', blurb: 'Can transfer it to others', coachOnly: true },
   { value: 5, label: 'Systemize', blurb: 'Runs as a system — independent examples of WGLL', coachOnly: true },
@@ -127,13 +127,13 @@ export default function ModuleDetailScreen() {
 
   // Fetch the user's progress for this module's stage so we can pre-populate scores.
   // When grading on behalf of a trainee, we fetch the trainee's progress instead.
-  const stage = moduleQ.data?.stage as 2 | 3 | 4 | 5 | undefined;
+  const stage = moduleQ.data?.stage as 1 | 2 | 3 | 4 | 5 | 6 | undefined;
   const progressQ = useQuery({
     queryKey: isGradingOnBehalf
       ? ['trainee-module-progress', trainee_id, stage]
       : ['module-progress', stage],
     queryFn: () => isGradingOnBehalf
-      ? apiService.getTraineeModuleProgress(String(trainee_id), stage as 2 | 3 | 4 | 5).then(r => r.data.progress)
+      ? apiService.getTraineeModuleProgress(String(trainee_id), stage as 1 | 2 | 3 | 4 | 5 | 6).then(r => r.data.progress)
       : apiService.getMyModuleProgress(stage!).then(r => r.data.progress),
     enabled: !!stage,
   });
@@ -182,6 +182,15 @@ export default function ModuleDetailScreen() {
 
   const readyMut = useMutation({
     mutationFn: (ready: boolean) => apiService.setReadyForCheck(String(id), { ready }).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['module-progress', stage] });
+    },
+    onError: (e: any) => showAlert('Could not update', e?.response?.data?.detail || 'Try again'),
+  });
+
+  // "I know this": anyone ticks Know on their own view; Do and above are the Coach's.
+  const knowMut = useMutation({
+    mutationFn: (know: boolean) => apiService.setIKnowIt(String(id), know).then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['module-progress', stage] });
     },
@@ -439,13 +448,13 @@ export default function ModuleDetailScreen() {
           )}
           {isTrainee ? (
             <Text style={styles.scaleHelp}>
-              Your coach signs off each rung of the proof ladder as you prove it. Deliver is the standard — Teach and Systemize take it further.
+              Tap <Text style={{ fontWeight: '800' }}>Know</Text> when you know it. Your Coach signs off Do and Deliver as you prove them — Deliver is the standard.
             </Text>
           ) : selfLadderOnly ? (
             <View style={styles.selfRateBanner}>
               <Ionicons name="information-circle" size={16} color={colors.primary} />
               <Text style={styles.selfRateBannerText}>
-                Pass the questions on the Learn screen to tick <Text style={{ fontWeight: '800' }}>Know</Text>. For every rung after that, tap <Text style={{ fontWeight: '800' }}>Ready for check</Text> below — your coach confirms it with you, and the date stamps itself.
+                Tap <Text style={{ fontWeight: '800' }}>Know</Text> when you know it (or pass the questions on the Learn screen). For every rung after that, tap <Text style={{ fontWeight: '800' }}>Ready for check</Text> below — your Coach confirms it with you, and the date stamps itself.
               </Text>
             </View>
           ) : (
@@ -468,11 +477,16 @@ export default function ModuleDetailScreen() {
             // Ready-for-check button below. Coaches tap rungs directly, and
             // admins may also sign their own (nobody sits above them).
             const interactive = canAssess && (isGradingOnBehalf || isAdmin) && !locked;
+            // Your own view: Know is yours to tick (and untick while it's the top rung).
+            const selfKnow = !isGradingOnBehalf && !isAdmin && r.value === 1 && ladder <= 1 && !knowMut.isPending;
             return (
               <TouchableOpacity
                 key={r.value}
-                activeOpacity={interactive ? 0.7 : 1}
+                activeOpacity={interactive || selfKnow ? 0.7 : 1}
+                accessibilityRole={selfKnow ? 'checkbox' : undefined}
+                accessibilityState={selfKnow ? { checked: achieved } : undefined}
                 onPress={() => {
+                  if (selfKnow) { knowMut.mutate(!achieved); return; }
                   if (!interactive) return;
                   // Tap the current rung to step back down; tap any rung to set it.
                   setLadder(isCurrent ? r.value - 1 : r.value);
@@ -527,7 +541,7 @@ export default function ModuleDetailScreen() {
           })}
           {/* The one primary action on your own view: ask your coach to
               check the next rung. Trainee, leader, admin — same button. */}
-          {!isGradingOnBehalf && ladder < maxRungForStage(stage) && (
+          {!isGradingOnBehalf && ladder < maxRungForStage(stage) && (isAdmin || ladder >= 1) && (
             myProgress?.ready_for_check ? (
               <View style={styles.readyPending}>
                 <Ionicons name="hourglass-outline" size={16} color={colors.primary} />

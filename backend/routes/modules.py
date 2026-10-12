@@ -116,9 +116,14 @@ async def _is_stage_unlocked(user: dict, stage: int) -> bool:
     an OwnerIQ stage, the older rules below."""
     if (user.get("role") or "").lower() == "admin":
         return True
-    by_oiq = await _owneriq_unlocked(user)
-    if by_oiq is not None:
-        return stage in by_oiq
+    from core.schedule_template import stage_num
+    from core.cod_access import unlocked_stages
+    n = stage_num(user.get("owneriq_stage"))
+    if n is not None:
+        if stage in unlocked_stages(n, False):
+            return True
+        # 3+ also opens with a Stage 3 on the team (only looked up when needed).
+        return stage == 5 and await _team_has_stage3(user)
     return await _is_stage_unlocked_by_role(user, stage)
 
 
@@ -572,7 +577,8 @@ async def upsert_progress(
     # mirrors the printed sheet: the BA works the material, the coach signs
     # the proof.
     stage_cap = _max_rung_for_stage(stage)
-    max_ladder = stage_cap if (target_user_id != assessor_id or role == "admin") else min(2, stage_cap)
+    # Self-claims stop at Know (the Owner's rule): Do and above are the Coach's.
+    max_ladder = stage_cap if (target_user_id != assessor_id or role == "admin") else 1
     if payload.ladder is not None:
         if payload.ladder > max_ladder:
             update.pop("ladder", None)  # silently drop, like locked dims
@@ -1331,6 +1337,51 @@ async def cod_vet_module(payload: CodVetBody, request: Request):
 # prove the next rung; the item lands in their coach's queue; the coach
 # confirms (writes the ladder — date stamps itself) or taps "not yet". No
 # forms, no manual dates, no separate review destination.
+
+
+class KnowBody(BaseModel):
+    know: bool = True
+
+
+@router.post("/module-progress/{module_id}/know")
+async def set_i_know_it(module_id: str, payload: KnowBody, request: Request):
+    """"I know this": anyone (BAs included) ticks Know on their OWN row for an
+    item they can open; untick only while Know is the top rung. Do, Deliver
+    and above stay with the Coach (the Owner's rule, Oct 2026)."""
+    user = await get_current_user(request)
+    uid = str(user.get("id") or user.get("_id") or "")
+    m = await db.training_modules.find_one({"id": module_id})
+    if not m:
+        raise HTTPException(status_code=404, detail="Module not found")
+    await _check_module_read(user, m)
+    existing = await db.module_progress.find_one({
+        "$or": [
+            {"target_user_id": uid, "module_id": module_id},
+            {"user_id": uid, "module_id": module_id, "target_user_id": {"$exists": False}},
+        ],
+    })
+    current = int((existing or {}).get("ladder") or 0)
+    if payload.know:
+        if current >= 1:
+            return _normalise_progress_row(existing)
+        new_ladder = 1
+    else:
+        if current != 1:
+            raise HTTPException(status_code=400, detail="Your Coach has signed this off past Know")
+        new_ladder = 0
+    upd = {
+        "ladder": new_ladder,
+        "ladder_dates": _apply_ladder_dates((existing or {}).get("ladder_dates") or {}, new_ladder, None, 1, _today_iso()),
+        "know_self_claimed": bool(payload.know),
+        "last_assessed_at": _now_iso(),
+    }
+    if existing:
+        await db.module_progress.update_one({"_id": existing["_id"]}, {"$set": upd})
+        return _normalise_progress_row({**existing, **upd})
+    doc = {"id": str(uuid.uuid4()), "user_id": uid, "target_user_id": uid, "module_id": module_id,
+           "stage": int(m.get("stage") or 0), **upd}
+    await db.module_progress.insert_one(doc)
+    return _normalise_progress_row(doc)
 
 
 class ReadyBody(BaseModel):
