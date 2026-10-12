@@ -689,6 +689,7 @@ export default function HiresScreen() {
       {/* Performance | Spider | Bells: a small row of pills. */}
       <View style={styles.topBar}>
         <PillTabs
+          fit
           items={viewSegments}
           value={viewMode}
           onChange={(k) => setViewMode(k as 'performance' | 'timeline' | 'spider' | 'bells' | 'sectors')}
