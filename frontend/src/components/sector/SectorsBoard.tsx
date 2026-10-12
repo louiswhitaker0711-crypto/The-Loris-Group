@@ -23,6 +23,7 @@ type Row = {
   live: { hit?: number };
 };
 type Sector = { leader_id: string; leader_name: string; people: Row[]; goal: number; hit: number; sector_goal: number | null; people_goal: number;
+  postcode?: string; stats?: { in: number; pa: number | null; scoring: number | null };
   whatsapp: { setup: string; breakdown: string } };
 
 function addDays(iso: string, n: number) {
@@ -96,7 +97,8 @@ export function SectorsBoard({ bottomPad = 24 }: { bottomPad?: number }) {
                 </Text>
               </View>
               <Text style={s.mutedSm}>
-                {sec.sector_goal != null ? `Sector goal ${sec.sector_goal}` : 'No sector goal set'}{sec.people_goal ? ` · everyone's goals add up to ${sec.people_goal}` : ''}
+                {[sec.postcode ? `📍 ${sec.postcode}` : '', sec.sector_goal != null ? `Sector goal ${sec.sector_goal}` : 'No sector goal set',
+                  sec.stats?.in ? `PA ${sec.stats.pa} · Scoring ${sec.stats.scoring}%` : ''].filter(Boolean).join(' · ')}
               </Text>
               {sec.people.map((p) => {
                 const b = p.breakdown;

@@ -999,7 +999,7 @@ export const apiService = {
   notifySectorSetups: (date: string) => api.post('/sector/setup/notify', {}, { params: { date } }),
   getSectorRoster: (date: string) => api.get('/sector/roster', { params: { date } }),
   saveMySector: (date: string, memberIds: string[]) => api.put('/sector/sectors', { member_ids: memberIds }, { params: { date } }),
-  saveSectorGoal: (date: string, goal: number | null) => api.put('/sector/goal', { goal }, { params: { date } }),
+  saveSectorGoal: (date: string, goal: number | null, postcode = '') => api.put('/sector/goal', { goal, postcode }, { params: { date } }),
   getSectorBoard: (date: string) => api.get('/sector/board', { params: { date } }),
   getSectorStatus: () => api.get('/sector/status'),
   // Bells: paste the WhatsApp report

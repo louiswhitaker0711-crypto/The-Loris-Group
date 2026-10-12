@@ -123,12 +123,36 @@ def _first(name: str) -> str:
 
 
 def _label(iso: str) -> str:
+    """'Tue 13 Oct': written out, so it can't be read as goal/hit ('12/10')."""
     d = Date.fromisoformat(iso)
-    return f"{d.day}/{d.month}"
+    return f"{d.strftime('%a')} {d.day} {d.strftime('%b')}"
 
 
-def setup_text(rows: list, iso: str, sector_goal: Optional[int] = None) -> str:
+def clean_postcode(v) -> str:
+    """A postcode or district as typed ('ls6 1ab' → 'LS6 1AB'), letters,
+    digits and spaces only."""
+    return " ".join("".join(ch for ch in str(v or "").upper() if ch.isalnum() or ch == " ").split())[:10]
+
+
+def sector_stats(rows: list, sector_goal: Optional[int] = None) -> dict:
+    """From the people with a breakdown: sign-ups, goal, PA (sign-ups per
+    person in) and scoring (% of people in with at least one sign-up)."""
+    inn = [r.get("breakdown") or {} for r in rows
+           if any((r.get("breakdown") or {}).get(k) is not None for k in ("doors", "spoken", "pitched", "closed", "hit"))]
+    hits = [int(b.get("hit") or 0) for b in inn]
+    goals = [b.get("goal") for b in inn if b.get("goal") is not None]
+    hit = sum(hits)
+    goal = sector_goal if sector_goal is not None else (sum(goals) if goals else None)
+    n = len(inn)
+    return {"in": n, "hit": hit, "goal": goal,
+            "pa": round(hit / n, 1) if n else None,
+            "scoring": round(100 * sum(1 for h in hits if h > 0) / n) if n else None}
+
+
+def setup_text(rows: list, iso: str, sector_goal: Optional[int] = None, postcode: str = "") -> str:
     out = [f"*SetUp* {_label(iso)}"]
+    if postcode:
+        out.append(f"Postcode: {postcode}")
     if sector_goal is not None:
         out.append(f"Sector goal: {sector_goal}")
     for r in rows:
@@ -145,11 +169,15 @@ def setup_text(rows: list, iso: str, sector_goal: Optional[int] = None) -> str:
     return "\n".join(out)
 
 
-def breakdown_text(rows: list, iso: str, sector_goal: Optional[int] = None) -> str:
+def breakdown_text(rows: list, iso: str, sector_goal: Optional[int] = None, postcode: str = "") -> str:
     out = [f"*Breakdown* {_label(iso)}"]
-    if sector_goal is not None:
-        sh = sum(int((r.get("breakdown") or {}).get("hit") or 0) for r in rows)
-        out.append(f"Sector goal: {sector_goal} hit: {sh}{'🔥' if sh >= sector_goal and sh > 0 else ''}")
+    if postcode:
+        out.append(f"Postcode: {postcode}")
+    st = sector_stats(rows, sector_goal)
+    if st["in"]:
+        g, h = st["goal"], st["hit"]
+        out.append(f"Sector goal: {g} hit: {h}{'🔥' if h >= g and h > 0 else ''}" if g is not None else f"Sector sign-ups: {h}")
+        out.append(f"PA: {st['pa']} · Scoring: {st['scoring']}%")
     for r in rows:
         b = r.get("breakdown") or {}
         nums = [b.get(k) for k in ("doors", "spoken", "pitched", "closed")]
@@ -274,8 +302,8 @@ async def sector_day(request: Request, date: Optional[str] = None):
         "options": {"proud": PROUD_OPTIONS, "change": CHANGE_OPTIONS,
                     "kpi_metrics": [{"key": k, "label": v, "loa": LOA.get(k)} for k, v in KPI_METRICS.items()]},
         "people": rows,
-        "whatsapp": {"setup": setup_text(rows, iso, (sector or {}).get("goal")),
-                     "breakdown": breakdown_text(rows, iso, (sector or {}).get("goal"))},
+        "whatsapp": {"setup": setup_text(rows, iso, (sector or {}).get("goal"), (sector or {}).get("postcode") or ""),
+                     "breakdown": breakdown_text(rows, iso, (sector or {}).get("goal"), (sector or {}).get("postcode") or "")},
     }
 
 
@@ -533,7 +561,8 @@ async def save_sector_goal(request: Request, date: Optional[str] = None):
     body = await request.json()
     raw = body.get("goal")
     goal = None if raw in (None, "") else _int(raw, 0, 200)
-    await db.sectors.update_one({"leader_id": str(user["id"]), "date": iso}, {"$set": {"goal": goal}})
+    await db.sectors.update_one({"leader_id": str(user["id"]), "date": iso},
+                                {"$set": {"goal": goal, "postcode": clean_postcode(body.get("postcode"))}})
     return await _sector_of_leader(str(user["id"]), iso)
 
 
@@ -563,7 +592,9 @@ async def sector_board(request: Request, date: Optional[str] = None):
         hit = sum(int((r.get("live") or {}).get("hit") or 0) for r in rows)
         out.append({"leader_id": sec["leader_id"], "leader_name": sec.get("leader_name"), "people": rows,
                     "goal": sg if sg is not None else people_goal, "sector_goal": sg, "people_goal": people_goal, "hit": hit,
-                    "whatsapp": {"setup": setup_text(rows, iso, sg), "breakdown": breakdown_text(rows, iso, sg)}})
+                    "postcode": sec.get("postcode") or "", "stats": sector_stats(rows, sg),
+                    "whatsapp": {"setup": setup_text(rows, iso, sg, sec.get("postcode") or ""),
+                                 "breakdown": breakdown_text(rows, iso, sg, sec.get("postcode") or "")}})
     return {"date": iso, "sectors": out}
 
 
@@ -615,7 +646,7 @@ async def sector_start_tick() -> int:
             continue
         try:
             await send_push_to_user(uid, "🚀 Start your sector set-up",
-                                    "Who's in your sector? Set everyone's goal, KPI and focus.",
+                                    "Who's in your sector, the postcode, and everyone's goal, KPI and focus.",
                                     {"type": "sector_setup", "url": "/sector?start=1"})
             sent += 1
         except Exception as ex:
