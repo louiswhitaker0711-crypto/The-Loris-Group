@@ -175,7 +175,7 @@ export default function MeetingNotesScreen() {
       {topics.length > 0 && (
         <View style={s.row}>
           {topics.map((t) => (
-            <Pressable key={t.id} onPress={() => router.push(`/cod/${t.id}` as any)} style={s.chip} accessibilityRole="link">
+            <Pressable key={t.id} onPress={() => router.push(`/module/${t.id}` as any)} style={s.chip} accessibilityRole="link">
               <Text style={s.chipText}>COD {codStageLabel(t.stage)} · {t.title}</Text>
             </Pressable>
           ))}
@@ -257,8 +257,8 @@ export default function MeetingNotesScreen() {
               </Pressable>
             )}
             <Text style={s.muted}>Everyone who can read the recap can open the PDF too.</Text>
-            <Text style={s.label}>COD topics</Text>
-            <Text style={s.muted}>Tap a stage to see its topics, and tick the ones this meeting covered. The recap shows on those topics in the COD.</Text>
+            <Text style={s.label}>COD items</Text>
+            <Text style={s.muted}>Tap a stage to see its sections and items, and tick the ones this meeting covered. The recap shows on those items in the COD.</Text>
             <CodTopicPicker selected={topicIds} onChange={setTopicIds} />
             <Text style={[s.label, { marginTop: 6 }]}>Your notes</Text>
             <Text style={s.muted}>Type or paste them, or read them from a photo of handwritten notes. Optional if you've added a PDF. Only Coaches and the Owner see these.</Text>

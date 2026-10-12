@@ -14,7 +14,7 @@ import { useColors, useTheme, lightColors, fonts } from '../../src/theme/ThemeCo
 import { GRADIENT } from '../../src/theme/brand';
 import { pageMarkKick } from '../../src/theme/pageScroll';
 import { StageVideo, useCodVideos } from '../../src/components/cod/StageVideo';
-import { sortByCodStage } from '../../src/components/cod/stageOrder';
+import { sortByCodStage, codStageShortName } from '../../src/components/cod/stageOrder';
 import { apiService } from '../../src/api/client';
 import { usePullToRefresh } from '../../src/components/ui/PullRefresh';
 import { useAuth } from '../../src/auth/AuthContext';
@@ -313,11 +313,12 @@ export default function TraineeProgressScreen() {
         // Written in stored-stage order; rendered in COD display order — SL
         // (stored stage 5) sits between Stage 3 and Stage 4. See stageOrder.ts.
         const devSteps: LadderStep[] = sortByCodStage<LadderStep & { stage: number }>([
-          { stage: 1, key: 'd1', label: 'Foundation', state: devStage > 1 ? 'done' : 'current' },
-          { stage: 2, key: 'd2', label: 'Self Management', state: devStage === 2 ? 'current' : 'upcoming' },
-          { stage: 3, key: 'd3', label: 'Leader', state: 'locked' },
-          { stage: 4, key: 'd4', label: 'Team Builder', state: 'locked' },
-          { stage: 5, key: 'd5', label: 'Sector Leader', state: 'locked' },
+          { stage: 1, key: 'd1', label: codStageShortName(1), state: devStage > 1 ? 'done' : 'current' },
+          { stage: 2, key: 'd2', label: codStageShortName(2), state: devStage === 2 ? 'current' : 'upcoming' },
+          { stage: 3, key: 'd3', label: codStageShortName(3), state: 'locked' },
+          { stage: 4, key: 'd4', label: codStageShortName(4), state: 'locked' },
+          { stage: 5, key: 'd5', label: codStageShortName(5), state: 'locked' },
+          { stage: 6, key: 'd6', label: codStageShortName(6), state: 'locked' },
         ], (d) => d.stage);
         const devNext = nextMod
           ? {
@@ -386,7 +387,7 @@ export default function TraineeProgressScreen() {
 
       {/* Stage 2 body — modules grouped by category, locked overlay until 8 days submitted. */}
       {tab === 'stage2' && stageStatusQ.data?.stage_2_unlocked && (
-        <StageVideo url={codVideosQ.data?.stage2} title="Stage 2 — Self Management Briefing" />
+        <StageVideo url={codVideosQ.data?.stage2} title="Stage 2 — Becoming a Leader Briefing" />
       )}
       {tab === 'stage2' && (
         !stageStatusQ.data?.stage_2_unlocked ? (
@@ -453,7 +454,7 @@ export default function TraineeProgressScreen() {
       {tab === 'stage1' && (
         <>
           {/* Stage 1 briefing video (Cloudinary) — expectations for the stage */}
-          <StageVideo url={codVideosQ.data?.stage1} title="Stage 1 — Foundation Briefing" />
+          <StageVideo url={codVideosQ.data?.stage1} title="Stage 1 — 6 Day Evaluation Briefing" />
           {stage1Q.isLoading || stage1ProgressQ.isLoading ? (
             <View style={{ padding: 32, alignItems: 'center' }}><BrandLoader size={52} /></View>
           ) : (() => {

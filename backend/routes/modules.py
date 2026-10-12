@@ -119,9 +119,12 @@ async def _is_stage_unlocked(user: dict, stage: int) -> bool:
     if stage == 4:
         return role == "admin"
     if stage == 5:
-        # Stage SL (Sector/Site Leader) — open to every leader (the people
-        # who run sectors) and to admins, so they can browse and grade.
+        # Stage 3+ (Core Leader / Coach; stored as 5) — open to every leader
+        # and to admins, so they can browse and grade.
         return role in ("leader", "admin")
+    if stage == 6:
+        # Stage 5 (Becoming a Business Owner; stored as 6) — like Stage 4.
+        return role == "admin"
     return False
 
 
@@ -225,13 +228,13 @@ async def get_scale():
     scheme kept for old clients."""
     return {"bands": ASSESSMENT_BANDS, "dimensions": ASSESSMENT_DIMENSIONS,
             "ladder": LADDER_RUNGS, "ladder_completed_at": LADDER_COMPLETED_AT,
-            "ladder_max_by_stage": {1: 3, 2: 3, 3: 4, 4: 5, 5: 5}}
+            "ladder_max_by_stage": {1: 3, 2: 3, 3: 4, 4: 5, 5: 5, 6: 5}}
 
 
 @router.get("/modules")
 async def list_modules(
     request: Request,
-    stage: int = Query(..., ge=1, le=5),
+    stage: int = Query(..., ge=1, le=6),
     office: Optional[str] = None,
 ):
     """List all modules in a stage, scoped to the authenticated user's office."""
@@ -280,7 +283,7 @@ async def get_module(module_id: str, request: Request):
     elif role == "leader":
         # Leaders can always READ Stage 2 (to coach trainees) and Stage 3
         # (for personal growth). Stage 4 remains admin-only.
-        if stage >= 4:
+        if stage in (4, 6):
             raise HTTPException(status_code=403, detail="Stage not unlocked")
     else:
         # Trainee — still gated behind Stage 2 unlock logic.
@@ -383,7 +386,7 @@ def _compute_completed(merged: dict) -> bool:
 @router.get("/module-progress/me")
 async def my_progress(
     request: Request,
-    stage: int = Query(..., ge=1, le=5),
+    stage: int = Query(..., ge=1, le=6),
 ):
     """All progress rows for the current user at a given stage. For Stage 2
     this returns rows where the trainee is the TARGET (graded BY a leader).
@@ -621,7 +624,7 @@ async def _check_module_read(user: dict, m: dict) -> None:
     if role == "admin":
         return
     if role == "leader":
-        if stage == 4:
+        if stage in (4, 6):
             raise HTTPException(status_code=403, detail="Stage not unlocked")
         if stage == 5 and not await _is_stage_unlocked(user, 5):
             raise HTTPException(status_code=403, detail="Stage not unlocked")
@@ -884,7 +887,7 @@ async def list_my_trainees(request: Request):
 
 
 @router.get("/leader/trainees/{trainee_user_id}/module-progress")
-async def trainee_module_progress(trainee_user_id: str, request: Request, stage: int = Query(2, ge=1, le=5)):
+async def trainee_module_progress(trainee_user_id: str, request: Request, stage: int = Query(2, ge=1, le=6)):
     """Get the full module-progress list for a single trainee. Caller must be
     the trainee's leader (subtree) or an admin."""
     user = await get_current_user(request)
@@ -1097,6 +1100,7 @@ async def my_stage_status(request: Request):
     s3_unlocked = await _is_stage_unlocked(user, 3)
     s4_unlocked = await _is_stage_unlocked(user, 4)
     s5_unlocked = await _is_stage_unlocked(user, 5)
+    s6_unlocked = await _is_stage_unlocked(user, 6)
     has_junior = is_leader and await _team_has_junior_leader(user)
 
     # Visibility rules:
@@ -1149,12 +1153,15 @@ async def my_stage_status(request: Request):
         "stage_2_visible": s2_visible,
         "stage_3_visible": s3_visible,
         "stage_4_visible": s4_visible,
-        # Stage SL (5) shows for, and is unlocked for, leaders/admins.
+        # Stage 3+ (stored 5) shows for, and is unlocked for, leaders/admins.
         "stage_5_visible": is_leader or is_admin,
+        # Stage 5 Business Owner (stored 6) — like Stage 4.
+        "stage_6_visible": s4_visible,
         "stage_2_unlocked": s2_unlocked,
         "stage_3_unlocked": s3_unlocked,
         "stage_4_unlocked": s4_unlocked,
         "stage_5_unlocked": s5_unlocked,
+        "stage_6_unlocked": s6_unlocked,
         "sales_path_enabled": sales_path_on,
         "sales_level": sales_level,
         "sales_level_name": sales_level_name,
@@ -1223,7 +1230,7 @@ async def cod_vetting_list(request: Request):
     await _ensure_seeded(office_id)
     rows = []
     async for m in db.training_modules.find(
-        {"office_id": office_id, "stage": {"$in": [1, 2, 3, 4, 5]}, "retired": {"$ne": True}},
+        {"office_id": office_id, "stage": {"$in": [1, 2, 3, 4, 5, 6]}, "retired": {"$ne": True}},
     ):
         rows.append({
             "stage": m.get("stage"), "category": m.get("category"), "topic": m.get("topic"),
@@ -1241,7 +1248,7 @@ async def cod_vetting_list(request: Request):
 
 
 class CodVetBody(BaseModel):
-    stage: int = Field(..., ge=1, le=5)
+    stage: int = Field(..., ge=1, le=6)
     topic: str
     updates: Optional[dict] = None   # subset of _VETTABLE_FIELDS
     vetted: bool = True
@@ -1499,7 +1506,7 @@ async def pregenerate_module_quizzes(limit: int = 25) -> dict:
     tick to stay inside LLM rate limits."""
     import hashlib
     made = skipped = 0
-    async for m in db.training_modules.find({"retired": {"$ne": True}, "stage": {"$in": [2, 3, 4, 5]}}):
+    async for m in db.training_modules.find({"retired": {"$ne": True}, "stage": {"$in": [2, 3, 4, 5, 6]}}):
         if made >= limit:
             break
         content = (m.get("trainee_content") or "").strip()

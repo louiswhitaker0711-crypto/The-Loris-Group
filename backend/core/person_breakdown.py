@@ -20,12 +20,13 @@ from core.cod_stages import COD_STAGE_ORDER
 FUNNEL = ("doors_knocked", "spoken_to", "pitches_commenced", "pitches_closed", "sales")
 METRICS = FUNNEL + ("points",)
 
-COD_STAGE_NAME = {1: "Foundation", 2: "Self Management", 3: "Leader", 4: "Team Builder", 5: "Sector/Site Leader"}
+from core.cod_sheet import STAGE_TITLES as COD_STAGE_NAME  # noqa: E402  (the Owner's COD sheet)
 
 
 def cod_stage_label(stage: int) -> str:
-    """Stage SL is stored as 5 (core/cod_stages.py)."""
-    return "SL" if stage == 5 else str(stage)
+    """Stage 3+ is stored as 5 and Stage 5 as 6 (core/cod_sheet.py)."""
+    from core.cod_sheet import stage_label
+    return stage_label(stage)
 
 
 def stage_label(value) -> Optional[str]:

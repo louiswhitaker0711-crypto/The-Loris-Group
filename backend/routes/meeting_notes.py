@@ -15,7 +15,7 @@ people who can write recaps.
 
 A meeting can also carry a title, one PDF (e.g. the plan written elsewhere;
 stored in GridFS like the Library's PDFs, readable by anyone who can read the
-recap) and the COD topics it covered (`coaching_impacts` ids). When there is a
+recap) and the COD items it covered (`training_modules` ids). When there is a
 PDF, the AI reads it alongside any typed notes.
 
 Collection `meeting_notes`, one document per (office, block, date):
@@ -115,14 +115,17 @@ def _gridfs():
     return AsyncIOMotorGridFSBucket(db, bucket_name="meeting_pdfs")
 
 
-async def clean_topics(ids) -> list:
-    """Keep only real COD topics, in the order given, as {id, title, stage}."""
+async def clean_topics(ids, office_id=None) -> list:
+    """Keep only live COD items (the Owner's COD sheet, `training_modules`),
+    in the order given, as {id, title, stage, section}."""
     want = [str(i) for i in (ids or []) if i][:MAX_TOPICS]
     if not want:
         return []
     found = {}
-    async for d in db.coaching_impacts.find({"id": {"$in": want}}, {"_id": 0, "id": 1, "title": 1, "stage": 1}):
-        found[d["id"]] = {"id": d["id"], "title": d.get("title") or "Untitled", "stage": int(d.get("stage") or 1)}
+    q = {"id": {"$in": want}, "retired": {"$ne": True}, "office_id": {"$in": [office_id, None]}}
+    async for d in db.training_modules.find(q, {"_id": 0, "id": 1, "topic": 1, "stage": 1, "category": 1}):
+        found[d["id"]] = {"id": d["id"], "title": d.get("topic") or "Untitled",
+                          "stage": int(d.get("stage") or 1), "section": d.get("category") or ""}
     out, seen = [], set()
     for i in want:
         if i in found and i not in seen:
@@ -202,7 +205,7 @@ async def save_meeting_note(request: Request):
     if "title" in body:
         update["title"] = str(body.get("title") or "").strip()[:MAX_TITLE]
     if "cod_topic_ids" in body:
-        update["cod_topics"] = await clean_topics(body.get("cod_topic_ids") or [])
+        update["cod_topics"] = await clean_topics(body.get("cod_topic_ids") or [], block["office_id"])
     note = await _upsert(user, block, key, existing, update)
     return _public(note, user)
 

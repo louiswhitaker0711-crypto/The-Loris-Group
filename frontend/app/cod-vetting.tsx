@@ -21,15 +21,9 @@ import { useAuth } from '../src/auth/AuthContext';
 import { BrandLoader } from '../src/components/ui/BrandLoader';
 import { useTabBarClearance } from '../src/customization/CustomTabBar';
 import { toast } from '../src/utils/toast';
-import { COD_STAGE_ORDER, sortByCodStage } from '../src/components/cod/stageOrder';
+import { COD_STAGE_ORDER, COD_STAGE_TITLES, sortByCodStage } from '../src/components/cod/stageOrder';
 
-const STAGE_LABEL: Record<number, string> = {
-  1: 'Stage 1 · Foundation',
-  2: 'Stage 2 · Self Management',
-  3: 'Stage 3 · Leader',
-  4: 'Stage 4 · Team Builder',
-  5: 'Stage SL · Sector/Site Leader',
-};
+const STAGE_LABEL: Record<number, string> = COD_STAGE_TITLES;
 
 type VetModule = {
   stage: number; category: string; topic: string; sequence: number;

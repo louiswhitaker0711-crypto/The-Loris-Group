@@ -35,13 +35,15 @@ import { EditorialHero } from '../src/components/ui/EditorialHero';
 import { DepthCard } from '../src/components/ui/DepthCard';
 import { XPBar } from '../src/components/ui/XPBar';
 import { Keycap } from '../src/components/ui/Keycap';
+import { COD_STAGE_TITLES } from '../src/components/cod/stageOrder';
 
 const STAGE_TITLE: Record<number, { name: string; sub: string }> = {
-  1: { name: 'Stage 1 · Foundation', sub: 'Build Your Core Competencies' },
-  2: { name: 'Stage 2 · Self Management', sub: 'Operate Like a Professional' },
-  3: { name: 'Stage 3 · Leader', sub: 'Creating Success in Others' },
-  4: { name: 'Stage 4 · Team Builder', sub: 'Embedding Systems & Creating Independence' },
-  5: { name: 'Stage SL · Sector/Site Leader', sub: 'Performance Management' },
+  1: { name: COD_STAGE_TITLES[1], sub: 'Your COD sheet: learn it, prove it, get it signed off' },
+  2: { name: COD_STAGE_TITLES[2], sub: 'Your COD sheet: learn it, prove it, get it signed off' },
+  3: { name: COD_STAGE_TITLES[3], sub: 'Your COD sheet: learn it, prove it, get it signed off' },
+  5: { name: COD_STAGE_TITLES[5], sub: 'Your COD sheet: learn it, prove it, get it signed off' },
+  4: { name: COD_STAGE_TITLES[4], sub: 'Your COD sheet: learn it, prove it, get it signed off' },
+  6: { name: COD_STAGE_TITLES[6], sub: 'Your COD sheet: learn it, prove it, get it signed off' },
 };
 // The sheet's boxes. Second D is Deliver — same as the PDF. The ladder
 // grows with the stage: 1-2 top out at Deliver, 3 adds Teach, 4/SL add
@@ -67,7 +69,7 @@ export default function CodSheetScreen() {
   const { user } = useAuth();
   const { scrollY, onScroll } = useParallaxScroll();
   const params = useLocalSearchParams<{ stage?: string; user_id?: string; name?: string }>();
-  const stage = Math.min(5, Math.max(1, parseInt(String(params.stage || '2'), 10) || 2)) as 1 | 2 | 3 | 4 | 5;
+  const stage = Math.min(6, Math.max(1, parseInt(String(params.stage || '2'), 10) || 2)) as 1 | 2 | 3 | 4 | 5 | 6;
   const targetId = typeof params.user_id === 'string' && params.user_id ? params.user_id : undefined;
 
   const modulesQ = useQuery({

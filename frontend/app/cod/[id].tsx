@@ -37,7 +37,6 @@ import { Impact, ImpactQuiz, CATEGORY_LABEL, LOCAL_PASSED_KEY, stageMeta } from 
 import { parseNotes, chunkForLearn, readMinutes } from '../../src/components/cod/parseNotes';
 import { NotesBlocks } from '../../src/components/cod/NotesBlocks';
 import { QuickCheck } from '../../src/components/cod/QuickCheck';
-import { TopicRecaps } from '../../src/components/meeting/TopicRecaps';
 
 const MODE_KEY = 'cg1.cod.readerMode';
 
@@ -257,7 +256,6 @@ export default function CodReaderScreen() {
             </View>
           ) : null}
 
-          <TopicRecaps topicId={impact.id} />
 
           {!passed && (
             <GlowButton onPress={() => { switchMode('learn'); }} style={styles.learnCta}>

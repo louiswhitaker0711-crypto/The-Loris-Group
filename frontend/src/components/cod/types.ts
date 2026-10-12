@@ -29,14 +29,14 @@ export type StageMeta = {
 };
 
 export const STAGE_META: Record<number, StageMeta> = {
-  1: { label: 'Stage 1 · Sales Mechanics', short: 'Sales Mechanics', color: brand.green, icon: 'flash', tagline: 'Win the door — systems for the pitch itself.' },
-  2: { label: 'Stage 2 · Mentality & Behaviours', short: 'Mentality & Behaviours', color: brand.limeDark, icon: 'sparkles', tagline: 'Own your head — habits that survive a bad day.' },
-  3: { label: 'Stage 3 · Coach & Lead', short: 'Coach & Lead', color: brand.rose, icon: 'people', tagline: 'Turn your game into someone else’s game.' },
-  4: { label: 'Stage 4 · Run a Team', short: 'Run a Team', color: brand.yellow, icon: 'trophy', tagline: 'Build the machine that builds people.' },
-  // Sector/Site Leader is STORED as 5 but sits between 3 and 4. Without an
-  // entry here it fell through to the `Stage ${s}` fallback and the chip read
-  // "Stage 5" while sitting between "Stage 3" and "Stage 4".
-  5: { label: 'Stage SL · Sector/Site Leader', short: 'Sector/Site Leader', color: brand.cyan, icon: 'navigate', tagline: 'Run the sector — performance management on the ground.' },
+  // Names follow the Owner's COD sheet (stageOrder.ts). 3+ is stored as 5 and
+  // Stage 5 (Business Owner) as 6.
+  1: { label: 'Stage 1 · 6 Day Evaluation', short: '6 Day Evaluation', color: brand.green, icon: 'flash', tagline: 'Win the door — systems for the pitch itself.' },
+  2: { label: 'Stage 2 · Becoming a Leader', short: 'Becoming a Leader', color: brand.limeDark, icon: 'sparkles', tagline: 'Own your head — habits that survive a bad day.' },
+  3: { label: 'Stage 3 · Being a Leader', short: 'Being a Leader', color: brand.rose, icon: 'people', tagline: 'Turn your game into someone else’s game.' },
+  5: { label: 'Stage 3+ · Core Leader / Coach', short: 'Core Leader / Coach', color: brand.cyan, icon: 'navigate', tagline: 'Develop your leaders and build the team.' },
+  4: { label: 'Stage 4 · Advanced Team Building', short: 'Advanced Team Building', color: brand.yellow, icon: 'trophy', tagline: 'Build the machine that builds people.' },
+  6: { label: 'Stage 5 · Business Owner', short: 'Business Owner', color: brand.limeDark, icon: 'business', tagline: 'Run your own business.' },
 };
 
 export const stageMeta = (s: number): StageMeta =>

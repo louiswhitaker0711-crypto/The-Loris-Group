@@ -3,9 +3,9 @@
  *
  * The "how this all works" front page from the Final Cycle of Development
  * document: the Proof Ladder (Know → Do → Deliver → Teach → Systemize),
- * the weekly rhythm, the 4 Pillars, and the stage map from Foundation to
- * Sector/Site Leader. Static content — the source of truth is the COD
- * document; update both together.
+ * the weekly rhythm, and the stage map of the Owner's COD sheet (stages 1,
+ * 2, 3, 3+, 4, 5). Static content — the source of truth is
+ * backend/core/cod_sheet.py; update both together.
  *
  * Visual system ("Ink & Cube"): a full-bleed pop hero with a 130px Rubik
  * cube, gradient section heads, depth cards, hex-coin ladder rungs, keycap
@@ -25,7 +25,6 @@ import { EditorialHero } from '../src/components/ui/EditorialHero';
 import { DepthCard } from '../src/components/ui/DepthCard';
 import { SectionHead } from '../src/components/ui/SectionHead';
 import { HexCoin } from '../src/components/ui/HexCoin';
-import { Keycap } from '../src/components/ui/Keycap';
 import { RankRibbon } from '../src/components/ui/RankRibbon';
 
 const LADDER = [
@@ -38,41 +37,24 @@ const LADDER = [
 
 const RHYTHM = [
   'Choose the next stage and agree on the outcomes and proof required.',
-  'Coach on the 4 Pillars.',
+  'Coach on the items on your COD sheet.',
   'Review weekly: numbers, behaviour, evidence, decisions.',
   'Drive results that are specific, owned, and evidenced.',
   'Progress only happens when evidence is shown and standards are consistently met.',
   'Implement what good looks like (WGLL).',
 ];
 
-const PILLARS = [
-  {
-    name: 'Commercial Craft', icon: 'briefcase' as const, color: '#0ea5e9',
-    desc: 'The technical skills of the role. How you execute the sign-up process, engage customers, handle questions, close confidently, and maintain quality under pressure. This is the foundation of performance.',
-  },
-  {
-    name: 'Self Leadership', icon: 'person' as const, color: '#f59e0b',
-    desc: "How you manage yourself. Your reliability, planning, resilience, emotional regulation, and ownership of your own results and development. No one can build this for you.",
-  },
-  {
-    name: 'People Leadership', icon: 'people-circle' as const, color: '#10b981',
-    desc: 'How you show up for and influence others. From following and enforcing standards as a BA, to coaching, developing, and holding a team accountable as a Leader.',
-  },
-  {
-    name: 'Digital & Data', icon: 'stats-chart' as const, color: '#ef4444',
-    desc: 'How you use numbers and systems. Accurate data submission, using KPIs to self-coach, tracking team performance, and making decisions driven by evidence — not feelings.',
-  },
-];
 
-// Written in stored-stage order; rendered in COD display order (SL sits
-// between Stage 3 and Stage 4 — see stageOrder.ts). `stage` is the STORED
-// number, so SL stays 5.
+// Written in stored-stage order; rendered in COD display order: 3+ is stored
+// as 5 and sits between 3 and 4; Stage 5 (Business Owner) is stored as 6.
+// The Owner's COD sheet (backend core/cod_sheet.py).
 const STAGES = sortByCodStage([
-  { stage: 1, tag: 'STAGE 1', name: 'Foundation', sub: 'Build your core competencies' },
-  { stage: 2, tag: 'STAGE 2', name: 'Self Management', sub: 'Operate like a professional' },
-  { stage: 3, tag: 'STAGE 3', name: 'Leader', sub: 'Creating success in others' },
-  { stage: 4, tag: 'STAGE 4', name: 'Team Builder', sub: 'Embedding systems, standards & creating independence' },
-  { stage: 5, tag: 'STAGE SL', name: 'Sector/Site Leader', sub: 'Performance management — for leaders running sectors' },
+  { stage: 1, tag: 'STAGE 1', name: '6 Day Evaluation', sub: 'Intro to the business, expectations, the 5 Steps, impulsing, handling questions' },
+  { stage: 2, tag: 'STAGE 2', name: 'Becoming a Leader', sub: 'Company, goals, selling independently, the 8 Steps, profitability, example setting' },
+  { stage: 3, tag: 'STAGE 3', name: 'Being a Leader', sub: 'Recruiting, Week 1 coaching, working with a Stage 2, running sectors, EQ' },
+  { stage: 4, tag: 'STAGE 4', name: 'Advanced Team Building', sub: 'Using the network, public speaking, managing KPI\u2019s, developing people' },
+  { stage: 5, tag: 'STAGE 3+', name: 'Being a Core Leader / Coach', sub: 'Developing your leaders, team development, territory management' },
+  { stage: 6, tag: 'STAGE 5', name: 'Becoming a Business Owner', sub: 'Your business, administration, recruiting, finance, the daily rhythm' },
 ], (s) => s.stage);
 
 export default function CodIntroScreen() {
@@ -139,23 +121,6 @@ export default function CodIntroScreen() {
           ))}
         </DepthCard>
         </ScrollReveal>
-
-        <SectionHead style={styles.sectionHead}>The 4 Pillars</SectionHead>
-        <Text style={styles.sectionSub}>Every stage develops the same four pillars — the level just keeps rising.</Text>
-        {PILLARS.map((p) => (
-          <ScrollReveal key={p.name} scrollY={scrollY}>
-          <DepthCard style={styles.pillarCard}>
-            <View pointerEvents="none" style={[styles.pillarAccent, { backgroundColor: p.color }]} />
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <Keycap size={36} radius={11}>
-                <Ionicons name={p.icon} size={18} color={p.color} />
-              </Keycap>
-              <Text style={styles.pillarName}>{p.name}</Text>
-            </View>
-            <Text style={styles.pillarDesc}>{p.desc}</Text>
-          </DepthCard>
-          </ScrollReveal>
-        ))}
 
         <SectionHead style={styles.sectionHead}>The Stages</SectionHead>
         <ScrollReveal scrollY={scrollY}>
