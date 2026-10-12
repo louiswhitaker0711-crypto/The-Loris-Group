@@ -17,7 +17,7 @@ import { Breathe } from '../src/components/ui/Breathe';
 import PressableScale from '../src/components/ui/PressableScale';
 import PlannerLoaReview from '../src/components/planner/PlannerLoaReview';
 import PrimetimeDayBlock from '../src/components/planner/PrimetimeDayBlock';
-import WeeklySheet, { printWeeklySheet } from '../src/components/planner/WeeklySheet';
+import WeeklySheet, { printWeeklySheet, type SheetRow } from '../src/components/planner/WeeklySheet';
 import { planningTarget } from '../src/utils/officeDay';
 import { useAuth } from '../src/auth/AuthContext';
 import { apiService } from '../src/api/client';
@@ -92,6 +92,8 @@ const NOTE_FIELDS: { key: string; label: string; icon: any }[] = [
   { key: 'morning_cs', label: 'Morning Meeting · Customer Service', icon: 'heart-outline' },
   { key: 'morning_bells', label: 'Morning Meeting · Bells', icon: 'notifications-outline' },
 ];
+// Every day box, for the day page laid out in the person's own order.
+const ALL_DAY_FIELDS: { key: string; label: string; icon: any }[] = [...PLAN_FIELDS, ...NOTE_FIELDS];
 
 type DevRow = { id: string; who: string; what: string };
 type Review = {
@@ -380,6 +382,15 @@ export default function WeeklyPlannerScreen() {
     enabled: showWeekTab,
   });
 
+  // The viewer's own row order and times (the Sheet tab and the day pages).
+  const layoutQ = useQuery({
+    queryKey: ['sheet-layout'],
+    queryFn: () => apiService.getSheetLayout().then((r) => r.data as { rows: SheetRow[] }),
+    staleTime: 1000 * 60 * 5,
+    enabled: showWeekTab,
+  });
+  const layoutRows: SheetRow[] = layoutQ.data?.rows || [];
+
   // Safety net: if we guessed 'week' before the doc loaded but the target
   // turns out to be a trainee (e.g. a leader opening a trainee's plan via
   // ?user_id=), correct onto a real tab instead of showing an empty Week page.
@@ -546,6 +557,34 @@ export default function WeeklyPlannerScreen() {
     }
   }, [crewEdit]);
   const isAdmin = user?.role === 'admin';
+
+  // One day box as a card (used by the day page in the person's own order).
+  const renderDayCard = (f: { key: string; label: string; icon: any }, dayIdx: number) => (
+    <Card
+      grow
+      key={f.key} icon={f.icon} title={f.label}
+      right={canEdit ? (
+        <TouchableOpacity onPress={() => onScanInto(dayIdx, f.key)} hitSlop={8} disabled={scanningField === f.key}>
+          {scanningField === f.key
+            ? <ActivityIndicator size="small" color={colors.primary} />
+            : <Ionicons name="camera-outline" size={17} color={colors.primary} />}
+        </TouchableOpacity>
+      ) : undefined}
+    >
+      {f.key === 'morning_bells' && isAdmin && !targetUserId && (
+        <BellsReadoutBlock week={week} dayIndex={dayIdx} />
+      )}
+      <NoteBox
+        value={draft?.days[String(dayIdx)]?.[f.key] || ''}
+        placeholder="Notes…"
+        onOpen={() => setEditorField({ where: 'day', tab: dayIdx, key: f.key, title: f.label })}
+      />
+      {f.key === 'primetime' && showWeekTab && (
+        <PrimetimeDayBlock week={week} dayIndex={dayIdx} canEdit={canEdit} />
+      )}
+    </Card>
+  );
+
   // The goals card describes the PLAN OWNER's goal, so its wording follows
   // their role — an admin opening a team leader's plan must see "Team sales",
   // not "Office sales" (only an admin's own crew goal drives the office goal).
@@ -1204,63 +1243,79 @@ export default function WeeklyPlannerScreen() {
               <Text style={styles.daySub}>{shortDate(dayDate(week, tab))}</Text>
             </View>
 
-            <Kicker style={styles.kicker}>Plan today</Kicker>
-            <View style={styles.cardGrid}>
-            {planFields.map((f) => (
-              <Card
-                grow
-                key={f.key} icon={f.icon} title={f.label}
-                right={canEdit ? (
-                  <TouchableOpacity onPress={() => onScanInto(tab, f.key)} hitSlop={8} disabled={scanningField === f.key}>
-                    {scanningField === f.key
-                      ? <ActivityIndicator size="small" color={colors.primary} />
-                      : <Ionicons name="camera-outline" size={17} color={colors.primary} />}
-                  </TouchableOpacity>
-                ) : undefined}
-              >
-                <NoteBox
-                  value={draft.days[String(tab)]?.[f.key] || ''}
-                  placeholder={`Plan ${f.label.toLowerCase()}…`}
-                  onOpen={() => setEditorField({ where: 'day', tab, key: f.key, title: f.label })}
-                />
-                {/* The box above stays what it always was: the leader's own
-                    note to self. Underneath it, the structured version for the
-                    same day — the crew who are actually in, each with
-                    learning/teaching/watching, a topic and who with, plus what
-                    the rest of the office is running. Leaders only; trainees
-                    don't schedule anyone. */}
-                {f.key === 'primetime' && showWeekTab && (
-                  <PrimetimeDayBlock week={week} dayIndex={tab} canEdit={canEdit} />
-                )}
-              </Card>
-            ))}
-            </View>
+            {showWeekTab && layoutRows.length > 0 ? (
+              <>
+                <Kicker style={styles.kicker}>Your day</Kicker>
+                <View style={styles.cardGrid}>
+                  {layoutRows.map((row) => {
+                    const f = ALL_DAY_FIELDS.find((x) => x.key === row.key);
+                    if (!f) return null;
+                    return renderDayCard({ ...f, label: row.time ? `${row.time} · ${row.label}` : row.label }, tab);
+                  })}
+                </View>
+                <Text style={styles.layoutHint}>Change the order, names and times in Sheet → Edit rows.</Text>
+              </>
+            ) : (
+              <>
+                <Kicker style={styles.kicker}>Plan today</Kicker>
+                <View style={styles.cardGrid}>
+                {planFields.map((f) => (
+                  <Card
+                    grow
+                    key={f.key} icon={f.icon} title={f.label}
+                    right={canEdit ? (
+                      <TouchableOpacity onPress={() => onScanInto(tab, f.key)} hitSlop={8} disabled={scanningField === f.key}>
+                        {scanningField === f.key
+                          ? <ActivityIndicator size="small" color={colors.primary} />
+                          : <Ionicons name="camera-outline" size={17} color={colors.primary} />}
+                      </TouchableOpacity>
+                    ) : undefined}
+                  >
+                    <NoteBox
+                      value={draft.days[String(tab)]?.[f.key] || ''}
+                      placeholder={`Plan ${f.label.toLowerCase()}…`}
+                      onOpen={() => setEditorField({ where: 'day', tab, key: f.key, title: f.label })}
+                    />
+                    {/* The box above stays what it always was: the leader's own
+                        note to self. Underneath it, the structured version for the
+                        same day — the crew who are actually in, each with
+                        learning/teaching/watching, a topic and who with, plus what
+                        the rest of the office is running. Leaders only; trainees
+                        don't schedule anyone. */}
+                    {f.key === 'primetime' && showWeekTab && (
+                      <PrimetimeDayBlock week={week} dayIndex={tab} canEdit={canEdit} />
+                    )}
+                  </Card>
+                ))}
+                </View>
 
-            <Kicker style={styles.kicker}>Notes</Kicker>
-            <View style={styles.cardGrid}>
-            {NOTE_FIELDS.map((f) => (
-              <Card
-                grow
-                key={f.key} icon={f.icon} title={f.label}
-                right={canEdit ? (
-                  <TouchableOpacity onPress={() => onScanInto(tab, f.key)} hitSlop={8} disabled={scanningField === f.key}>
-                    {scanningField === f.key
-                      ? <ActivityIndicator size="small" color={colors.primary} />
-                      : <Ionicons name="camera-outline" size={17} color={colors.primary} />}
-                  </TouchableOpacity>
-                ) : undefined}
-              >
-                {f.key === 'morning_bells' && isAdmin && !targetUserId && (
-                  <BellsReadoutBlock week={week} dayIndex={tab} />
-                )}
-                <NoteBox
-                  value={draft.days[String(tab)]?.[f.key] || ''}
-                  placeholder="Notes…"
-                  onOpen={() => setEditorField({ where: 'day', tab, key: f.key, title: f.label })}
-                />
-              </Card>
-            ))}
-            </View>
+                <Kicker style={styles.kicker}>Notes</Kicker>
+                <View style={styles.cardGrid}>
+                {NOTE_FIELDS.map((f) => (
+                  <Card
+                    grow
+                    key={f.key} icon={f.icon} title={f.label}
+                    right={canEdit ? (
+                      <TouchableOpacity onPress={() => onScanInto(tab, f.key)} hitSlop={8} disabled={scanningField === f.key}>
+                        {scanningField === f.key
+                          ? <ActivityIndicator size="small" color={colors.primary} />
+                          : <Ionicons name="camera-outline" size={17} color={colors.primary} />}
+                      </TouchableOpacity>
+                    ) : undefined}
+                  >
+                    {f.key === 'morning_bells' && isAdmin && !targetUserId && (
+                      <BellsReadoutBlock week={week} dayIndex={tab} />
+                    )}
+                    <NoteBox
+                      value={draft.days[String(tab)]?.[f.key] || ''}
+                      placeholder="Notes…"
+                      onOpen={() => setEditorField({ where: 'day', tab, key: f.key, title: f.label })}
+                    />
+                  </Card>
+                ))}
+                </View>
+              </>
+            )}
           </>
         )}
 
@@ -1271,7 +1326,12 @@ export default function WeeklyPlannerScreen() {
             canEdit={canEdit}
             onReview={(patch) => setReview(patch as Partial<Review>)}
             onDay={setDayField}
-            onPrint={() => printWeeklySheet(draft.review, draft.days, week, targetName)}
+            layout={layoutRows}
+            onSaveLayout={async (rows) => {
+              const res = await apiService.putSheetLayout(rows);
+              queryClient.setQueryData(['sheet-layout'], res.data);
+            }}
+            onPrint={() => printWeeklySheet(draft.review, draft.days, week, targetName, layoutRows)}
           />
         )}
 
@@ -1688,6 +1748,7 @@ const createStyles = (colors: any) => StyleSheet.create({
 
   shell: { width: '100%', maxWidth: 1240, alignSelf: 'center' },
   kicker: { marginTop: 8, marginBottom: 10 },
+  layoutHint: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, marginTop: 2, marginBottom: 8 },
   cardGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 12 },
   cardGrow: { flexGrow: 1, flexBasis: 380, minWidth: 260, marginBottom: 0 },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, marginTop: 4 },

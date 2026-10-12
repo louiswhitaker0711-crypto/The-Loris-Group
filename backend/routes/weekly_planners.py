@@ -1339,6 +1339,73 @@ async def set_my_planner_goals(request: Request):
             "office_goal": office_goal_out}
 
 
+# ── Weekly sheet layout: each person's own rows, order and times ──────────
+# Personal only: it changes how the sheet and the day pages are laid out for
+# that person, never the office timetable.
+SHEET_DEFAULT_ROWS = [
+    {"key": "leaders_meeting", "label": "Coaches", "time": "10:00", "on_sheet": True},
+    {"key": "stage1", "label": "Stage 1", "time": "10:30", "on_sheet": True},
+    {"key": "stage2", "label": "Stage 2", "time": "10:30", "on_sheet": True},
+    {"key": "primetime", "label": "Primetime", "time": "11:00", "on_sheet": False},
+    {"key": "sales_impact", "label": "Sales impact", "time": "11:00", "on_sheet": True},
+    {"key": "product_coaching", "label": "Product coaching", "time": "11:00", "on_sheet": True},
+    {"key": "morning_news", "label": "News and Bells", "time": "11:45", "on_sheet": True},
+    {"key": "morning_topic", "label": "Topic", "time": "11:45", "on_sheet": True},
+    {"key": "morning_cs", "label": "Customer service", "time": "11:45", "on_sheet": True},
+    {"key": "morning_bells", "label": "Bells", "time": "11:45", "on_sheet": False},
+    {"key": "sector", "label": "Sectors", "time": "13:30", "on_sheet": True},
+    {"key": "networking", "label": "Networking", "time": "", "on_sheet": False},
+    {"key": "crew_plan", "label": "Crew meetings", "time": "", "on_sheet": False},
+    {"key": "appointments", "label": "Appointments", "time": "", "on_sheet": True},
+]
+_TIME_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+_SHEET_DEFAULT_BY_KEY = {r["key"]: r for r in SHEET_DEFAULT_ROWS}
+
+
+def normalize_sheet_layout(raw) -> list:
+    """Every day box once, in the person's order, each with a short label, an
+    optional HH:MM time and whether it shows on the weekly sheet. Unknown or
+    repeated keys are dropped; boxes left out are added at the end."""
+    out, seen = [], set()
+    for r in raw if isinstance(raw, list) else []:
+        if not isinstance(r, dict):
+            continue
+        key = str(r.get("key") or "")
+        if key not in _SHEET_DEFAULT_BY_KEY or key in seen:
+            continue
+        seen.add(key)
+        time = str(r.get("time") or "").strip()
+        on_sheet = r.get("on_sheet")
+        out.append({
+            "key": key,
+            "label": _s(r.get("label"), 40) or _SHEET_DEFAULT_BY_KEY[key]["label"],
+            "time": time if _TIME_RE.match(time) else "",
+            "on_sheet": _SHEET_DEFAULT_BY_KEY[key]["on_sheet"] if on_sheet is None else bool(on_sheet),
+        })
+    out += [dict(r) for r in SHEET_DEFAULT_ROWS if r["key"] not in seen]
+    return out
+
+
+@router.get("/weekly-planners/sheet-layout")
+async def get_sheet_layout(request: Request):
+    me = await get_current_user(request)
+    doc = await db.planner_sheet_layouts.find_one({"user_id": str(me["id"])}, {"_id": 0, "rows": 1})
+    return {"rows": normalize_sheet_layout((doc or {}).get("rows")), "custom": bool(doc)}
+
+
+@router.put("/weekly-planners/sheet-layout")
+async def put_sheet_layout(request: Request):
+    me = await get_current_user(request)
+    body = await request.json()
+    rows = normalize_sheet_layout((body or {}).get("rows"))
+    await db.planner_sheet_layouts.update_one(
+        {"user_id": str(me["id"])},
+        {"$set": {"user_id": str(me["id"]), "rows": rows, "updated_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True,
+    )
+    return {"rows": rows, "custom": True}
+
+
 @router.get("/weekly-planners/{week}")
 async def get_weekly_planner(week: str, request: Request, user_id: Optional[str] = None):
     """Planner doc for a week (coerced to its Sunday). Owner gets a seed if
