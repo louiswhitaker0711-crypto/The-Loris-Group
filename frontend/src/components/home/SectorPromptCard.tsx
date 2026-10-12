@@ -26,7 +26,7 @@ export default function SectorPromptCard() {
   if (data.is_leader && data.phase === 'setup') {
     if (!data.has_sector) {
       icon = 'rocket'; title = 'Start your sector set-up';
-      sub = "Tick who's in your sector, then each person's goal, KPI and focus."; url = '/sector?start=1';
+      sub = "Tick who's in, add the postcode and sector goal, then each person's set-up."; url = '/sector?start=1';
     } else if (data.setups < data.members) {
       icon = 'create'; title = `Finish set-up · ${data.setups}/${data.members}`;
       sub = 'A few people still need their goal, KPI and focus.'; url = '/sector';

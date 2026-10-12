@@ -94,7 +94,8 @@ export default function SectorScreen() {
       )}
 
       {!!q.data?.can_manage && !!q.data?.sector && mode === 'setup' && (
-        <SectorGoal key={date + String(q.data.sector.goal ?? '')} date={date} current={q.data.sector.goal ?? null}
+        <SectorGoal key={date + String(q.data.sector.goal ?? '') + (q.data.sector.postcode || '')} date={date}
+          current={q.data.sector.goal ?? null} currentPostcode={q.data.sector.postcode || ''}
           suggested={people.reduce((a, p) => a + (p.setup?.goal || 0), 0)} onSaved={() => q.refetch()} s={s} c={c} />
       )}
 
@@ -132,21 +133,26 @@ export default function SectorScreen() {
   );
 }
 
-function SectorGoal({ date, current, suggested, onSaved, s, c }: { date: string; current: number | null; suggested: number; onSaved: () => void; s: any; c: any }) {
+function SectorGoal({ date, current, currentPostcode, suggested, onSaved, s, c }: { date: string; current: number | null; currentPostcode: string; suggested: number; onSaved: () => void; s: any; c: any }) {
   const [goal, setGoal] = useState(current != null ? String(current) : '');
+  const [postcode, setPostcode] = useState(currentPostcode);
   const [busy, setBusy] = useState(false);
   const save = async () => {
     setBusy(true);
     try {
-      await apiService.saveSectorGoal(date, num(goal));
-      toast.success('Sector goal saved'); onSaved();
+      await apiService.saveSectorGoal(date, num(goal), postcode);
+      toast.success('Sector saved'); onSaved();
     } catch (e) { showAlert('Could not save', errText(e, 'Try again.')); }
     finally { setBusy(false); }
   };
   return (
     <View style={s.card}>
-      <Text style={s.h}>🎯 Sector goal</Text>
-      <Text style={s.muted}>Sign-ups for the whole sector today. You get updates against it through the field.</Text>
+      <Text style={s.h}>📍 Your sector today</Text>
+      <Text style={s.label}>Postcode</Text>
+      <TextInput value={postcode} onChangeText={(v) => setPostcode(v.toUpperCase())} autoCapitalize="characters" maxLength={10}
+        placeholder="LS6 1AB" placeholderTextColor={c.textMuted} style={[s.input, { width: 160 }]} accessibilityLabel="Postcode" />
+      <Text style={s.label}>Sector goal</Text>
+      <Text style={s.muted}>Sign-ups for the whole sector. You get updates against it through the field.</Text>
       <View style={s.row}>
         <TextInput value={goal} onChangeText={setGoal} keyboardType="number-pad" placeholder={suggested ? String(suggested) : '12'}
           placeholderTextColor={c.textMuted} style={[s.input, s.small]} accessibilityLabel="Sector goal" />

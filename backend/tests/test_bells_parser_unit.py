@@ -192,3 +192,15 @@ def test_the_office_report_format_with_diamonds_bold_names_and_a_title():
         "*Kit* 1\n💎3📸\n"
     )
     assert _counts(report) == {"Alex": (1, 1, 0), "Sam": (3, 2, 3), "jo": (2, 0, 1), "Kit": (1, 0, 0)}
+
+
+def test_the_report_without_blank_lines_still_splits_by_bold_name():
+    # The top line is the sector's goal/hit ("15/9"), not a person, and a
+    # report typed with no blank lines (or one person per line) still splits.
+    report = (
+        "*Example Team* 15/9\n"
+        "*Alex* 2\n🥇2📸\n🥈3📸\n"
+        "*Sam* 5 💎2📸⭕️ 🥇1📸 🥈3📸 🥈3📸⭕️ 💎2📸⭕️\n"
+        "*jo* 2 🥇2📸 💎3📸⭕️\n"
+    )
+    assert _counts(report) == {"Alex": (1, 1, 0), "Sam": (3, 2, 3), "jo": (2, 0, 1)}

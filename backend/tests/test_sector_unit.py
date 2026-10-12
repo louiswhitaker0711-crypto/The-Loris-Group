@@ -23,7 +23,7 @@ def test_breakdown_text_matches_the_office_layout():
         {"user_name": "Nobody Yet", "breakdown": None},
     ]
     assert sec.breakdown_text(rows, "2026-10-12") == (
-        "*Breakdown* 12/10\n\n*Alex*\n82/57/20/17 (phone died)\nGoal: 3 hit: 1\nProud of: shorten my pitch\nChange: SEE"
+        "*Breakdown* Mon 12 Oct\nSector goal: 8 hit: 6\nPA: 3.0 · Scoring: 100%\n\n*Alex*\n82/57/20/17 (phone died)\nGoal: 3 hit: 1\nProud of: shorten my pitch\nChange: SEE"
         "\n\n*Sam*\n95/64/20/13\nGoal: 5 hit: 5🔥\nProud of: good intro\nChange: speak to 80")
 
 
@@ -31,7 +31,7 @@ def test_setup_text_matches_the_office_layout():
     rows = [{"user_name": "Alex Example", "setup": {"goal": 4, "kpi_metric": "closes", "kpi_target": 20, "focus": "KISS"}},
             {"user_name": "Sam Example", "setup": {"goal": 4, "kpi_metric": "spoken", "kpi_target": 70, "focus": "handling objections"}}]
     assert sec.setup_text(rows, "2026-10-13") == (
-        "*SetUp* 13/10\n\n*Alex*\nGoal: 4\nKPI: 20 closes\n\nFocus: KISS"
+        "*SetUp* Tue 13 Oct\n\n*Alex*\nGoal: 4\nKPI: 20 closes\n\nFocus: KISS"
         "\n\n*Sam*\nGoal: 4\nKPI: 70 spoken\n\nFocus: handling objections")
 
 
@@ -86,10 +86,18 @@ class _Req:
 def test_sector_goal_heads_the_whatsapp_texts():
     rows = [{"user_name": "Alex Example", "setup": {"goal": 4}, "breakdown": {"goal": 4, "hit": 5}},
             {"user_name": "Sam Example", "setup": {"goal": 3}, "breakdown": {"goal": 3, "hit": 2}}]
-    assert sec.setup_text(rows, "2026-10-12", 8).startswith("*SetUp* 12/10\nSector goal: 8\n\n*Alex*")
-    assert sec.breakdown_text(rows, "2026-10-12", 7).startswith("*Breakdown* 12/10\nSector goal: 7 hit: 7🔥")
-    # No sector goal: the office's layout is unchanged.
-    assert sec.setup_text(rows, "2026-10-12").startswith("*SetUp* 12/10\n\n*Alex*")
+    assert sec.setup_text(rows, "2026-10-12", 8, "LS6").startswith("*SetUp* Mon 12 Oct\nPostcode: LS6\nSector goal: 8\n\n*Alex*")
+    assert sec.breakdown_text(rows, "2026-10-12", 7, "LS6").startswith(
+        "*Breakdown* Mon 12 Oct\nPostcode: LS6\nSector goal: 7 hit: 7🔥\nPA: 3.5 · Scoring: 100%\n\n*Alex*")
+    assert sec.setup_text(rows, "2026-10-12").startswith("*SetUp* Mon 12 Oct\n\n*Alex*")
+
+
+def test_pa_and_scoring_count_the_people_in():
+    rows = [{"breakdown": {"doors": 100, "goal": 4, "hit": 3}}, {"breakdown": {"doors": 90, "goal": 3, "hit": 0}},
+            {"breakdown": {"doors": 110, "goal": 4, "hit": 2}}, {"breakdown": {"doors": 80, "goal": 3, "hit": 1}},
+            {"breakdown": None}]
+    assert sec.sector_stats(rows) == {"in": 4, "hit": 6, "goal": 14, "pa": 1.5, "scoring": 75}
+    assert sec.clean_postcode(" ls6  1ab! ") == "LS6 1AB"
 
 
 def test_the_positive_goes_in_each_persons_nudge():

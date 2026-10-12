@@ -172,6 +172,9 @@ def _summary_line(line: str) -> bool:
     return bool(_name_part(line)) and sum(text_counts(line)) > 0
 
 
+_BOLD_NAME_RX = re.compile(r"^\*[^*\d][^*]*\*")
+
+
 def _split_blocks(text: str) -> List[List[str]]:
     """Split paste into blocks of lines per rep (separated by blank lines)."""
     blocks: List[List[str]] = []
@@ -183,6 +186,11 @@ def _split_blocks(text: str) -> List[List[str]]:
                 blocks.append(current)
                 current = []
         else:
+            # A WhatsApp bold name ("*Val* 2") always starts a new person, so a
+            # report with no blank lines between people still splits.
+            if current and _BOLD_NAME_RX.match(line.strip()):
+                blocks.append(current)
+                current = []
             current.append(line)
     if current:
         blocks.append(current)
@@ -232,7 +240,11 @@ def deterministic_parse(text: str) -> List[ParsedRep]:
     for block in _split_blocks(text):
         if not block:
             continue
-        name = _name_from_header(block[0]) if not _summary_line(block[0]) else _name_part(block[0])
+        bold = _BOLD_NAME_RX.match(block[0].strip())
+        if bold:
+            name = bold.group(0).strip("* ").strip()
+        else:
+            name = _name_from_header(block[0]) if not _summary_line(block[0]) else _name_part(block[0])
         if not name:
             continue
         # The first line itself may contain emojis (rare but possible — e.g.
@@ -272,7 +284,7 @@ def deterministic_parse(text: str) -> List[ParsedRep]:
         confidence = 1.0 if noise == 0 else 0.7
 
         if sales_count == 0 and len(block) == 1 and _DATE_RX.search(block[0]):
-            continue  # a title line like "*Team* 12/10", not a person
+            continue  # the title line ("*Team* 12/10" = sector goal/hit), not a person
         reps.append(ParsedRep(
             raw_name=name,
             over30=over30,
