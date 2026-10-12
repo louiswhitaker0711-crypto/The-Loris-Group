@@ -978,6 +978,12 @@ export const apiService = {
     api.get<OfficeWeeklyReview>('/weekly-planners/office/weekly-review', {
       params: { ...(week ? { week } : {}), ...(office ? { office } : {}) },
     }),
+  // Meeting notes and recaps (Schedule → a meeting → Meeting notes).
+  getMeetingNote: (blockId: string, date: string) => api.get('/meeting-notes', { params: { block_id: blockId, date } }),
+  saveMeetingNote: (body: { block_id: string; date: string; raw_notes?: string; recap?: string }) => api.put('/meeting-notes', body),
+  writeMeetingRecap: (noteId: string) => api.post(`/meeting-notes/${noteId}/recap`, {}, { timeout: 120_000 }),
+  publishMeetingRecap: (noteId: string, body: { publish: boolean; notify?: boolean }) => api.post(`/meeting-notes/${noteId}/publish`, body),
+  meetingRecapLibrary: () => api.get('/meeting-notes/library'),
   scanWeeklyNotes: (data: { uri: string; name?: string; type?: string }) => {
     const form = new FormData();
     // @ts-ignore — RN FormData accepts {uri,name,type}

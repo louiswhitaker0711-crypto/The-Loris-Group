@@ -41,6 +41,7 @@ from routes.public_html import router as public_html_router
 from routes.roster_share import router as roster_share_router
 from routes.schedule import router as schedule_router
 from routes.agenda import router as agenda_router
+from routes.meeting_notes import router as meeting_notes_router
 from routes.monthly_planners import router as monthly_planners_router
 from routes.weekly_planners import router as weekly_planners_router
 from routes.primetime import router as primetime_router
@@ -140,6 +141,7 @@ api_router.include_router(primetime_router)
 api_router.include_router(absences_router)
 api_router.include_router(planner_coach_router)
 api_router.include_router(coaching_router)
+api_router.include_router(meeting_notes_router)
 api_router.include_router(coaching_assistant_router)
 api_router.include_router(product_knowledge_router)
 api_router.include_router(user_prefs_router)

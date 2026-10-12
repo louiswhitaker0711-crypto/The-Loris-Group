@@ -29,6 +29,8 @@ export function hrefOf(it: Pick<TabItem, 'kind' | 'target'>): string {
 const ROUTE_TITLES: Record<string, [string, IconName]> = {
   badges: ['Badges', 'ribbon-outline'],
   'owneriq-import': ['Add from OwnerIQ', 'git-network-outline'],
+  'meeting-notes': ['Meeting notes', 'document-text-outline'],
+  'meeting-recaps': ['Meeting recaps', 'albums-outline'],
   module: ['Module', 'book-outline'],
   leadership: ['My Progress', 'footsteps-outline'],
   bells: ['Bells', 'notifications-outline'],

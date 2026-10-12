@@ -55,6 +55,7 @@ _TYPE_TO_CATEGORY = {
     "ci_ready": "coaching",
     "ci_comment": "coaching",
     "zero_days": "coaching",        # two zero days in a row → needs a retrain
+    "meeting_recap": "coaching",    # a meeting recap was published
     "schedule": "schedule",
     "absence_request": "schedule",
     "absence_decision": "schedule",
