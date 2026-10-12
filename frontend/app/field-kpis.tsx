@@ -147,6 +147,12 @@ export default function FieldKpisScreen() {
   const [excluded, setExcluded] = useState<Set<string>>(() => new Set(saved?.excluded ?? []));
   const [weekEnding, setWeekEnding] = useState(() => saved?.weekEnding ?? thisSundayISO());
   const [weekPickerOpen, setWeekPickerOpen] = useState(false);
+  // Per-BA rows opened to show that person's average per day and what it
+  // takes them to land 1 sign-up.
+  const [openReps, setOpenReps] = useState<Set<string>>(() => new Set());
+  const toggleRep = useCallback((key: string) => {
+    setOpenReps((s) => { const n = new Set(s); if (n.has(key)) n.delete(key); else n.add(key); return n; });
+  }, []);
   const [search, setSearch] = useState(() => saved?.search ?? '');
   const [avgOpen, setAvgOpen] = useState(() => saved?.avgOpen ?? true);
   const [ratioOpen, setRatioOpen] = useState(() => saved?.ratioOpen ?? true);
@@ -479,11 +485,23 @@ export default function FieldKpisScreen() {
               {/* per-BA table — the full funnel per person, in scheme order */}
               <View style={styles.collHead}>
                 <Kicker style={styles.collTitle} count={repFilter.size > 0 ? `${repFilter.size} selected` : shownReps.length}>Per BA</Kicker>
+                <TouchableOpacity
+                  onPress={() => setOpenReps(openReps.size >= shownReps.length && shownReps.length > 0
+                    ? new Set() : new Set(shownReps.map((r) => r.key)))}
+                  style={styles.perBaFilter}
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="stats-chart-outline" size={14} color={colors.primary} />
+                  <Text style={styles.perBaFilterTxt}>
+                    {openReps.size >= shownReps.length && shownReps.length > 0 ? 'Hide averages' : 'Show averages'}
+                  </Text>
+                </TouchableOpacity>
                 <TouchableOpacity onPress={() => setFilterOpen(true)} style={styles.perBaFilter}>
                   <Ionicons name={repFilter.size > 0 ? 'funnel' : 'funnel-outline'} size={14} color={colors.primary} />
                   <Text style={styles.perBaFilterTxt}>Filter</Text>
                 </TouchableOpacity>
               </View>
+              <Text style={styles.tableHint}>Tap a name for their average per day and what it takes them to land 1 sign-up.</Text>
               {canManage && (
                 <Text style={styles.tableHint}>Tap the eye to leave someone out of the average, or put them back.</Text>
               )}
@@ -499,10 +517,14 @@ export default function FieldKpisScreen() {
               )}
               {shownReps.map((rep, i) => {
                 const off = rep.excluded;
+                const isOpen = openReps.has(rep.key);
+                const last = i === shownReps.length - 1;
+                const days = rep.active_days || 0;
+                const signUps = rep.totals?.sales || 0;
                 return (
+                  <View key={rep.key}>
                   <View
-                    key={rep.key}
-                    style={[styles.trRow, i === shownReps.length - 1 && { borderBottomWidth: 0 }, off && styles.repRowOff]}
+                    style={[styles.trRow, (last && !isOpen) && { borderBottomWidth: 0 }, isOpen && { borderBottomWidth: 0 }, off && styles.repRowOff]}
                   >
                     <View style={styles.trRepCell}>
                       {canManage && (
@@ -518,15 +540,18 @@ export default function FieldKpisScreen() {
                             color={off ? colors.textMuted : colors.primary} />
                         </TouchableOpacity>
                       )}
-                      <View style={{ flex: 1, minWidth: 0 }}>
+                      <Pressable style={{ flex: 1, minWidth: 0 }} onPress={() => toggleRep(rep.key)}
+                        accessibilityRole="button" accessibilityState={{ expanded: isOpen }}
+                        accessibilityLabel={`${rep.rep_name || 'This BA'}: ${isOpen ? 'hide' : 'show'} averages`}>
                         <Text style={[styles.repName, off && styles.repDim]} numberOfLines={2}>
-                          {rep.rep_name || rep.badge_number || 'Unknown'}
+                          {rep.rep_name || rep.badge_number || 'Unknown'}{' '}
+                          <Ionicons name={isOpen ? 'chevron-up' : 'chevron-down'} size={11} color={colors.textMuted} />
                         </Text>
                         <Text style={styles.repMeta} numberOfLines={1}>
                           {rep.badge_number || 'no badge'} · {OFFICE_NAME(rep.mc_pin)}
                           {rep.zero ? ' · off' : ''}{!rep.cg1_user_id ? ' · unlinked' : ''}
                         </Text>
-                      </View>
+                      </Pressable>
                     </View>
                     {ROW_METRICS.map((m) => (
                       <Text
@@ -536,6 +561,33 @@ export default function FieldKpisScreen() {
                         {fmt(rep.totals?.[m.key])}
                       </Text>
                     ))}
+                  </View>
+                  {isOpen && (
+                    <View style={[styles.subWrap, last && { borderBottomWidth: 0 }]}>
+                      <View style={styles.subRow}>
+                        <View style={styles.subLblCell}>
+                          <Text style={styles.subLbl}>Average per day</Text>
+                          <Text style={styles.subMeta}>{days} {days === 1 ? 'day' : 'days'} in the field</Text>
+                        </View>
+                        {ROW_METRICS.map((m) => (
+                          <Text key={m.key} style={[styles.subCell, m.key === 'sales' && styles.tdSales]}>
+                            {days ? fmt1((rep.totals?.[m.key] || 0) / days) : '—'}
+                          </Text>
+                        ))}
+                      </View>
+                      <View style={styles.subRow}>
+                        <View style={styles.subLblCell}>
+                          <Text style={styles.subLbl}>For 1 sign-up</Text>
+                          <Text style={styles.subMeta}>{signUps ? 'what it took' : 'no sign-ups yet'}</Text>
+                        </View>
+                        {ROW_METRICS.map((m) => (
+                          <Text key={m.key} style={styles.subCell}>
+                            {m.key === 'sales' ? (signUps ? '1' : '—') : signUps ? fmt1((rep.totals?.[m.key] || 0) / signUps) : '—'}
+                          </Text>
+                        ))}
+                      </View>
+                    </View>
+                  )}
                   </View>
                 );
               })}
@@ -709,6 +761,12 @@ const createStyles = (c: any) => StyleSheet.create({
   trRepCell: { flex: 2.2, flexDirection: 'row', alignItems: 'center', paddingRight: 6, minWidth: 0 },
   tdCell: { flex: 1, fontFamily: fonts.body, fontSize: 13, color: c.textSecondary, textAlign: 'center', fontVariant: ['tabular-nums'] as any },
   tdSales: { fontFamily: fonts.bodyBold, color: c.text },
+  subWrap: { paddingHorizontal: 12, paddingBottom: 8, backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border },
+  subRow: { flexDirection: 'row', alignItems: 'center', minHeight: 34, paddingTop: 6 },
+  subLblCell: { flex: 2.2, paddingRight: 6, minWidth: 0 },
+  subLbl: { fontFamily: fonts.bodySemibold, fontSize: 11.5, color: c.textSecondary },
+  subMeta: { fontFamily: fonts.body, fontSize: 10, color: c.textMuted },
+  subCell: { flex: 1, fontFamily: fonts.body, fontSize: 12.5, color: c.textSecondary, textAlign: 'center', fontVariant: ['tabular-nums'] as any },
 
   helpTxt: { fontFamily: fonts.body, fontSize: 11.5, color: c.textMuted, marginTop: 8 },
   errTxt: { fontFamily: fonts.body, fontSize: 13, color: c.textSecondary, textAlign: 'center', marginTop: 40 },
