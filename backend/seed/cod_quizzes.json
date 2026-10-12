@@ -10506,5 +10506,257 @@
    ],
    "answer": 2
   }
+ ],
+ "2|Industry capacity": [
+  {
+   "question": "What is 'industry capacity' about?",
+   "choices": [
+    "How far door-to-door and direct sales can scale, even today",
+    "How many pints a van holds",
+    "How many BAs fit in the office",
+    "The size of a milk round"
+   ],
+   "answer": 0
+  },
+  {
+   "question": "Why can direct sales scale in this day and age?",
+   "choices": [
+    "It can't: it's dying out",
+    "Only by spending on adverts",
+    "Every new BA who learns the systems can reach more doors: the business grows with its people",
+    "Only with more vans"
+   ],
+   "answer": 2
+  },
+  {
+   "question": "What limits how fast a door-to-door business grows?",
+   "choices": [
+    "The number of doors in the UK",
+    "Recruiting, coaching and keeping good people",
+    "The weather",
+    "The app"
+   ],
+   "answer": 1
+  },
+  {
+   "question": "Why do people prefer services that come to them now?",
+   "choices": [
+    "Convenience: they're at home, with the products they use at home",
+    "They don't",
+    "Shops are closed",
+    "It's cheaper by law"
+   ],
+   "answer": 0
+  }
+ ],
+ "2|The ‘One’ principle": [
+  {
+   "question": "What does the 'One' principle say?",
+   "choices": [
+    "Every door is its own instance: it isn't connected to the last result",
+    "After five no's, a yes is due",
+    "A bad street means a bad day",
+    "One sign-up is enough for the day"
+   ],
+   "answer": 0
+  },
+  {
+   "question": "You've had ten no's in a row. What does the 'One' principle tell you?",
+   "choices": [
+    "A yes is guaranteed next",
+    "The street is finished",
+    "Your pitch is broken",
+    "The next door is a fresh chance: knock it with full S.E.E."
+   ],
+   "answer": 3
+  },
+  {
+   "question": "What's the gambler's fallacy?",
+   "choices": [
+    "Betting on sign-ups",
+    "A closing technique",
+    "A type of territory",
+    "Believing past results change the odds of the next one"
+   ],
+   "answer": 3
+  },
+  {
+   "question": "How does the 'One' principle help you be independent in the field?",
+   "choices": [
+    "You work alone all day",
+    "You don't carry the last door's result into the next, so you don't need someone to pick you up",
+    "You skip coaching",
+    "You only count good doors"
+   ],
+   "answer": 1
+  }
+ ],
+ "3|40/20 rule": [
+  {
+   "question": "What's the 40/20 rule when coaching a new start?",
+   "choices": [
+    "40 doors, then 20 sign-ups",
+    "40% sales, 20% breaks",
+    "About 40 minutes for you and 20 for them: two-thirds your own doors, one-third coaching them",
+    "40 minutes of breaks, 20 working"
+   ],
+   "answer": 2
+  },
+  {
+   "question": "Why balance your time like this?",
+   "choices": [
+    "So the new start works alone",
+    "To finish earlier",
+    "So your own numbers hold while you coach",
+    "It isn't important"
+   ],
+   "answer": 2
+  },
+  {
+   "question": "Roughly what share of your time is spent coaching the new start?",
+   "choices": [
+    "All of it",
+    "None",
+    "Three-quarters",
+    "About a third"
+   ],
+   "answer": 3
+  },
+  {
+   "question": "On day 1, what still comes first?",
+   "choices": [
+    "The new start's confidence: let them watch you first, then give them their share",
+    "Your own sign-ups only",
+    "Leaving them alone",
+    "Paperwork"
+   ],
+   "answer": 0
+  }
+ ],
+ "5|Showtime": [
+  {
+   "question": "What is 'Showtime'?",
+   "choices": [
+    "The morning meeting video",
+    "Turning it on and putting the show on for your people, whatever kind of day you're having",
+    "A sales competition",
+    "Time off"
+   ],
+   "answer": 1
+  },
+  {
+   "question": "A tough morning, then the team arrives. What does Showtime look like?",
+   "choices": [
+    "Steady and positive, giving people what they need",
+    "Showing your bad mood",
+    "Staying in your office",
+    "Cancelling the meeting"
+   ],
+   "answer": 0
+  },
+  {
+   "question": "Why is Showtime a leader's responsibility?",
+   "choices": [
+    "It isn't",
+    "Only the Owner does it",
+    "The team takes its energy from you",
+    "Only on Mondays"
+   ],
+   "answer": 2
+  },
+  {
+   "question": "Which word best fits the leader in Showtime?",
+   "choices": [
+    "Loud",
+    "Moody",
+    "Stoic: calm and consistent under pressure",
+    "Distant"
+   ],
+   "answer": 2
+  }
+ ],
+ "4|Countries": [
+  {
+   "question": "In which countries does the Acwyre network sell?",
+   "choices": [
+    "England only",
+    "England and Wales only",
+    "England, Scotland, France, Belgium and America",
+    "Every country in Europe"
+   ],
+   "answer": 2
+  },
+  {
+   "question": "Who runs the campaigns we're part of?",
+   "choices": [
+    "The Modern Milkman",
+    "Field IQ",
+    "Acwyre",
+    "Ginger"
+   ],
+   "answer": 2
+  },
+  {
+   "question": "Why does selling in different countries matter to a Stage 4?",
+   "choices": [
+    "It doesn't",
+    "So you can move abroad",
+    "Only for the Owner",
+    "It shows how big the network is and opens travel and expansion opportunities"
+   ],
+   "answer": 3
+  },
+  {
+   "question": "What do the systems have in common across countries?",
+   "choices": [
+    "The same systems: S.E.E., the 5 Steps, G.I.F.T.S. and the L.O.A.",
+    "Nothing",
+    "A different system everywhere",
+    "Only the product"
+   ],
+   "answer": 0
+  }
+ ],
+ "4|Scoring ratio": [
+  {
+   "question": "What's the scoring ratio?",
+   "choices": [
+    "Doors per sign-up",
+    "The share of people out in the field who scored (got at least one sign-up)",
+    "Sign-ups per hour",
+    "The fail rate"
+   ],
+   "answer": 1
+  },
+  {
+   "question": "10 out on the doors, 7 got a sign-up. What's the scoring ratio?",
+   "choices": [
+    "7%",
+    "10%",
+    "17%",
+    "70%"
+   ],
+   "answer": 3
+  },
+  {
+   "question": "Why does the scoring ratio matter to a Stage 4?",
+   "choices": [
+    "It shows how much of the team is contributing, not just the top performers",
+    "It doesn't",
+    "It's the same as total sales",
+    "Only for the client"
+   ],
+   "answer": 0
+  },
+  {
+   "question": "A high total but a low scoring ratio tells you...",
+   "choices": [
+    "Everyone's fine",
+    "The territory's bad",
+    "Stop coaching",
+    "A few people are carrying the team: coach the rest"
+   ],
+   "answer": 3
+  }
  ]
 }

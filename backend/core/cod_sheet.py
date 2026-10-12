@@ -72,6 +72,30 @@ NEW_OVERVIEWS = {
     },
 }
 
+# Notes for sheet items, in the Owner's words (Oct 2026). Seeded onto new
+# items, and filled into live items that still have no notes
+# (core/cod_sheet_migration.run_cod_notes_update).
+OWNER_NOTES: dict[tuple[int, str], str] = {
+    (2, 'Industry capacity'): (
+        'Industry capacity is about how far door-to-door and direct sales can scale, especially in this day and age.'
+    ),
+    (2, 'The ‘One’ principle'): (
+        "The 'One' principle is about the gambler's fallacy: every door, every instance, is not connected to the results before it. A run of no's doesn't make the next door a yes or a no. It's about being independent in the field: you don't carry the last result into the next door."
+    ),
+    (3, '40/20 rule'): (
+        "When you're coaching a new start, about 40 minutes for you and 20 minutes for them: roughly two-thirds of your time on your own doors and one-third coaching them, so you balance and manage your time."
+    ),
+    (5, 'Showtime'): (
+        "Showtime is turning it on: putting the show on and being a leader for people. Stay stoic and give people what they need, whatever kind of day you're having."
+    ),
+    (4, 'Countries'): (
+        "We sell in different countries in Acwyre's network: England, Scotland, France, Belgium and America."
+    ),
+    (4, 'Scoring ratio'): (
+        "The scoring ratio is the share of people out in the field who scored: got at least one sign-up. If 10 are out and 7 get a sign-up, that's 70%. A high total with a low scoring ratio means a few people are carrying the team."
+    ),
+}
+
 SHEET: list[tuple[int, str, list]] = [
     # ── Stage 1 · 6 Day Evaluation ────────────────────────────────────────
     (1, OVERVIEW, [("Stage 1 — 6 Day Evaluation", (1, "Stage 1 — The Foundation Standard"))]),

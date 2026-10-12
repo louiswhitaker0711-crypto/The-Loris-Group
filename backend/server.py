@@ -405,6 +405,8 @@ async def _startup_work():
     try:
         from core.cod_sheet_migration import run_cod_sheet_update
         await run_cod_sheet_update(db)
+        from core.cod_sheet_migration import run_cod_notes_update
+        await run_cod_notes_update(db)
     except Exception:
         logger.exception("COD sheet update failed (continuing)")
 
