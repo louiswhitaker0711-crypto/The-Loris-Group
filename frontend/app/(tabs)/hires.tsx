@@ -30,6 +30,7 @@ import FieldInsights from '../../src/components/insights/FieldInsights';
 // The Bells board (weekly sign-ups), shown here as the third section. It is
 // the same screen as /bells.
 import BellsBoard from '../bells';
+import { SectorsBoard } from '../../src/components/sector/SectorsBoard';
 import PressableScale from '../../src/components/ui/PressableScale';
 import { Skeleton } from '../../src/components/ui/Skeleton';
 import { EmptyState } from '../../src/components/ui/EmptyState';
@@ -148,11 +149,11 @@ export default function HiresScreen() {
   // Performance (OwnerIQ's Performance Hub), Spider and Bells are the views on
   // offer. Tree and Unassigned were taken off the bar (owner, Oct 2026); their
   // views are still below but nothing switches to them.
-  const [viewMode, setViewMode] = useState<'performance' | 'timeline' | 'spider' | 'bells' | 'tree' | 'unassigned'>('performance');
+  const [viewMode, setViewMode] = useState<'performance' | 'timeline' | 'spider' | 'bells' | 'sectors' | 'tree' | 'unassigned'>('performance');
   // A link can open a section directly: /hires?view=bells (Home's Bells shortcut).
   const { view: viewParam } = useLocalSearchParams<{ view?: string }>();
   useEffect(() => {
-    if (viewParam === 'performance' || viewParam === 'timeline' || viewParam === 'spider' || viewParam === 'bells') setViewMode(viewParam);
+    if (viewParam === 'performance' || viewParam === 'timeline' || viewParam === 'spider' || viewParam === 'bells' || viewParam === 'sectors') setViewMode(viewParam);
   }, [viewParam]);
   // Which tree row has its contact dropdown (phone / email / call) open.
   const [expandedContactId, setExpandedContactId] = useState<string | null>(null);
@@ -242,6 +243,7 @@ export default function HiresScreen() {
       { key: 'timeline', label: 'Timeline', testID: 'hires-view-timeline' },
       { key: 'spider', label: 'Spider', testID: 'hires-view-spider' },
       { key: 'bells', label: 'Bells', testID: 'hires-view-bells' },
+      { key: 'sectors', label: 'Sectors', testID: 'hires-view-sectors' },
     ];
     return items;
   }, []);
@@ -689,7 +691,7 @@ export default function HiresScreen() {
         <PillTabs
           items={viewSegments}
           value={viewMode}
-          onChange={(k) => setViewMode(k as 'performance' | 'timeline' | 'spider' | 'bells')}
+          onChange={(k) => setViewMode(k as 'performance' | 'timeline' | 'spider' | 'bells' | 'sectors')}
         />
       </View>
 
@@ -721,6 +723,9 @@ export default function HiresScreen() {
       ) : viewMode === 'bells' ? (
         /* ==================== BELLS (weekly sign-ups board) ==================== */
         <BellsBoard />
+      ) : viewMode === 'sectors' ? (
+        /* ==================== SECTORS (set-ups and breakdowns) ==================== */
+        <SectorsBoard bottomPad={tabBarClearance + 24} />
       ) : isLoading && viewMode !== 'unassigned' ? (
         <View style={styles.skeletonWrap}>
           <Skeleton.List kind="row" count={8} />

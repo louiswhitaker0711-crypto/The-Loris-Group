@@ -195,6 +195,10 @@ function BellsScreen() {
                   <Ionicons name="people-circle-outline" size={14} color={colors.text} />
                   <Text style={styles.ghostBtnText}>Set-up & breakdown</Text>
                 </TouchableOpacity>
+                <TouchableOpacity style={styles.ghostBtn} onPress={() => router.push('/sectors' as any)} testID="bells-sectors-btn">
+                  <Ionicons name="grid-outline" size={14} color={colors.text} />
+                  <Text style={styles.ghostBtnText}>Sectors</Text>
+                </TouchableOpacity>
                 <TouchableOpacity style={styles.ghostBtn} onPress={() => router.push('/field-reset' as any)} testID="bells-reset-btn">
                   <Ionicons name="refresh-circle-outline" size={14} color={colors.text} />
                   <Text style={styles.ghostBtnText}>6pm reset</Text>

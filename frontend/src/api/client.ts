@@ -997,6 +997,10 @@ export const apiService = {
   saveSectorDay: (userId: string, date: string, body: { setup?: any; breakdown?: any }) =>
     api.put(`/sector/day/${userId}`, body, { params: { date } }),
   notifySectorSetups: (date: string) => api.post('/sector/setup/notify', {}, { params: { date } }),
+  getSectorRoster: (date: string) => api.get('/sector/roster', { params: { date } }),
+  saveMySector: (date: string, memberIds: string[]) => api.put('/sector/sectors', { member_ids: memberIds }, { params: { date } }),
+  getSectorBoard: (date: string) => api.get('/sector/board', { params: { date } }),
+  getSectorStatus: () => api.get('/sector/status'),
   // Bells: paste the WhatsApp report
   parseBellsWhatsapp: (text: string, officeId?: string) => api.post('/bells/parse-whatsapp', { text, office_id: officeId }),
   applyBellsBulk: (body: { date: string; office_id: string; reps: Array<{ user_id: string | null; user_name: string; raw_name?: string; over30: number; under30: number; memberships: number }> }) =>

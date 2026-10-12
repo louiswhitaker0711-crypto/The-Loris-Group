@@ -37,6 +37,7 @@ import FieldAveragesCard from '../../src/components/home/FieldAveragesCard';
 import FieldIqWeekCard from '../../src/components/home/FieldIqWeekCard';
 import LiveOpsCard from '../../src/components/home/LiveOpsCard';
 import PrimetimeCard from '../../src/components/home/PrimetimeCard';
+import SectorPromptCard from '../../src/components/home/SectorPromptCard';
 import { Stagger } from '../../src/components/ui/Reveal';
 import { StreakFlame } from '../../src/components/ui/StreakFlame';
 import { useParallaxScroll } from '../../src/components/ui/Parallax';
@@ -496,6 +497,9 @@ export default function HomeScreen() {
   // A BA's own start, journey and sales path; a Coach's or Admin's new starts.
   const blockTop = (
     <>
+      {/* ── Sector set-up / breakdown prompt during field time ── */}
+      <SectorPromptCard />
+
       {/* ── Trainee: Start Here banner ── */}
       {isTrainee && (
         <GlowButton breathe onPress={() => router.push('/onboarding')} style={styles.startHereCard} testID="home-start-here">
