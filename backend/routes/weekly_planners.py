@@ -61,6 +61,8 @@ EIGHT_STEPS = [
 DAY_FIELDS = [
     "primetime", "sector", "networking", "crew_plan",
     "leaders_meeting", "morning_news", "morning_topic", "morning_cs", "morning_bells",
+    # The owner's printed weekly sheet adds these rows to each day.
+    "stage1", "stage2", "sales_impact", "product_coaching", "appointments",
 ]
 
 # Human labels for search results
@@ -74,7 +76,19 @@ DAY_FIELD_LABELS = {
     "morning_topic": "Morning Meeting · Topic",
     "morning_cs": "Morning Meeting · Customer Service",
     "morning_bells": "Morning Meeting · Bells",
+    "stage1": "Stage 1",
+    "stage2": "Stage 2",
+    "sales_impact": "Sales Impact",
+    "product_coaching": "Product Coaching",
+    "appointments": "Appointments",
 }
+
+# The top of the owner's printed weekly sheet. Concentration and Social use
+# the review's existing `concentration` and `team_management.social`.
+OFFICE_PLAN_FIELDS = (
+    "expectations_1", "expectations_2", "leaders_theme", "topic_theme",
+    "cs_theme", "competition", "news",
+)
 DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 
 
@@ -112,6 +126,8 @@ def _empty_review() -> dict:
         # 💡 Theme + concentration
         "theme": "",
         "concentration": "",
+        # 📋 The weekly sheet's header rows (OFFICE_PLAN_FIELDS)
+        "office_plan": {k: "" for k in OFFICE_PLAN_FIELDS},
         # 👥 Headcount / COD breakdown (free text — formats vary per leader)
         "headcount": "",
         # 🧑‍💼 Recruitment
@@ -182,6 +198,7 @@ def _normalize_review(raw) -> dict:
     out["next_goals"] = _sub(raw.get("next_goals"), {"sales": 20, "leaders": 20, "piece_avg": 20, "scoring": 20})
     out["theme"] = _s(raw.get("theme"), 300)
     out["concentration"] = _s(raw.get("concentration"), 300)
+    out["office_plan"] = _sub(raw.get("office_plan"), {k: 800 for k in OFFICE_PLAN_FIELDS})
     out["headcount"] = _s(raw.get("headcount"), 1500)
     out["recruitment"] = _sub(raw.get("recruitment"), {"booked_in": 20, "attended": 20, "newstarts": 20, "focus": 300})
     steps_raw = (raw.get("eight_steps") or {}) if isinstance(raw.get("eight_steps"), dict) else {}

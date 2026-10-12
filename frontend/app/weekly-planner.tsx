@@ -17,6 +17,7 @@ import { Breathe } from '../src/components/ui/Breathe';
 import PressableScale from '../src/components/ui/PressableScale';
 import PlannerLoaReview from '../src/components/planner/PlannerLoaReview';
 import PrimetimeDayBlock from '../src/components/planner/PrimetimeDayBlock';
+import WeeklySheet, { printWeeklySheet } from '../src/components/planner/WeeklySheet';
 import { planningTarget } from '../src/utils/officeDay';
 import { useAuth } from '../src/auth/AuthContext';
 import { apiService } from '../src/api/client';
@@ -75,7 +76,14 @@ const PLAN_FIELDS: { key: string; label: string; icon: any }[] = [
   { key: 'sector', label: 'Sector', icon: 'map-outline' },
   { key: 'networking', label: 'Networking', icon: 'people-outline' },
   { key: 'crew_plan', label: 'Crew Meetings', icon: 'rocket-outline' },
+  // From the owner's weekly sheet (Coaches and Admins only).
+  { key: 'stage1', label: 'Stage 1', icon: 'school-outline' },
+  { key: 'stage2', label: 'Stage 2', icon: 'school-outline' },
+  { key: 'sales_impact', label: 'Sales Impact', icon: 'trending-up-outline' },
+  { key: 'product_coaching', label: 'Product Coaching', icon: 'cube-outline' },
+  { key: 'appointments', label: 'Appointments', icon: 'calendar-outline' },
 ];
+const LEADER_ONLY_KEYS = ['crew_plan', 'stage1', 'stage2', 'sales_impact', 'product_coaching', 'appointments'];
 // "Notes" — what they write down as the day happens
 const NOTE_FIELDS: { key: string; label: string; icon: any }[] = [
   { key: 'leaders_meeting', label: 'Coaches Meeting', icon: 'star-outline' },
@@ -96,6 +104,7 @@ type Review = {
   next_goals: { sales: string; leaders: string; piece_avg: string; scoring: string };
   theme: string;
   concentration: string;
+  office_plan?: Record<string, string>;
   headcount: string;
   recruitment: { booked_in: string; attended: string; newstarts: string; focus: string };
   eight_steps: { scores: Record<string, number>; focus: string };
@@ -339,7 +348,7 @@ export default function WeeklyPlannerScreen() {
   // ?day=0..5 (e.g. from the Home hero) opens straight onto that day's page;
   // otherwise open on the day being planned, so after 6pm you land on
   // tomorrow ready to fill it in.
-  const [tab, setTab] = useState<'week' | number | 'notes'>(() => {
+  const [tab, setTab] = useState<'week' | 'sheet' | number | 'notes'>(() => {
     const d = parseInt(String(params.day ?? ''), 10);
     if (Number.isFinite(d) && d >= 0 && d <= 5) return d;
     if (targetUserId) return 'week';
@@ -362,7 +371,7 @@ export default function WeeklyPlannerScreen() {
   const viewingRole = q.data?.target?.role ?? (!targetUserId ? user?.role : undefined);
   const showWeekTab = viewingRole !== 'trainee';
   // Trainees have no crew yet — drop the "Crew Meetings" plan-today box.
-  const planFields = viewingRole === 'trainee' ? PLAN_FIELDS.filter((f) => f.key !== 'crew_plan') : PLAN_FIELDS;
+  const planFields = viewingRole === 'trainee' ? PLAN_FIELDS.filter((f) => !LEADER_ONLY_KEYS.includes(f.key)) : PLAN_FIELDS;
 
   const statsQ = useQuery({
     queryKey: ['weekly-planner-stats', week, targetUserId || 'me'],
@@ -375,7 +384,7 @@ export default function WeeklyPlannerScreen() {
   // turns out to be a trainee (e.g. a leader opening a trainee's plan via
   // ?user_id=), correct onto a real tab instead of showing an empty Week page.
   useEffect(() => {
-    if (!showWeekTab && tab === 'week') {
+    if (!showWeekTab && (tab === 'week' || tab === 'sheet')) {
       const wd = (new Date().getDay() + 6) % 7;
       setTab(wd <= 5 ? wd : 'notes');
     }
@@ -750,6 +759,11 @@ export default function WeeklyPlannerScreen() {
           {showWeekTab && (
             <PressableScale style={[styles.tabChip, tab === 'week' && styles.tabChipActive]} onPress={() => setTab('week')}>
               <Text style={[styles.tabChipText, tab === 'week' && styles.tabChipTextActive]}>Week</Text>
+            </PressableScale>
+          )}
+          {showWeekTab && (
+            <PressableScale style={[styles.tabChip, tab === 'sheet' && styles.tabChipActive]} onPress={() => setTab('sheet')}>
+              <Text style={[styles.tabChipText, tab === 'sheet' && styles.tabChipTextActive]}>Sheet</Text>
             </PressableScale>
           )}
           {DAY_LABELS.map((d, i) => (
@@ -1248,6 +1262,17 @@ export default function WeeklyPlannerScreen() {
             ))}
             </View>
           </>
+        )}
+
+        {tab === 'sheet' && wizard === null && (
+          <WeeklySheet
+            review={draft.review}
+            days={draft.days}
+            canEdit={canEdit}
+            onReview={(patch) => setReview(patch as Partial<Review>)}
+            onDay={setDayField}
+            onPrint={() => printWeeklySheet(draft.review, draft.days, week, targetName)}
+          />
         )}
 
         {tab === 'notes' && (
