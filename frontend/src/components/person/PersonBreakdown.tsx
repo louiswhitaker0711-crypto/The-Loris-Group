@@ -28,6 +28,7 @@ import { useTabBarClearance } from '../../customization/CustomTabBar';
 import { APP_LOCALE, APP_TZ, formatMoney } from '../../utils/appTime';
 import { DAY_SHORT, dowOf, rangeLabel } from '../../utils/calendarDates';
 import { PersonBadgeFlow } from '../badges/BadgeStudio';
+import { openBadgeMaker, usesExternalBadgeMaker } from '../../utils/openBadgeMaker';
 import FieldInsights from '../insights/FieldInsights';
 
 const P = {
@@ -165,12 +166,17 @@ export function PersonBreakdown({ id }: { id: string }) {
             </View>
           </View>
           <View style={[s.actions, wide && { marginTop: 0, justifyContent: 'flex-end' }]}>
-            {canBadge && (
+            {canBadge && (usesExternalBadgeMaker ? (
+            <Pressable onPress={openBadgeMaker} style={s.btn} accessibilityRole="button" testID="person-badge-btn">
+              <Ionicons name="open-outline" size={16} color={P.onLime} />
+              <Text style={s.btnText}>Badge maker</Text>
+            </Pressable>
+            ) : (
             <Pressable onPress={() => setBadgeOpen(true)} style={s.btn} accessibilityRole="button" testID="person-badge-btn">
               <Ionicons name={badge ? 'print-outline' : 'add-circle-outline'} size={16} color={P.onLime} />
               <Text style={s.btnText}>{badge ? 'Print badge' : 'Create badge'}</Text>
             </Pressable>
-            )}
+            ))}
             {canOpenCod && (
               <Pressable onPress={() => router.push(`/leader/trainee/${p.id}` as never)} style={s.btnGhost} accessibilityRole="button" testID="person-open-cod">
                 <Ionicons name="trending-up-outline" size={15} color={P.text} />
@@ -436,7 +442,18 @@ export function PersonBreakdown({ id }: { id: string }) {
         {canBadge && (
         <View style={s.card} testID="person-badge">
           <Section icon="ribbon-outline" text="ID badge" />
-          {badge ? (
+          {usesExternalBadgeMaker ? (
+            <View style={s.badgeRow}>
+              <Text style={[s.empty, { flex: 1, minWidth: 180, marginTop: 0 }]}>
+                {p.badge_numbers.length ? `Badge number ${p.badge_numbers.join(', ')}. ` : 'No badge number yet: add it in Admin so their OwnerIQ numbers link up. '}
+                ID badges are made in your badge maker.
+              </Text>
+              <Pressable onPress={openBadgeMaker} style={s.btn} accessibilityRole="button">
+                <Ionicons name="open-outline" size={16} color={P.onLime} />
+                <Text style={s.btnText}>Open badge maker</Text>
+              </Pressable>
+            </View>
+          ) : badge ? (
             <View style={s.badgeRow}>
               <View style={{ flex: 1, minWidth: 180 }}>
                 <Text style={s.lead}>{badge.full_name} · {badge.badge_number}</Text>
@@ -465,7 +482,7 @@ export function PersonBreakdown({ id }: { id: string }) {
         )}
       </View>
 
-      {badgeOpen && canBadge && (
+      {badgeOpen && canBadge && !usesExternalBadgeMaker && (
         <PersonBadgeFlow
           badgeId={badge?.id}
           prefill={{ full_name: p.name, badge_number: p.badge_numbers[0], user_id: p.id }}

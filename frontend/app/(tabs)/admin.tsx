@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { showAlert } from '../../src/utils/showAlert';
+import { openBadgeMaker, usesExternalBadgeMaker } from '../../src/utils/openBadgeMaker';
 import { promptText } from '../../src/utils/promptText';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Modal, Image, Platform, KeyboardAvoidingView, Linking, Switch,  } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -403,7 +404,9 @@ export default function AdminScreen() {
     { key: 'review', icon: 'podium-outline', title: 'Monday Review', sub: "Last week's numbers and plans", onPress: () => router.push('/weekly-review' as any) },
     { key: 'absences', icon: 'calendar-outline', title: 'Absence Approvals', sub: 'Approve or decline absences', badge: absPending?.pending || 0, onPress: () => router.push('/absence-approvals' as any) },
     { key: 'goals', icon: 'flag-outline', title: 'Goal Planner', sub: 'KPI and Rock suggestions', onPress: () => router.push('/planner-goal-menu') },
-    { key: 'badges', icon: 'ribbon-outline', title: 'Badges', sub: 'Make, edit and print ID badges', testID: 'admin-badges', onPress: () => router.push('/badges' as any) },
+    usesExternalBadgeMaker
+      ? { key: 'badges', icon: 'ribbon-outline', title: 'Badges', sub: 'Opens your badge maker in a new tab', testID: 'admin-badges', onPress: openBadgeMaker }
+      : { key: 'badges', icon: 'ribbon-outline', title: 'Badges', sub: 'Make, edit and print ID badges', testID: 'admin-badges', onPress: () => router.push('/badges' as any) },
     ...(isSuperAdmin ? [{ key: 'restore', icon: 'library-outline' as const, title: 'Restore Manual + Modules', sub: 'Put back anything missing', onPress: restoreBundle }] : []),
   ];
 

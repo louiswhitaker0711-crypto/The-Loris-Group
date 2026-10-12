@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { showAlert } from '../../src/utils/showAlert';
+import { openBadgeMaker, usesExternalBadgeMaker } from '../../src/utils/openBadgeMaker';
 import { View, Text, StyleSheet, FlatList, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator, TextInput, Image, Platform, Linking } from 'react-native';
 import DraggableFlatList, { ScaleDecorator } from 'react-native-draggable-flatlist';
 // expo-haptics has no web implementation — use a no-op stub on web.
@@ -707,7 +708,7 @@ export default function HiresScreen() {
           // Admins and Coach+ open the person's own page (and their badge);
           // a Coach opens the COD screen of someone they coach.
           onOpenPerson={(id) => router.push((isAdmin || user?.coach_plus ? `/person/${id}` : `/leader/trainee/${id}`) as never)}
-          onBadges={isAdmin || (user?.role === 'leader' && user?.coach_plus) ? () => router.push('/badges' as never) : undefined}
+          onBadges={isAdmin || (user?.role === 'leader' && user?.coach_plus) ? (usesExternalBadgeMaker ? openBadgeMaker : () => router.push('/badges' as never)) : undefined}
         />
       ) : viewMode === 'timeline' ? (
         /* ==================== TIMELINE (sign-ups hour by hour, patterns) ==================== */
