@@ -992,6 +992,11 @@ export const apiService = {
   getMyFieldReset: () => api.get('/field-reset/today'),
   saveMyFieldReset: (body: { more_signups: number; kpi: string; focus: string }) => api.put('/field-reset/today', body),
   getTeamFieldResets: (date?: string) => api.get('/field-reset/team', { params: date ? { date } : {} }),
+  // Sector set-up and breakdown
+  getSectorDay: (date: string) => api.get('/sector/day', { params: { date } }),
+  saveSectorDay: (userId: string, date: string, body: { setup?: any; breakdown?: any }) =>
+    api.put(`/sector/day/${userId}`, body, { params: { date } }),
+  notifySectorSetups: (date: string) => api.post('/sector/setup/notify', {}, { params: { date } }),
   // Bells: paste the WhatsApp report
   parseBellsWhatsapp: (text: string, officeId?: string) => api.post('/bells/parse-whatsapp', { text, office_id: officeId }),
   applyBellsBulk: (body: { date: string; office_id: string; reps: Array<{ user_id: string | null; user_name: string; raw_name?: string; over30: number; under30: number; memberships: number }> }) =>

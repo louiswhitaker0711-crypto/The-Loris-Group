@@ -99,7 +99,9 @@ async def get_my_reset(request: Request):
     user = await get_current_user(request)
     d = today_iso()
     doc = await db.field_resets.find_one({"user_id": str(user["id"]), "date": d}, {"_id": 0})
+    from routes.sector import my_setup
     return {
+        "setup": await my_setup(str(user["id"]), d),
         "date": d,
         "kpi_options": KPI_OPTIONS,
         "reset": doc,
