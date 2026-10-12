@@ -54,6 +54,7 @@ _TYPE_TO_CATEGORY = {
     "primetime_nudge": "planning",
     "field_reset": "planning",       # the 6pm reset
     "sector_setup": "planning",      # your set-up for the day
+    "field_nudge": "planning",       # set-up check-ins and the breakdown ask
     "ci_ready": "coaching",
     "ci_comment": "coaching",
     "zero_days": "coaching",        # two zero days in a row → needs a retrain

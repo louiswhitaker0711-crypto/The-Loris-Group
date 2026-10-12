@@ -51,6 +51,8 @@ export default function SectorScreen() {
   const opts = q.data?.options;
   const text: string = q.data?.whatsapp?.[mode] || '';
   const hasText = text.split('\n').length > 1;
+  // A BA only sees themselves: open their card straight away.
+  useEffect(() => { if (people.length === 1 && open === null) setOpen(people[0].user_id); }, [people.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const notify = async () => {
     try {
