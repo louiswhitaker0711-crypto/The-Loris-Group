@@ -18,7 +18,7 @@ import { APP_LOCALE } from '../src/utils/appTime';
 import { openInWhatsApp, copyText } from '../src/utils/whatsapp';
 import { SectorPicker } from '../src/components/sector/SectorPicker';
 
-type Setup = { goal: number | null; kpi_metric: string | null; kpi_target: number | null; focus: string };
+type Setup = { goal: number | null; kpi_metric: string | null; kpi_target: number | null; focus: string; positive?: string };
 type Breakdown = { doors: number | null; spoken: number | null; pitched: number | null; closed: number | null;
   note: string; goal: number | null; hit: number | null; proud: string; change: string };
 type Person = { user_id: string; user_name: string; setup: Setup | null; breakdown: Breakdown | null;
@@ -93,6 +93,11 @@ export default function SectorScreen() {
           onSaved={() => q.refetch()} />
       )}
 
+      {!!q.data?.can_manage && !!q.data?.sector && mode === 'setup' && (
+        <SectorGoal key={date + String(q.data.sector.goal ?? '')} date={date} current={q.data.sector.goal ?? null}
+          suggested={people.reduce((a, p) => a + (p.setup?.goal || 0), 0)} onSaved={() => q.refetch()} s={s} c={c} />
+      )}
+
       {q.isLoading ? <ActivityIndicator color={c.primary} /> : people.map((p) => (
         mode === 'setup'
           ? <SetupCard key={p.user_id + date} p={p} date={date} opts={opts} open={open === p.user_id}
@@ -127,6 +132,38 @@ export default function SectorScreen() {
   );
 }
 
+function SectorGoal({ date, current, suggested, onSaved, s, c }: { date: string; current: number | null; suggested: number; onSaved: () => void; s: any; c: any }) {
+  const [goal, setGoal] = useState(current != null ? String(current) : '');
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    setBusy(true);
+    try {
+      await apiService.saveSectorGoal(date, num(goal));
+      toast.success('Sector goal saved'); onSaved();
+    } catch (e) { showAlert('Could not save', errText(e, 'Try again.')); }
+    finally { setBusy(false); }
+  };
+  return (
+    <View style={s.card}>
+      <Text style={s.h}>🎯 Sector goal</Text>
+      <Text style={s.muted}>Sign-ups for the whole sector today. You get updates against it through the field.</Text>
+      <View style={s.row}>
+        <TextInput value={goal} onChangeText={setGoal} keyboardType="number-pad" placeholder={suggested ? String(suggested) : '12'}
+          placeholderTextColor={c.textMuted} style={[s.input, s.small]} accessibilityLabel="Sector goal" />
+        {suggested > 0 && !goal && (
+          <Pressable onPress={() => setGoal(String(suggested))} style={s.ghost} accessibilityRole="button">
+            <Text style={s.ghostText}>Use {suggested} (everyone's goals)</Text>
+          </Pressable>
+        )}
+        <Pressable onPress={save} disabled={busy} style={s.btn} accessibilityRole="button" testID="sector-goal-save">
+          {busy ? <ActivityIndicator size="small" color={c.onPrimary} /> : <Ionicons name="checkmark" size={16} color={c.onPrimary} />}
+          <Text style={s.btnText}>Save</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
 function Chips({ items, value, onPick, s, c, highlight }: { items: string[]; value: string; onPick: (v: string) => void; s: any; c: any; highlight?: string }) {
   return (
     <View style={s.chips}>
@@ -149,6 +186,7 @@ function SetupCard({ p, date, opts, open, onToggle, onSaved, s, c }: any) {
   const [metric, setMetric] = useState<string>(cur.kpi_metric || '');
   const [target, setTarget] = useState(cur.kpi_target != null ? String(cur.kpi_target) : '');
   const [focus, setFocus] = useState(cur.focus || '');
+  const [positive, setPositive] = useState(cur.positive || '');
   const [busy, setBusy] = useState(false);
   const y = p.yesterday || {};
   const metrics: Array<{ key: string; label: string; loa: number | null }> = opts?.kpi_metrics || [];
@@ -158,11 +196,12 @@ function SetupCard({ p, date, opts, open, onToggle, onSaved, s, c }: any) {
     if (y.goal != null) setGoal(String(y.goal));
     if (y.kpi) { setMetric(y.kpi.kpi_metric); setTarget(String(y.kpi.kpi_target)); }
     if (y.change) setFocus(y.change);
+    if (y.proud && !positive) setPositive(y.proud);
   };
   const save = async () => {
     setBusy(true);
     try {
-      await apiService.saveSectorDay(p.user_id, date, { setup: { goal: num(goal), kpi_metric: metric || null, kpi_target: num(target), focus } });
+      await apiService.saveSectorDay(p.user_id, date, { setup: { goal: num(goal), kpi_metric: metric || null, kpi_target: num(target), focus, positive } });
       toast.success('Saved'); onSaved(); onToggle();
     } catch (e) { showAlert('Could not save', errText(e, 'Try again.')); }
     finally { setBusy(false); }
@@ -202,6 +241,15 @@ function SetupCard({ p, date, opts, open, onToggle, onSaved, s, c }: any) {
           <Text style={s.label}>Focus</Text>
           <Chips items={opts?.change || []} value={focus} onPick={setFocus} s={s} c={c} highlight={y.change} />
           <TextInput value={focus} onChangeText={setFocus} placeholder="Or type it" placeholderTextColor={c.textMuted} style={s.input} />
+          <Text style={s.label}>Positive</Text>
+          <Text style={s.muted}>Something they're doing well. It goes in their notifications through the field.</Text>
+          {!!y.proud && y.proud !== positive && (
+            <Pressable onPress={() => setPositive(y.proud)} style={s.hint} accessibilityRole="button">
+              <Ionicons name="arrow-undo-outline" size={15} color={c.primary} />
+              <Text style={[s.ghostText, { flex: 1 }]}>Yesterday they were proud of "{y.proud}" — tap to use</Text>
+            </Pressable>
+          )}
+          <TextInput value={positive} onChangeText={setPositive} placeholder="e.g. great tone of voice on the doors" placeholderTextColor={c.textMuted} style={s.input} maxLength={120} />
           <Pressable onPress={save} disabled={busy} style={s.btn} accessibilityRole="button">
             {busy ? <ActivityIndicator size="small" color={c.onPrimary} /> : <Ionicons name="checkmark" size={16} color={c.onPrimary} />}
             <Text style={s.btnText}>Save</Text>

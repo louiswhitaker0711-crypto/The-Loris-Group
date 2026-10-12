@@ -85,7 +85,8 @@ def clean_setup(body: dict) -> dict:
     if metric and metric not in KPI_METRICS:
         raise HTTPException(status_code=400, detail="Pick the KPI: doors, spoken, pitched, closes or call backs")
     return {"goal": _int(body.get("goal"), 0, 30), "kpi_metric": metric or None,
-            "kpi_target": _int(body.get("kpi_target"), 0, 300), "focus": _text(body.get("focus"))}
+            "kpi_target": _int(body.get("kpi_target"), 0, 300), "focus": _text(body.get("focus")),
+            "positive": _text(body.get("positive"))}
 
 
 def clean_breakdown(body: dict) -> dict:
@@ -126,8 +127,10 @@ def _label(iso: str) -> str:
     return f"{d.day}/{d.month}"
 
 
-def setup_text(rows: list, iso: str) -> str:
+def setup_text(rows: list, iso: str, sector_goal: Optional[int] = None) -> str:
     out = [f"*SetUp* {_label(iso)}"]
+    if sector_goal is not None:
+        out.append(f"Sector goal: {sector_goal}")
     for r in rows:
         s = r.get("setup") or {}
         if not any([s.get("goal") is not None, s.get("kpi_metric"), s.get("focus")]):
@@ -142,8 +145,11 @@ def setup_text(rows: list, iso: str) -> str:
     return "\n".join(out)
 
 
-def breakdown_text(rows: list, iso: str) -> str:
+def breakdown_text(rows: list, iso: str, sector_goal: Optional[int] = None) -> str:
     out = [f"*Breakdown* {_label(iso)}"]
+    if sector_goal is not None:
+        sh = sum(int((r.get("breakdown") or {}).get("hit") or 0) for r in rows)
+        out.append(f"Sector goal: {sector_goal} hit: {sh}{'🔥' if sh >= sector_goal and sh > 0 else ''}")
     for r in rows:
         b = r.get("breakdown") or {}
         nums = [b.get(k) for k in ("doors", "spoken", "pitched", "closed")]
@@ -268,7 +274,8 @@ async def sector_day(request: Request, date: Optional[str] = None):
         "options": {"proud": PROUD_OPTIONS, "change": CHANGE_OPTIONS,
                     "kpi_metrics": [{"key": k, "label": v, "loa": LOA.get(k)} for k, v in KPI_METRICS.items()]},
         "people": rows,
-        "whatsapp": {"setup": setup_text(rows, iso), "breakdown": breakdown_text(rows, iso)},
+        "whatsapp": {"setup": setup_text(rows, iso, (sector or {}).get("goal")),
+                     "breakdown": breakdown_text(rows, iso, (sector or {}).get("goal"))},
     }
 
 
@@ -317,6 +324,8 @@ async def notify_setups(request: Request, date: Optional[str] = None):
             parts.append(f"KPI {kpi_text(s)}")
         if s.get("focus"):
             parts.append(f"Focus: {s['focus']}")
+        if s.get("positive"):
+            parts.append(f"💪 {s['positive']}")
         if not parts:
             continue
         try:
@@ -358,6 +367,8 @@ def nudge_text(setup: dict, now: dict, slot: str) -> tuple[str, str]:
         parts.append(f"KPI: {kpi_text(setup)}")
     if setup.get("focus"):
         parts.append(f"Focus: {setup['focus']}")
+    if setup.get("positive"):
+        parts.append(f"💪 {setup['positive']}")
     if goal is not None and hit >= goal and goal > 0:
         return "🔥 Goal hit", f"{hit}/{goal} — go for one more. " + " · ".join(parts[1:])
     title = {"early": "🎯 Check in", "mid": "📊 Halfway check", "late": "⏱️ Last stretch"}[slot]
@@ -366,17 +377,57 @@ def nudge_text(setup: dict, now: dict, slot: str) -> tuple[str, str]:
     return title, " · ".join(parts)
 
 
+def sector_nudge_text(goal: Optional[int], rows: list, slot: str) -> tuple[str, str]:
+    """(title, body) for a sector leader: the sector against its goal, and
+    who is furthest behind their own goal. rows: {user_name, goal, hit}."""
+    hit = sum(int(r.get("hit") or 0) for r in rows)
+    if goal is None:
+        goal = sum(int(r.get("goal") or 0) for r in rows) or None
+    behind = sorted([r for r in rows if r.get("goal") is not None and int(r.get("hit") or 0) < int(r["goal"])],
+                    key=lambda r: int(r.get("hit") or 0) - int(r["goal"]))
+    tail = ", ".join(f"{_first(r.get('user_name'))} {int(r.get('hit') or 0)}/{r['goal']}" for r in behind[:4])
+    if goal is None:
+        return "📊 Your sector", f"{hit} sign-ups so far" + (f" · Behind: {tail}" if tail else "")
+    if goal > 0 and hit >= goal:
+        return "🔥 Sector goal hit", f"{hit}/{goal} — push for one more each." + (f" Still chasing: {tail}" if tail else "")
+    left = goal - hit
+    title = {"early": "🎯 Sector check in", "mid": "📊 Sector halfway",
+             "late": f"⏱️ Sector: {left} more to hit {goal}"}[slot]
+    body = f"{hit}/{goal} sign-ups · {left} to go"
+    return title, body + (f" · Behind: {tail}" if tail else "")
+
+
+async def sector_leader_nudges(slot: str, iso: str) -> int:
+    from core.push import send_push_to_user
+    sectors = [x async for x in db.sectors.find({"date": iso, "member_ids.0": {"$exists": True}}, {"_id": 0})]
+    if not sectors:
+        return 0
+    ids = list({m for sec in sectors for m in sec.get("member_ids") or []})
+    live = await _prefill(ids, iso)
+    setups = {d["user_id"]: d.get("setup") or {} async for d in db.sector_days.find({"date": iso, "user_id": {"$in": ids}}, {"_id": 0})}
+    names = {p["user_id"]: p["user_name"] for p in await _users_by_ids(ids)}
+    sent = 0
+    for sec in sectors:
+        rows = [{"user_name": names.get(m, ""), "goal": (setups.get(m) or {}).get("goal"),
+                 "hit": (live.get(m) or {}).get("hit") or 0} for m in sec.get("member_ids") or [] if m in names]
+        title, body = sector_nudge_text(sec.get("goal"), rows, slot)
+        try:
+            await send_push_to_user(sec["leader_id"], title, body, {"type": "field_nudge", "url": "/sectors"})
+            sent += 1
+        except Exception as ex:
+            logger.warning("sector nudge failed for %s: %s", sec.get("leader_id"), ex)
+    return sent
+
+
 async def field_nudge_tick(slot: str) -> int:
     from core.push import send_push_to_user
     iso = today_iso()
     docs = [d async for d in db.sector_days.find({"date": iso, "setup": {"$ne": None}}, {"_id": 0})]
-    if not docs:
-        return 0
-    live = await _prefill([d["user_id"] for d in docs], iso)
+    live = await _prefill([d["user_id"] for d in docs], iso) if docs else {}
     sent = 0
     for d in docs:
         s = d.get("setup") or {}
-        if s.get("goal") is None and not s.get("kpi_metric") and not s.get("focus"):
+        if s.get("goal") is None and not s.get("kpi_metric") and not s.get("focus") and not s.get("positive"):
             continue
         title, body = nudge_text(s, live.get(d["user_id"]) or {}, slot)
         try:
@@ -384,6 +435,10 @@ async def field_nudge_tick(slot: str) -> int:
             sent += 1
         except Exception as ex:
             logger.warning("field nudge failed for %s: %s", d["user_id"], ex)
+    try:
+        sent += await sector_leader_nudges(slot, iso)
+    except Exception as ex:
+        logger.warning("sector leader nudges failed: %s", ex)
     return sent
 
 
@@ -466,6 +521,22 @@ async def save_my_sector(request: Request, date: Optional[str] = None):
     return await _sector_of_leader(str(user["id"]), iso)
 
 
+@router.put("/sector/goal")
+async def save_sector_goal(request: Request, date: Optional[str] = None):
+    """The sector leader's goal for the whole sector that day (blank clears it,
+    and the board falls back to adding up each person's goal)."""
+    user = await get_current_user(request)
+    iso = _clean_date(date)
+    sec = await _sector_of_leader(str(user["id"]), iso)
+    if not sec:
+        raise HTTPException(status_code=400, detail="Pick who's in your sector first")
+    body = await request.json()
+    raw = body.get("goal")
+    goal = None if raw in (None, "") else _int(raw, 0, 200)
+    await db.sectors.update_one({"leader_id": str(user["id"]), "date": iso}, {"$set": {"goal": goal}})
+    return await _sector_of_leader(str(user["id"]), iso)
+
+
 @router.get("/sector/board")
 async def sector_board(request: Request, date: Optional[str] = None):
     """Every sector in the office on a day, with each person's set-up and
@@ -487,11 +558,12 @@ async def sector_board(request: Request, date: Optional[str] = None):
             d = docs.get(m) or {}
             su = d.get("setup")
             rows.append({**people[m], "setup": {**su, "kpi": kpi_text(su)} if su else None, "breakdown": d.get("breakdown"), "live": live.get(m) or {}})
-        goal = sum(int((r.get("setup") or {}).get("goal") or 0) for r in rows)
+        people_goal = sum(int((r.get("setup") or {}).get("goal") or 0) for r in rows)
+        sg = sec.get("goal")
         hit = sum(int((r.get("live") or {}).get("hit") or 0) for r in rows)
         out.append({"leader_id": sec["leader_id"], "leader_name": sec.get("leader_name"), "people": rows,
-                    "goal": goal, "hit": hit,
-                    "whatsapp": {"setup": setup_text(rows, iso), "breakdown": breakdown_text(rows, iso)}})
+                    "goal": sg if sg is not None else people_goal, "sector_goal": sg, "people_goal": people_goal, "hit": hit,
+                    "whatsapp": {"setup": setup_text(rows, iso, sg), "breakdown": breakdown_text(rows, iso, sg)}})
     return {"date": iso, "sectors": out}
 
 
