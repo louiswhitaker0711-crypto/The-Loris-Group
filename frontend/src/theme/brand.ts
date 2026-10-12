@@ -31,6 +31,11 @@
 export const APP_NAME = 'The Loris Hub';
 export const APP_SHORT_NAME = 'The Loris Group';
 export const ORG_NAME = 'The Loris Group';
+// ID badges are made in the campaign's own badge maker, which prints the
+// approved Modern Milkman design. Badge buttons open it in a new tab. Set to ''
+// to use the app's built-in badge maker (Badge Studio) instead. Badge NUMBERS
+// still live in the app either way: they link people to OwnerIQ.
+export const BADGE_MAKER_URL = 'https://tmm-badge-maker.replit.app';
 
 // ── Raw brand palette ────────────────────────────────────────────────────────
 export const brand = {
