@@ -49,8 +49,8 @@ def test_sales_badges_use_worked_sales_not_memberships_or_stale_statuses():
 
     assert achievements._sales_badge_keys(membership_only) == []
     assert achievements._sales_badge_keys(stale_off_sales) == []
-    assert achievements._sales_badge_keys(amber_week) == ["first_sale", "first_bell"]
-    assert achievements._sales_badge_keys(green_week) == ["first_sale", "first_bell", "personal_12"]
+    assert achievements._sales_badge_keys(amber_week) == ["first_sale"]
+    assert achievements._sales_badge_keys(green_week) == ["first_sale", "personal_12"]
     assert achievements._sales_badge_keys(superstar_green_week) == [
         "first_sale",
         "first_bell",
@@ -206,7 +206,7 @@ def _reconcile_db(monkeypatch, held, weeks, deleted):
 
 
 def test_reconcile_revokes_badge_after_downward_correction(monkeypatch):
-    # Rep unlocked First Gong (5/day) from a mis-keyed entry; the fixed board
+    # Rep unlocked First Gong (8/day) from a mis-keyed entry; the fixed board
     # now tops out at 2 sales in a day, so first_gong must be pulled while the
     # legitimately-earned first_sale stays.
     deleted = []
@@ -222,13 +222,13 @@ def test_reconcile_revokes_badge_after_downward_correction(monkeypatch):
 
 
 def test_reconcile_keeps_badge_the_data_still_supports(monkeypatch):
-    # Still a real 5-sale day on the board — nothing should be revoked and no
+    # Still a real 8-sale day on the board — nothing should be revoked and no
     # delete should even be issued.
     deleted = []
     _reconcile_db(
         monkeypatch,
         held=["first_sale", "first_gong"],
-        weeks=[{"week_ending": "2026-07-19", "days": [{"status": "in", "over30": 3, "under30": 2}]}],
+        weeks=[{"week_ending": "2026-07-19", "days": [{"status": "in", "over30": 4, "under30": 4}]}],
         deleted=deleted,
     )
     revoked = asyncio.run(achievements.reconcile_sales_badges("user-1"))
@@ -254,3 +254,11 @@ def test_reconcile_no_op_when_rep_holds_no_sales_badges(monkeypatch):
     )
     assert asyncio.run(achievements.reconcile_sales_badges("user-1")) == []
     assert scanned["find"] == 0
+
+
+def test_bell_is_4_and_gong_is_8_sign_ups_in_a_day():
+    day = lambda n: [{"status": "in", "over30": n, "under30": 0, "memberships": 0}]
+    assert achievements._sales_badge_keys(day(3)) == ["first_sale"]
+    assert achievements._sales_badge_keys(day(4)) == ["first_sale", "first_bell"]
+    assert achievements._sales_badge_keys(day(7)) == ["first_sale", "first_bell"]
+    assert achievements._sales_badge_keys(day(8)) == ["first_sale", "first_bell", "first_gong"]

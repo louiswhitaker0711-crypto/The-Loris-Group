@@ -91,6 +91,16 @@ Your own super-admin account is linked to the OwnerIQ owner login automatically.
 
 Links decide who sees what. A Coach sees a team in Live Operations or the Performance Hub because their linked OwnerIQ id is in it (or it's led by someone under them in the app), never because a name matches. A Coach or BA who isn't linked yet sees no live teams until they are.
 
+### People who aren't in the app yet: Add from OwnerIQ
+
+**Admin → Add from OwnerIQ** reads your OwnerIQ tree (it never changes OwnerIQ) and lists everyone active who isn't in the app. Tick the people to add, type a starter password (or tap **Make one**) and tap **Add**. Each new account gets:
+
+- the name, email and badge numbers OwnerIQ has, so it is linked straight away;
+- **Coach** if they are stage 3 or above in OwnerIQ, otherwise **BA** (tap the chip to change it);
+- as their coach, the person above them in the OwnerIQ tree, when that person is a Coach in the app.
+
+Copy the message the screen shows and send it to them. They log in with their email and the starter password, then choose their own (the starter password stops working after 7 days). People with no email in OwnerIQ can't be added this way: add their email in OwnerIQ, or add them with **Add Coach / BA**. People added this way skip the Day 1–8 BA Academy; add brand-new starters with **Add Coach / BA** instead.
+
 ## 5. Check it worked
 
 After the deploy finishes:
@@ -108,7 +118,7 @@ If people show as unlinked, an admin can open `https://<your app>/api/owneriq/li
 | --- | --- | --- | --- |
 | `OWNERIQ_EMAIL` | Yes, for any OwnerIQ feature | The owner login the app signs in with | Your OwnerIQ account |
 | `OWNERIQ_PASSWORD` | Yes, for any OwnerIQ feature. **Secret: set your own; no default** | Its password | Your OwnerIQ account |
-| `OWNERIQ_API_BASE` | No. Default `https://us.owner-iq.ai` | The OwnerIQ API host | OwnerIQ support, if your account isn't on the default host |
+| `OWNERIQ_API_BASE` | No. Default `https://us.owner-iq.ai` | The OwnerIQ API host. UK accounts use `https://uk.owner-iq.ai` | Log in at owner-iq.ai with the browser's developer tools open (Network): the `sessions` request shows the host. Or ask OwnerIQ support |
 | `OWNERIQ_MC_PINS` | No. Blank = every company the login can see | Which marketing companies (offices) to sync, comma-separated pins | The check script, or OwnerIQ's company switcher |
 | `OWNERIQ_OFFICE_PINS` | No | Which OwnerIQ company each app office is: `Office Name=PIN,Other=PIN`. Office names are matched ignoring capitals | You choose; the check script suggests a line |
 | `OWNERIQ_ROOT_USER_IDS` | No | Top-of-tree OwnerIQ accounts that are *not* an office owner, skipped when the people sync looks for each office's owner | `check_owneriq.py --roots` |
