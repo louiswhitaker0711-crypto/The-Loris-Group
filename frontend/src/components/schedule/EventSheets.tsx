@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Modal, Pressable, TextInput, ScrollView, ActivityIndicator, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fonts } from '../../theme/ThemeContext';
 import { apiService } from '../../api/client';
@@ -260,6 +261,11 @@ export function EventDetail({ block, iso, wide, canManage, isAdmin, onClose, onE
   const task = block.kind === 'task';
   const done = isDone(block, iso);
   const lanes = useMemo(() => blockGroups(block).map((g) => GROUP_LABEL[g]), [block]);
+  const router = useRouter();
+  const openNotes = () => {
+    onClose();
+    router.push(`/meeting-notes?block_id=${encodeURIComponent(String(block.id))}&date=${iso}` as any);
+  };
   return (
     <Frame wide={wide} onClose={onClose} maxW={420}>
       <View style={f.topBar}>
@@ -310,6 +316,13 @@ export function EventDetail({ block, iso, wide, canManage, isAdmin, onClose, onE
           <Pressable onPress={onToggleDone} style={[f.saveBtn, { alignSelf: 'flex-start', paddingHorizontal: 16, flexDirection: 'row', gap: 6 }]}>
             <Ionicons name={done ? 'arrow-undo-outline' : 'checkmark'} size={16} color={CAL.onLime} />
             <Text style={f.saveText}>{done ? 'Mark not done' : 'Mark done'}</Text>
+          </Pressable>
+        )}
+        {!personal && !task && (
+          <Pressable onPress={openNotes} style={[f.ghostBtn, { alignSelf: 'flex-start', flexDirection: 'row', gap: 6, alignItems: 'center' }]}
+            accessibilityRole="button" testID="meeting-notes-open">
+            <Ionicons name="document-text-outline" size={16} color={CAL.muted} />
+            <Text style={f.ghostText}>Meeting notes</Text>
           </Pressable>
         )}
       </View>

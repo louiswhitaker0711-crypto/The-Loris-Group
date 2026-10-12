@@ -27,7 +27,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { showAlert } from '../src/utils/showAlert';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator,
-  Modal, TextInput, KeyboardAvoidingView, Platform, Linking,
+  Modal, TextInput, KeyboardAvoidingView, Platform, Linking, Pressable,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -692,6 +692,23 @@ export default function LeadershipHub() {
               </View>
             </DepthCard>
             </Reveal>
+
+            {/* Meeting recaps: published notes from meetings people missed. */}
+            <Pressable
+              onPress={() => router.push('/meeting-recaps' as any)}
+              style={styles.heroCard}
+              accessibilityRole="button"
+              testID="open-meeting-recaps"
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <Ionicons name="document-text-outline" size={20} color={colors.text} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: fonts.bodySemibold, fontSize: 15, color: colors.text }}>Meeting recaps</Text>
+                  <Text style={styles.libStripSub}>One-page notes from meetings, for anyone who missed one</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              </View>
+            </Pressable>
 
             {/* Admin manage row — storage usage + add actions */}
             {isAdmin && manage && (
