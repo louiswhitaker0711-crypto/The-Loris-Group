@@ -38,7 +38,7 @@ def test_sheet_layout_keeps_order_times_and_labels():
         {"key": "appointments", "on_sheet": False},
     ])
     assert [r["key"] for r in rows[:3]] == ["sector", "stage1", "appointments"]
-    assert rows[0] == {"key": "sector", "label": "Field", "time": "13:30", "on_sheet": True}
+    assert rows[0] == {"key": "sector", "label": "Field", "time": "13:30", "on_sheet": True, "on_day": True}
     assert rows[1]["time"] == "" and rows[1]["label"] == "Stage 1"
     assert rows[2]["on_sheet"] is False
     # every day box is there exactly once
@@ -50,3 +50,31 @@ def test_sheet_layout_default_is_in_time_order_and_matches_the_paper_sheet():
     times = [r["time"] for r in rows if r["time"]]
     assert times == sorted(times)
     assert sum(r["on_sheet"] for r in rows) == 10
+
+
+def test_a_box_can_be_hidden_from_the_day_pages():
+    rows = wp.normalize_sheet_layout([{"key": "networking", "on_day": False}])
+    assert rows[0]["on_day"] is False
+    assert all(r["on_day"] for r in rows[1:])
+
+
+def test_times_are_per_day_and_only_valid_ones_are_kept():
+    t = wp.normalize_times({"1": {"appointments": "15:00", "stage1": "9:00", "nope": "10:00"}, "3": {"appointments": "12:30"}})
+    assert t["1"] == {"appointments": "15:00"}
+    assert t["3"] == {"appointments": "12:30"}
+    assert t["0"] == {}
+
+
+def test_timed_boxes_go_on_the_owners_calendar_only():
+    user = {"id": "u1", "office_id": "o1"}
+    days = {"1": {"appointments": "Interview, Example Person"}}
+    times = wp.normalize_times({"1": {"appointments": "15:00"}})
+    layout = wp.normalize_sheet_layout(None)
+    blocks = wp.planner_calendar_blocks(user, "2026-10-18", days, times, layout)
+    assert len(blocks) == 1
+    b = blocks[0]
+    assert b["audience"] == "personal" and b["owner_id"] == "u1"
+    assert b["date"] == "2026-10-13" and b["day_of_week"] == 1
+    assert (b["start_time"], b["end_time"]) == ("15:00", "15:30")
+    assert b["title"] == "Appointments" and b["details"] == "Interview, Example Person"
+    assert b["reminder_minutes"] is None

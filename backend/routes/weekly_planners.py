@@ -1343,20 +1343,20 @@ async def set_my_planner_goals(request: Request):
 # Personal only: it changes how the sheet and the day pages are laid out for
 # that person, never the office timetable.
 SHEET_DEFAULT_ROWS = [
-    {"key": "leaders_meeting", "label": "Coaches", "time": "10:00", "on_sheet": True},
-    {"key": "stage1", "label": "Stage 1", "time": "10:30", "on_sheet": True},
-    {"key": "stage2", "label": "Stage 2", "time": "10:30", "on_sheet": True},
-    {"key": "primetime", "label": "Primetime", "time": "11:00", "on_sheet": False},
-    {"key": "sales_impact", "label": "Sales impact", "time": "11:00", "on_sheet": True},
-    {"key": "product_coaching", "label": "Product coaching", "time": "11:00", "on_sheet": True},
-    {"key": "morning_news", "label": "News and Bells", "time": "11:45", "on_sheet": True},
-    {"key": "morning_topic", "label": "Topic", "time": "11:45", "on_sheet": True},
-    {"key": "morning_cs", "label": "Customer service", "time": "11:45", "on_sheet": True},
-    {"key": "morning_bells", "label": "Bells", "time": "11:45", "on_sheet": False},
-    {"key": "sector", "label": "Sectors", "time": "13:30", "on_sheet": True},
-    {"key": "networking", "label": "Networking", "time": "", "on_sheet": False},
-    {"key": "crew_plan", "label": "Crew meetings", "time": "", "on_sheet": False},
-    {"key": "appointments", "label": "Appointments", "time": "", "on_sheet": True},
+    {"key": "leaders_meeting", "label": "Coaches", "time": "10:00", "on_sheet": True, "on_day": True},
+    {"key": "stage1", "label": "Stage 1", "time": "10:30", "on_sheet": True, "on_day": True},
+    {"key": "stage2", "label": "Stage 2", "time": "10:30", "on_sheet": True, "on_day": True},
+    {"key": "primetime", "label": "Primetime", "time": "11:00", "on_sheet": False, "on_day": True},
+    {"key": "sales_impact", "label": "Sales impact", "time": "11:00", "on_sheet": True, "on_day": True},
+    {"key": "product_coaching", "label": "Product coaching", "time": "11:00", "on_sheet": True, "on_day": True},
+    {"key": "morning_news", "label": "News and Bells", "time": "11:45", "on_sheet": True, "on_day": True},
+    {"key": "morning_topic", "label": "Topic", "time": "11:45", "on_sheet": True, "on_day": True},
+    {"key": "morning_cs", "label": "Customer service", "time": "11:45", "on_sheet": True, "on_day": True},
+    {"key": "morning_bells", "label": "Bells", "time": "11:45", "on_sheet": False, "on_day": True},
+    {"key": "sector", "label": "Sectors", "time": "13:30", "on_sheet": True, "on_day": True},
+    {"key": "networking", "label": "Networking", "time": "", "on_sheet": False, "on_day": True},
+    {"key": "crew_plan", "label": "Crew meetings", "time": "", "on_sheet": False, "on_day": True},
+    {"key": "appointments", "label": "Appointments", "time": "", "on_sheet": True, "on_day": True},
 ]
 _TIME_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 _SHEET_DEFAULT_BY_KEY = {r["key"]: r for r in SHEET_DEFAULT_ROWS}
@@ -1364,7 +1364,8 @@ _SHEET_DEFAULT_BY_KEY = {r["key"]: r for r in SHEET_DEFAULT_ROWS}
 
 def normalize_sheet_layout(raw) -> list:
     """Every day box once, in the person's order, each with a short label, an
-    optional HH:MM time and whether it shows on the weekly sheet. Unknown or
+    optional HH:MM time, whether it shows on the weekly sheet and whether it
+    shows on the day pages. Unknown or
     repeated keys are dropped; boxes left out are added at the end."""
     out, seen = [], set()
     for r in raw if isinstance(raw, list) else []:
@@ -1375,15 +1376,78 @@ def normalize_sheet_layout(raw) -> list:
             continue
         seen.add(key)
         time = str(r.get("time") or "").strip()
-        on_sheet = r.get("on_sheet")
+        on_sheet, on_day = r.get("on_sheet"), r.get("on_day")
         out.append({
             "key": key,
             "label": _s(r.get("label"), 40) or _SHEET_DEFAULT_BY_KEY[key]["label"],
             "time": time if _TIME_RE.match(time) else "",
             "on_sheet": _SHEET_DEFAULT_BY_KEY[key]["on_sheet"] if on_sheet is None else bool(on_sheet),
+            "on_day": True if on_day is None else bool(on_day),
         })
     out += [dict(r) for r in SHEET_DEFAULT_ROWS if r["key"] not in seen]
     return out
+
+
+def normalize_times(raw) -> dict:
+    """{day: {box: "HH:MM"}}: a time for one box on one day only."""
+    raw = raw if isinstance(raw, dict) else {}
+    out = {}
+    for d in DAYS:
+        day_raw = raw.get(str(d)) if isinstance(raw.get(str(d)), dict) else {}
+        out[str(d)] = {k: str(v).strip() for k, v in day_raw.items()
+                       if k in DAY_FIELDS and _TIME_RE.match(str(v or "").strip())}
+    return out
+
+
+def planner_calendar_blocks(user: dict, week_ending: str, days: dict, times: dict, layout: list) -> list:
+    """The Schedule entries a week plan puts on its owner's own calendar: every
+    box given a time for that day. Personal (only the owner sees them), no
+    reminder, 30 minutes long, the box's notes as the details."""
+    labels = {r["key"]: r["label"] for r in layout}
+    monday = date.fromisoformat(week_ending) - timedelta(days=6)
+    now = datetime.now(timezone.utc).isoformat()
+    out = []
+    for d in DAYS:
+        for key, hhmm in (times.get(str(d)) or {}).items():
+            h, m = map(int, hhmm.split(":"))
+            end = min(h * 60 + m + 30, 23 * 60 + 59)
+            out.append({
+                "id": str(uuid.uuid4()),
+                "office_id": user.get("office_id") or "",
+                "day_of_week": d,
+                "start_time": hhmm,
+                "end_time": f"{end // 60:02d}:{end % 60:02d}",
+                "title": labels.get(key) or DAY_FIELD_LABELS.get(key, key),
+                "audience": "personal",
+                "color": "#2864d9",
+                "core_leader_ids": [],
+                "owner_id": str(user["id"]),
+                "groups": [],
+                "date": (monday + timedelta(days=d)).isoformat(),
+                "kind": "event",
+                "reminder_minutes": None,
+                "done_dates": [],
+                "presenter": None,
+                "topic": None,
+                "details": (((days.get(str(d)) or {}).get(key) or "").strip()[:1000]) or None,
+                "source": "planner",
+                "planner_week": week_ending,
+                "planner_key": key,
+                "created_at": now,
+                "updated_at": now,
+            })
+    return out
+
+
+async def sync_planner_calendar(user: dict, week_ending: str, days: dict, times: dict) -> None:
+    """Replace this person's planner entries on their Schedule for the week."""
+    doc = await db.planner_sheet_layouts.find_one({"user_id": str(user["id"])}, {"_id": 0, "rows": 1})
+    layout = normalize_sheet_layout((doc or {}).get("rows"))
+    blocks = planner_calendar_blocks(user, week_ending, days, times, layout)
+    await db.schedule_blocks.delete_many({"owner_id": str(user["id"]), "source": "planner",
+                                          "planner_week": week_ending})
+    if blocks:
+        await db.schedule_blocks.insert_many([dict(b) for b in blocks])
 
 
 @router.get("/weekly-planners/sheet-layout")
@@ -1455,6 +1519,7 @@ async def upsert_weekly_planner(week: str, request: Request):
 
     body = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
     days = _normalize_days(body.get("days"))
+    times = normalize_times(body.get("times"))
     notes = _s(body.get("notes"), 8000)
     # Trainees get the daily plan only — no week review, no crew (they don't
     # have one yet). Enforced server-side regardless of what a client sends,
@@ -1472,14 +1537,18 @@ async def upsert_weekly_planner(week: str, request: Request):
     now = datetime.now(timezone.utc).isoformat()
     existing = await db.weekly_planners.find_one({"user_id": me["id"], "week_ending": week_ending}, {"_id": 0})
     if existing:
-        update = {"review": review, "days": days, "notes": notes, "updated_at": now}
+        update = {"review": review, "days": days, "times": times, "notes": notes, "updated_at": now}
         await db.weekly_planners.update_one({"id": existing["id"]}, {"$set": update})
+        if (existing.get("times") or {}) != times or (times and existing.get("days") != days):
+            await sync_planner_calendar(me, week_ending, days, times)
         existing.update(update)
         return _scrub(existing)
 
     doc = _seed(me["id"], me.get("office_id") or "", week_ending)
-    doc.update({"review": review, "days": days, "notes": notes})
+    doc.update({"review": review, "days": days, "times": times, "notes": notes})
     await db.weekly_planners.insert_one(doc.copy())
+    if any(times.values()):
+        await sync_planner_calendar(me, week_ending, days, times)
     return _scrub(doc)
 
 

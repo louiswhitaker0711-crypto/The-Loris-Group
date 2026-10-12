@@ -17,7 +17,7 @@ import { Breathe } from '../src/components/ui/Breathe';
 import PressableScale from '../src/components/ui/PressableScale';
 import PlannerLoaReview from '../src/components/planner/PlannerLoaReview';
 import PrimetimeDayBlock from '../src/components/planner/PrimetimeDayBlock';
-import WeeklySheet, { printWeeklySheet, type SheetRow } from '../src/components/planner/WeeklySheet';
+import WeeklySheet, { printWeeklySheet, dayOrder, DayTimeInput, type SheetRow } from '../src/components/planner/WeeklySheet';
 import { planningTarget } from '../src/utils/officeDay';
 import { useAuth } from '../src/auth/AuthContext';
 import { apiService } from '../src/api/client';
@@ -120,6 +120,9 @@ type Review = {
 type Planner = {
   id: string; user_id: string; office_id: string; week_ending: string;
   review: Review; days: Record<string, Record<string, string>>; notes: string;
+  // A time for one box on one day ("HH:MM"); a timed box also goes on the
+  // owner's own Schedule.
+  times?: Record<string, Record<string, string>>;
 };
 
 function makeId(): string { return Math.random().toString(36).slice(2, 11); }
@@ -426,7 +429,7 @@ export default function WeeklyPlannerScreen() {
 
   const saveMut = useMutation({
     mutationFn: (p: Planner) =>
-      apiService.upsertWeeklyPlanner(p.week_ending, { review: p.review, days: p.days, notes: p.notes }).then((r) => r.data),
+      apiService.upsertWeeklyPlanner(p.week_ending, { review: p.review, days: p.days, times: p.times || {}, notes: p.notes }).then((r) => r.data),
     onMutate: () => setSavingState('saving'),
     onSuccess: (data: Planner) => {
       setSavingState('saved');
@@ -453,6 +456,14 @@ export default function WeeklyPlannerScreen() {
     });
   };
   const setReview = (patch: Partial<Review>) => update((c) => ({ ...c, review: { ...c.review, ...patch } }));
+  const setDayTime = (day: number, key: string, v: string) =>
+    update((c) => {
+      const times = { ...(c.times || {}) };
+      const dayTimes = { ...(times[String(day)] || {}) };
+      if (v) dayTimes[key] = v; else delete dayTimes[key];
+      times[String(day)] = dayTimes;
+      return { ...c, times };
+    });
   const setDayField = (day: number, key: string, v: string) =>
     update((c) => ({ ...c, days: { ...c.days, [String(day)]: { ...(c.days[String(day)] || {}), [key]: v } } }));
 
@@ -564,11 +575,18 @@ export default function WeeklyPlannerScreen() {
       grow
       key={f.key} icon={f.icon} title={f.label}
       right={canEdit ? (
-        <TouchableOpacity onPress={() => onScanInto(dayIdx, f.key)} hitSlop={8} disabled={scanningField === f.key}>
-          {scanningField === f.key
-            ? <ActivityIndicator size="small" color={colors.primary} />
-            : <Ionicons name="camera-outline" size={17} color={colors.primary} />}
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <DayTimeInput
+            value={draft?.times?.[String(dayIdx)]?.[f.key] || ''}
+            onChange={(v) => setDayTime(dayIdx, f.key, v)}
+            label={f.label}
+          />
+          <TouchableOpacity onPress={() => onScanInto(dayIdx, f.key)} hitSlop={8} disabled={scanningField === f.key}>
+            {scanningField === f.key
+              ? <ActivityIndicator size="small" color={colors.primary} />
+              : <Ionicons name="camera-outline" size={17} color={colors.primary} />}
+          </TouchableOpacity>
+        </View>
       ) : undefined}
     >
       {f.key === 'morning_bells' && isAdmin && !targetUserId && (
@@ -1247,13 +1265,13 @@ export default function WeeklyPlannerScreen() {
               <>
                 <Kicker style={styles.kicker}>Your day</Kicker>
                 <View style={styles.cardGrid}>
-                  {layoutRows.map((row) => {
+                  {dayOrder(layoutRows, draft.times?.[String(tab)] || {}).map(({ row, time }) => {
                     const f = ALL_DAY_FIELDS.find((x) => x.key === row.key);
                     if (!f) return null;
-                    return renderDayCard({ ...f, label: row.time ? `${row.time} · ${row.label}` : row.label }, tab);
+                    return renderDayCard({ ...f, label: time ? `${time} · ${row.label}` : row.label }, tab);
                   })}
                 </View>
-                <Text style={styles.layoutHint}>Change the order, names and times in Sheet → Edit rows.</Text>
+                <Text style={styles.layoutHint}>The clock on a box sets a time for this day only and puts it on your Schedule. Order, names, default times and which boxes show: Sheet → Edit rows.</Text>
               </>
             ) : (
               <>
@@ -1326,12 +1344,14 @@ export default function WeeklyPlannerScreen() {
             canEdit={canEdit}
             onReview={(patch) => setReview(patch as Partial<Review>)}
             onDay={setDayField}
+            times={draft.times || {}}
+            onTime={setDayTime}
             layout={layoutRows}
             onSaveLayout={async (rows) => {
               const res = await apiService.putSheetLayout(rows);
               queryClient.setQueryData(['sheet-layout'], res.data);
             }}
-            onPrint={() => printWeeklySheet(draft.review, draft.days, week, targetName, layoutRows)}
+            onPrint={() => printWeeklySheet(draft.review, draft.days, week, targetName, layoutRows, draft.times || {})}
           />
         )}
 
