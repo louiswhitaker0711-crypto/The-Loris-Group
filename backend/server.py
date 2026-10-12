@@ -400,6 +400,14 @@ async def _startup_work():
     except Exception:
         logger.exception("Law of Averages update failed (continuing)")
 
+    # The Owner's COD sheet (stages 1, 2, 3, 3+, 4, 5): once per database,
+    # carry earlier items over in place, archive the rest, add the new ones.
+    try:
+        from core.cod_sheet_migration import run_cod_sheet_update
+        await run_cod_sheet_update(db)
+    except Exception:
+        logger.exception("COD sheet update failed (continuing)")
+
     await db.users.create_index("email", unique=True)
     # Primetime reads the whole office's week on every Home render, and writes
     # upsert by (office, week, day, person). One compound index serves both.

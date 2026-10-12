@@ -1330,24 +1330,56 @@ STAGE_SL_MODULES = [
 
 
 
-def all_seed_modules() -> list:
-    """Returns every module as a flat list with sequence numbers assigned.
-
-    Modules are enriched in-place with curated content from the
-    Leadership Toolkit + Impact Booklet (see core/module_content.py)
-    so the trainee_content / what_good_looks_like / leader_coaching_notes
-    fields here serve as a fallback only — newly-seeded office copies
-    automatically inherit the curated material."""
-    # COD 2026: the seed content below IS the curated curriculum (derived
-    # from the Final Cycle of Development). The legacy module_content.py
-    # enrichment overlay was written for the pre-2026 topic sets and no
-    # longer applies.
+def earlier_cod_modules() -> list:
+    """The earlier COD (COD 2026, four pillars per stage), with the Sep-2026
+    plain-English overlay applied. Kept as the content source the Owner's
+    COD sheet (core/cod_sheet.py) carries items over from."""
     out: list = []
-    seq = 0
     for m in STAGE_1_MODULES + STAGE_2_MODULES + STAGE_3_MODULES + STAGE_4_MODULES + STAGE_SL_MODULES:
-        seq += 1
-        out.append({**m, "sequence": seq, "assessment_bands": ASSESSMENT_BANDS})
+        out.append({**m, "assessment_bands": ASSESSMENT_BANDS})
     _apply_simplified_overlay(out)
+    return out
+
+
+def _blank_module(stage: int, category: str, topic: str) -> dict:
+    """A sheet item with no notes yet: the Coach teaches it, and the Owner
+    can add notes in Manual → COD."""
+    return {
+        "stage": stage,
+        "category": category,
+        "topic": topic,
+        "trainee_content": "",
+        "what_good_looks_like": [],
+        "how_measured": [],
+        "leader_coaching_notes": [],
+        "assessment_prompts": {
+            "knowledge": f"Can explain {topic} simply, and why it matters",
+            "skill": f"Can show {topic} in roleplay and live",
+            "consistency": f"Does {topic} reliably, day after day",
+            "independence": f"Does {topic} without being prompted",
+        },
+    }
+
+
+def all_seed_modules() -> list:
+    """Every item on the Owner's COD sheet (core/cod_sheet.py), in sheet
+    order, with sequence numbers. Items carried over from the earlier COD
+    keep its notes; the sheet's new items start without notes."""
+    from core.cod_sheet import NEW_OVERVIEWS, OVERVIEW, sheet_items
+
+    earlier = {(m["stage"], m["topic"]): m for m in earlier_cod_modules()}
+    out: list = []
+    for it in sheet_items():
+        src = it["source"]
+        if src and src in earlier:
+            base = dict(earlier[src])
+        else:
+            base = _blank_module(it["stage"], it["category"], it["topic"])
+            if it["category"] == OVERVIEW and it["stage"] in NEW_OVERVIEWS:
+                base.update(NEW_OVERVIEWS[it["stage"]])
+        base.update({"stage": it["stage"], "category": it["category"], "topic": it["topic"],
+                     "sequence": it["sequence"], "assessment_bands": ASSESSMENT_BANDS})
+        out.append(base)
     return out
 
 

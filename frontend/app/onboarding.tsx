@@ -494,8 +494,8 @@ export default function OnboardingScreen() {
           <View style={styles.noteRow}>
             <Ionicons name="sync-outline" size={16} color={colors.primaryLight} />
             <Text style={[styles.noteText, styles.noteTextInk]}>
-              The COD is the one system behind every advancement here — five stages from Foundation to
-              Team Builder, each built on the same 4 Pillars. Every capability climbs the proof
+              The COD is the one system behind every advancement here — six stages, from the 6 Day
+              Evaluation to Becoming a Business Owner. Every item on your COD sheet climbs the proof
               ladder:
             </Text>
           </View>
@@ -533,7 +533,7 @@ export default function OnboardingScreen() {
             </Keycap>
             <View style={{ flex: 1 }}>
               <Text style={[styles.linkTitle, { color: colors.inkText }]}>How the COD works</Text>
-              <Text style={[styles.linkSub, { color: colors.inkMuted }]}>Proof ladder · the 4 Pillars · the stage map</Text>
+              <Text style={[styles.linkSub, { color: colors.inkMuted }]}>Proof ladder · the stage map</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.inkMuted} />
           </TouchableOpacity>

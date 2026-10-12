@@ -28,6 +28,7 @@ import { SlidingSegments } from '../../src/components/ui/SlidingSegments';
 import { useTabBarClearance } from '../../src/customization/CustomTabBar';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { codStageLabel } from '../../src/components/cod/stageOrder';
+import { TopicRecaps } from '../../src/components/meeting/TopicRecaps';
 import { APP_LOCALE } from '../../src/utils/appTime';
 
 const DIMENSIONS: Array<{ key: 'knowledge' | 'skill' | 'consistency' | 'independence'; label: string; help: string }> = [
@@ -337,6 +338,14 @@ export default function ModuleDetailScreen() {
             </Section>
           </ScrollReveal>
         )}
+        {seg === 'learn' && !m.trainee_content && (
+          <Section title="📘 What to Learn" colors={colors}>
+            <Text style={styles.bodyText}>
+              Your Coach teaches this one. Ask them about it, then work towards getting it signed off.
+            </Text>
+          </Section>
+        )}
+        {seg === 'learn' && <TopicRecaps topicId={String(m.id)} />}
 
         {/* What good looks like */}
         {seg === 'prove' && Array.isArray(m.what_good_looks_like) && m.what_good_looks_like.length > 0 && (

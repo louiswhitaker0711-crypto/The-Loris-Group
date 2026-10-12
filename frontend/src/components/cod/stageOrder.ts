@@ -1,6 +1,12 @@
 /**
  * COD stage DISPLAY order — the single source of truth for the sequence.
  *
+ * Oct 2026: the office runs the Owner's COD sheet (backend core/cod_sheet.py):
+ *   Stage 1 6 Day Evaluation → 2 Becoming a Leader → 3 Being a Leader →
+ *   3+ Being a Core Leader / Coach (STORED as 5, the old Sector/Site Leader
+ *   slot) → 4 Advanced Team Building → 5 Becoming a Business Owner (STORED
+ *   as 6). The history below explains how the stored numbers came about.
+ *
  * The Cycle of Development runs:
  *   Stage 1 Foundation → Stage 2 Self Management → Stage 3 Leader →
  *   Stage SL Sector/Site Leader → Stage 4 Team Builder
@@ -33,7 +39,7 @@
  */
 
 /** Stored stage numbers, in the order a person actually meets them. */
-export const COD_STAGE_ORDER: readonly number[] = [1, 2, 3, 5, 4];
+export const COD_STAGE_ORDER: readonly number[] = [1, 2, 3, 5, 4, 6];
 
 /**
  * Where a stored stage number sits in the display order. Stages the COD
@@ -61,11 +67,12 @@ export function sortByCodStage<T>(rows: readonly T[], stageOf: (row: T) => numbe
  * should read it from here.
  */
 export const COD_STAGE_NAME: Record<number, string> = {
-  1: 'Foundation',
-  2: 'Self Management',
-  3: 'Leader',
-  4: 'Team Builder',
-  5: 'Sector/Site Leader',
+  1: '6 Day Evaluation',
+  2: 'Becoming a Leader',
+  3: 'Being a Leader',
+  4: 'Advanced Team Building',
+  5: 'Being a Core Leader / Coach',
+  6: 'Becoming a Business Owner',
 };
 
 /**
@@ -76,7 +83,9 @@ export const COD_STAGE_NAME: Record<number, string> = {
  */
 export const COD_STAGE_SHORT: Record<number, string> = {
   ...COD_STAGE_NAME,
-  5: 'Sector Leader',
+  4: 'Team Building',
+  5: 'Core Leader',
+  6: 'Business Owner',
 };
 
 /** Short stage name for display. */
@@ -101,8 +110,11 @@ export function furthestCodStage(stages: readonly number[], fallback = 1): numbe
   return best;
 }
 
-/** Stored stage number for Sector/Site Leader. Stored as 5, never shown as 5. */
+/** Stored stage number for Stage 3+ (Core Leader / Coach; was Sector/Site
+ *  Leader). Stored as 5, shown as "3+". The name is historical. */
 export const COD_SL_STAGE = 5;
+/** Stored stage number for Stage 5 (Becoming a Business Owner), shown as "5". */
+export const COD_OWNER_STAGE = 6;
 
 /**
  * How a stage is SPELLED on screen: "SL" for Sector/Site Leader, the number
@@ -111,12 +123,15 @@ export const COD_SL_STAGE = 5;
  * Anywhere a stage number reaches a user, it goes through here.
  */
 export function codStageLabel(stage: number): string {
-  return stage === COD_SL_STAGE ? 'SL' : String(stage);
+  if (stage === COD_SL_STAGE) return '3+';
+  if (stage === COD_OWNER_STAGE) return '5';
+  return String(stage);
 }
 
 /** Two-character form for numbered section headers ("01", "02", "SL"). */
 export function codStagePad(stage: number): string {
-  return stage === COD_SL_STAGE ? 'SL' : String(stage).padStart(2, '0');
+  if (stage === COD_SL_STAGE) return '3+';
+  return codStageLabel(stage).padStart(2, '0');
 }
 
 /**
@@ -127,3 +142,13 @@ export function codStagePad(stage: number): string {
 export function codStageIsBefore(a: number, b: number): boolean {
   return codStageRank(a) < codStageRank(b);
 }
+
+/** "Stage 3+ · Being a Core Leader / Coach" — the full title for a stage. */
+export function codStageTitle(stage: number): string {
+  return `Stage ${codStageLabel(stage)} · ${codStageName(stage)}`;
+}
+
+/** { stage: title } for every COD stage — for label lookups. */
+export const COD_STAGE_TITLES: Record<number, string> = Object.fromEntries(
+  COD_STAGE_ORDER.map((s) => [s, codStageTitle(s)]),
+);

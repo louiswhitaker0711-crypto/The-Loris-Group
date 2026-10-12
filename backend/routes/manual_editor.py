@@ -390,7 +390,7 @@ async def reorder_day(
 # Stage 3 leadership development, and the future Stage 4 advanced track).
 # Modules are scoped by office_id (None = global template).
 
-ALLOWED_STAGES = (2, 3, 4)
+ALLOWED_STAGES = (1, 2, 3, 4, 5, 6)
 
 
 def _strip(d: Optional[dict]) -> Optional[dict]:

@@ -17,16 +17,11 @@ import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '../api/client';
-import { sortCodStages, codStageLabel } from '../components/cod/stageOrder';
+import { sortCodStages, codStageLabel, COD_STAGE_TITLES } from '../components/cod/stageOrder';
 
-type Stage = 2 | 3 | 4 | 5;
+type Stage = 1 | 2 | 3 | 4 | 5 | 6;
 
-const STAGE_LABEL: Record<Stage, string> = {
-  2: 'Stage 2 · Independence',
-  3: 'Stage 3 · Leadership',
-  4: 'Stage 4 · Team Builder',
-  5: 'Stage SL · Sector/Site Leader',
-};
+const STAGE_LABEL: Record<Stage, string> = COD_STAGE_TITLES as Record<Stage, string>;
 
 type ModuleRow = {
   id: string;
@@ -189,9 +184,8 @@ export default function ModulesEditor({
     >
       {/* Stage tabs */}
       <View style={styles.tabsRow}>
-        {/* COD display order (stageOrder.ts) — no SL tab here today, but the
-            rail follows the same sequence as every other stage rail. */}
-        {(sortCodStages([2, 3, 4]) as Stage[]).map((s) => (
+        {/* COD display order (stageOrder.ts): 1, 2, 3, 3+, 4, 5. */}
+        {(sortCodStages([1, 2, 3, 4, 5, 6]) as Stage[]).map((s) => (
           <TouchableOpacity
             key={s}
             style={[styles.tab, stage === s && styles.tabActive]}
