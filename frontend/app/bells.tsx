@@ -495,7 +495,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   navBtn: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background },
   weekPill: { flexDirection: 'row', alignItems: 'center', gap: 7, height: 36, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background },
   weekText: { fontFamily: fonts.bodySemibold, fontSize: 13, color: colors.text },
-  tools: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  tools: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, maxWidth: '100%', flexShrink: 1 },
   ghostBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background },
   ghostBtnText: { fontFamily: fonts.bodySemibold, fontSize: 12.5, color: colors.text },
 
