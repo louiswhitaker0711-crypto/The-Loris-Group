@@ -12,7 +12,7 @@
  * saved by /weekly-planners/sheet-layout); the day pages follow the same
  * order. Nothing here changes the office timetable.
  */
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Modal, Pressable, Switch, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -40,10 +40,51 @@ export const SHEET_HEADER: { id: string; label: string }[] = [
 
 // One row of a person's layout: the day box it saves into, its name, an
 // optional HH:MM time and whether it shows on the sheet.
-export type SheetRow = { key: string; label: string; time: string; on_sheet: boolean };
+export type SheetRow = { key: string; label: string; time: string; on_sheet: boolean; on_day?: boolean };
+type Times = Record<string, Record<string, string>>;
 
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 export const rowTitle = (r: SheetRow) => (r.time ? `${r.time} · ${r.label}` : r.label);
+// A day page's boxes: those shown on day pages, each with that day's own time
+// (or the row's default), timed ones first in time order, the rest after in
+// the person's own order.
+export const dayOrder = (rows: SheetRow[], dayTimes: Record<string, string>) => {
+  const list = rows.filter((r) => r.on_day !== false).map((row) => ({ row, time: dayTimes[row.key] || row.time }));
+  const timed = list.filter((x) => x.time).sort((a, b) => a.time.localeCompare(b.time));
+  return [...timed, ...list.filter((x) => !x.time)];
+};
+
+// A small HH:MM box: "1500" becomes "15:00"; only a whole valid time (or
+// clearing it) is saved.
+export function DayTimeInput({ value, onChange, label, compact }: {
+  value: string; onChange: (v: string) => void; label: string; compact?: boolean;
+}) {
+  const c = useColors();
+  const [text, setText] = useState(value);
+  useEffect(() => { setText(value); }, [value]);
+  const bad = !!text && !TIME_RE.test(text);
+  return (
+    <TextInput
+      value={text}
+      onChangeText={(raw) => {
+        let t = raw.replace(/[^0-9:]/g, '').slice(0, 5);
+        if (/^\d{3,4}$/.test(t)) t = `${t.slice(0, t.length - 2).padStart(2, '0')}:${t.slice(-2)}`;
+        setText(t);
+        if (!t || TIME_RE.test(t)) onChange(t);
+      }}
+      placeholder="--:--"
+      placeholderTextColor={c.textMuted}
+      keyboardType="numbers-and-punctuation"
+      accessibilityLabel={`${label} time for this day`}
+      style={{
+        width: compact ? 50 : 58, paddingVertical: compact ? 2 : 4, paddingHorizontal: 4, borderRadius: 6,
+        borderWidth: 1, borderColor: bad ? c.red : c.border, backgroundColor: c.page,
+        fontFamily: fonts.body, fontSize: compact ? 11.5 : 13, color: c.text, textAlign: 'center',
+      }}
+    />
+  );
+}
+
 // Timed rows first, earliest first; untimed rows keep their order after them.
 export const sortByTime = (rows: SheetRow[]) => {
   const timed = rows.filter((r) => r.time).sort((a, b) => a.time.localeCompare(b.time));
@@ -75,12 +116,12 @@ function weekLabel(weekEnding: string): string {
   return new Date(y, m - 1, d).toLocaleDateString(APP_LOCALE, { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-export function buildWeeklySheetHtml(review: Review, days: Days, weekEnding: string, ownerName: string, layout: SheetRow[]): string {
+export function buildWeeklySheetHtml(review: Review, days: Days, weekEnding: string, ownerName: string, layout: SheetRow[], times: Times = {}): string {
   const sheetRows = layout.filter((r) => r.on_sheet);
   const head = SHEET_HEADER.map((h) => `<tr><th>${esc(h.label)}</th><td>${br(headerValue(review, h.id))}</td></tr>`).join('');
   const dayHead = DAYS.map((d) => `<th>${d}</th>`).join('');
   const rows = sheetRows.map((r) => `<tr>${DAYS.map((_, i) =>
-    `<td><div class="lbl">${esc(rowTitle(r))}</div>${br(days?.[String(i)]?.[r.key])}</td>`).join('')}</tr>`).join('');
+    `<td><div class="lbl">${esc(rowTitle({ ...r, time: times?.[String(i)]?.[r.key] || r.time }))}</div>${br(days?.[String(i)]?.[r.key])}</td>`).join('')}</tr>`).join('');
   return `<!doctype html><html><head><meta charset="utf-8"/>
 <title>Weekly plan · ${esc(ownerName)} · w/e ${esc(weekLabel(weekEnding))}</title>
 <style>
@@ -104,8 +145,8 @@ export function buildWeeklySheetHtml(review: Review, days: Days, weekEnding: str
 </body></html>`;
 }
 
-export async function printWeeklySheet(review: Review, days: Days, weekEnding: string, ownerName: string, layout: SheetRow[]) {
-  const html = buildWeeklySheetHtml(review, days, weekEnding, ownerName, layout);
+export async function printWeeklySheet(review: Review, days: Days, weekEnding: string, ownerName: string, layout: SheetRow[], times: Times = {}) {
+  const html = buildWeeklySheetHtml(review, days, weekEnding, ownerName, layout, times);
   try {
     await Print.printAsync({ html });
   } catch {
@@ -113,9 +154,11 @@ export async function printWeeklySheet(review: Review, days: Days, weekEnding: s
   }
 }
 
-export default function WeeklySheet({ review, days, canEdit, layout, onSaveLayout, onReview, onDay, onPrint }: {
+export default function WeeklySheet({ review, days, times, canEdit, layout, onSaveLayout, onReview, onDay, onTime, onPrint }: {
   review: Review;
   days: Days;
+  times: Times;
+  onTime: (day: number, key: string, v: string) => void;
   canEdit: boolean;
   layout: SheetRow[];
   onSaveLayout: (rows: SheetRow[]) => Promise<void>;
@@ -172,7 +215,14 @@ export default function WeeklySheet({ review, days, canEdit, layout, onSaveLayou
             <View key={r.key} style={s.gridRow}>
               {DAYS.map((d, i) => (
                 <View key={d} style={[s.cell, s.col]}>
-                  <Text style={s.cellLabel}>{rowTitle(r)}</Text>
+                  <View style={s.cellHead}>
+                    <Text style={[s.cellLabel, { flex: 1 }]} numberOfLines={1}>{r.label}</Text>
+                    {canEdit ? (
+                      <DayTimeInput compact value={times?.[String(i)]?.[r.key] || ''} onChange={(v) => onTime(i, r.key, v)} label={`${d} ${r.label}`} />
+                    ) : (times?.[String(i)]?.[r.key] || r.time) ? (
+                      <Text style={s.cellLabel}>{times?.[String(i)]?.[r.key] || r.time}</Text>
+                    ) : null}
+                  </View>
                   <TextInput
                     style={s.cellInput}
                     value={days?.[String(i)]?.[r.key] || ''}
@@ -236,7 +286,7 @@ function RowEditor({ layout, onClose, onSave }: {
           </TouchableOpacity>
         </View>
         <Text style={s.hint}>
-          Just for you: the order, names and times of your rows on the sheet and the day pages. Times are 24-hour, like 10:30, and can be left blank.
+          Just for you. Set the order, the names and a usual time for each row (24-hour, like 10:30, or blank), and switch rows off the weekly sheet (Sheet) or the day pages (Day). To give a box a time on one day only, use the clock box on that day.
         </Text>
         <View style={s.edActions}>
           <TouchableOpacity onPress={() => setRows(sortByTime)} style={s.printBtn} accessibilityRole="button">
@@ -274,7 +324,11 @@ function RowEditor({ layout, onClose, onSave }: {
                 />
                 <View style={s.edSheet}>
                   <Text style={s.edSheetTxt}>Sheet</Text>
-                  <Switch value={r.on_sheet} onValueChange={(v) => set(i, { on_sheet: v })} />
+                  <Switch value={r.on_sheet} onValueChange={(v) => set(i, { on_sheet: v })} accessibilityLabel={`Show ${r.label} on the weekly sheet`} />
+                </View>
+                <View style={s.edSheet}>
+                  <Text style={s.edSheetTxt}>Day</Text>
+                  <Switch value={r.on_day !== false} onValueChange={(v) => set(i, { on_day: v })} accessibilityLabel={`Show ${r.label} on the day pages`} />
                 </View>
               </View>
             );
@@ -306,6 +360,7 @@ const styles = (c: any) => StyleSheet.create({
   dayHead: { paddingVertical: 8, alignItems: 'center', backgroundColor: c.surface, borderBottomWidth: 1, borderBottomColor: c.border },
   dayHeadTxt: { fontFamily: fonts.bodySemibold, fontSize: 12, letterSpacing: 0.5, textTransform: 'uppercase', color: c.text },
   cell: { minHeight: 84, paddingHorizontal: 8, paddingTop: 6, paddingBottom: 4, borderBottomWidth: 1, borderBottomColor: c.border },
+  cellHead: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   cellLabel: { fontFamily: fonts.bodySemibold, fontSize: 9.5, letterSpacing: 0.4, textTransform: 'uppercase', color: c.textMuted },
   edRoot: { flex: 1, backgroundColor: c.page, paddingHorizontal: 16 },
   edHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
