@@ -51,3 +51,42 @@ def test_unscheduled_rows_with_a_time_go_on_the_admins_own_calendar():
     assert (b["title"], b["date"], b["start_time"], b["end_time"]) == ("Appointments", "2026-10-13", "15:00", "15:30")
     assert b["audience"] == "personal" and b["owner_id"] == "admin-1" and b["reminder_minutes"] is None
     assert b["presenter"] == "Example Person"
+
+
+def _cells(**kw):
+    return [{"day": d, "topic": kw.get(f"t{d}", ""), "presenter": kw.get(f"p{d}", ""), "time": ""} for d in range(6)]
+
+
+def test_the_schedule_leads_the_plan():
+    schedule_rows = [
+        {"label": "Coaches meeting", "time_label": "10:00 AM", "schedule_match_title": "Coaches meeting", "cells": _cells()},
+        {"label": "Primetime", "time_label": "11:00 AM", "schedule_match_title": "Primetime", "cells": _cells()},
+        {"label": "Morning meeting", "time_label": "11:45 AM", "schedule_match_title": "Morning meeting", "cells": _cells()},
+    ]
+    rows = [
+        # On the schedule; its title was copied in as a topic on Tuesday.
+        {"label": "Coaches meeting", "time_label": "9:00 AM", "schedule_match_title": "Coaches meeting",
+         "cells": _cells(t1="Coaches meeting", p2="Example Person")},
+        # Gone from the schedule, empty → dropped.
+        {"label": "Old slot", "time_label": "", "schedule_match_title": "Old slot", "cells": _cells()},
+        # Gone from the schedule but written in → kept.
+        {"label": "Workshop", "time_label": "", "schedule_match_title": "Workshop", "cells": _cells(t0="Rehash")},
+        # Never on the schedule → kept.
+        {"label": "Appointments", "time_label": "", "schedule_match_title": None, "cells": _cells()},
+        {"label": "Morning meeting", "time_label": "11:45 AM", "schedule_match_title": "Morning meeting", "cells": _cells()},
+    ]
+    out = agenda.follow_schedule(rows, schedule_rows)
+    labels = [r["label"] for r in out]
+    assert "Old slot" not in labels
+    assert labels == ["Coaches meeting", "Workshop", "Appointments", "Primetime", "Morning meeting"]
+    coaches = out[0]
+    assert coaches["time_label"] == "10:00 AM"          # time follows the schedule
+    assert coaches["cells"][1]["topic"] == ""            # the copied title is gone
+    assert coaches["cells"][2]["presenter"] == "Example Person"
+
+
+def test_a_topic_that_repeats_the_row_name_is_not_saved():
+    row = agenda._normalize_row({"label": "Sector leaders meeting",
+                                 "cells": [{"day": 1, "topic": "Sector Leaders Meeting"}, {"day": 2, "topic": "Targets"}]})
+    assert row["cells"][1]["topic"] == ""
+    assert row["cells"][2]["topic"] == "Targets"

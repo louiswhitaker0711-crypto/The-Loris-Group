@@ -198,6 +198,60 @@ async def _active_days_by_title(office_id: str) -> dict:
     return {k: sorted(v) for k, v in out.items()}
 
 
+def follow_schedule(rows: list, schedule_rows: list) -> list:
+    """The office Schedule leads the plan. Every Schedule block title has a
+    row (a new one slots in by its time); a row's time follows the Schedule;
+    a row whose block has gone from the Schedule disappears unless something
+    was written in it. Rows that were never on the Schedule (Appointments,
+    say) stay as they are. A topic that only repeats the row's name is
+    cleared."""
+    by_title = {(r.get("label") or "").strip().lower(): r for r in schedule_rows}
+    out: list = []
+    seen: set = set()
+    for r in rows or []:
+        r = dict(r)
+        label = (r.get("label") or "").strip()
+        key = (r.get("schedule_match_title") or label).strip().lower()
+        cells = [dict(c) for c in (r.get("cells") or [])]
+        for c in cells:
+            if (c.get("topic") or "").strip().lower() == label.lower():
+                c["topic"] = ""
+        r["cells"] = cells
+        if key in by_title:
+            seen.add(key)
+            if by_title[key].get("time_label"):
+                r["time_label"] = by_title[key]["time_label"]
+            out.append(r)
+        elif r.get("schedule_match_title"):
+            has = any((c.get("topic") or "").strip() or (c.get("presenter") or "").strip() for c in cells)
+            if has:
+                out.append(r)
+        else:
+            out.append(r)
+    for key, sr in by_title.items():
+        if key in seen:
+            continue
+        new = dict(sr)
+        t_new = _minutes(new.get("time_label"))
+        at = len(out)
+        if t_new is not None:
+            for i, r in enumerate(out):
+                t = _minutes(r.get("time_label"))
+                if t is not None and t > t_new:
+                    at = i
+                    break
+        out.insert(at, new)
+    return out
+
+
+def _minutes(label) -> Optional[int]:
+    hhmm = parse_time(str(label or ""))
+    if not hhmm:
+        return None
+    h, m = map(int, hhmm.split(":"))
+    return h * 60 + m
+
+
 def _annotate_active_days(rows: list, day_map: dict) -> list:
     """Attach `active_days` to each row. Display-only — `_normalize_row`
     drops it on save, so it is recomputed from the live schedule on every
@@ -264,6 +318,11 @@ def _normalize_row(raw: dict) -> dict:
                 # A time for this day only (free text, e.g. "15:00").
                 "time": (c.get("time") or "").strip()[:12],
             }
+    label = (raw.get("label") or "Topic").strip()
+    for c in by_day.values():
+        # A topic that only repeats the row's own name isn't a topic.
+        if c["topic"].lower() == label.lower():
+            c["topic"] = ""
     cells_out = [by_day.get(d, {"day": d, "topic": "", "presenter": "", "time": ""}) for d in DAYS_IN_AGENDA]
     days = sorted({int(d) for d in (raw.get("days") or []) if str(d).isdigit() and int(d) in DAYS_IN_AGENDA}) \
         if isinstance(raw.get("days"), list) else []
@@ -449,6 +508,11 @@ async def get_agenda(request: Request, week: Optional[str] = None, office: Optio
             week_ending = latest.get("week_ending") or week_ending
             seed_rows = []
             fallback_used = True
+
+    # The Schedule leads: bring the plan's rows in line with it (new blocks
+    # appear, times follow, removed blocks go unless written in).
+    if doc and not fallback_used:
+        doc["rows"] = follow_schedule(list(doc.get("rows") or []), await _build_seed_rows(office_id))
 
     # Annotate rows with the days they actually occur on per the office's
     # current schedule, so the editor can hide dead day-cells.
@@ -983,12 +1047,11 @@ async def fill_agenda_from_schedule(request: Request):
         # Pull presenter from the schedule block (this is the value the user
         # actually edited on the Schedule/Daily tab — see Issue #1).
         block_presenter = (b.get("presenter") or "").strip()
-        if not existing_topic:
-            cell["topic"] = title
+        # The row already names the block: never copy its title in as a topic.
         if not existing_presenter and block_presenter:
             cell["presenter"] = block_presenter
         filled += 1
-        filled_details.append({"day": day_i, "label": title, "topic": title, "presenter": block_presenter})
+        filled_details.append({"day": day_i, "label": title, "topic": "", "presenter": block_presenter})
         # Bubble up time_label if empty
         if not (row.get("time_label") or "").strip():
             row["time_label"] = _to_pretty_time(b.get("start_time") or "")
