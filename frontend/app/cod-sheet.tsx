@@ -19,9 +19,10 @@
  * scroll-driven.
  */
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { showAlert } from '../src/utils/showAlert';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useColors, fonts, GRADIENT } from '../src/theme/ThemeContext';
@@ -93,9 +94,30 @@ export default function CodSheetScreen() {
 
   const doneCount = modules.filter((m) => ladderOf(m) >= 3).length;
 
-  // The sheet is the MIRROR, not a second pen: all ticking happens in the
-  // module page / check queue; this grid just renders the truth. Red =
-  // nothing yet · amber = ready for check · green boxes = signed rungs.
+  // Click to sign (Owner, Oct 2026). Coaches and Admins grading someone tap
+  // a box to sign that rung, or tap the top signed box to take it back; the
+  // server re-checks they may grade this person. On your own sheet you can
+  // tick Know (Do and above are your Coach's); Admins can sign their own.
+  const qc = useQueryClient();
+  const role = (user?.role || '').toLowerCase();
+  const canSign = targetId ? (role === 'leader' || role === 'admin') : role === 'admin';
+  const [busyCell, setBusyCell] = React.useState<string | null>(null);
+  const signMut = useMutation({
+    mutationFn: async ({ m, rung, ladder }: { m: any; rung: number; ladder: number }) => {
+      if (canSign) {
+        const next = ladder === rung ? rung - 1 : rung;
+        return apiService.upsertModuleProgress(m.id, { ladder: next }, targetId).then((r) => r.data);
+      }
+      return apiService.setIKnowIt(m.id, ladder < 1).then((r) => r.data);
+    },
+    onMutate: ({ m, rung }) => setBusyCell(`${m.id}:${rung}`),
+    onSettled: () => {
+      setBusyCell(null);
+      qc.invalidateQueries({ queryKey: targetId ? ['trainee-module-progress', targetId, stage] : ['module-progress', stage] });
+    },
+    onError: (e: any) => showAlert('Could not sign that', e?.response?.data?.detail || 'Try again'),
+  });
+  const tappable = (rung: number, ladder: number) => canSign || (!targetId && rung === 1 && ladder <= 1);
 
   if (modulesQ.isLoading || progressQ.isLoading) {
     return <View style={styles.loader}><BrandLoader size={56} /></View>;
@@ -142,8 +164,9 @@ export default function CodSheetScreen() {
             ))}
           </View>
           <Text style={styles.selfNote}>
-            The sheet mirrors the ladder — tick Know yourself on an item when you know it, tap "Ready for check" for
-            the rest, and your Coach's sign-off fills the boxes here. 🟢 signed · 🟡 in progress · ⚪ not started.
+            {canSign
+              ? 'Tap a box to sign that rung. Tap the top ticked box again to take it back. 🟢 signed · 🟡 in progress · ⚪ not started.'
+              : 'Tap K when you know an item. Your Coach signs Do and Deliver. 🟢 signed · 🟡 in progress · ⚪ not started.'}
           </Text>
         </EditorialHero>
 
@@ -170,21 +193,37 @@ export default function CodSheetScreen() {
                     {boxesForStage(stage).map((b) => {
                       const on = ladder >= b.rung;
                       const pending = !on && b.rung === ladder + 1 && !!progressById[m.id]?.ready_for_check;
-                      return (
+                      const canTap = tappable(b.rung, ladder);
+                      const busy = busyCell === `${m.id}:${b.rung}`;
+                      const box = (
                         <Keycap
-                          key={b.rung}
                           size={BOX}
                           radius={8}
                           tone={on ? 'gradient' : 'paper'}
                           style={pending ? styles.boxPending : undefined}
                         >
-                          {on
-                            ? <Ionicons name="checkmark" size={13} color="#fff" />
-                            : pending
-                              ? <Ionicons name="hourglass-outline" size={12} color={colors.yellow} />
-                              : <Text style={styles.boxLetter}>{b.letter}</Text>}
+                          {busy
+                            ? <ActivityIndicator size="small" color={on ? '#fff' : colors.primary} />
+                            : on
+                              ? <Ionicons name="checkmark" size={13} color="#fff" />
+                              : pending
+                                ? <Ionicons name="hourglass-outline" size={12} color={colors.yellow} />
+                                : <Text style={styles.boxLetter}>{b.letter}</Text>}
                         </Keycap>
                       );
+                      return canTap ? (
+                        <TouchableOpacity
+                          key={b.rung}
+                          activeOpacity={0.6}
+                          disabled={signMut.isPending}
+                          onPress={() => signMut.mutate({ m, rung: b.rung, ladder })}
+                          accessibilityRole="button"
+                          accessibilityLabel={`${m.topic}: ${b.label}${on ? ', signed' : ''}`}
+                          hitSlop={4}
+                        >
+                          {box}
+                        </TouchableOpacity>
+                      ) : <View key={b.rung}>{box}</View>;
                     })}
                   </View>
                 </View>
@@ -195,8 +234,7 @@ export default function CodSheetScreen() {
         ))}
 
         <Text style={styles.footNote}>
-          Read-only by design — sign-offs happen on the module page and in the coach's check
-          queue; this sheet mirrors them. Tap a topic for the full page.
+          Tap an item's name for its full page: notes, questions and coach notes.
         </Text>
       </ScrollView>
     </View>
