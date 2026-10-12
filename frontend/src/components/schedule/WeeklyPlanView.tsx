@@ -1,3 +1,4 @@
+import { sortByTime } from '../../utils/agendaTime';
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { showAlert } from '../../utils/showAlert';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, RefreshControl, Modal, Pressable,  } from 'react-native';
@@ -56,12 +57,16 @@ const STATS_FIELDS: { key: string; label: string; placeholder: string; icon: any
   { key: 'personal_recruits', label: 'Personal Recruits', placeholder: 'e.g. 2',   icon: 'person-add-outline', color: '#22c55e' },
 ];
 
-type Cell = { day: number; topic: string; presenter: string };
+type Cell = { day: number; topic: string; presenter: string; time?: string };
 type Row = {
   id: string; label: string; time_label: string; schedule_match_title: string | null; cells: Cell[];
   /** Days this row's matched schedule block actually occurs on (from the
    * backend, recomputed each GET). null/undefined → treat as every day. */
   active_days?: number[] | null;
+  /** Days picked in Structure for a row that isn't on the office Schedule. */
+  days?: number[];
+  /** True when the row matches an office Schedule block (from the server). */
+  on_schedule?: boolean;
 };
 type Themes = Record<string, string>;
 type Stats = Record<string, string>;
@@ -132,6 +137,7 @@ const slugify = (s: string) => (s || '').trim().toLowerCase();
 const cellFilled = (c?: Cell) => !!c && !!((c.presenter || '').trim() || (c.topic || '').trim());
 /** Days this row happens on per the office schedule (all days when unknown). */
 function activeDaysOf(row: Row): number[] {
+  if (!row.on_schedule && row.days && row.days.length) return row.days;
   return row.active_days && row.active_days.length ? row.active_days : ALL_DAYS;
 }
 /** Days the editor should render for a row: schedule-active days, plus any
@@ -518,6 +524,29 @@ export default function WeeklyPlanView() {
   const updateRow = (rowId: string, next: Row) => {
     update((c) => ({ ...c, rows: c.rows.map((r) => (r.id === rowId ? next : r)) }));
   };
+  // Row order: the plan's own row order AND the office's saved order (what
+  // Preview and the coaches' plan follow), kept the same.
+  const applyRowOrder = (rows: Row[]) => {
+    update((c) => ({ ...c, rows }));
+    const cur = rowConfigQ.data || { row_order: [], hidden_rows: [] };
+    rowCfgMut.mutate({
+      row_order: rows.map((r) => slugify(r.label)).filter(Boolean),
+      hidden_rows: (cur.hidden_rows as string[]) || [],
+    });
+  };
+  const moveRow = (rowId: string, by: number) => {
+    if (!draft) return;
+    const i = draft.rows.findIndex((r) => r.id === rowId);
+    const j = i + by;
+    if (i < 0 || j < 0 || j >= draft.rows.length) return;
+    const next = [...draft.rows];
+    [next[i], next[j]] = [next[j], next[i]];
+    applyRowOrder(next);
+  };
+  const sortRowsByTime = () => {
+    if (!draft) return;
+    applyRowOrder(sortByTime(draft.rows, (r) => r.time_label));
+  };
   const forceDay = (rowId: string, day: number) => {
     setForcedDays((cur) => {
       const list = cur[rowId] || [];
@@ -740,16 +769,22 @@ export default function WeeklyPlanView() {
                 <Ionicons name="calendar-outline" size={13} color={colors.primary} />
                 <Text style={styles.btnLightText}>{fillMut.isPending ? 'Filling…' : 'Fill from Schedule'}</Text>
               </TouchableOpacity>
+              <TouchableOpacity style={styles.btnLight} onPress={sortRowsByTime} accessibilityRole="button">
+                <Ionicons name="time-outline" size={13} color={colors.primary} />
+                <Text style={styles.btnLightText}>Sort by time</Text>
+              </TouchableOpacity>
               <TouchableOpacity style={styles.btnLight} onPress={onResetFromSchedule}>
                 <Ionicons name="refresh" size={13} color="#dc2626" />
                 <Text style={[styles.btnLightText, { color: '#dc2626' }]}>Reset rows</Text>
               </TouchableOpacity>
             </View>
 
-            {draft.rows.map((row) => (
+            {draft.rows.map((row, ri) => (
               <StructureRowCard
                 key={row.id}
                 row={row}
+                onMoveUp={ri > 0 ? () => moveRow(row.id, -1) : undefined}
+                onMoveDown={ri < draft.rows.length - 1 ? () => moveRow(row.id, 1) : undefined}
                 titles={titlesQ.data || []}
                 hidden={hiddenSlugs.has(slugify(row.label))}
                 onToggleHidden={() => toggleRowHidden(row.label)}
@@ -764,8 +799,9 @@ export default function WeeklyPlanView() {
             </PressableScale>
 
             <Text style={styles.structFootnote}>
-              Hidden rows stay out of the Fill view and the coaches' plan, but keep their saved content.
-              Drag-to-reorder lives in Preview → Manage Rows.
+              Use the arrows to move a row, or Sort by time. The eye hides a row from Fill, Preview and the
+              coaches' plan (its content is kept). A row that isn't on the office Schedule runs on the days you
+              tick; give it a time and anything you write in it also goes on your own Schedule, just for you.
             </Text>
           </>
         )}
@@ -1138,7 +1174,7 @@ function FillRowCard({
       {expanded && (
         <>
           {visDays.map((d) => {
-            const cell = row.cells.find((c) => c.day === d) || { day: d, topic: '', presenter: '' };
+            const cell = row.cells.find((c) => c.day === d) || { day: d, topic: '', presenter: '', time: '' };
             const filled = cellFilled(cell);
             const oneOff = !activeDays.includes(d);
             return (
@@ -1166,6 +1202,13 @@ function FillRowCard({
                     onChangeText={(v) => setCell(d, { topic: v })}
                     style={styles.cellTopicInput}
                     placeholder="Topic (optional)"
+                    placeholderTextColor={colors.textMuted}
+                  />
+                  <TextInput
+                    value={cell.time || ''}
+                    onChangeText={(v) => setCell(d, { time: v.slice(0, 12) })}
+                    style={styles.cellTimeInput}
+                    placeholder={row.time_label ? `Time (usually ${row.time_label})` : 'Time this day (optional)'}
                     placeholderTextColor={colors.textMuted}
                   />
                 </View>
@@ -1225,7 +1268,7 @@ function DayFillList({
       </View>
 
       {slots.map((row) => {
-        const cell = row.cells.find((c) => c.day === day) || { day, topic: '', presenter: '' };
+        const cell = row.cells.find((c) => c.day === day) || { day, topic: '', presenter: '', time: '' };
         const filled = cellFilled(cell);
         const oneOff = !activeDaysOf(row).includes(day);
         const setCell = (patch: Partial<Cell>) => {
@@ -1257,6 +1300,13 @@ function DayFillList({
               placeholder="Topic (optional)"
               placeholderTextColor={colors.textMuted}
             />
+            <TextInput
+              value={cell.time || ''}
+              onChangeText={(v) => setCell({ time: v.slice(0, 12) })}
+              style={styles.cellTimeInput}
+              placeholder={row.time_label ? `Time (usually ${row.time_label})` : 'Time this day (optional)'}
+              placeholderTextColor={colors.textMuted}
+            />
           </DepthCard>
         );
       })}
@@ -1283,10 +1333,11 @@ function DayFillList({
 // Structure · one row's layout config — label, time, schedule match, hide.
 // ─────────────────────────────────────────────────────────────────────────
 function StructureRowCard({
-  row, titles, hidden, onToggleHidden, onUpdate, onRemove,
+  row, titles, hidden, onToggleHidden, onUpdate, onRemove, onMoveUp, onMoveDown,
 }: {
   row: Row; titles: string[]; hidden: boolean;
   onToggleHidden: () => void; onUpdate: (r: Row) => void; onRemove: () => void;
+  onMoveUp?: () => void; onMoveDown?: () => void;
 }) {
   const colors = useColors();
   const isDark = useTheme().effective === 'dark';
@@ -1298,6 +1349,14 @@ function StructureRowCard({
   return (
     <DepthCard sheen={false} style={[styles.rowCard, hidden && { opacity: 0.55 }]}>
       <View style={styles.rowHead}>
+        <View style={{ alignItems: 'center' }}>
+          <TouchableOpacity onPress={onMoveUp} disabled={!onMoveUp} hitSlop={6} accessibilityLabel={`Move ${row.label} up`}>
+            <Ionicons name="chevron-up" size={18} color={onMoveUp ? colors.primary : colors.border} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onMoveDown} disabled={!onMoveDown} hitSlop={6} accessibilityLabel={`Move ${row.label} down`}>
+            <Ionicons name="chevron-down" size={18} color={onMoveDown ? colors.primary : colors.border} />
+          </TouchableOpacity>
+        </View>
         <View style={styles.rowHeadLeft}>
           <TextInput
             value={row.label}
@@ -1322,13 +1381,40 @@ function StructureRowCard({
         </TouchableOpacity>
       </View>
 
-      {/* Which days this row actually runs (from the Schedule tab) */}
-      <View style={styles.activeDaysRow}>
-        <Ionicons name="today-outline" size={12} color={colors.textMuted} />
-        <Text style={styles.activeDaysText}>
-          {activeDays ? activeDays.map((d) => DAY_LABELS[d]).join(' · ') : 'Every day (no schedule match)'}
-        </Text>
-      </View>
+      {/* Which days this row runs: from the Schedule tab when it's on the
+          office Schedule, otherwise the days ticked here. */}
+      {row.on_schedule ? (
+        <View style={styles.activeDaysRow}>
+          <Ionicons name="today-outline" size={12} color={colors.textMuted} />
+          <Text style={styles.activeDaysText}>
+            {activeDays ? activeDays.map((d) => DAY_LABELS[d]).join(' · ') : 'Every day'}
+          </Text>
+        </View>
+      ) : (
+        <View style={[styles.activeDaysRow, { flexWrap: 'wrap' }]}>
+          <Ionicons name="today-outline" size={12} color={colors.textMuted} />
+          <Text style={styles.activeDaysText}>Runs on</Text>
+          {ALL_DAYS.map((d) => {
+            const on = (row.days || []).includes(d);
+            return (
+              <TouchableOpacity
+                key={d}
+                onPress={() => {
+                  const cur = new Set(row.days || []);
+                  if (on) cur.delete(d); else cur.add(d);
+                  onUpdate({ ...row, days: Array.from(cur).sort() });
+                }}
+                style={[styles.addDayChip, on && { backgroundColor: colors.primary, borderColor: colors.primary }]}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: on }}
+              >
+                <Text style={[styles.addDayChipText, on && { color: colors.onPrimary }]}>{DAY_LABELS[d]}</Text>
+              </TouchableOpacity>
+            );
+          })}
+          {!(row.days || []).length && <Text style={styles.activeDaysText}>(none ticked = every day)</Text>}
+        </View>
+      )}
 
       {/* Matcher chip */}
       <TouchableOpacity style={styles.matchRow} onPress={() => setMatcherOpen(true)}>
@@ -1555,6 +1641,7 @@ const createStyles = (colors: any, isDark = false) => {
   // Presenter is the primary input — bolder, slightly larger
   cellPresenterInput: { fontFamily: fonts.bodySemibold, backgroundColor: colors.surfaceAlt, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 6, fontSize: 13, fontWeight: '700', color: colors.text, borderWidth: 1, borderColor: colors.border },
   // Topic is now the secondary detail — smaller, muted
+  cellTimeInput: { fontFamily: fonts.mono, backgroundColor: 'transparent', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, fontSize: 11, color: colors.textSecondary, marginTop: 3, borderWidth: 1, borderColor: hair, borderStyle: 'dashed' },
   cellTopicInput: { fontFamily: fonts.body, backgroundColor: 'transparent', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, fontSize: 11, fontWeight: '500', fontStyle: 'italic', color: colors.textMuted, marginTop: 3, borderWidth: 1, borderColor: hair, borderStyle: 'dashed' },
   // Read-only versions for legacy non-admin path
   cellPresenterRO: { fontSize: 13, fontWeight: '700', color: colors.text, paddingVertical: 2 },
