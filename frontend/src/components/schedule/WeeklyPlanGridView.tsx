@@ -16,7 +16,7 @@ import { apiService } from '../../api/client';
 import { useActiveOffice } from '../../office/ActiveOfficeContext';
 import { toast } from '../../utils/toast';
 import { APP_LOCALE } from '../../utils/appTime';
-import { sortByTime } from '../../utils/agendaTime';
+import { sortByTime, timeMinutes } from '../../utils/agendaTime';
 
 // ──────────────────────────────────────────────────────────────────────────
 // Read-only "Excel-like" weekly plan view shown to Leaders (and as a
@@ -85,7 +85,8 @@ const STATS_FIELDS: { key: string; label: string; icon: any; color: string }[] =
 const COL_WIDTH = 124;
 const LABEL_COL_WIDTH = 102;
 
-type Cell = { day: number; topic: string; presenter: string; time?: string };
+type Cell = { day: number; topic: string; presenter: string; time?: string; merge_up?: boolean };
+export type MergeChange = { rowId: string; day: number; merge: boolean };
 type Row = { id: string; label: string; time_label: string; cells: Cell[] };
 type Themes = Record<string, string>;
 
@@ -94,9 +95,14 @@ type Themes = Record<string, string>;
  * just repeats the row label doesn't count. */
 export function cellLines(cell: Cell | undefined, rowLabel: string): { main: string; sub: string; time: string } {
   const presenter = (cell?.presenter || '').trim();
-  const topicRaw = (cell?.topic || '').trim();
+  let topicRaw = (cell?.topic || '').trim();
+  let time = (cell?.time || '').trim();
+  // A time typed into the topic box is the day's time, not its topic.
+  if (topicRaw && !time && /[:.]|[ap]\.?m/i.test(topicRaw) && timeMinutes(topicRaw) != null) {
+    time = topicRaw;
+    topicRaw = '';
+  }
   const topic = topicRaw && topicRaw.toLowerCase() !== (rowLabel || '').trim().toLowerCase() ? topicRaw : '';
-  const time = (cell?.time || '').trim();
   if (topic && presenter) return { main: topic, sub: presenter, time };
   return { main: topic || presenter, sub: '', time };
 }
@@ -108,7 +114,10 @@ export default function WeeklyPlanGridView({
   rows,
   weekEnding,
   isAdmin = false,
+  onSetMerge,
 }: {
+  /** Admin editor only: merge / unmerge cells (same day, row into the one above). */
+  onSetMerge?: (changes: MergeChange[]) => void;
   themes: Themes;
   stats?: Stats;
   rows: Row[];
@@ -139,6 +148,8 @@ export default function WeeklyPlanGridView({
   // tallest data cell in the same row. Prevents visual row drift when one
   // day has a wrapped topic/presenter longer than the default 48pt.
   const [rowHeights, setRowHeights] = useState<Record<string, number>>({});
+  // The cell an admin tapped to merge or unmerge.
+  const [mergeAt, setMergeAt] = useState<{ ri: number; di: number } | null>(null);
 
   // Live office sales count for this week — drives the "goal vs actual"
   // annotation on the Weekly Goal tile. Reuses the same query key as the
@@ -187,6 +198,17 @@ export default function WeeklyPlanGridView({
     return [...listed, ...unlisted];
   }, [rows, rowConfig]);
 
+  // Merged cells: a cell marked merge_up joins the one above it (same day),
+  // only when there IS a visible row above. mergedAt(ri, di) → true for the
+  // lower cells of a merge; anchorOf gives the top cell's row index.
+  const mergedAt = (ri: number, di: number) =>
+    ri > 0 && !!visibleRows[ri]?.cells.find((c) => c.day === di)?.merge_up;
+  const anchorOf = (ri: number, di: number) => {
+    let a = ri;
+    while (a > 0 && mergedAt(a, di)) a -= 1;
+    return a;
+  };
+
   // Parse goal for %-to-goal annotation
   const weeklyGoalRaw = (stats?.weekly_goal ?? '').toString().trim();
   const weeklyGoalNum = (() => {
@@ -227,12 +249,15 @@ export default function WeeklyPlanGridView({
       const dayHeaderHtml = DAY_LABELS.map((d, i) =>
         `<th class="day-h" style="background:${DAY_TINTS[i]};border-bottom:3px solid ${DAY_BARS[i]}">${escape(d.toUpperCase())}DAY</th>`,
       ).join('');
-      const gridRowsHtml = visibleRows.map((row) => {
+      const gridRowsHtml = visibleRows.map((row, ri) => {
         const labelTrim = (row.label || '').trim().toLowerCase();
         const cellsHtml = DAY_LABELS.map((_, di) => {
+          if (mergedAt(ri, di)) return '';
+          let span = 1;
+          while (ri + span < visibleRows.length && mergedAt(ri + span, di)) span += 1;
           const cell = row.cells.find((c) => c.day === di);
           const { main, sub, time } = cellLines(cell, labelTrim);
-          return `<td class="cell">
+          return `<td class="cell"${span > 1 ? ` rowspan="${span}" style="vertical-align:middle;text-align:center"` : ''}>
             ${time ? `<div class="topic">${escape(time)}</div>` : ''}
             ${main ? `<div class="pres">${escape(main)}</div>` : ''}
             ${sub ? `<div class="topic">${escape(sub)}</div>` : ''}
@@ -497,6 +522,43 @@ export default function WeeklyPlanGridView({
           </View>
         </View>
 
+        {/* Merge options for the tapped cell — admin editor only */}
+        {mergeAt && onSetMerge && (() => {
+          const { ri, di } = mergeAt;
+          const row = visibleRows[ri];
+          const isMerged = mergedAt(ri, di);
+          const dayMerged = visibleRows.length > 1 && visibleRows.every((_, i) => i === 0 || mergedAt(i, di));
+          const close = () => setMergeAt(null);
+          const apply = (changes: MergeChange[]) => { onSetMerge(changes); close(); };
+          const opt = (label: string, icon: any, onPress: () => void) => (
+            <TouchableOpacity key={label} onPress={onPress} style={styles.mergeOpt} accessibilityRole="button">
+              <Ionicons name={icon} size={16} color={colors.primary} />
+              <Text style={styles.mergeOptText}>{label}</Text>
+            </TouchableOpacity>
+          );
+          return (
+            <Modal visible transparent animationType="fade" onRequestClose={close}>
+              <Pressable style={styles.mergeBackdrop} onPress={close}>
+                <Pressable style={styles.mergeSheet} onPress={() => {}}>
+                  <Text style={styles.mergeTitle}>{row?.label} · {DAY_FULL[di]}</Text>
+                  <Text style={styles.mergeSub}>Merged cells show as one box on the plan and the PDF. The top cell's words are the ones shown.</Text>
+                  {ri > 0 && (isMerged
+                    ? opt('Unmerge from the cell above', 'git-branch-outline', () => apply([{ rowId: row.id, day: di, merge: false }]))
+                    : opt(`Merge with ${visibleRows[ri - 1]?.label || 'the cell above'}`, 'git-merge-outline', () => apply([{ rowId: row.id, day: di, merge: true }])))}
+                  {ri + 1 < visibleRows.length && !mergedAt(ri + 1, di) &&
+                    opt(`Merge with ${visibleRows[ri + 1]?.label || 'the cell below'}`, 'git-merge-outline', () => apply([{ rowId: visibleRows[ri + 1].id, day: di, merge: true }]))}
+                  {dayMerged
+                    ? opt(`Unmerge all of ${DAY_FULL[di]}`, 'grid-outline', () => apply(visibleRows.slice(1).map((r) => ({ rowId: r.id, day: di, merge: false }))))
+                    : opt(`Merge all of ${DAY_FULL[di]} into one`, 'square-outline', () => apply(visibleRows.slice(1).map((r) => ({ rowId: r.id, day: di, merge: true }))))}
+                  <TouchableOpacity onPress={close} style={[styles.mergeOpt, { justifyContent: 'center' }]} accessibilityRole="button">
+                    <Text style={[styles.mergeOptText, { color: colors.textMuted }]}>Cancel</Text>
+                  </TouchableOpacity>
+                </Pressable>
+              </Pressable>
+            </Modal>
+          );
+        })()}
+
         {/* Manage Rows modal — admin only */}
         <ManageRowsSheet
           visible={showManageRows}
@@ -604,15 +666,21 @@ export default function WeeklyPlanGridView({
                   >
                     {DAY_LABELS.map((_, di) => {
                       const cell = row.cells.find((c) => c.day === di);
-                      const { main, sub, time } = cellLines(cell, row.label);
+                      const merged = mergedAt(ri, di);
+                      const mergedBelow = ri + 1 < visibleRows.length && mergedAt(ri + 1, di);
+                      const { main, sub, time } = merged ? { main: '', sub: '', time: '' } : cellLines(cell, row.label);
                       const has = !!(main || time);
+                      const zebraRow = merged ? anchorOf(ri, di) : ri;
+                      const Wrap: any = onSetMerge ? TouchableOpacity : View;
                       return (
-                        <View
+                        <Wrap
                           key={di}
+                          {...(onSetMerge ? { onPress: () => setMergeAt({ ri, di }), activeOpacity: 0.7, accessibilityRole: 'button', accessibilityLabel: `${row.label}, ${DAY_FULL[di]}: merge options` } : {})}
                           style={[
                             styles.dataCell,
                             { width: colW, minHeight: rowMinH, paddingHorizontal: cellPadH, paddingVertical: cellPadV },
-                            ri % 2 === 1 && styles.dataCellAlt,
+                            zebraRow % 2 === 1 && styles.dataCellAlt,
+                            mergedBelow && { borderBottomWidth: 0 },
                           ]}
                         >
                           {todayCol === di && (
@@ -639,7 +707,7 @@ export default function WeeklyPlanGridView({
                           ) : (
                             <Text style={styles.cellEmpty}> </Text>
                           )}
-                        </View>
+                        </Wrap>
                       );
                     })}
                   </View>
@@ -993,6 +1061,12 @@ const createStyles = (colors: any, isDark = false) => {
     justifyContent: 'center', overflow: 'hidden',
   },
   dataCellAlt: { backgroundColor: zebra },
+  mergeBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center', padding: 16 },
+  mergeSheet: { width: '100%', maxWidth: 420, backgroundColor: colors.surface, borderRadius: 16, padding: 16, gap: 4 },
+  mergeTitle: { fontSize: 16, fontWeight: '800', color: colors.text },
+  mergeSub: { fontSize: 12, color: colors.textMuted, marginBottom: 8, lineHeight: 17 },
+  mergeOpt: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, paddingHorizontal: 4, borderTopWidth: 1, borderTopColor: hair },
+  mergeOptText: { fontSize: 14, fontWeight: '700', color: colors.text },
   cellTopic: { fontSize: 10, fontWeight: '500', fontStyle: 'italic', color: colors.textMuted, lineHeight: 13, marginTop: 2 },
   presenterRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 4 },
   cellPresenter: { fontSize: 12, fontWeight: '800', color: colors.text, lineHeight: 15 },
