@@ -82,7 +82,7 @@ export default function SectorScreen() {
       </View>
       <Text style={s.muted}>
         {mode === 'setup'
-          ? 'Goal, KPI and focus for each person. Yesterday’s "Change" is ready to use as today’s focus.'
+          ? 'Goal, KPI, focus and a positive for each person. Yesterday’s "Change" shows as a suggestion for the focus.'
           : 'Doors / spoken / pitched / closed and sign-ups come in from OwnerIQ and Bells. Add what they’re proud of and what they’ll change.'}
       </Text>
 
@@ -192,11 +192,11 @@ function SetupCard({ p, date, opts, open, onToggle, onSaved, s, c }: any) {
   const metrics: Array<{ key: string; label: string; loa: number | null }> = opts?.kpi_metrics || [];
   const summary = p.setup ? [cur.goal != null ? `Goal ${cur.goal}` : '', cur.kpi_metric ? `${cur.kpi_target ?? ''} ${metrics.find((m) => m.key === cur.kpi_metric)?.label || ''}`.trim() : '', cur.focus].filter(Boolean).join(' · ') : 'Not set';
 
+  // Yesterday's goal and suggested KPI. Yesterday's "Change" is only offered
+  // as a suggestion for the focus, never filled in for them.
   const useYesterday = () => {
     if (y.goal != null) setGoal(String(y.goal));
     if (y.kpi) { setMetric(y.kpi.kpi_metric); setTarget(String(y.kpi.kpi_target)); }
-    if (y.change) setFocus(y.change);
-    if (y.proud && !positive) setPositive(y.proud);
   };
   const save = async () => {
     setBusy(true);
@@ -218,11 +218,11 @@ function SetupCard({ p, date, opts, open, onToggle, onSaved, s, c }: any) {
       </Pressable>
       {open && (
         <View style={{ gap: 10 }}>
-          {(y.change || y.kpi) && (
+          {(y.goal != null || y.kpi) && (
             <Pressable onPress={useYesterday} style={s.hint} accessibilityRole="button">
               <Ionicons name="arrow-undo-outline" size={15} color={c.primary} />
               <Text style={[s.ghostText, { flex: 1 }]}>
-                From yesterday: {[y.change && `change "${y.change}"`, y.kpi && `${y.kpi.kpi_target} ${metrics.find((m) => m.key === y.kpi.kpi_metric)?.label}`].filter(Boolean).join(' · ')} — tap to use
+                {[y.goal != null && `Yesterday's goal ${y.goal}`, y.kpi && `suggested KPI ${y.kpi.kpi_target} ${metrics.find((m) => m.key === y.kpi.kpi_metric)?.label}`].filter(Boolean).join(' · ')} — tap to use
               </Text>
             </Pressable>
           )}
@@ -239,6 +239,12 @@ function SetupCard({ p, date, opts, open, onToggle, onSaved, s, c }: any) {
           </View>
           {!!metric && <TextInput value={target} onChangeText={setTarget} keyboardType="number-pad" placeholder="Target" placeholderTextColor={c.textMuted} style={[s.input, s.small]} />}
           <Text style={s.label}>Focus</Text>
+          {!!y.change && y.change !== focus && (
+            <Pressable onPress={() => setFocus(y.change)} style={s.hint} accessibilityRole="button">
+              <Ionicons name="bulb-outline" size={15} color={c.primary} />
+              <Text style={[s.ghostText, { flex: 1 }]}>Suggestion: yesterday they said they'd change "{y.change}". Tap to make it today's focus, or pick something else.</Text>
+            </Pressable>
+          )}
           <Chips items={opts?.change || []} value={focus} onPick={setFocus} s={s} c={c} highlight={y.change} />
           <TextInput value={focus} onChangeText={setFocus} placeholder="Or type it" placeholderTextColor={c.textMuted} style={s.input} />
           <Text style={s.label}>Positive</Text>
