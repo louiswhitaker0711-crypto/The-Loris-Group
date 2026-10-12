@@ -61,11 +61,11 @@ type Loa = {
 type Stage = { stage: number; label: string; name: string; done: number; met: number; total: number; complete: boolean; current: boolean };
 
 // `th` is the column heading in the day-by-day table, where a phone leaves
-// each column about 55px: "Presented" shortens to "Pres." there only.
+// each column about 55px: "Pitched" fits as it is.
 const FUNNEL: { key: string; label: string; th: string; one: string; icon: Icon }[] = [
   { key: 'doors_knocked', label: 'Doors', th: 'Doors', one: 'doors', icon: 'home-outline' },
   { key: 'spoken_to', label: 'Spoken', th: 'Spoken', one: 'spoken to', icon: 'chatbubbles-outline' },
-  { key: 'pitches_commenced', label: 'Presented', th: 'Pres.', one: 'presented', icon: 'easel-outline' },
+  { key: 'pitches_commenced', label: 'Pitched', th: 'Pitched', one: 'pitched', icon: 'easel-outline' },
   { key: 'pitches_closed', label: 'Closed', th: 'Closed', one: 'closed', icon: 'hand-left-outline' },
   { key: 'sales', label: 'Sign-ups', th: 'Signed', one: 'sign-ups', icon: 'ribbon-outline' },
 ];

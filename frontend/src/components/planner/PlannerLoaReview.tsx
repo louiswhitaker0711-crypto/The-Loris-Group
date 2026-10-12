@@ -22,14 +22,14 @@ const METRICS = [
   // The owner's Field IQ names.
   { key: 'doors_knocked', h: 'Doors' },
   { key: 'spoken_to', h: 'Spoken' },
-  { key: 'pitches_commenced', h: 'Presented' },
+  { key: 'pitches_commenced', h: 'Pitched' },
   { key: 'pitches_closed', h: 'Closed' },
   { key: 'sales', h: 'Sign-ups' },
 ];
 const RATIO_KEYS = [
   { key: 'doors_knocked', label: 'doors' },
   { key: 'spoken_to', label: 'spoken' },
-  { key: 'pitches_commenced', label: 'presented' },
+  { key: 'pitches_commenced', label: 'pitched' },
   { key: 'pitches_closed', label: 'closed' },
 ];
 const fmt1 = (n: any) => (n === null || n === undefined ? '—' : Number(n).toFixed(n >= 100 ? 0 : 1));

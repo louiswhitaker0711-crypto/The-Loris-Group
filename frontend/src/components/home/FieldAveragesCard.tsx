@@ -42,11 +42,11 @@ const isoToday = () => ymd(new Date());
 const isoYesterday = () => { const d = new Date(); d.setDate(d.getDate() - 1); return ymd(d); };
 
 // The owner's Field IQ names. `th` is the per-rep table header, where a
-// column is ~45px wide — "Presented" shortens to "Pres." there only.
+// column is ~45px wide — "Pitched" fits as it is.
 const AVG_METRICS = [
   { key: 'doors_knocked', h: 'Doors', th: 'Doors' },
   { key: 'spoken_to', h: 'Spoken', th: 'Spoken' },
-  { key: 'pitches_commenced', h: 'Presented', th: 'Pres.' },
+  { key: 'pitches_commenced', h: 'Pitched', th: 'Pitched' },
   { key: 'pitches_closed', h: 'Closed', th: 'Closed' },
   { key: 'sales', h: 'Sign-ups', th: 'Sign-ups' },
 ];

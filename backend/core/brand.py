@@ -8,8 +8,8 @@ deliberately NOT branded.
 """
 import os
 
-APP_NAME = (os.environ.get("APP_NAME") or "").strip() or "Vertex Hub"
-ORG_NAME = (os.environ.get("ORG_NAME") or "").strip() or "Vertex Organisation"
+APP_NAME = (os.environ.get("APP_NAME") or "").strip() or "The Loris Hub"
+ORG_NAME = (os.environ.get("ORG_NAME") or "").strip() or "The Loris Group"
 
 # Palette (mirrors the frontend theme). The logo is a lime wordmark on a
 # transparent background, so it only ever sits on FOREST.

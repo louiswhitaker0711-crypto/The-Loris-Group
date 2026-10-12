@@ -265,7 +265,7 @@ function IndividualBlocks({ s, styles }: any) {
       <View style={styles.metricRow}>
         <Metric label="Doors" value={fmt(t.doors_knocked)} styles={styles} />
         <Metric label="Spoken" value={fmt(t.spoken_to)} styles={styles} />
-        <Metric label="Presented" value={fmt(t.pitches_commenced)} styles={styles} />
+        <Metric label="Pitched" value={fmt(t.pitches_commenced)} styles={styles} />
         <Metric label="Closed" value={fmt(t.pitches_closed)} styles={styles} />
         <Metric label="Sign-ups" value={fmt(t.sales)} styles={styles} />
       </View>
@@ -292,7 +292,7 @@ function TeamBlocks({ s, styles, onMember }: any) {
       <View style={styles.metricRow}>
         <Metric label="Doors" value={fmt(t.doors_knocked)} styles={styles} />
         <Metric label="Spoken" value={fmt(t.spoken_to)} styles={styles} />
-        <Metric label="Presented" value={fmt(t.pitches_commenced)} styles={styles} />
+        <Metric label="Pitched" value={fmt(t.pitches_commenced)} styles={styles} />
         <Metric label="Closed" value={fmt(t.pitches_closed)} styles={styles} />
         <Metric label="Sign-ups" value={fmt(t.sales)} styles={styles} />
       </View>

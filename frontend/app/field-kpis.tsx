@@ -78,16 +78,16 @@ const PRESETS = [
 
 const METRICS = [
   { key: 'doors_knocked', label: 'Doors knocked', short: 'Doors', icon: 'walk' as const, color: '#8b5cf6' },
-  // The owner's Field IQ names: Doors / Spoken / Presented / Closed / Sign-ups.
+  // The owner's Field IQ names: Doors / Spoken / Pitched / Closed / Sign-ups.
   { key: 'spoken_to', label: 'Spoken', short: 'Spoken', icon: 'chatbubble-ellipses' as const, color: '#06b6d4' },
-  { key: 'pitches_commenced', label: 'Presented', short: 'Presented', icon: 'megaphone' as const, color: '#f59e0b' },
+  { key: 'pitches_commenced', label: 'Pitched', short: 'Pitched', icon: 'megaphone' as const, color: '#f59e0b' },
   { key: 'pitches_closed', label: 'Closed', short: 'Closed', icon: 'checkmark-done' as const, color: '#22c55e' },
   { key: 'sales', label: 'Sign-ups', short: 'Sign-ups', icon: 'cart' as const, color: '#ec4899' },
 ];
 const RATIOS = [
   { key: 'doors_knocked', label: 'doors knocked' },
   { key: 'spoken_to', label: 'spoken' },
-  { key: 'pitches_commenced', label: 'presented' },
+  { key: 'pitches_commenced', label: 'pitched' },
   { key: 'pitches_closed', label: 'closed' },
 ];
 // Per-BA table columns, in the field scheme order (Pitched → "Closed").
@@ -95,7 +95,7 @@ const ROW_METRICS = [
   // The owner's Field IQ names ("Pres." — the per-rep column is ~45px wide).
   { key: 'doors_knocked', h: 'Doors' },
   { key: 'spoken_to', h: 'Spoken' },
-  { key: 'pitches_commenced', h: 'Pres.' },
+  { key: 'pitches_commenced', h: 'Pitched' },
   { key: 'pitches_closed', h: 'Closed' },
   { key: 'sales', h: 'Sign-ups' },
 ];
