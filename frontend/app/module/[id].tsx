@@ -389,7 +389,7 @@ export default function ModuleDetailScreen() {
           </Section>
         )}
 
-        {/* Check your understanding — 3-question quiz (Product-Knowledge
+        {/* Check your understanding — 3-5 question quiz (Product-Knowledge
             style). Hidden while grading someone else; the quiz belongs to
             the learner. */}
         {seg === 'learn' && !isGradingOnBehalf && (
@@ -677,8 +677,9 @@ export default function ModuleDetailScreen() {
 
 /**
  * ModuleQuiz — "Check your understanding" (the Product-Knowledge pattern in
- * miniature). 3 AI-generated multiple-choice questions per module, graded
- * server-side; passing 2 of 3 banks the module on the journey path. Answer
+ * miniature). 3-5 multiple-choice questions per item (written ones from
+ * seed/cod_quizzes.json, else AI), graded server-side; pass = all but one
+ * right, which ticks Know. Answer
  * a question and it auto-advances; the last answer submits.
  */
 function ModuleQuiz({ moduleId, myProgress, colors, onRecorded }: {
@@ -793,7 +794,7 @@ function ModuleQuiz({ moduleId, myProgress, colors, onRecorded }: {
               {result.score}/{result.total} {result.passed ? '— banked!' : '— almost'}
             </Text>
             <Text style={{ color: colors.textSecondary, fontSize: 12.5, marginTop: 2, textAlign: 'center' }}>
-              {result.passed ? 'This module now glows on your journey path.' : 'Skim the content again and retake — you need 2 right.'}
+              {result.passed ? 'Know is ticked. Next: Ready for check with your Coach.' : `Go over it again and retake — you need ${Math.max(1, (result.total || 3) - 1)} right.`}
             </Text>
           </View>
           {quiz.questions.map((q, i) => {

@@ -674,6 +674,52 @@ async def _check_module_read(user: dict, m: dict) -> None:
     raise HTTPException(status_code=403, detail="Stage not unlocked")
 
 
+_AUTHORED_QUIZZES: Optional[dict] = None
+
+
+def authored_quiz_questions(stage, topic) -> Optional[list]:
+    """The written quiz for a COD item (seed/cod_quizzes.json, keyed
+    "stage|topic"), or None. 3-5 multiple-choice questions grounded in
+    Campaign Knowledge and the COD library."""
+    global _AUTHORED_QUIZZES
+    if _AUTHORED_QUIZZES is None:
+        import json
+        from pathlib import Path
+        path = Path(__file__).resolve().parent.parent / "seed" / "cod_quizzes.json"
+        try:
+            _AUTHORED_QUIZZES = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            logger.exception("cod_quizzes.json unreadable")
+            _AUTHORED_QUIZZES = {}
+    return _AUTHORED_QUIZZES.get(f"{stage}|{topic}")
+
+
+async def _authored_quiz(m: dict) -> Optional[dict]:
+    """A written quiz wins over an AI one: no AI key or cost needed, and
+    the same questions for everyone. Cached in module_quizzes like the AI
+    ones, keyed by a hash of the questions so an edit refreshes it."""
+    import hashlib
+    import json
+    qs = authored_quiz_questions(m.get("stage"), m.get("topic"))
+    if not qs:
+        return None
+    h = "authored-" + hashlib.sha1(json.dumps(qs, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+    existing = await db.module_quizzes.find_one({"module_id": m["id"], "content_hash": h})
+    if existing:
+        return _strip_id(existing)
+    doc = {
+        "id": str(uuid.uuid4()),
+        "module_id": m["id"],
+        "content_hash": h,
+        "source": "authored",
+        "questions": [{"id": f"q{i + 1}", "question": q["question"], "choices": list(q["choices"]),
+                       "answer": int(q["answer"])} for i, q in enumerate(qs)],
+        "created_at": _now_iso(),
+    }
+    await db.module_quizzes.insert_one(doc.copy())
+    return doc
+
+
 async def _get_or_create_quiz(m: dict, user: Optional[dict] = None) -> Optional[dict]:
     """The module's cached quiz, generating it on a cache miss. `user` is the
     person whose request caused the generation: they are charged one unit of
@@ -682,6 +728,9 @@ async def _get_or_create_quiz(m: dict, user: Optional[dict] = None) -> Optional[
     import hashlib
     from core.rate_limit import generation_allowed, generation_started, generation_succeeded, take_ai_quota
 
+    authored = await _authored_quiz(m)
+    if authored:
+        return authored
     content = (m.get("trainee_content") or "").strip()
     good = m.get("what_good_looks_like") or []
     extra = "\n".join(str(x) for x in good) if isinstance(good, list) else str(good)
@@ -800,7 +849,8 @@ class QuizSubmit(BaseModel):
 async def submit_module_quiz(module_id: str, body: QuizSubmit, request: Request):
     """Grade a quiz attempt server-side and record it on the user's own
     module_progress row (quiz fields only — leader-graded dimensions and
-    `completed` are untouched). Pass = at least 2 of 3."""
+    `completed` are untouched). Pass = all but one right (2 of 3, 3 of 4,
+    4 of 5)."""
     user = await get_current_user(request)
     m = await db.training_modules.find_one({"id": module_id})
     if not m:
@@ -1602,6 +1652,8 @@ async def pregenerate_module_quizzes(limit: int = 25) -> dict:
     async for m in db.training_modules.find({"retired": {"$ne": True}, "stage": {"$in": [2, 3, 4, 5, 6]}}):
         if made >= limit:
             break
+        if authored_quiz_questions(m.get("stage"), m.get("topic")):
+            continue  # written quiz: nothing to generate
         content = (m.get("trainee_content") or "").strip()
         if len(content) < 60:
             continue
