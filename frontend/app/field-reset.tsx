@@ -74,6 +74,15 @@ export default function FieldResetScreen() {
         <Text style={s.muted}>The last stretch is where the day is won. Reset, set it, share it.</Text>
       </View>
 
+      {!!mine.data?.setup && (
+        <View style={s.card}>
+          <Text style={s.label}>Your set-up today</Text>
+          <Text style={s.muted}>
+            {[mine.data.setup.goal != null ? `Goal ${mine.data.setup.goal}` : '', mine.data.setup.kpi ? `KPI ${mine.data.setup.kpi}` : '', mine.data.setup.focus ? `Focus: ${mine.data.setup.focus}` : ''].filter(Boolean).join(' · ')}
+          </Text>
+        </View>
+      )}
+
       <View style={s.card}>
         <Text style={s.label}>How many more sign-ups are you going for?</Text>
         <View style={s.stepper}>

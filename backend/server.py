@@ -38,6 +38,7 @@ from routes.training_routes import router as training_router
 from routes.bells import router as bells_router
 from routes.bells_parser import router as bells_parser_router
 from routes.field_reset import router as field_reset_router
+from routes.sector import router as sector_router
 from routes.public_html import router as public_html_router
 from routes.roster_share import router as roster_share_router
 from routes.schedule import router as schedule_router
@@ -135,6 +136,7 @@ api_router.include_router(training_router)
 api_router.include_router(bells_router)
 api_router.include_router(bells_parser_router)
 api_router.include_router(field_reset_router)
+api_router.include_router(sector_router)
 api_router.include_router(schedule_router)
 api_router.include_router(agenda_router)
 api_router.include_router(monthly_planners_router)
