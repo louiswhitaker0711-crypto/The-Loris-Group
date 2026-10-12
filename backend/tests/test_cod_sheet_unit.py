@@ -100,3 +100,16 @@ def test_live_swap_keeps_progress_archives_the_rest_and_adds_new(monkeypatch):
     # Once only.
     assert _run(mig.run_cod_sheet_update(db)) == {"skipped": True}
     assert _run(db.training_modules.count_documents({"office_id": OFFICE})) == live + 1
+
+
+def test_owner_notes_fill_only_empty_items_once():
+    db = AsyncMongoMockClient()["t"]
+    _run(db.training_modules.insert_many([
+        {"id": "a", "office_id": OFFICE, "stage": 5, "topic": "Showtime", "trainee_content": ""},
+        {"id": "b", "office_id": OFFICE, "stage": 4, "topic": "Countries", "trainee_content": "Edited by the office"},
+    ]))
+    out = _run(mig.run_cod_notes_update(db))
+    assert out["filled"] == 1
+    assert _run(db.training_modules.find_one({"id": "a"}))["trainee_content"].startswith("Showtime is turning it on")
+    assert _run(db.training_modules.find_one({"id": "b"}))["trainee_content"] == "Edited by the office"
+    assert _run(mig.run_cod_notes_update(db)) == {"skipped": True}

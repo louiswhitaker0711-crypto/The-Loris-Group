@@ -1365,7 +1365,7 @@ def all_seed_modules() -> list:
     """Every item on the Owner's COD sheet (core/cod_sheet.py), in sheet
     order, with sequence numbers. Items carried over from the earlier COD
     keep its notes; the sheet's new items start without notes."""
-    from core.cod_sheet import NEW_OVERVIEWS, OVERVIEW, sheet_items
+    from core.cod_sheet import NEW_OVERVIEWS, OVERVIEW, OWNER_NOTES, sheet_items
 
     earlier = {(m["stage"], m["topic"]): m for m in earlier_cod_modules()}
     out: list = []
@@ -1377,6 +1377,9 @@ def all_seed_modules() -> list:
             base = _blank_module(it["stage"], it["category"], it["topic"])
             if it["category"] == OVERVIEW and it["stage"] in NEW_OVERVIEWS:
                 base.update(NEW_OVERVIEWS[it["stage"]])
+            note = OWNER_NOTES.get((it["stage"], it["topic"]))
+            if note:
+                base["trainee_content"] = note
         base.update({"stage": it["stage"], "category": it["category"], "topic": it["topic"],
                      "sequence": it["sequence"], "assessment_bands": ASSESSMENT_BANDS})
         out.append(base)

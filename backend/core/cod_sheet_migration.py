@@ -89,3 +89,24 @@ async def run_cod_sheet_update(db) -> dict:
     await db.migrations.insert_one({"_id": MARKER, **totals, "at": datetime.now(timezone.utc).isoformat()})
     logger.info("COD sheet update: %s", totals)
     return totals
+
+
+NOTES_MARKER = "cod_notes_2026_10"
+
+
+async def run_cod_notes_update(db) -> dict:
+    """Once per database: give live sheet items the Owner's notes
+    (core/cod_sheet.OWNER_NOTES), only where an item still has none."""
+    if await db.migrations.find_one({"_id": NOTES_MARKER}):
+        return {"skipped": True}
+    from core.cod_sheet import OWNER_NOTES
+    filled = 0
+    for (stage, topic), text in OWNER_NOTES.items():
+        r = await db.training_modules.update_many(
+            {"stage": stage, "topic": topic, "retired": {"$ne": True},
+             "$or": [{"trainee_content": {"$in": ["", None]}}, {"trainee_content": {"$exists": False}}]},
+            {"$set": {"trainee_content": text}})
+        filled += r.modified_count
+    await db.migrations.insert_one({"_id": NOTES_MARKER, "filled": filled,
+                                    "at": datetime.now(timezone.utc).isoformat()})
+    return {"filled": filled}
