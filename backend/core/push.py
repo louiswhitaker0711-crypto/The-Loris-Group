@@ -52,6 +52,7 @@ _TYPE_TO_CATEGORY = {
     "assessment_complete": "briefing",
     "weekly_planner_nudge": "planning",
     "primetime_nudge": "planning",
+    "field_reset": "planning",       # the 6pm reset
     "ci_ready": "coaching",
     "ci_comment": "coaching",
     "zero_days": "coaching",        # two zero days in a row → needs a retrain

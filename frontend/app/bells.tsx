@@ -185,6 +185,18 @@ function BellsScreen() {
               onChange={(k) => setViewMode(k as 'table' | 'team')}
             />
             <View style={{ flex: 1 }} />
+            {(user?.role === 'admin' || user?.role === 'leader') && (
+              <View style={styles.tools}>
+                <TouchableOpacity style={styles.ghostBtn} onPress={() => router.push('/bells-paste' as any)} testID="bells-paste-btn">
+                  <Ionicons name="logo-whatsapp" size={14} color={colors.text} />
+                  <Text style={styles.ghostBtnText}>Paste from WhatsApp</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.ghostBtn} onPress={() => router.push('/field-reset' as any)} testID="bells-reset-btn">
+                  <Ionicons name="refresh-circle-outline" size={14} color={colors.text} />
+                  <Text style={styles.ghostBtnText}>6pm reset</Text>
+                </TouchableOpacity>
+              </View>
+            )}
             {user?.role === 'admin' && (
               <View style={styles.tools}>
                 <TouchableOpacity style={styles.ghostBtn} onPress={() => router.push('/snapshot' as any)} testID="bells-snapshot-btn">

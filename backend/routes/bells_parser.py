@@ -106,6 +106,68 @@ def _has_sale_emoji(line: str) -> bool:
     return bool(GOLD_RX.search(line) or SILVER_RX.search(line))
 
 
+# Plain-text counts, for messages written without the emojis (Oct 2026):
+#   "Mason 2G 1S 1R" · "Mason - Gold 2, Silver 1, Round 1" · "G2 S1 R1"
+#   "2 gold 1 silver 1 round" · a line that is just "Gold" or "S" = one.
+_WORDS = {
+    "g": ("gold", "golds", "g"),
+    "s": ("silver", "silvers", "s"),
+    "r": ("round", "rounds", "r", "membership", "memberships", "rnd"),
+}
+
+
+def _kind(word: str) -> Optional[str]:
+    w = word.lower().rstrip(".:")
+    for k, names in _WORDS.items():
+        if w in names:
+            return k
+    return None
+
+
+def text_counts(line: str) -> tuple[int, int, int]:
+    """(gold, silver, round) written in words or letters on one line. Works
+    out whether numbers come before the word ("2G", "2 gold") or after it
+    ("G2", "Gold 2") from whichever pattern appears first."""
+    tokens = re.findall(r"\d+|[A-Za-z]+", _strip_emojis(line))
+    kinds = [_kind(t) if not t.isdigit() else None for t in tokens]
+    num_first = next((i for i in range(len(tokens) - 1) if tokens[i].isdigit() and kinds[i + 1]), None)
+    kind_first = next((i for i in range(len(tokens) - 1) if kinds[i] and tokens[i + 1].isdigit()), None)
+    counts = {"g": 0, "s": 0, "r": 0}
+    if num_first is None and kind_first is None:
+        words = [t for t in tokens if not t.isdigit()]
+        if words and all(_kind(w) for w in words):  # "Gold", "S R", "Gold + Round"
+            for w in words:
+                counts[_kind(w)] += 1
+        return counts["g"], counts["s"], counts["r"]
+    before = num_first is not None and (kind_first is None or num_first <= kind_first)
+    i = 0
+    while i < len(tokens) - 1:
+        if before and tokens[i].isdigit() and kinds[i + 1]:
+            counts[kinds[i + 1]] += int(tokens[i]); i += 2; continue
+        if not before and kinds[i] and tokens[i + 1].isdigit():
+            counts[kinds[i]] += int(tokens[i + 1]); i += 2; continue
+        i += 1
+    return counts["g"], counts["s"], counts["r"]
+
+
+def _name_part(line: str) -> str:
+    """The name on a 'Name 2G 1S' style line: the words before the counts."""
+    cleaned = _strip_emojis(line)
+    words = []
+    for w in re.split(r"\s+", cleaned):
+        if not w:
+            continue
+        if re.match(r"^\d", w) or _kind(re.sub(r"\d+", "", w)) and re.search(r"\d", w) or _kind(w):
+            break
+        words.append(w)
+    return re.sub(r"[\s\-–—:,]+$", "", " ".join(words)).strip()
+
+
+def _summary_line(line: str) -> bool:
+    """'Name' followed by text counts on the same line."""
+    return bool(_name_part(line)) and sum(text_counts(line)) > 0
+
+
 def _split_blocks(text: str) -> List[List[str]]:
     """Split paste into blocks of lines per rep (separated by blank lines)."""
     blocks: List[List[str]] = []
@@ -151,21 +213,33 @@ def deterministic_parse(text: str) -> List[ParsedRep]:
     on that line means the sign-up also took The Round.
     Number after name is IGNORED — we trust the emojis (per user request)."""
     reps: List[ParsedRep] = []
+    lines = [ln for ln in (text or "").splitlines() if ln.strip()]
+    if lines and not any(_has_sale_emoji(ln) for ln in lines) and \
+            sum(1 for ln in lines if _summary_line(ln)) >= max(1, len(lines) // 2):
+        # One person per line: "Mason 2G 1S 1R".
+        for ln in lines:
+            if not _summary_line(ln):
+                continue
+            g, s_, r = text_counts(ln)
+            reps.append(ParsedRep(raw_name=_name_part(ln), over30=g, under30=s_,
+                                  memberships=min(r, g + s_), sales_count=g + s_,
+                                  raw_lines=[ln], confidence=0.9))
+        return reps
     for block in _split_blocks(text):
         if not block:
             continue
-        name = _name_from_header(block[0])
+        name = _name_from_header(block[0]) if not _summary_line(block[0]) else _name_part(block[0])
         if not name:
             continue
         # The first line itself may contain emojis (rare but possible — e.g.
         # 'Mason 6 🥇'). Treat it as a sign-up line iff it has 🥇 or 🥈.
         emoji_lines: List[str] = []
-        if _has_sale_emoji(block[0]):
+        if _has_sale_emoji(block[0]) or (block[0] and sum(text_counts(block[0])) > 0 and _summary_line(block[0])):
             emoji_lines.append(block[0])
         for line in block[1:]:
-            if _has_sale_emoji(line):
+            if _has_sale_emoji(line) or sum(text_counts(line)) > 0:
                 emoji_lines.append(line)
-            # Lines without 🥇/🥈 are treated as separators / blank rows.
+            # Lines without a sign-up are treated as separators / blank rows.
 
         over30 = 0
         under30 = 0
@@ -176,16 +250,20 @@ def deterministic_parse(text: str) -> List[ParsedRep]:
             # sign-up(s): never more memberships than sign-ups on the line.
             golds = len(GOLD_RX.findall(line))
             silvers = len(SILVER_RX.findall(line))
+            rounds = len(MEMBER_RX.findall(line))
+            if not (golds or silvers):
+                golds, silvers, rounds = text_counts(line)
             over30 += golds
             under30 += silvers
-            memberships += min(len(MEMBER_RX.findall(line)), golds + silvers)
+            memberships += min(rounds, golds + silvers)
         sales_count = over30 + under30
 
         # Confidence: drop slightly if the rep block had non-emoji noise lines
         # so the leader sees the "Verify" badge.
         noise = sum(
             1 for line in block[1:]
-            if line.strip() and not _has_sale_emoji(line) and not _strip_emojis(line) == ""
+            if line.strip() and not _has_sale_emoji(line) and not sum(text_counts(line))
+            and not _strip_emojis(line) == ""
         )
         confidence = 1.0 if noise == 0 else 0.7
 
@@ -590,6 +668,8 @@ async def apply_bulk(req: ApplyRequest, request: Request):
             "memberships": _memberships_for(rep),
             "status": explicit if explicit else ("in" if (rep.over30 + rep.under30) > 0 else (days[day_idx].get("status") or "off")),
         }
+        # A pasted day is the office's own record: drop the OwnerIQ marker so
+        # the hourly sync leaves this day alone.
         await db.bells_entries.update_one(
             {"id": existing["id"]},
             {"$set": {
@@ -598,7 +678,7 @@ async def apply_bulk(req: ApplyRequest, request: Request):
                 "user_name": true_name,
                 "updated_at": now_iso,
                 "updated_by_id": user["id"],
-            }},
+            }, "$unset": {f"owneriq_days.{day_idx}": ""}},
         )
         try:
             await award_sales_milestones(rep.user_id, days)
