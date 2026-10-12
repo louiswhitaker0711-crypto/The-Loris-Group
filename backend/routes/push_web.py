@@ -19,7 +19,7 @@ from pydantic import BaseModel
 from auth import get_current_user
 from database import db
 from core.brand import APP_NAME
-from core.webpush import is_allowed_push_endpoint, vapid_public_key, send_web_push_to_user
+from core.webpush import ensure_vapid_keys, is_allowed_push_endpoint, vapid_public_key, send_web_push_to_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -43,6 +43,7 @@ class UnsubBody(BaseModel):
 @router.get("/push/vapid-key")
 async def push_vapid_key(request: Request):
     await get_current_user(request)
+    await ensure_vapid_keys()
     key = vapid_public_key()
     if not key:
         raise HTTPException(status_code=503, detail="Web push not configured")

@@ -5,12 +5,18 @@ Subscriptions live in `web_push_subscriptions` (one doc per browser endpoint,
 tagged with user_id). send_web_push_to_user() delivers to every subscription a
 user has and prunes dead ones (404/410). Best-effort — never raises to callers.
 
-Env (set on Railway):
+Keys: VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY on Railway win when both are set.
+Otherwise the server makes its own key pair the first time it is needed and
+keeps it in the `server_keys` collection (`_id: "vapid"`), so notifications
+work with nothing to set up and the private key never leaves the server.
+Keep that document: new keys mean everyone has to switch notifications on
+again.
+
   VAPID_PUBLIC_KEY   base64url raw public point — also served to the client
   VAPID_PRIVATE_KEY  base64url raw private scalar
   VAPID_SUBJECT      contact for push services: "mailto:you@example.org" or an
-                     https URL (falls back to APP_BASE_URL, then to the
-                     SENDGRID_FROM_EMAIL address)
+                     https URL (falls back to APP_BASE_URL, then the Railway
+                     domain, then the SENDGRID_FROM_EMAIL address)
 """
 import os
 import json
@@ -51,8 +57,55 @@ def is_allowed_push_endpoint(endpoint: str) -> bool:
     return any(host == h or host.endswith("." + h) for h in PUSH_SERVICE_HOSTS)
 
 
+# The key pair in use: from the environment, or made and stored by the server.
+_KEYS: dict = {}
+
+
+def _b64url(raw: bytes) -> str:
+    import base64
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+
+
+def generate_vapid_keys() -> tuple[str, str]:
+    """A fresh P-256 key pair as (public, private), both base64url raw."""
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    key = ec.generate_private_key(ec.SECP256R1())
+    private = key.private_numbers().private_value.to_bytes(32, "big")
+    public = key.public_key().public_bytes(serialization.Encoding.X962,
+                                           serialization.PublicFormat.UncompressedPoint)
+    return _b64url(public), _b64url(private)
+
+
+async def ensure_vapid_keys() -> bool:
+    """Load the key pair (env first, then the stored one, else make and store
+    one). Returns whether push can be used. Never raises."""
+    env_pub, env_priv = os.getenv("VAPID_PUBLIC_KEY") or "", os.getenv("VAPID_PRIVATE_KEY") or ""
+    if env_pub and env_priv:
+        _KEYS.update(public=env_pub, private=env_priv)
+        return True
+    if _KEYS.get("public") and _KEYS.get("private"):
+        return True
+    try:
+        doc = await db.server_keys.find_one({"_id": "vapid"})
+        if not doc:
+            public, private = generate_vapid_keys()
+            try:
+                await db.server_keys.insert_one({"_id": "vapid", "public": public, "private": private})
+                logger.info("web push: made and stored a new VAPID key pair")
+            except Exception:
+                pass  # another worker stored one first: use theirs
+            doc = await db.server_keys.find_one({"_id": "vapid"})
+        if doc and doc.get("public") and doc.get("private"):
+            _KEYS.update(public=doc["public"], private=doc["private"])
+            return True
+    except Exception as e:
+        logger.error("web push: could not load VAPID keys: %s", e)
+    return False
+
+
 def vapid_public_key() -> str:
-    return (os.getenv("VAPID_PUBLIC_KEY") or "")
+    return _KEYS.get("public") or (os.getenv("VAPID_PUBLIC_KEY") or "")
 
 
 def _vapid_subject() -> str:
@@ -63,12 +116,15 @@ def _vapid_subject() -> str:
     base = (os.getenv("APP_BASE_URL") or "").strip().rstrip("/")
     if base.startswith("https://"):
         return base
+    railway = (os.getenv("RAILWAY_PUBLIC_DOMAIN") or "").strip().strip("/")
+    if railway:
+        return f"https://{railway}"
     sender = (os.getenv("SENDGRID_FROM_EMAIL") or "").strip()
     return f"mailto:{sender}" if sender else ""
 
 
 def _configured() -> bool:
-    return bool(os.getenv("VAPID_PRIVATE_KEY") and os.getenv("VAPID_PUBLIC_KEY"))
+    return bool(_KEYS.get("private") and _KEYS.get("public"))
 
 
 def _send_one(subscription: dict, payload: dict) -> int | None:
@@ -77,7 +133,7 @@ def _send_one(subscription: dict, payload: dict) -> int | None:
     from pywebpush import webpush, WebPushException
     from py_vapid import Vapid01
     try:
-        vapid = Vapid01.from_raw((os.getenv("VAPID_PRIVATE_KEY") or "").encode())
+        vapid = Vapid01.from_raw((_KEYS.get("private") or "").encode())
         resp = webpush(
             subscription_info=subscription,
             data=json.dumps(payload),
@@ -99,7 +155,7 @@ def _send_one(subscription: dict, payload: dict) -> int | None:
 
 async def send_web_push_to_user(user_id: str, title: str, body: str, data: dict | None = None):
     """Fan a notification out to all of a user's web-push subscriptions."""
-    if not _configured():
+    if not _configured() and not await ensure_vapid_keys():
         return
     try:
         subs = await db.web_push_subscriptions.find({"user_id": str(user_id)}).to_list(length=50)

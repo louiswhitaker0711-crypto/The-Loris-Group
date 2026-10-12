@@ -14,7 +14,7 @@ Prices change, so this page doesn't quote any. Check each provider's pricing pag
 | [Claude Code](#claude-code) | Recommended | Your assistant for setting up and changing the app | none in the app |
 | [Your domain](#your-own-domain) | Recommended | `app.yourdomain.co.uk` | `APP_BASE_URL` |
 | [SendGrid](#sendgrid-email) | Optional, recommended | Email | `SENDGRID_API_KEY`, `SENDGRID_FROM_EMAIL`, `SENDGRID_FROM_NAME` |
-| [Web push (VAPID)](#web-push-vapid-keys) | Optional, recommended | Phone notifications | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` |
+| [Web push (VAPID)](#web-push-vapid-keys) | Automatic | Phone notifications | none needed (optional `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`) |
 | [OwnerIQ](#owneriq) | Optional | Field numbers, Live Operations, Performance Hub, Timeline | `OWNERIQ_*` |
 | [Anthropic API](#anthropic-api-claude) | Optional | The AI features | `ANTHROPIC_API_KEY` (+ optional model settings) |
 | [S3-compatible storage](#s3-compatible-storage-eg-cloudflare-r2) | Optional | Where profile and badge photos are kept | `CI_S3_*` |
@@ -75,8 +75,8 @@ Prices change, so this page doesn't quote any. Check each provider's pricing pag
 ## Web push (VAPID keys)
 
 - **Powers:** notifications on phones that have installed the app to their home screen: nudges, reminders, inbox alerts, "Retrain needed" alerts, the Monday bulletin reminder.
-- **Needed:** optional but recommended. There's no account to create: you generate a key pair once.
-- **Without it:** no phone notifications. Everything still lands in the in-app **Inbox**.
+- **Needed:** nothing to do. With no keys set on Railway the server makes its own key pair the first time it is needed and keeps it in the database (`server_keys`, `_id: "vapid"`), so the private key never leaves the server. Keep that document: new keys mean everyone has to switch notifications on again. You can still set your own keys on Railway (below); they win.
+- **Turning them on:** each person opens the app from their home screen, then **Profile → Notifications**. Everything also lands in the in-app **Inbox**.
 - **Settings:** `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` (secret), `VAPID_SUBJECT` (`mailto:you@yourdomain.co.uk`).
 - **Generate:** with Node installed, run `npx web-push generate-vapid-keys` and copy the two keys straight into Railway. Generate them **once**: new keys mean everyone has to switch notifications on again.
 - **Cost:** free. Apple's, Google's and Mozilla's push services deliver the messages.
