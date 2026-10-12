@@ -142,8 +142,8 @@ export default function CodSheetScreen() {
             ))}
           </View>
           <Text style={styles.selfNote}>
-            The sheet mirrors the ladder — pass the questions for Know, tap "Ready for check" on a module for
-            the rest, and your coach's sign-off fills the boxes here. 🟢 signed · 🟡 in progress · ⚪ not started.
+            The sheet mirrors the ladder — tick Know yourself on an item when you know it, tap "Ready for check" for
+            the rest, and your Coach's sign-off fills the boxes here. 🟢 signed · 🟡 in progress · ⚪ not started.
           </Text>
         </EditorialHero>
 

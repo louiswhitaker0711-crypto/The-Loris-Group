@@ -1121,6 +1121,8 @@ export const apiService = {
     api.post(`/sales-path/${userId}/ramp-checkin`, { week_ending: weekEnding, note }),
   setReadyForCheck: (moduleId: string, body: { ready: boolean; target_user_id?: string; note?: string }) =>
     api.post<any>(`/module-progress/${moduleId}/ready`, body),
+  setIKnowIt: (moduleId: string, know: boolean) =>
+    api.post<any>(`/module-progress/${moduleId}/know`, { know }),
   getPendingChecks: () => api.get<{ checks: any[] }>('/cod/checks'),
   codVettingList: () => api.get<{ modules: any[] }>('/cod/vetting'),
   codVetModule: (body: { stage: number; topic: string; updates?: any; vetted?: boolean }) =>

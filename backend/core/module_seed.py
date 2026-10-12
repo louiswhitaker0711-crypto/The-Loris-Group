@@ -28,12 +28,12 @@ ASSESSMENT_DIMENSIONS = ["knowledge", "skill", "consistency", "independence"]
 
 # COD 2026 Proof Ladder — the grader. Every capability climbs these rungs;
 # a capability counts as met at Deliver, and keeps climbing through Teach
-# and Systemize. Self-learners may claim Know and Do; Deliver and above are
+# and Systemize. Self-learners may claim Know only (Owner, Oct 2026); Do, Deliver and above are
 # signed off by the coach (upline leader/admin) — the in-app equivalent of
 # the printed sheet's COACH SIGN-OFF box.
 LADDER_RUNGS = [
     {"value": 1, "key": "know", "label": "Know", "blurb": "Can explain it simply", "self": True},
-    {"value": 2, "key": "do", "label": "Do", "blurb": "Can execute it effectively in the office", "self": True},
+    {"value": 2, "key": "do", "label": "Do", "blurb": "Can execute it effectively in the office", "self": False},
     {"value": 3, "key": "deliver", "label": "Deliver", "blurb": "Hits the standard under pressure in the field", "self": False},
     {"value": 4, "key": "teach", "label": "Teach", "blurb": "Can transfer it to others", "self": False},
     {"value": 5, "key": "systemize", "label": "Systemize", "blurb": "Runs as a system — independent examples of WGLL", "self": False},
