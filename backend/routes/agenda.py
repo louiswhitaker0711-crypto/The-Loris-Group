@@ -180,7 +180,9 @@ async def _active_days_by_title(office_id: str) -> dict:
     values (0..5) that title actually occurs on in this office's schedule.
     Drives the editor's "only show the days this row really happens on"
     behavior."""
-    cursor = db.schedule_blocks.find({"office_id": office_id}, {"_id": 0, "title": 1, "day_of_week": 1})
+    # Office blocks only: someone's private entries never change the plan.
+    cursor = db.schedule_blocks.find({"office_id": office_id, "audience": {"$ne": "personal"}},
+                                     {"_id": 0, "title": 1, "day_of_week": 1})
     blocks = await cursor.to_list(500)
     out: dict = {}
     for b in blocks:
@@ -199,12 +201,35 @@ async def _active_days_by_title(office_id: str) -> dict:
 def _annotate_active_days(rows: list, day_map: dict) -> list:
     """Attach `active_days` to each row. Display-only — `_normalize_row`
     drops it on save, so it is recomputed from the live schedule on every
-    GET. Match by schedule_match_title first, then the row label. Rows with
-    no matching schedule blocks get None → editor treats that as all days."""
+    GET. Match by schedule_match_title first, then the row label. A row with
+    no matching schedule blocks uses the days picked for it in Structure
+    (`days`); none picked → None → editor treats that as all days."""
     for r in rows or []:
         key = (r.get("schedule_match_title") or r.get("label") or "").strip().lower()
-        r["active_days"] = day_map.get(key)
+        r["on_schedule"] = bool(day_map.get(key))
+        r["active_days"] = day_map.get(key) or (list(r.get("days") or []) or None)
     return rows
+
+
+_HHMM_RE = re.compile(r"^\s*(\d{1,2})(?:[:.](\d{2}))?\s*([ap]\.?m\.?)?\s*$", re.I)
+
+
+def parse_time(text: str) -> Optional[str]:
+    """'15:00', '3pm', '3:30 PM', '9.30', '0930' → 'HH:MM' (24-hour), else None."""
+    t = (text or "").strip()
+    if re.fullmatch(r"\d{3,4}", t):
+        t = f"{t[:-2]}:{t[-2:]}"
+    m = _HHMM_RE.match(t)
+    if not m:
+        return None
+    h, mins, ampm = int(m.group(1)), int(m.group(2) or 0), (m.group(3) or "").lower()
+    if ampm.startswith("p") and h < 12:
+        h += 12
+    if ampm.startswith("a") and h == 12:
+        h = 0
+    if h > 23 or mins > 59:
+        return None
+    return f"{h:02d}:{mins:02d}"
 
 
 def _to_pretty_time(hhmm: str) -> str:
@@ -236,15 +261,75 @@ def _normalize_row(raw: dict) -> dict:
                 "day": d,
                 "topic": (c.get("topic") or "").strip(),
                 "presenter": (c.get("presenter") or "").strip(),
+                # A time for this day only (free text, e.g. "15:00").
+                "time": (c.get("time") or "").strip()[:12],
             }
-    cells_out = [by_day.get(d, {"day": d, "topic": "", "presenter": ""}) for d in DAYS_IN_AGENDA]
+    cells_out = [by_day.get(d, {"day": d, "topic": "", "presenter": "", "time": ""}) for d in DAYS_IN_AGENDA]
+    days = sorted({int(d) for d in (raw.get("days") or []) if str(d).isdigit() and int(d) in DAYS_IN_AGENDA}) \
+        if isinstance(raw.get("days"), list) else []
     return {
         "id": (raw.get("id") or str(uuid.uuid4())),
         "label": (raw.get("label") or "Topic").strip(),
         "time_label": (raw.get("time_label") or "").strip(),
         "schedule_match_title": (raw.get("schedule_match_title") or "").strip() or None,
+        # Days a row that isn't on the office Schedule runs on (Structure).
+        "days": days,
         "cells": cells_out,
     }
+
+
+def agenda_calendar_blocks(admin: dict, office_id: str, week_ending: str, rows: list, day_map: dict) -> list:
+    """The private Schedule entries an agenda puts on the calendar of the
+    admin who saved it: rows that aren't on the office Schedule, on each day
+    that has something written and a time (the day's own time, else the
+    row's). Personal (only they see them), 30 minutes, no reminder."""
+    monday = date.fromisoformat(week_ending) - timedelta(days=6)
+    now = datetime.now(timezone.utc).isoformat()
+    out = []
+    for r in rows or []:
+        key = (r.get("schedule_match_title") or r.get("label") or "").strip().lower()
+        if day_map.get(key):
+            continue  # on the office Schedule already: publishing fills it in
+        for c in r.get("cells") or []:
+            topic, presenter = (c.get("topic") or "").strip(), (c.get("presenter") or "").strip()
+            hhmm = parse_time(c.get("time") or "") or parse_time(r.get("time_label") or "")
+            if not hhmm or not (topic or presenter):
+                continue
+            h, m = map(int, hhmm.split(":"))
+            end = min(h * 60 + m + 30, 23 * 60 + 59)
+            out.append({
+                "id": str(uuid.uuid4()),
+                "office_id": office_id,
+                "day_of_week": c["day"],
+                "start_time": hhmm,
+                "end_time": f"{end // 60:02d}:{end % 60:02d}",
+                "title": (r.get("label") or "Agenda").strip(),
+                "audience": "personal",
+                "color": "#2864d9",
+                "core_leader_ids": [],
+                "owner_id": str(admin.get("id")),
+                "groups": [],
+                "date": (monday + timedelta(days=int(c["day"]))).isoformat(),
+                "kind": "event",
+                "reminder_minutes": None,
+                "done_dates": [],
+                "presenter": presenter or None,
+                "topic": topic or None,
+                "details": None,
+                "source": "agenda",
+                "agenda_week": week_ending,
+                "created_at": now,
+                "updated_at": now,
+            })
+    return out
+
+
+async def sync_agenda_calendar(admin: dict, office_id: str, week_ending: str, rows: list, day_map: dict) -> None:
+    blocks = agenda_calendar_blocks(admin, office_id, week_ending, rows, day_map)
+    await db.schedule_blocks.delete_many({"owner_id": str(admin.get("id")), "source": "agenda",
+                                          "agenda_week": week_ending, "office_id": office_id})
+    if blocks:
+        await db.schedule_blocks.insert_many([dict(b) for b in blocks])
 
 
 def _normalize_themes(raw: Optional[dict]) -> dict:
@@ -533,11 +618,13 @@ async def upsert_agenda(request: Request):
         }
         await db.weekly_agendas.update_one({"id": existing["id"]}, {"$set": update})
         await _mirror_goal_if_changed(existing.get("stats"))
+        day_map = await _active_days_by_title(office_id)
+        await sync_agenda_calendar(admin, office_id, week_ending, rows, day_map)
         existing.update(update)
         # Autosave responses get written back into the client's query cache
         # and re-seed the editor draft — annotate the same way GET does so
         # the editor's day-filtering survives an autosave round-trip.
-        _annotate_active_days(existing.get("rows") or [], await _active_days_by_title(office_id))
+        _annotate_active_days(existing.get("rows") or [], day_map)
         return _scrub(existing)
 
     # A brand-new plan inherits a goal already set elsewhere (Bells crew
@@ -564,7 +651,9 @@ async def upsert_agenda(request: Request):
     }
     await db.weekly_agendas.insert_one(doc.copy())
     await _mirror_goal_if_changed(None)
-    _annotate_active_days(doc.get("rows") or [], await _active_days_by_title(office_id))
+    day_map = await _active_days_by_title(office_id)
+    await sync_agenda_calendar(admin, office_id, week_ending, rows, day_map)
+    _annotate_active_days(doc.get("rows") or [], day_map)
     return _scrub(doc)
 
 

@@ -16,6 +16,7 @@ import { apiService } from '../../api/client';
 import { useActiveOffice } from '../../office/ActiveOfficeContext';
 import { toast } from '../../utils/toast';
 import { APP_LOCALE } from '../../utils/appTime';
+import { sortByTime } from '../../utils/agendaTime';
 
 // ──────────────────────────────────────────────────────────────────────────
 // Read-only "Excel-like" weekly plan view shown to Leaders (and as a
@@ -84,9 +85,21 @@ const STATS_FIELDS: { key: string; label: string; icon: any; color: string }[] =
 const COL_WIDTH = 124;
 const LABEL_COL_WIDTH = 102;
 
-type Cell = { day: number; topic: string; presenter: string };
+type Cell = { day: number; topic: string; presenter: string; time?: string };
 type Row = { id: string; label: string; time_label: string; cells: Cell[] };
 type Themes = Record<string, string>;
+
+/** What a cell shows: with a topic AND a presenter, the topic leads and the
+ * presenter sits under it; with only one of them, that one leads. A topic that
+ * just repeats the row label doesn't count. */
+export function cellLines(cell: Cell | undefined, rowLabel: string): { main: string; sub: string; time: string } {
+  const presenter = (cell?.presenter || '').trim();
+  const topicRaw = (cell?.topic || '').trim();
+  const topic = topicRaw && topicRaw.toLowerCase() !== (rowLabel || '').trim().toLowerCase() ? topicRaw : '';
+  const time = (cell?.time || '').trim();
+  if (topic && presenter) return { main: topic, sub: presenter, time };
+  return { main: topic || presenter, sub: '', time };
+}
 type Stats = Record<string, string>;
 
 export default function WeeklyPlanGridView({
@@ -167,11 +180,11 @@ export default function WeeklyPlanGridView({
     orderList.forEach((k, i) => orderIdx.set(k, i));
     const labelled = rows.filter((r) => slug(r.label));
     const shown = labelled.filter((r) => !hiddenSet.has(slug(r.label)));
-    // Stable sort by (orderIdx[slug] if known else Infinity, original index).
-    return shown
-      .map((r, i) => ({ r, i, idx: orderIdx.has(slug(r.label)) ? (orderIdx.get(slug(r.label)) as number) : Number.POSITIVE_INFINITY }))
-      .sort((a, b) => (a.idx - b.idx) || (a.i - b.i))
-      .map(({ r }) => r);
+    // Saved order first; rows not in it follow in time order (untimed last).
+    const listed = shown.filter((r) => orderIdx.has(slug(r.label)))
+      .sort((a, b) => (orderIdx.get(slug(a.label)) as number) - (orderIdx.get(slug(b.label)) as number));
+    const unlisted = sortByTime(shown.filter((r) => !orderIdx.has(slug(r.label))), (r) => r.time_label);
+    return [...listed, ...unlisted];
   }, [rows, rowConfig]);
 
   // Parse goal for %-to-goal annotation
@@ -218,13 +231,11 @@ export default function WeeklyPlanGridView({
         const labelTrim = (row.label || '').trim().toLowerCase();
         const cellsHtml = DAY_LABELS.map((_, di) => {
           const cell = row.cells.find((c) => c.day === di);
-          const presenter = (cell?.presenter || '').trim();
-          const topic = (cell?.topic || '').trim();
-          // Suppress topic if it just repeats the row label
-          const topicIsDup = !!topic && topic.toLowerCase() === labelTrim;
+          const { main, sub, time } = cellLines(cell, labelTrim);
           return `<td class="cell">
-            ${presenter ? `<div class="pres">${escape(presenter)}</div>` : ''}
-            ${topic && !topicIsDup ? `<div class="topic">${escape(topic)}</div>` : ''}
+            ${time ? `<div class="topic">${escape(time)}</div>` : ''}
+            ${main ? `<div class="pres">${escape(main)}</div>` : ''}
+            ${sub ? `<div class="topic">${escape(sub)}</div>` : ''}
           </td>`;
         }).join('');
         return `<tr>
@@ -491,6 +502,7 @@ export default function WeeklyPlanGridView({
           visible={showManageRows}
           onClose={() => setShowManageRows(false)}
           allLabels={Array.from(new Set(rows.map((r) => (r.label || '').trim()).filter(Boolean)))}
+          timeByLabel={Object.fromEntries(rows.map((r) => [(r.label || '').trim().toLowerCase(), r.time_label || '']))}
           currentOrder={rowConfig?.row_order || []}
           currentHidden={rowConfig?.hidden_rows || []}
           onSaved={() => {
@@ -592,14 +604,8 @@ export default function WeeklyPlanGridView({
                   >
                     {DAY_LABELS.map((_, di) => {
                       const cell = row.cells.find((c) => c.day === di);
-                      const has = !!(cell?.topic || cell?.presenter);
-                      // Hide topic when it duplicates the row label (case-
-                      // insensitive) — the frozen left column already shows it.
-                      const topicTrim = (cell?.topic || '').trim();
-                      const labelTrim = (row.label || '').trim();
-                      const topicIsDup = topicTrim &&
-                        topicTrim.toLowerCase() === labelTrim.toLowerCase();
-                      const showTopic = !!topicTrim && !topicIsDup;
+                      const { main, sub, time } = cellLines(cell, row.label);
+                      const has = !!(main || time);
                       return (
                         <View
                           key={di}
@@ -614,14 +620,19 @@ export default function WeeklyPlanGridView({
                           )}
                           {has ? (
                             <>
-                              {!!cell?.presenter && (
-                                <Text style={[styles.cellPresenter, { fontSize: presFontSize }]} numberOfLines={2}>
-                                  {cell.presenter}
+                              {!!time && (
+                                <Text style={[styles.cellTopic, { fontSize: topicFontSize, marginTop: 0 }]} numberOfLines={1}>
+                                  {time}
                                 </Text>
                               )}
-                              {showTopic && (
+                              {!!main && (
+                                <Text style={[styles.cellPresenter, { fontSize: presFontSize }]} numberOfLines={2}>
+                                  {main}
+                                </Text>
+                              )}
+                              {!!sub && (
                                 <Text style={[styles.cellTopic, { fontSize: topicFontSize }]} numberOfLines={2}>
-                                  {cell!.topic}
+                                  {sub}
                                 </Text>
                               )}
                             </>
@@ -662,6 +673,7 @@ type ManageRowsSheetProps = {
   allLabels: string[];
   currentOrder: string[];
   currentHidden: string[];
+  timeByLabel?: Record<string, string>;
   onSaved: () => void;
   colors: any;
 };
@@ -670,7 +682,7 @@ type MRItem = { slug: string; label: string };
 const slugify = (s: string) => (s || '').trim().toLowerCase();
 
 function ManageRowsSheet({
-  visible, onClose, allLabels, currentOrder, currentHidden, onSaved, colors,
+  visible, onClose, allLabels, currentOrder, currentHidden, timeByLabel = {}, onSaved, colors,
 }: ManageRowsSheetProps) {
   const styles = useMemo(() => createMRStyles(colors), [colors]);
   // Same office the grid above is rendering, so a super admin editing office
@@ -755,8 +767,19 @@ function ManageRowsSheet({
     );
   };
 
+  // Arrows as well as drag: dragging is fiddly on a phone and on the web.
+  const move = (slug: string, by: number) => setItems((cur) => {
+    const i = cur.findIndex((x) => x.slug === slug);
+    const j = i + by;
+    if (i < 0 || j < 0 || j >= cur.length) return cur;
+    const next = [...cur];
+    [next[i], next[j]] = [next[j], next[i]];
+    return next;
+  });
+
   const renderItem = useCallback(({ item, drag, isActive }: RenderItemParams<MRItem>) => {
     const isHidden = hidden.has(item.slug);
+    const time = timeByLabel[item.slug] || '';
     return (
       <ScaleDecorator>
         <View style={[styles.row, isActive && styles.rowActive, isHidden && styles.rowHidden]}>
@@ -775,6 +798,13 @@ function ManageRowsSheet({
           >
             {item.label}
           </Text>
+          {!!time && <Text style={{ fontSize: 11, color: colors.textMuted }}>{time}</Text>}
+          <TouchableOpacity onPress={() => move(item.slug, -1)} hitSlop={6} accessibilityLabel={`Move ${item.label} up`}>
+            <Ionicons name="chevron-up" size={18} color={colors.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => move(item.slug, 1)} hitSlop={6} accessibilityLabel={`Move ${item.label} down`}>
+            <Ionicons name="chevron-down" size={18} color={colors.primary} />
+          </TouchableOpacity>
           <TouchableOpacity
             onPress={() => toggleHidden(item.slug)}
             style={[styles.eyeBtn, isHidden && { backgroundColor: colors.background }]}
@@ -786,7 +816,7 @@ function ManageRowsSheet({
         </View>
       </ScaleDecorator>
     );
-  }, [hidden, colors, styles]);
+  }, [hidden, colors, styles, timeByLabel]);
 
   const visibleCount = items.length - hidden.size;
 
@@ -804,12 +834,20 @@ function ManageRowsSheet({
             </TouchableOpacity>
           </View>
           <Text style={styles.sub}>
-            Drag to reorder. Tap the eye to hide a row from coaches and the PDF.
+            Use the arrows (or drag) to reorder, or Sort by time. Tap the eye to hide a row from the plan and the PDF.
             {'  '}
             <Text style={{ color: colors.textSecondary, fontWeight: '800' }}>
               {visibleCount} visible · {hidden.size} hidden
             </Text>
           </Text>
+          <TouchableOpacity
+            onPress={() => setItems((cur) => sortByTime(cur, (x) => timeByLabel[x.slug]))}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingVertical: 6 }}
+            accessibilityRole="button"
+          >
+            <Ionicons name="time-outline" size={15} color={colors.primary} />
+            <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>Sort by time</Text>
+          </TouchableOpacity>
           <View style={{ flex: 1, marginTop: 4 }}>
             {items.length === 0 ? (
               <View style={{ padding: 28, alignItems: 'center' }}>
