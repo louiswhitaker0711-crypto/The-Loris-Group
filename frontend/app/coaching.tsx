@@ -27,7 +27,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { showAlert } from '../src/utils/showAlert';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator,
-  Modal, TextInput, KeyboardAvoidingView, Platform, Linking,
+  Modal, TextInput, KeyboardAvoidingView, Platform, Linking, Pressable,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
