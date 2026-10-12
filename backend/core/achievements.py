@@ -7,7 +7,7 @@ already happens server-side (bells entry, hierarchy changes, promotions,
 assessment grading, exam submit, streak activity).
 
 Performance-first catalog (per the owner, 2026-07-12):
-    day-sales ladder   sign-up(1) → bell(3) → gong(5) → superstar(10)
+    day-sales ladder   sign-up(1) → bell(4) → gong(8) → superstar(10)
     personal weeks     Green Week (15+, the owner's traffic light system
                        Green — core/week_bands.py) / 20 / 30 personal
                        sign-ups in one bells week
@@ -43,11 +43,12 @@ from core.week_bands import GREEN_WEEK_SALES
 logger = logging.getLogger(__name__)
 
 # Day-sales ladder — units in a single calendar day on the bells board.
-# Vocabulary (owner-confirmed): bell = 3 sales/day, gong = 5, superstar = 10.
+# Vocabulary (owner-confirmed): bell = 4 sign-ups/day, gong = 8, superstar = 10
+# (Modern Milkman; the fundraising ladder was 3 and 5).
 DAY_SALES_TIERS = [
     (1, "first_sale"),
-    (3, "first_bell"),
-    (5, "first_gong"),
+    (4, "first_bell"),
+    (8, "first_gong"),
     (10, "superstar_10"),
 ]
 
@@ -87,10 +88,10 @@ ACHIEVEMENTS = [
     # ── Day-sales ladder ──────────────────────────────────────────────────
     {"key": "first_sale", "title": "First Sign-up", "subtitle": "You got your first sign-up.", "emoji": "🎉",
      "how": "Get your first sign-up. It counts as soon as the day's sign-ups are logged on the Bells board."},
-    {"key": "first_bell", "title": "First Bell", "subtitle": "3 sign-ups in one day.", "emoji": "🔔",
-     "how": "Ring the bell — 3 sign-ups in a single day."},
-    {"key": "first_gong", "title": "First Gong", "subtitle": "5 sign-ups in one day.", "emoji": "🥁",
-     "how": "Bang the gong — 5 sign-ups in a single day."},
+    {"key": "first_bell", "title": "First Bell", "subtitle": "4 sign-ups in one day.", "emoji": "🔔",
+     "how": "Ring the bell — 4 sign-ups in a single day."},
+    {"key": "first_gong", "title": "First Gong", "subtitle": "8 sign-ups in one day.", "emoji": "🥁",
+     "how": "Bang the gong — 8 sign-ups in a single day."},
     {"key": "superstar_10", "title": "Superstar", "subtitle": "10 sign-ups in one day.", "emoji": "🌟",
      "how": "10 sign-ups in a single day. Rare air — the whole office hears about this one."},
     # ── Personal weeks ──────────────────────────────────────────────────
