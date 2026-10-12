@@ -90,3 +90,19 @@ def test_a_topic_that_repeats_the_row_name_is_not_saved():
                                  "cells": [{"day": 1, "topic": "Sector Leaders Meeting"}, {"day": 2, "topic": "Targets"}]})
     assert row["cells"][1]["topic"] == ""
     assert row["cells"][2]["topic"] == "Targets"
+
+
+def test_a_time_typed_as_the_topic_becomes_the_time():
+    row = agenda._normalize_row({"label": "Appointment", "cells": [
+        {"day": 3, "topic": "9:00", "presenter": "Example Person"},
+        {"day": 4, "topic": "Goals", "time": "10:00"},
+        {"day": 5, "topic": "5"},
+    ]})
+    assert (row["cells"][3]["time"], row["cells"][3]["topic"]) == ("9:00", "")
+    assert (row["cells"][4]["time"], row["cells"][4]["topic"]) == ("10:00", "Goals")
+    assert row["cells"][5]["topic"] == "5"
+
+
+def test_merge_flag_is_kept():
+    row = agenda._normalize_row({"label": "COD 1&2", "cells": [{"day": 0, "merge_up": True}]})
+    assert row["cells"][0]["merge_up"] is True and row["cells"][1]["merge_up"] is False

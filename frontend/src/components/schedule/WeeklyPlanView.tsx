@@ -16,7 +16,7 @@ import PressableScale from '../ui/PressableScale';
 import { useAuth } from '../../auth/AuthContext';
 import { useActiveOffice } from '../../office/ActiveOfficeContext';
 import { apiService } from '../../api/client';
-import WeeklyPlanGridView from './WeeklyPlanGridView';
+import WeeklyPlanGridView, { type MergeChange } from './WeeklyPlanGridView';
 import AgendaScanReviewSheet, { ScanInFlightOverlay, ApplyResult, ScanPayload } from './AgendaScanReviewSheet';
 import * as ImagePicker from 'expo-image-picker';
 import { APP_LOCALE } from '../../utils/appTime';
@@ -57,7 +57,7 @@ const STATS_FIELDS: { key: string; label: string; placeholder: string; icon: any
   { key: 'personal_recruits', label: 'Personal Recruits', placeholder: 'e.g. 2',   icon: 'person-add-outline', color: '#22c55e' },
 ];
 
-type Cell = { day: number; topic: string; presenter: string; time?: string };
+type Cell = { day: number; topic: string; presenter: string; time?: string; merge_up?: boolean };
 type Row = {
   id: string; label: string; time_label: string; schedule_match_title: string | null; cells: Cell[];
   /** Days this row's matched schedule block actually occurs on (from the
@@ -534,6 +534,20 @@ export default function WeeklyPlanView() {
       hidden_rows: (cur.hidden_rows as string[]) || [],
     });
   };
+  // Merge / unmerge cells on the plan (from Preview).
+  const setMerges = (changes: MergeChange[]) => {
+    update((c) => ({
+      ...c,
+      rows: c.rows.map((r) => {
+        const mine = changes.filter((ch) => ch.rowId === r.id);
+        if (!mine.length) return r;
+        return { ...r, cells: r.cells.map((cell) => {
+          const ch = mine.find((m) => m.day === cell.day);
+          return ch ? { ...cell, merge_up: ch.merge } : cell;
+        }) };
+      }),
+    }));
+  };
   const moveRow = (rowId: string, by: number) => {
     if (!draft) return;
     const i = draft.rows.findIndex((r) => r.id === rowId);
@@ -742,7 +756,8 @@ export default function WeeklyPlanView() {
                 </Text>
               </View>
             )}
-            <WeeklyPlanGridView themes={draft.themes} stats={draft.stats || {}} rows={draft.rows} weekEnding={draft.week_ending} isAdmin={isAdmin} />
+            <Text style={styles.structFootnote}>Tap a cell to merge it with the one above or below, or to merge a whole day into one box.</Text>
+            <WeeklyPlanGridView themes={draft.themes} stats={draft.stats || {}} rows={draft.rows} weekEnding={draft.week_ending} isAdmin={isAdmin} onSetMerge={setMerges} />
           </>
         )}
 
