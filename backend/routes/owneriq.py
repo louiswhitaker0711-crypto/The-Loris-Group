@@ -819,3 +819,78 @@ async def owneriq_averages(
         "team_avg_per_day": team_agg["avg_per_rep_day"],
         "team_included_count": team_agg["included_count"],
     }
+
+
+# ── Add the team from OwnerIQ ────────────────────────────────────────────────
+class ImportPick(BaseModel):
+    owneriq_user_id: str
+    role: Optional[str] = None
+
+
+class ImportPeopleBody(BaseModel):
+    dry_run: bool = True
+    people: list[ImportPick] = []
+    starter_password: Optional[str] = None
+    days: Optional[int] = None
+    office_id: Optional[str] = None
+
+
+async def _owneriq_roster_for(pin: Optional[str]) -> list[dict]:
+    """Read the office's OwnerIQ people (read-only)."""
+    import httpx
+    from owneriq_import import parse_roster
+    from owneriq_sync import _login, _select_company, _api_headers, OWNERIQ_API_BASE
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        token = await _login(client)
+        if pin:
+            await _select_company(client, token, pin)
+        hdrs = {**_api_headers(), "authorization": f"Bearer {token}"}
+        r = await client.get(f"{OWNERIQ_API_BASE}/v2/users", params={"limit": 2000, "active": "true"},
+                             headers=hdrs, timeout=90.0)
+        if r.status_code != 200:
+            raise OwnerIQError(f"GET /v2/users failed: HTTP {r.status_code}")
+        return parse_roster(r.json())
+
+
+@router.post("/owneriq/import-people")
+async def owneriq_import_people(request: Request, body: ImportPeopleBody):
+    """List (dry run) or create app accounts for the office's OwnerIQ people.
+    Reads OwnerIQ only; never writes to it."""
+    from owneriq_config import root_user_ids
+    from owneriq_import import apply_import, owner_node, plan_import
+    admin = await require_admin(request)
+    office_id = admin.get("office_id")
+    if body.office_id and body.office_id != office_id:
+        if not admin.get("is_super_admin"):
+            raise HTTPException(403, "You can only add people to your own office")
+        office_id = body.office_id
+    if not office_id:
+        raise HTTPException(400, "Choose an office first")
+    pin = await _office_pin(office_id)
+    try:
+        people = await _owneriq_roster_for(pin)
+    except OwnerIQError as ex:
+        logger.warning("OwnerIQ import: %s", ex)
+        raise HTTPException(502, "Couldn't read your team from OwnerIQ. Try again in a minute.")
+    app_users = await db.users.find(
+        {"deleted": {"$ne": True}},
+        {"name": 1, "email": 1, "amplifi_codes": 1, "owneriq_user_id": 1, "office_id": 1}).to_list(20000)
+    office_of = {str(u["_id"]): u.get("office_id") for u in app_users}
+    rows = plan_import(people, app_users, owner_node(people, root_user_ids()))
+    if not admin.get("is_super_admin"):
+        # Don't show names of accounts that belong to another office.
+        for r in rows:
+            if r.get("app_user_id") and office_of.get(r["app_user_id"]) != office_id:
+                r["app_user_name"] = "an account in another office"
+    if body.dry_run:
+        return {"office_id": office_id, "rows": rows}
+    try:
+        result = await apply_import(
+            db, office_id=office_id, admin=admin, rows=rows,
+            picks=[p.model_dump() for p in body.people],
+            starter_password=body.starter_password or "", days=body.days or 7)
+    except ValueError as ex:
+        raise HTTPException(400, str(ex))
+    logger.info("OwnerIQ import: %d created, %d skipped (office %s)",
+                len(result["created"]), len(result["skipped"]), office_id)
+    return result

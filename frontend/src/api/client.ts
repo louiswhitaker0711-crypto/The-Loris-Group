@@ -1318,6 +1318,14 @@ export const apiService = {
   // Admin: change someone in OwnerIQ (promote = advance a stage, demote = back one).
   owneriqRepAction: (body: { cg1_user_id: string; action: 'promote' | 'demote'; dry_run?: boolean }) =>
     api.post('/owneriq/rep-action', { dry_run: false, ...body }),
+  // Admin: add people from the OwnerIQ tree (dry_run lists them; reads OwnerIQ only).
+  owneriqImportPeople: (body: {
+    dry_run: boolean;
+    people?: { owneriq_user_id: string; role?: 'leader' | 'trainee' }[];
+    starter_password?: string;
+    days?: number;
+    office_id?: string;
+  }) => api.post('/owneriq/import-people', body, { timeout: 120000 }),
   getTeamTree: (office?: string) => api.get('/team/tree' + (office ? `?office=${encodeURIComponent(office)}` : '')),
   setReportsTo: (userId: string, parentId: string | null) =>
     api.put(`/admin/users/${userId}/reports-to`, { reports_to: parentId }),

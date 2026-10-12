@@ -534,6 +534,10 @@ export default function AdminScreen() {
                 <Ionicons name="person-add" size={15} color={colors.onPrimary} />
                 <Text style={styles.addBtnText}>Add Coach / BA</Text>
               </TouchableOpacity>
+              <TouchableOpacity style={styles.addBtn} onPress={() => router.push('/owneriq-import' as any)} accessibilityRole="button" testID="admin-add-owneriq">
+                <Ionicons name="git-network-outline" size={15} color={colors.onPrimary} />
+                <Text style={styles.addBtnText}>Add from OwnerIQ</Text>
+              </TouchableOpacity>
             </View>
             <Text style={styles.accountsHint}>Tap a name for that person's full breakdown and badge. Tap the row to edit their account.</Text>
 
