@@ -17,12 +17,12 @@ import { openInWhatsApp, copyText } from '../../utils/whatsapp';
 
 type Row = {
   user_id: string; user_name: string;
-  setup: { goal: number | null; kpi?: string; focus?: string } | null;
+  setup: { goal: number | null; kpi?: string; focus?: string; positive?: string } | null;
   breakdown: { doors: number | null; spoken: number | null; pitched: number | null; closed: number | null;
     note?: string; goal: number | null; hit: number | null; proud?: string; change?: string } | null;
   live: { hit?: number };
 };
-type Sector = { leader_id: string; leader_name: string; people: Row[]; goal: number; hit: number;
+type Sector = { leader_id: string; leader_name: string; people: Row[]; goal: number; hit: number; sector_goal: number | null; people_goal: number;
   whatsapp: { setup: string; breakdown: string } };
 
 function addDays(iso: string, n: number) {
@@ -95,6 +95,9 @@ export function SectorsBoard({ bottomPad = 24 }: { bottomPad?: number }) {
                   {sec.hit}/{sec.goal}{sec.goal > 0 && sec.hit >= sec.goal ? ' 🔥' : ''}
                 </Text>
               </View>
+              <Text style={s.mutedSm}>
+                {sec.sector_goal != null ? `Sector goal ${sec.sector_goal}` : 'No sector goal set'}{sec.people_goal ? ` · everyone's goals add up to ${sec.people_goal}` : ''}
+              </Text>
               {sec.people.map((p) => {
                 const b = p.breakdown;
                 const pg = b?.goal ?? p.setup?.goal;
@@ -111,6 +114,7 @@ export function SectorsBoard({ bottomPad = 24 }: { bottomPad?: number }) {
                         {[p.setup.goal != null ? `Goal ${p.setup.goal}` : '', p.setup.kpi ? `KPI ${p.setup.kpi}` : '', p.setup.focus ? `Focus: ${p.setup.focus}` : ''].filter(Boolean).join(' · ') || '—'}
                       </Text>
                     ) : <Text style={s.mutedSm}>No set-up yet</Text>}
+                    {!!p.setup?.positive && <Text style={s.line}><Text style={s.tag}>Positive </Text>{p.setup.positive}</Text>}
                     {b ? (
                       <>
                         <Text style={s.line}>

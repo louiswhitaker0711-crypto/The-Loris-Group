@@ -44,7 +44,7 @@ def test_kpi_suggestion_is_the_step_furthest_behind():
 
 def test_inputs_are_checked():
     assert sec.clean_setup({"goal": "4", "kpi_metric": "Closes", "kpi_target": "20", "focus": "  tov "}) == {
-        "goal": 4, "kpi_metric": "closes", "kpi_target": 20, "focus": "tov"}
+        "goal": 4, "kpi_metric": "closes", "kpi_target": 20, "focus": "tov", "positive": ""}
     with pytest.raises(HTTPException):
         sec.clean_setup({"kpi_metric": "vibes"})
     with pytest.raises(HTTPException):
@@ -81,6 +81,32 @@ class _Req:
 
     async def json(self):
         return self._b
+
+
+def test_sector_goal_heads_the_whatsapp_texts():
+    rows = [{"user_name": "Alex Example", "setup": {"goal": 4}, "breakdown": {"goal": 4, "hit": 5}},
+            {"user_name": "Sam Example", "setup": {"goal": 3}, "breakdown": {"goal": 3, "hit": 2}}]
+    assert sec.setup_text(rows, "2026-10-12", 8).startswith("*SetUp* 12/10\nSector goal: 8\n\n*Alex*")
+    assert sec.breakdown_text(rows, "2026-10-12", 7).startswith("*Breakdown* 12/10\nSector goal: 7 hit: 7🔥")
+    # No sector goal: the office's layout is unchanged.
+    assert sec.setup_text(rows, "2026-10-12").startswith("*SetUp* 12/10\n\n*Alex*")
+
+
+def test_the_positive_goes_in_each_persons_nudge():
+    title, body = sec.nudge_text({"goal": 4, "focus": "KISS", "positive": "great tone of voice"}, {"hit": 1}, "early")
+    assert "Focus: KISS" in body and "💪 great tone of voice" in body
+    assert sec.clean_setup({"positive": "  great   intro "})["positive"] == "great intro"
+
+
+def test_sector_leader_nudge_tracks_the_sector_goal():
+    rows = [{"user_name": "Alex Example", "goal": 4, "hit": 3}, {"user_name": "Sam Example", "goal": 3, "hit": 0},
+            {"user_name": "Jo Example", "goal": 2, "hit": 2}]
+    title, body = sec.sector_nudge_text(10, rows, "late")
+    assert title == "⏱️ Sector: 5 more to hit 10"
+    assert body == "5/10 sign-ups · 5 to go · Behind: Sam 0/3, Alex 3/4"
+    # No sector goal set: falls back to adding up each person's goal.
+    assert sec.sector_nudge_text(None, rows, "mid")[1].startswith("5/9 sign-ups")
+    assert sec.sector_nudge_text(5, rows, "mid")[0] == "🔥 Sector goal hit"
 
 
 def test_a_person_is_in_one_sector_a_day_and_the_board_shows_both(monkeypatch):

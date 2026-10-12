@@ -51,7 +51,7 @@ export default function SectorPromptCard() {
 
   const m = data.my_setup;
   if (m && data.phase) {
-    const bits = [m.goal != null ? `Goal ${m.goal}` : '', m.kpi ? `KPI ${m.kpi}` : '', m.focus ? `Focus: ${m.focus}` : ''].filter(Boolean);
+    const bits = [m.goal != null ? `Goal ${m.goal}` : '', m.kpi ? `KPI ${m.kpi}` : '', m.focus ? `Focus: ${m.focus}` : '', m.positive ? `💪 ${m.positive}` : ''].filter(Boolean);
     if (!bits.length) return null;
     return (
       <View style={s.plain} testID="home-my-setup">
