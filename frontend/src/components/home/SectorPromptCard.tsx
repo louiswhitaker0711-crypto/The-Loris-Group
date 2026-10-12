@@ -1,0 +1,74 @@
+// Top of Home during field time. A sector leader sees "Start your sector
+// set-up" (or how far through it they are); at the end of the day, "Do your
+// sector's breakdown". A BA sees the set-up their leader wrote for them.
+// Hidden outside those windows. (GET /sector/status)
+import React, { useMemo } from 'react';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useQuery } from '@tanstack/react-query';
+import { useRouter } from 'expo-router';
+import { useColors, fonts } from '../../theme/ThemeContext';
+import { apiService } from '../../api/client';
+
+export default function SectorPromptCard() {
+  const c = useColors();
+  const s = useMemo(() => styles(c), [c]);
+  const router = useRouter();
+  const { data } = useQuery({
+    queryKey: ['sector-status'],
+    queryFn: () => apiService.getSectorStatus().then((r) => r.data),
+    refetchInterval: 5 * 60 * 1000,
+    retry: false,
+  });
+  if (!data) return null;
+
+  let icon: any = null, title = '', sub = '', url = '';
+  if (data.is_leader && data.phase === 'setup') {
+    if (!data.has_sector) {
+      icon = 'rocket'; title = 'Start your sector set-up';
+      sub = "Tick who's in your sector, then each person's goal, KPI and focus."; url = '/sector?start=1';
+    } else if (data.setups < data.members) {
+      icon = 'create'; title = `Finish set-up · ${data.setups}/${data.members}`;
+      sub = 'A few people still need their goal, KPI and focus.'; url = '/sector';
+    }
+  } else if (data.is_leader && data.phase === 'breakdown' && data.has_sector && data.breakdowns < data.members) {
+    icon = 'clipboard'; title = `Do your sector's breakdown · ${data.breakdowns}/${data.members}`;
+    sub = 'Numbers, goal against hit, proud of and change.'; url = '/sector?mode=breakdown';
+  }
+
+  if (url) {
+    return (
+      <Pressable onPress={() => router.push(url as never)} style={s.card} accessibilityRole="button" testID="home-sector-prompt">
+        <View style={s.icon}><Ionicons name={icon} size={20} color={c.onPrimary} /></View>
+        <View style={{ flex: 1 }}>
+          <Text style={s.title}>{title}</Text>
+          <Text style={s.sub}>{sub}</Text>
+        </View>
+        <Ionicons name="arrow-forward" size={18} color={c.onPrimary} />
+      </Pressable>
+    );
+  }
+
+  const m = data.my_setup;
+  if (m && data.phase) {
+    const bits = [m.goal != null ? `Goal ${m.goal}` : '', m.kpi ? `KPI ${m.kpi}` : '', m.focus ? `Focus: ${m.focus}` : ''].filter(Boolean);
+    if (!bits.length) return null;
+    return (
+      <View style={s.plain} testID="home-my-setup">
+        <Text style={s.plainTitle}>🎯 Your set-up today</Text>
+        <Text style={s.plainSub}>{bits.join(' · ')}</Text>
+      </View>
+    );
+  }
+  return null;
+}
+
+const styles = (c: any) => StyleSheet.create({
+  card: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: 16, backgroundColor: c.primary, marginBottom: 12 },
+  icon: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
+  title: { fontFamily: fonts.bodyBold, fontSize: 16, color: c.onPrimary },
+  sub: { fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: c.onPrimary, opacity: 0.9 },
+  plain: { padding: 14, borderRadius: 16, borderWidth: 1, borderColor: c.border, backgroundColor: c.background, gap: 4, marginBottom: 12 },
+  plainTitle: { fontFamily: fonts.bodyBold, fontSize: 15, color: c.text },
+  plainSub: { fontFamily: fonts.body, fontSize: 13.5, lineHeight: 19, color: c.textMuted },
+});

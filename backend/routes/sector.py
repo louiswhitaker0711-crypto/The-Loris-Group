@@ -23,6 +23,7 @@ their own.
 from __future__ import annotations
 
 import logging
+import uuid
 from datetime import date as Date, datetime, timedelta, timezone
 from typing import Optional
 
@@ -166,8 +167,28 @@ def breakdown_text(rows: list, iso: str) -> str:
 
 
 # ── Who can see / edit whom ──────────────────────────────────────────────────
-async def _people(user: dict) -> list[dict]:
+async def _sector_of_leader(leader_id: str, iso: str) -> Optional[dict]:
+    return await db.sectors.find_one({"leader_id": str(leader_id), "date": iso}, {"_id": 0})
+
+
+async def _users_by_ids(ids: list[str]) -> list[dict]:
+    oids = [ObjectId(i) for i in ids if ObjectId.is_valid(str(i))]
+    rows = []
+    async for u in db.users.find({"_id": {"$in": oids}, "deleted": {"$ne": True}}, {"_id": 1, "name": 1, "role": 1}):
+        rows.append({"user_id": str(u["_id"]), "user_name": u.get("name") or "", "role": u.get("role")})
+    order = {str(i): n for n, i in enumerate(ids)}
+    rows.sort(key=lambda r: order.get(r["user_id"], 999))
+    return rows
+
+
+async def _people(user: dict, iso: Optional[str] = None) -> list[dict]:
+    """Who the caller works with on a day: a sector leader's sector when they
+    have one, otherwise their team (Coach), the office (Admin) or themselves."""
     role = (user.get("role") or "").lower()
+    if iso and role in ("leader", "admin"):
+        sec = await _sector_of_leader(str(user["id"]), iso)
+        if sec and sec.get("member_ids"):
+            return await _users_by_ids(sec["member_ids"])
     q: dict = {"office_id": user.get("office_id"), "deleted": {"$ne": True}, "is_active": {"$ne": False},
                "is_demo": {"$ne": True}, "role": {"$in": ["trainee", "leader", "admin"]}}
     if role == "leader":
@@ -182,9 +203,13 @@ async def _people(user: dict) -> list[dict]:
     return rows
 
 
-async def _can_edit(user: dict, target_id: str) -> bool:
+async def _can_edit(user: dict, target_id: str, iso: Optional[str] = None) -> bool:
     if str(user.get("id")) == str(target_id):
         return True
+    if iso:
+        sec = await _sector_of_leader(str(user["id"]), iso)
+        if sec and str(target_id) in (sec.get("member_ids") or []):
+            return True
     return any(p["user_id"] == str(target_id) for p in await _people(user))
 
 
@@ -216,7 +241,8 @@ async def sector_day(request: Request, date: Optional[str] = None):
     user = await get_current_user(request)
     iso = _clean_date(date)
     prev = (Date.fromisoformat(iso) - timedelta(days=1 if Date.fromisoformat(iso).weekday() != 0 else 2)).isoformat()
-    people = await _people(user)
+    people = await _people(user, iso)
+    sector = await _sector_of_leader(str(user["id"]), iso)
     ids = [p["user_id"] for p in people]
     docs = {d["user_id"]: d async for d in db.sector_days.find({"date": iso, "user_id": {"$in": ids}}, {"_id": 0})}
     prev_docs = {d["user_id"]: d async for d in db.sector_days.find({"date": prev, "user_id": {"$in": ids}}, {"_id": 0})}
@@ -238,6 +264,7 @@ async def sector_day(request: Request, date: Optional[str] = None):
     return {
         "date": iso, "previous_date": prev,
         "can_manage": (user.get("role") or "").lower() in ("leader", "admin"),
+        "sector": sector,
         "options": {"proud": PROUD_OPTIONS, "change": CHANGE_OPTIONS,
                     "kpi_metrics": [{"key": k, "label": v, "loa": LOA.get(k)} for k, v in KPI_METRICS.items()]},
         "people": rows,
@@ -248,9 +275,9 @@ async def sector_day(request: Request, date: Optional[str] = None):
 @router.put("/sector/day/{user_id}")
 async def save_sector_day(user_id: str, request: Request, date: Optional[str] = None):
     user = await get_current_user(request)
-    if not await _can_edit(user, user_id):
-        raise HTTPException(status_code=403, detail="That person is not on your team")
     iso = _clean_date(date)
+    if not await _can_edit(user, user_id, iso):
+        raise HTTPException(status_code=403, detail="That person is not on your team or in your sector")
     body = await request.json()
     now = datetime.now(timezone.utc).isoformat()
     upd: dict = {}
@@ -278,7 +305,7 @@ async def notify_setups(request: Request, date: Optional[str] = None):
     if (user.get("role") or "").lower() not in ("leader", "admin"):
         raise HTTPException(status_code=403, detail="Coach or admin access required")
     iso = _clean_date(date)
-    ids = [p["user_id"] for p in await _people(user)]
+    ids = [p["user_id"] for p in await _people(user, iso)]
     from core.push import send_push_to_user
     sent = 0
     async for d in db.sector_days.find({"date": iso, "user_id": {"$in": ids}}, {"_id": 0}):
@@ -381,4 +408,159 @@ async def breakdown_prompt_tick() -> int:
             sent += 1
         except Exception as ex:
             logger.warning("breakdown prompt failed for %s: %s", uid, ex)
+    return sent
+
+
+
+# ── Sectors: who's with which sector leader, and the board ────────────────────
+# Collection `sectors`, one per (leader_id, date): {id, office_id, date,
+# leader_id, leader_name, member_ids, updated_at}. A person is in one sector a
+# day: adding them to a sector takes them out of any other that day.
+
+@router.get("/sector/roster")
+async def sector_roster(request: Request, date: Optional[str] = None):
+    """The office's people, for picking who's in your sector; shows who is
+    already in someone else's sector that day."""
+    user = await get_current_user(request)
+    if (user.get("role") or "").lower() not in ("leader", "admin"):
+        raise HTTPException(status_code=403, detail="Coach or admin access required")
+    iso = _clean_date(date)
+    taken: dict[str, str] = {}
+    async for sec in db.sectors.find({"office_id": user.get("office_id"), "date": iso}, {"_id": 0}):
+        if sec.get("leader_id") == str(user["id"]):
+            continue
+        for m in sec.get("member_ids") or []:
+            taken[m] = sec.get("leader_name") or ""
+    rows = []
+    async for u in db.users.find({"office_id": user.get("office_id"), "deleted": {"$ne": True}, "is_active": {"$ne": False},
+                                  "is_demo": {"$ne": True}, "role": {"$in": ["trainee", "leader", "admin"]}},
+                                 {"_id": 1, "name": 1, "role": 1}):
+        uid = str(u["_id"])
+        rows.append({"user_id": uid, "user_name": u.get("name") or "", "role": u.get("role"),
+                     "in_sector_of": taken.get(uid)})
+    rows.sort(key=lambda r: r["user_name"].lower())
+    return {"date": iso, "people": rows}
+
+
+@router.put("/sector/sectors")
+async def save_my_sector(request: Request, date: Optional[str] = None):
+    user = await get_current_user(request)
+    if (user.get("role") or "").lower() not in ("leader", "admin"):
+        raise HTTPException(status_code=403, detail="Coach or admin access required")
+    iso = _clean_date(date)
+    body = await request.json()
+    wanted = [str(i) for i in (body.get("member_ids") or []) if ObjectId.is_valid(str(i))][:40]
+    if not wanted:
+        raise HTTPException(status_code=400, detail="Pick at least one person")
+    valid = {str(u["_id"]) async for u in db.users.find(
+        {"_id": {"$in": [ObjectId(i) for i in wanted]}, "office_id": user.get("office_id"), "deleted": {"$ne": True}}, {"_id": 1})}
+    members = [i for i in dict.fromkeys(wanted) if i in valid]
+    if not members:
+        raise HTTPException(status_code=400, detail="Nobody from your office in that list")
+    await db.sectors.update_many({"office_id": user.get("office_id"), "date": iso, "leader_id": {"$ne": str(user["id"])}},
+                                 {"$pull": {"member_ids": {"$in": members}}})
+    now = datetime.now(timezone.utc).isoformat()
+    await db.sectors.update_one({"leader_id": str(user["id"]), "date": iso}, {
+        "$set": {"office_id": user.get("office_id"), "leader_name": user.get("name") or "", "member_ids": members, "updated_at": now},
+        "$setOnInsert": {"id": str(uuid.uuid4()), "created_at": now}}, upsert=True)
+    return await _sector_of_leader(str(user["id"]), iso)
+
+
+@router.get("/sector/board")
+async def sector_board(request: Request, date: Optional[str] = None):
+    """Every sector in the office on a day, with each person's set-up and
+    breakdown: the one place to see the whole field."""
+    user = await get_current_user(request)
+    iso = _clean_date(date)
+    sectors = [x async for x in db.sectors.find({"office_id": user.get("office_id"), "date": iso, "member_ids.0": {"$exists": True}},
+                                                {"_id": 0}).sort("leader_name", 1)]
+    all_ids = [m for sec in sectors for m in sec.get("member_ids") or []]
+    docs = {d["user_id"]: d async for d in db.sector_days.find({"date": iso, "user_id": {"$in": all_ids}}, {"_id": 0})}
+    live = await _prefill(all_ids, iso)
+    people = {p["user_id"]: p for p in await _users_by_ids(all_ids)}
+    out = []
+    for sec in sectors:
+        rows = []
+        for m in sec.get("member_ids") or []:
+            if m not in people:
+                continue
+            d = docs.get(m) or {}
+            su = d.get("setup")
+            rows.append({**people[m], "setup": {**su, "kpi": kpi_text(su)} if su else None, "breakdown": d.get("breakdown"), "live": live.get(m) or {}})
+        goal = sum(int((r.get("setup") or {}).get("goal") or 0) for r in rows)
+        hit = sum(int((r.get("live") or {}).get("hit") or 0) for r in rows)
+        out.append({"leader_id": sec["leader_id"], "leader_name": sec.get("leader_name"), "people": rows,
+                    "goal": goal, "hit": hit,
+                    "whatsapp": {"setup": setup_text(rows, iso), "breakdown": breakdown_text(rows, iso)}})
+    return {"date": iso, "sectors": out}
+
+
+@router.get("/sector/status")
+async def sector_status(request: Request):
+    """For the Home card: is it set-up or breakdown time, and what's done."""
+    user = await get_current_user(request)
+    now = datetime.now(APP_TZ)
+    iso = now.date().isoformat()
+    mins = now.hour * 60 + now.minute
+    sat = now.weekday() == 5
+    sun = now.weekday() == 6
+    start_win = (9 * 60 + 30, 12 * 60) if sat else (13 * 60, 16 * 60)
+    end_win = (16 * 60 + 30, 19 * 60) if sat else (19 * 60 + 30, 22 * 60)
+    phase = None if sun else "setup" if start_win[0] <= mins < start_win[1] else "breakdown" if end_win[0] <= mins < end_win[1] else None
+    is_leader = (user.get("role") or "").lower() in ("leader", "admin")
+    sec = await _sector_of_leader(str(user["id"]), iso) if is_leader else None
+    members = (sec or {}).get("member_ids") or []
+    setups = breakdowns = 0
+    if members:
+        async for d in db.sector_days.find({"date": iso, "user_id": {"$in": members}}, {"setup": 1, "breakdown": 1}):
+            setups += 1 if d.get("setup") else 0
+            breakdowns += 1 if d.get("breakdown") else 0
+    return {"date": iso, "phase": phase, "is_leader": is_leader, "has_sector": bool(members),
+            "members": len(members), "setups": setups, "breakdowns": breakdowns,
+            "my_setup": await my_setup(str(user["id"]), iso)}
+
+
+async def _leaders_out_today() -> list[str]:
+    now = datetime.now(APP_TZ)
+    d = now.date()
+    week_ending = (d + timedelta(days=6 - d.weekday())).isoformat()
+    away: set[str] = set()
+    async for e in db.bells_entries.find({"week_ending": week_ending}, {"user_id": 1, "days": 1}):
+        days = e.get("days") or []
+        if d.weekday() < len(days) and (days[d.weekday()] or {}).get("status") in ("ab", "ns", "rt"):
+            away.add(str(e.get("user_id")))
+    return [str(u["_id"]) async for u in db.users.find(
+        {"role": "leader", "deleted": {"$ne": True}, "is_active": {"$ne": False}, "is_demo": {"$ne": True}}, {"_id": 1})
+        if str(u["_id"]) not in away]
+
+
+async def sector_start_tick() -> int:
+    """Field start: every Coach out today is asked to start their sector set-up."""
+    from core.push import send_push_to_user
+    sent = 0
+    for uid in await _leaders_out_today():
+        if await _sector_of_leader(uid, today_iso()):
+            continue
+        try:
+            await send_push_to_user(uid, "🚀 Start your sector set-up",
+                                    "Who's in your sector? Set everyone's goal, KPI and focus.",
+                                    {"type": "sector_setup", "url": "/sector?start=1"})
+            sent += 1
+        except Exception as ex:
+            logger.warning("sector start push failed for %s: %s", uid, ex)
+    return sent
+
+
+async def sector_breakdown_tick() -> int:
+    """End of the field: every sector leader is asked for their breakdown."""
+    from core.push import send_push_to_user
+    sent = 0
+    async for sec in db.sectors.find({"date": today_iso(), "member_ids.0": {"$exists": True}}, {"leader_id": 1}):
+        try:
+            await send_push_to_user(sec["leader_id"], "📝 Sector breakdown",
+                                    "Do your sector's breakdown: numbers, proud of, and what changes tomorrow.",
+                                    {"type": "sector_setup", "url": "/sector?mode=breakdown"})
+            sent += 1
+        except Exception as ex:
+            logger.warning("sector breakdown push failed for %s: %s", sec.get("leader_id"), ex)
     return sent

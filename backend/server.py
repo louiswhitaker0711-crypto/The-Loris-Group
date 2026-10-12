@@ -904,6 +904,29 @@ async def _startup_work():
                 scheduler.add_job(_nudge_job(_slot), "cron", day_of_week=_days, hour=_h, minute=_m,
                                   id=f"field_nudge_{_days}_{_h:02d}{_m:02d}", replace_existing=True)
 
+        async def _sector_start():
+            try:
+                from routes.sector import sector_start_tick
+                logger.info(f"sector start: {await sector_start_tick()} sent")
+            except Exception as ex:
+                logger.error(f"sector start push failed: {ex}")
+
+        async def _sector_breakdown():
+            try:
+                from routes.sector import sector_breakdown_tick
+                logger.info(f"sector breakdown: {await sector_breakdown_tick()} sent")
+            except Exception as ex:
+                logger.error(f"sector breakdown push failed: {ex}")
+
+        scheduler.add_job(_sector_start, "cron", day_of_week="mon-fri", hour=13, minute=30,
+                          id="sector_start_weekday", replace_existing=True)
+        scheduler.add_job(_sector_start, "cron", day_of_week="sat", hour=10, minute=0,
+                          id="sector_start_sat", replace_existing=True)
+        scheduler.add_job(_sector_breakdown, "cron", day_of_week="mon-fri", hour=20, minute=5,
+                          id="sector_breakdown_weekday", replace_existing=True)
+        scheduler.add_job(_sector_breakdown, "cron", day_of_week="sat", hour=17, minute=5,
+                          id="sector_breakdown_sat", replace_existing=True)
+
         async def _breakdown_prompt():
             try:
                 from routes.sector import breakdown_prompt_tick

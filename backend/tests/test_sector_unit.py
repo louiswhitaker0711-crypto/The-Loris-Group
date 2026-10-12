@@ -60,3 +60,47 @@ def test_field_nudges_use_the_set_up_and_live_numbers():
     assert title == "⏱️ 2 more to hit your goal"
     title, body = sec.nudge_text(setup, {"hit": 4, "spoken": 60}, "late")
     assert title == "🔥 Goal hit" and body.startswith("4/4 — go for one more.")
+
+
+def _setup_db(monkeypatch, user):
+    import asyncio
+    from mongomock_motor import AsyncMongoMockClient
+    db = AsyncMongoMockClient()["t"]
+
+    async def _user(_r):
+        return dict(user)
+
+    monkeypatch.setattr(sec, "db", db)
+    monkeypatch.setattr(sec, "get_current_user", _user)
+    return db, asyncio.run
+
+
+class _Req:
+    def __init__(self, body):
+        self._b = body
+
+    async def json(self):
+        return self._b
+
+
+def test_a_person_is_in_one_sector_a_day_and_the_board_shows_both(monkeypatch):
+    from bson import ObjectId
+    lead_a, lead_b, ba1, ba2 = (ObjectId() for _ in range(4))
+    user_a = {"id": str(lead_a), "role": "leader", "office_id": "o1", "name": "Lead A"}
+    db, run = _setup_db(monkeypatch, user_a)
+    run(db.users.insert_many([
+        {"_id": lead_a, "name": "Lead A", "role": "leader", "office_id": "o1"},
+        {"_id": lead_b, "name": "Lead B", "role": "leader", "office_id": "o1"},
+        {"_id": ba1, "name": "Example One", "role": "trainee", "office_id": "o1"},
+        {"_id": ba2, "name": "Example Two", "role": "trainee", "office_id": "o1"},
+    ]))
+    run(db.sectors.insert_one({"leader_id": str(lead_b), "leader_name": "Lead B", "office_id": "o1",
+                               "date": "2026-10-13", "member_ids": [str(lead_b), str(ba1)]}))
+    run(sec.save_my_sector(_Req({"member_ids": [str(lead_a), str(ba1), str(ba2)]}), date="2026-10-13"))
+    b = run(db.sectors.find_one({"leader_id": str(lead_b)}))
+    assert str(ba1) not in b["member_ids"]  # moved to Lead A's sector
+    # Lead A can now edit someone outside their own team, because they're in the sector.
+    assert run(sec._can_edit(user_a, str(ba1), "2026-10-13"))
+    board = run(sec.sector_board(None, date="2026-10-13"))
+    names = {s_["leader_name"]: [p["user_name"] for p in s_["people"]] for s_ in board["sectors"]}
+    assert names == {"Lead A": ["Lead A", "Example One", "Example Two"], "Lead B": ["Lead B"]}

@@ -33,6 +33,7 @@ const ROUTE_TITLES: Record<string, [string, IconName]> = {
   'meeting-recaps': ['Meeting recaps', 'albums-outline'],
   'field-reset': ['6pm reset', 'refresh-circle-outline'],
   sector: ['Set-up & breakdown', 'people-circle-outline'],
+  sectors: ['Sectors', 'grid-outline'],
   'bells-paste': ['Paste from WhatsApp', 'clipboard-outline'],
   module: ['Module', 'book-outline'],
   leadership: ['My Progress', 'footsteps-outline'],

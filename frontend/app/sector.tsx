@@ -16,6 +16,7 @@ import { useKeyboardInset } from '../src/hooks/useKeyboardInset';
 import { todayISO } from '../src/utils/calendarDates';
 import { APP_LOCALE } from '../src/utils/appTime';
 import { openInWhatsApp, copyText } from '../src/utils/whatsapp';
+import { SectorPicker } from '../src/components/sector/SectorPicker';
 
 type Setup = { goal: number | null; kpi_metric: string | null; kpi_target: number | null; focus: string };
 type Breakdown = { doors: number | null; spoken: number | null; pitched: number | null; closed: number | null;
@@ -41,7 +42,7 @@ export default function SectorScreen() {
   const s = useMemo(() => styles(c), [c]);
   const insets = useSafeAreaInsets();
   const kb = useKeyboardInset();
-  const params = useLocalSearchParams<{ mode?: string }>();
+  const params = useLocalSearchParams<{ mode?: string; start?: string }>();
   const [mode, setMode] = useState<Mode>(params.mode === 'breakdown' ? 'breakdown' : 'setup');
   const today = todayISO();
   const [date, setDate] = useState(today);
@@ -84,6 +85,13 @@ export default function SectorScreen() {
           ? 'Goal, KPI and focus for each person. Yesterday’s "Change" is ready to use as today’s focus.'
           : 'Doors / spoken / pitched / closed and sign-ups come in from OwnerIQ and Bells. Add what they’re proud of and what they’ll change.'}
       </Text>
+
+      {!!q.data?.can_manage && (
+        <SectorPicker key={date + String(q.data?.sector?.member_ids?.length || 0)} date={date}
+          current={q.data?.sector?.member_ids || null}
+          startOpen={params.start === '1' || (!q.isLoading && !q.data?.sector && mode === 'setup')}
+          onSaved={() => q.refetch()} />
+      )}
 
       {q.isLoading ? <ActivityIndicator color={c.primary} /> : people.map((p) => (
         mode === 'setup'
