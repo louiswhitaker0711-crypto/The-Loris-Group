@@ -219,17 +219,41 @@ def finish(rep: dict) -> dict:
     return rep
 
 
+def signups(w: dict) -> float | None:
+    """Everything a person signed up that week, fails included, worked back
+    from their sales (which leave fails out) and fail rate: 8 sales at a 20%
+    fail rate is 10 sign-ups. All failed with no sales counts as 1."""
+    s, f = w.get("sales"), w.get("fail_rate")
+    if s is None:
+        return None
+    if f is None or f <= 0:
+        return float(s)
+    if f >= 100:
+        return float(s) if s else 1.0
+    return s / (1 - f / 100)
+
+
 def aggregate(weeks: list[dict]) -> dict:
-    """Several weeks of one person's (or the office's) numbers → one set for
-    the period: sales added up; every other measure averaged weighted by that
-    week's sales, so a 1-sale week counts for less than an 8-sale week. A
-    week with no sales figure counts once; a week with 0 sales doesn't count
-    towards the averages."""
+    """Several people's or weeks' numbers → one set, the way the Power BI
+    report adds them up: by volume, never a plain average of everyone's
+    figures, so someone with 17 sales counts 17 times as much as someone
+    with 1.
+
+      sales            added up
+      fails            total fails ÷ total sign-ups (sales + fails)
+      order value,     weighted by sign-ups (the report's order value
+      drop days        includes the failed orders)
+      The Round,       weighted by sales
+      4th week
+
+    A row with no sales figure counts once; 0 sales and no fails doesn't
+    count towards the averages."""
     out: dict = {}
     sales = [w["sales"] for w in weeks if w.get("sales") is not None]
     if sales:
         out["sales"] = sum(sales)
-    for key, _, kind in MEASURES:
+    su_num = su_den = 0.0
+    for key, _, _ in MEASURES:
         if key == "sales":
             continue
         num = den = 0.0
@@ -237,7 +261,11 @@ def aggregate(weeks: list[dict]) -> dict:
             v = w.get(key)
             if v is None:
                 continue
-            weight = w["sales"] if w.get("sales") is not None else 1
+            if key in ("aov", "drops", "fail_rate"):
+                g = signups(w)
+                weight = 1.0 if g is None else g
+            else:
+                weight = 1.0 if w.get("sales") is None else w["sales"]
             num += v * weight
             den += weight
         if den:
