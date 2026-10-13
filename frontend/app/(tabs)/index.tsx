@@ -36,6 +36,7 @@ import { Skeleton } from '../../src/components/ui/Skeleton';
 import FieldAveragesCard from '../../src/components/home/FieldAveragesCard';
 import FieldIqWeekCard from '../../src/components/home/FieldIqWeekCard';
 import LiveOpsCard from '../../src/components/home/LiveOpsCard';
+import SectorSetupsCard from '../../src/components/home/SectorSetupsCard';
 import PrimetimeCard from '../../src/components/home/PrimetimeCard';
 import SectorPromptCard from '../../src/components/home/SectorPromptCard';
 import { Stagger } from '../../src/components/ui/Reveal';
@@ -820,6 +821,8 @@ export default function HomeScreen() {
           scoped to the caller server-side. Tap a team → live KPIs + per-BA door
           log. Self-hides when no teams are out. */}
       <LiveOpsCard />
+      {/* Today's sector set-ups, right under Sectors: one tap away in the field. */}
+      <SectorSetupsCard />
       <FieldIqWeekCard />
 
       {/* ── Field KPIs LOA — admin office averages (Yesterday's LOA, expandable

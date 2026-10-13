@@ -3,8 +3,10 @@
 // sector, the streets confirmed in the last 12 weeks in solid black, and
 // today's drawing.
 //
-//   • Draw with your finger (or a mouse): the Pen draws, the Eraser rubs out
-//     anything today's you're allowed to remove, Move pans the map.
+//   • Like drawing on a WhatsApp photo: one finger draws, two fingers move
+//     and zoom the map, Undo takes back your last line. Tap a line to remove
+//     it. On a computer: drag to draw, hold Shift and drag (or right-drag)
+//     to move, scroll to zoom.
 //   • Bunny hops: the sector leader gives each pair one of five colours and
 //     draws each hop's AREA in its colour (a wide highlighter line). Share
 //     sends each hop their coloured area.
@@ -27,8 +29,11 @@ import { HOP_COLOURS, hopHex, hopLabel } from '../../utils/hopColours';
 
 const FREE_MAP_TOOLS = 'https://www.freemaptools.com/uk-postcode-map.htm';
 const MAX_POINTS = 380;
-type Mode = 'move' | 'pen' | 'erase';
 type Kind = 'plan' | 'done';
+// Line weights: planned areas a soft, fairly thin band; done lines thin.
+const PLAN_STYLE = { weight: 7, opacity: 0.45 };
+const DONE_WEIGHT = 3.5;
+const WORKED_WEIGHT = 4;
 
 type Props = {
   date: string;
@@ -36,16 +41,6 @@ type Props = {
   height?: number;
   endOfDay?: boolean;         // the breakdown: drawing what's done, then confirm
 };
-
-/** Distance in pixels from point p to segment a–b. */
-function segDist(p: any, a: any, b: any) {
-  const dx = b.x - a.x, dy = b.y - a.y;
-  const len = dx * dx + dy * dy;
-  let t = len ? ((p.x - a.x) * dx + (p.y - a.y) * dy) / len : 0;
-  t = Math.max(0, Math.min(1, t));
-  const x = a.x + t * dx, y = a.y + t * dy;
-  return Math.hypot(p.x - x, p.y - y);
-}
 
 export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Props) {
   const c = useColors();
@@ -59,15 +54,15 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
   const [failed, setFailed] = useState(false);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [mode, setMode] = useState<Mode>('move');
   const [kind, setKind] = useState<Kind>(endOfDay ? 'done' : 'plan');
   const [colour, setColour] = useState<string>('red');
   const [hopsOpen, setHopsOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const placed = useRef(false);
+  const [undoStack, setUndoStack] = useState<string[]>([]);
   // The pointer handlers read the latest state through refs.
-  const st = useRef({ mode, kind, colour, data, date, leaderId });
-  st.current = { mode, kind, colour, data, date, leaderId };
+  const st = useRef({ kind, colour, data, date, leaderId });
+  st.current = { kind, colour, data, date, leaderId };
 
   const load = useCallback(async () => {
     try {
@@ -90,33 +85,13 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
       pts = pts.filter((_, i) => i % step === 0 || i === latlngs.length - 1);
     }
     try {
-      await apiService.saveCoverage({ date: dt, lines: [pts], leader_id: lid,
+      const r = await apiService.saveCoverage({ date: dt, lines: [pts], leader_id: lid,
         kind: d?.can_confirm ? k : 'done', colour: col });
+      if (r.data?.id) setUndoStack((u) => [...u, r.data.id]);
       load();
     } catch (e: any) {
       showAlert('Could not save that line', e?.response?.data?.detail || 'Try again.');
       load();
-    }
-  }, [load]);
-
-  const erasing = useRef<Set<string>>(new Set());
-  const eraseAt = useCallback((pt: any) => {
-    const { data: d } = st.current;
-    const m = map.current;
-    if (!d || !m) return;
-    for (const mk of d.marks || []) {
-      if (!mk.can_delete || mk.status === 'confirmed' || erasing.current.has(mk.id)) continue;
-      for (const line of mk.lines || []) {
-        let hit = false;
-        for (let i = 1; i < line.length && !hit; i++) {
-          if (segDist(pt, m.latLngToContainerPoint(line[i - 1]), m.latLngToContainerPoint(line[i])) < 14) hit = true;
-        }
-        if (hit) {
-          erasing.current.add(mk.id);
-          apiService.deleteCoverage(mk.id).then(load).catch(() => {}).finally(() => erasing.current.delete(mk.id));
-          break;
-        }
-      }
     }
   }, [load]);
 
@@ -128,39 +103,52 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
     loadLeaflet().then((L) => {
       const el = box.current as unknown as HTMLElement | null;
       if (dead || !el || map.current) return;
-      const m = L.map(el, { scrollWheelZoom: false }).setView([53.8, -1.55], 9);
+      const m = L.map(el, { scrollWheelZoom: true }).setView([53.8, -1.55], 9);
       L.tileLayer(OSM_TILES, { maxZoom: 19, attribution: OSM_ATTRIBUTION }).addTo(m);
       shapeLayer.current = L.layerGroup().addTo(m);
       marksLayer.current = L.layerGroup().addTo(m);
       liveLayer.current = L.layerGroup().addTo(m);
       map.current = m;
 
+      // One finger (or a mouse drag) draws; a second finger cancels the line
+      // and Leaflet's pinch moves and zooms the map. Dragging is off so one
+      // finger never pans.
       let pts: number[][] = [];
       let live: any = null;
       let lastPx: any = null;
-      let active = false;
+      let drawingNow = false;
+      let panFrom: any = null;
+      const fingers = new Set<number>();
+      const cancelStroke = () => { drawingNow = false; pts = []; liveLayer.current?.clearLayers(); };
       const down = (e: PointerEvent) => {
-        const md = st.current.mode;
-        if (md === 'move') return;
-        e.preventDefault(); e.stopPropagation();
-        try { el.setPointerCapture(e.pointerId); } catch { /* older browsers */ }
-        active = true;
+        if (!st.current.data?.can_draw) return;
+        fingers.add(e.pointerId);
+        if (e.pointerType === 'mouse' && (e.shiftKey || e.button === 1 || e.button === 2)) {
+          panFrom = { x: e.clientX, y: e.clientY };
+          e.preventDefault();
+          return;
+        }
+        if (fingers.size > 1) { cancelStroke(); return; }
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        drawingNow = true;
         const p = m.mouseEventToContainerPoint(e);
         lastPx = p;
-        if (md === 'erase') { eraseAt(p); return; }
         const ll = m.containerPointToLatLng(p);
         pts = [[ll.lat, ll.lng]];
         const { kind: k, colour: col, data: d } = st.current;
         const planning = d?.can_confirm && k === 'plan';
         live = L.polyline(pts, planning
-          ? { color: hopHex(col), weight: 18, opacity: 0.35, lineCap: 'round', lineJoin: 'round' }
-          : { color: hopHex(col, c.primary), weight: 6, opacity: 0.95, lineCap: 'round', lineJoin: 'round' }).addTo(liveLayer.current);
+          ? { color: hopHex(col), ...PLAN_STYLE, lineCap: 'round', lineJoin: 'round', interactive: false }
+          : { color: hopHex(col, c.primary), weight: DONE_WEIGHT, opacity: 0.95, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(liveLayer.current);
       };
       const move = (e: PointerEvent) => {
-        if (!active) return;
-        e.preventDefault(); e.stopPropagation();
+        if (panFrom) {
+          m.panBy([panFrom.x - e.clientX, panFrom.y - e.clientY], { animate: false });
+          panFrom = { x: e.clientX, y: e.clientY };
+          return;
+        }
+        if (!drawingNow || fingers.size > 1) return;
         const p = m.mouseEventToContainerPoint(e);
-        if (st.current.mode === 'erase') { eraseAt(p); return; }
         if (lastPx && Math.hypot(p.x - lastPx.x, p.y - lastPx.y) < 3) return;
         lastPx = p;
         const ll = m.containerPointToLatLng(p);
@@ -168,18 +156,22 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
         live?.setLatLngs(pts);
       };
       const up = (e: PointerEvent) => {
-        if (!active) return;
-        active = false;
-        e.stopPropagation();
-        if (st.current.mode === 'pen' && pts.length >= 2) saveStroke(pts.map((q) => [q[0], q[1]]));
+        fingers.delete(e.pointerId);
+        if (panFrom) { panFrom = null; return; }
+        if (!drawingNow) return;
+        drawingNow = false;
+        if (pts.length >= 2) saveStroke(pts.map((q) => [q[0], q[1]]));
         pts = [];
         setTimeout(() => liveLayer.current?.clearLayers(), 600);
       };
+      const noMenu = (e: Event) => { if (st.current.data?.can_draw) e.preventDefault(); };
+      el.addEventListener('contextmenu', noMenu);
       el.addEventListener('pointerdown', down, true);
       el.addEventListener('pointermove', move, true);
       el.addEventListener('pointerup', up, true);
       el.addEventListener('pointercancel', up, true);
       cleanup = () => {
+        el.removeEventListener('contextmenu', noMenu);
         el.removeEventListener('pointerdown', down, true);
         el.removeEventListener('pointermove', move, true);
         el.removeEventListener('pointerup', up, true);
@@ -191,15 +183,16 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
     return () => { dead = true; cleanup(); if (map.current) { map.current.remove(); map.current = null; } };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Pen and Eraser hold the map still; Move lets it pan and zoom.
+  // When you can draw, one finger draws (no one-finger panning); two
+  // fingers still pinch to move and zoom. Otherwise the map pans as normal.
   useEffect(() => {
     const m = map.current;
     const el = box.current as unknown as HTMLElement | null;
-    if (!m || !el) return;
-    if (mode === 'move') { m.dragging.enable(); m.touchZoom.enable(); m.doubleClickZoom.enable(); el.style.cursor = ''; }
-    else { m.dragging.disable(); m.touchZoom.disable(); m.doubleClickZoom.disable(); el.style.cursor = 'crosshair'; }
-    el.style.touchAction = mode === 'move' ? '' : 'none';
-  }, [mode, ready]);
+    if (!m || !el || !data) return;
+    if (data.can_draw) { m.dragging.disable(); m.doubleClickZoom.disable(); el.style.cursor = 'crosshair'; el.style.touchAction = 'none'; }
+    else { m.dragging.enable(); m.doubleClickZoom.enable(); el.style.cursor = ''; el.style.touchAction = ''; }
+    m.touchZoom.enable();
+  }, [data, ready]);
 
   // Outline and lines.
   useEffect(() => {
@@ -226,20 +219,23 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
       const who = esc(mk.author_name || mk.leader_name || 'Someone');
       let style: any; let title: string;
       if (mk.status === 'plan') {
-        style = { color: hopHex(mk.colour), weight: 18, opacity: 0.32, lineCap: 'round', lineJoin: 'round' };
+        style = { color: hopHex(mk.colour), ...PLAN_STYLE, lineCap: 'round', lineJoin: 'round' };
         title = `${esc(hopLabel(mk.colour) || 'Planned')} area`;
       } else if (mk.status === 'draft') {
-        style = { color: hopHex(mk.colour, c.primary), weight: 6, opacity: 0.95, lineCap: 'round', lineJoin: 'round' };
+        style = { color: hopHex(mk.colour, c.primary), weight: DONE_WEIGHT, opacity: 0.95, lineCap: 'round', lineJoin: 'round' };
         title = `Done today${mk.colour ? ` · ${esc(hopLabel(mk.colour))}` : ''} (not confirmed yet)`;
       } else {
-        style = { color: '#000', weight: 6, opacity: mk.days_ago > 28 ? 0.35 : 0.85, lineCap: 'round', lineJoin: 'round' };
+        style = { color: '#000', weight: WORKED_WEIGHT, opacity: mk.days_ago > 28 ? 0.35 : 0.85, lineCap: 'round', lineJoin: 'round' };
         title = `Worked ${esc(when)}`;
       }
       for (const line of mk.lines || []) {
-        const pl = L.polyline(line, style).addTo(marksLayer.current);
+        // A wider invisible line underneath makes thin lines easy to tap.
+        const hit = L.polyline(line, { weight: 18, opacity: 0, interactive: true }).addTo(marksLayer.current);
+        const pl = L.polyline(line, { ...style, interactive: false }).addTo(marksLayer.current);
+        void pl;
         const del = mk.can_delete ? `<br/><a href="#" data-del="${esc(mk.id)}">Remove</a>` : '';
-        pl.bindPopup(`<b>${title}</b><br/>By ${who}${del}`);
-        pl.on('popupopen', (ev: any) => {
+        hit.bindPopup(`<b>${title}</b><br/>By ${who}${del}`);
+        hit.on('popupopen', (ev: any) => {
           const a = ev.popup.getElement()?.querySelector('a[data-del]');
           if (a) a.onclick = async (e: any) => {
             e.preventDefault();
@@ -258,6 +254,13 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
       () => showAlert('Location', 'Allow location for the app to show where you are.'),
       { enableHighAccuracy: true, timeout: 10000 },
     );
+  };
+  const undo = async () => {
+    const id = undoStack[undoStack.length - 1];
+    if (!id) return;
+    setUndoStack((u) => u.slice(0, -1));
+    try { await apiService.deleteCoverage(id); load(); }
+    catch (e: any) { showAlert('Could not undo', e?.response?.data?.detail || 'Try again.'); }
   };
   const share = async () => {
     setBusy('share');
@@ -320,22 +323,12 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
         </View>
       )}
 
-      {!!data?.can_draw && (
-        <View style={s.toolbar}>
-          {([['move', 'hand-left-outline', 'Move'], ['pen', 'pencil', 'Pen'], ['erase', 'remove-circle-outline', 'Eraser']] as const).map(([k, icon, label]) => (
-            <Pressable key={k} onPress={() => setMode(k)} style={[s.tool, mode === k && s.toolOn]} accessibilityRole="button" accessibilityState={{ selected: mode === k }} testID={`map-${k}`}>
-              <Ionicons name={icon as any} size={16} color={mode === k ? c.onPrimary : c.text} />
-              <Text style={[s.toolText, mode === k && { color: c.onPrimary }]}>{label}</Text>
-            </Pressable>
-          ))}
-        </View>
-      )}
-      {!!data?.can_draw && leads && mode === 'pen' && (
-        <View style={{ gap: 6 }}>
-          <View style={s.toolbar}>
+      {!!data?.can_draw && leads && (
+        <View style={s.tools}>
+          <View style={s.seg}>
             {([['plan', 'Plan areas'], ['done', 'Mark done']] as const).map(([k, label]) => (
-              <Pressable key={k} onPress={() => setKind(k)} style={[s.tool, kind === k && s.toolOn]} accessibilityRole="button" accessibilityState={{ selected: kind === k }}>
-                <Text style={[s.toolText, kind === k && { color: c.onPrimary }]}>{label}</Text>
+              <Pressable key={k} onPress={() => setKind(k)} style={[s.segBtn, kind === k && s.segOn]} accessibilityRole="button" accessibilityState={{ selected: kind === k }}>
+                <Text style={[s.segText, kind === k && { color: c.onPrimary }]}>{label}</Text>
               </Pressable>
             ))}
           </View>
@@ -344,13 +337,13 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
               <Pressable key={h.key} onPress={() => setColour(h.key)} accessibilityLabel={h.label} accessibilityState={{ selected: colour === h.key }}
                 style={[s.swatchBtn, { backgroundColor: h.hex }, colour === h.key && s.swatchOn]} />
             ))}
-            <Text style={s.small}>{kind === 'plan' ? `Drawing the ${hopLabel(colour).toLowerCase()} area` : `Marking done in ${hopLabel(colour).toLowerCase()}`}</Text>
           </View>
         </View>
       )}
-      {mode !== 'move' && (
+      {!!data?.can_draw && (
         <Text style={s.small}>
-          {mode === 'pen' ? 'Draw along the streets with your finger. Tap Move to pan or zoom the map.' : "Rub over a line to remove it (today's lines only)."}
+          {leads && kind === 'plan' ? `Draw the ${hopLabel(colour).toLowerCase()} area with one finger. ` : 'Draw over the streets you’ve done with one finger. '}
+          Two fingers move and zoom. Tap a line to remove it.
         </Text>
       )}
 
@@ -361,12 +354,18 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
         <Pressable onPress={locate} style={s.locate} accessibilityLabel="Show where I am" hitSlop={6}>
           <Ionicons name="locate" size={18} color={c.text} />
         </Pressable>
+        {undoStack.length > 0 && (
+          <Pressable onPress={undo} style={s.undo} accessibilityRole="button" accessibilityLabel="Undo the last line" testID="map-undo">
+            <Ionicons name="arrow-undo" size={16} color={c.text} />
+            <Text style={s.undoText}>Undo</Text>
+          </Pressable>
+        )}
       </View>
 
       <View style={s.legend}>
         {hops.map((h) => (
           <View key={h.colour} style={s.key}>
-            <View style={[s.swatch, { backgroundColor: hopHex(h.colour), height: 8, opacity: 0.6 }]} />
+            <View style={[s.swatch, { backgroundColor: hopHex(h.colour), height: 6, opacity: 0.6 }]} />
             <Text style={s.small}>{hopLabel(h.colour)}{h.members.length ? `: ${h.members.map((n: string) => n.split(' ')[0]).join(' & ')}` : ''}</Text>
           </View>
         ))}
@@ -463,12 +462,15 @@ const styles = (c: any) => StyleSheet.create({
   line: { fontFamily: fonts.bodySemibold, fontSize: 13.5, color: c.text, flexShrink: 1 },
   myHop: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 12, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface },
   bigDot: { width: 18, height: 18, borderRadius: 9 },
-  toolbar: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  tool: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 10, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface },
-  toolOn: { backgroundColor: c.primary, borderColor: c.primary },
-  toolText: { fontFamily: fonts.bodySemibold, fontSize: 13.5, color: c.text },
+  tools: { flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap' },
+  seg: { flexDirection: 'row', padding: 3, gap: 2, borderRadius: 10, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface },
+  segBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8 },
+  segOn: { backgroundColor: c.primary },
+  segText: { fontFamily: fonts.bodySemibold, fontSize: 13, color: c.text },
+  undo: { position: 'absolute', left: 10, bottom: 24, zIndex: 1000, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, height: 38, borderRadius: 19, backgroundColor: c.background, borderWidth: 1, borderColor: c.border },
+  undoText: { fontFamily: fonts.bodySemibold, fontSize: 13.5, color: c.text },
   colours: { flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
-  swatchBtn: { width: 30, height: 30, borderRadius: 15, borderWidth: 3, borderColor: 'transparent' },
+  swatchBtn: { width: 28, height: 28, borderRadius: 14, borderWidth: 3, borderColor: 'transparent' },
   swatchOn: { borderColor: c.text },
   mapBox: { borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: c.border, backgroundColor: c.surface },
   overlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', padding: 16, zIndex: 900 },

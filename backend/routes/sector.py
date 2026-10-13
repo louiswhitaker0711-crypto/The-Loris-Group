@@ -693,6 +693,7 @@ async def sector_map(request: Request, date: Optional[str] = None, leader: Optio
     iso = _clean_date(date)
     me = str(user["id"])
     is_admin = (user.get("role") or "").lower() == "admin"
+    # Only the sector's own people see its map (and Admins).
     if leader and (is_admin or leader == me):
         sec = await db.sectors.find_one({"office_id": user.get("office_id"), "date": iso, "leader_id": str(leader)}, {"_id": 0})
     else:
@@ -744,9 +745,9 @@ async def sector_map(request: Request, date: Optional[str] = None, leader: Optio
         "leads": leads,
         "shape": shape,
         "marks": marks,
-        "can_draw": iso == today_iso(),
+        "can_draw": iso == today_iso() and (leads or is_admin or me in (sec.get("member_ids") or [])),
         "can_confirm": leads or is_admin,
-        "can_share": leads or is_admin,
+        "can_share": leads,
         "drafts": sum(1 for m in marks if m["status"] == "draft"),
         "me": me,
     }
