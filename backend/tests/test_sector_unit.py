@@ -171,3 +171,14 @@ def test_check_ins_follow_the_sync():
     assert due_slot(tue(20, 10)) is None              # the field's over
     assert due_slot(sat(14, 30)) == "mid" and due_slot(sat(17, 5)) is None
     assert due_slot(datetime(2026, 10, 18, 15, 0)) is None   # Sunday
+
+
+def test_my_averages_and_what_one_sign_up_takes():
+    from routes.sector import averages_from
+    a = averages_from([{"doors": 100, "spoken": 60, "pitched": 20, "closed": 12, "sales": 3},
+                       {"doors": 140, "spoken": 80, "pitched": 30, "closed": 18, "sales": 5},
+                       {"doors": 0, "sales": 0}])                       # a day off: ignored
+    assert a["days"] == 2 and a["per_day"]["doors"] == 120 and a["per_day"]["sales"] == 4
+    assert a["per_sale"] == {"doors": 30.0, "spoken": 17.5, "pitched": 6.2, "closed": 3.8} and a["per_sale_source"] == "yours"
+    none = averages_from([])
+    assert none["per_day"] is None and none["per_sale"]["doors"] == 30 and none["per_sale_source"] == "law_of_averages"

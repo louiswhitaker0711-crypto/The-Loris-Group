@@ -654,6 +654,41 @@ async def sector_board(request: Request, date: Optional[str] = None):
     return {"date": iso, "sectors": out}
 
 
+AVERAGE_DAYS = 28   # look back this far for your field days
+LOA_DAY = {"doors": 120, "spoken": 70, "pitched": 25, "closed": 15, "sales": 4}
+
+
+def averages_from(days: list[dict]) -> dict:
+    """Your field days → an average day, and what one sign-up takes. With no
+    sign-ups yet, what one takes comes from the Law of Averages."""
+    days = [x for x in days if (x.get("doors") or 0) > 0]
+    n = len(days)
+    keys = ("doors", "spoken", "pitched", "closed", "sales")
+    tot = {k: sum(int(x.get(k) or 0) for x in days) for k in keys}
+    per_day = {k: round(tot[k] / n, 1) for k in keys} if n else None
+    if tot["sales"]:
+        per_sale = {k: round(tot[k] / tot["sales"], 1) for k in keys[:4]}
+        source = "yours"
+    else:
+        per_sale = {k: round(LOA_DAY[k] / LOA_DAY["sales"], 1) for k in keys[:4]}
+        source = "law_of_averages"
+    return {"days": n, "per_day": per_day, "per_sale": per_sale, "per_sale_source": source}
+
+
+async def my_averages(uid: str, today: Date) -> dict:
+    since = (today - timedelta(days=AVERAGE_DAYS)).isoformat()
+    by_day: dict = {}
+    async for r in db.owneriq_kpis.find({"cg1_user_id": uid, "date": {"$gte": since, "$lt": today.isoformat()},
+                                        "test_mode": {"$ne": True}, "cg1_matched_by": {"$ne": "name"}}):
+        cur = by_day.setdefault(str(r["date"])[:10], {"doors": 0, "spoken": 0, "pitched": 0, "closed": 0, "sales": 0})
+        cur["doors"] += int(r.get("doors_knocked") or 0)
+        cur["spoken"] += int(r.get("spoken_to") or 0)
+        cur["pitched"] += int(r.get("pitches_commenced") or 0)
+        cur["closed"] += int(r.get("pitches_closed") or 0)
+        cur["sales"] += int(r.get("sales") or 0)
+    return averages_from(list(by_day.values()))
+
+
 @router.get("/sector/my-day")
 async def sector_my_day(request: Request):
     """Home, straight under the map: your set-up for today and your live
@@ -676,7 +711,8 @@ async def sector_my_day(request: Request):
         plan = await db.weekly_planners.find_one({"user_id": uid, "week_ending": week_end}, {"personal": 1})
         f = str(((plan or {}).get("personal") or {}).get("scoring_focus") or "").strip()
         focus = [f] if f else []
-    return {"date": iso, "synced_at": (last or {}).get("synced_at"), "week_focus": focus, "label": _label(iso), "sunday": now.weekday() == 6,
+    return {"date": iso, "synced_at": (last or {}).get("synced_at"), "week_focus": focus,
+            "averages": await my_averages(uid, d), "label": _label(iso), "sunday": now.weekday() == 6,
             "setup": await my_setup(uid, iso),
             "live": {k: int(live.get(k) or 0) for k in ("doors", "spoken", "pitched", "closed", "hit")},
             "has_live": bool(live)}
