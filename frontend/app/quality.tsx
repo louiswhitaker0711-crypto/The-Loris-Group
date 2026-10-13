@@ -4,7 +4,8 @@
 //   • The Owner (Admin) drops in a screenshot of the report page (or Excel
 //     exports), checks who each row is, and saves the week.
 //   • A BA sees their own numbers; a Coach their team; Admins and Coach+ the
-//     whole office.
+//     whole office. For a week, 4 weeks, a month, 13 weeks or all time (the
+//     running average), with week by week underneath.
 // (backend routes/quality.py)
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Platform, TextInput } from 'react-native';
@@ -47,19 +48,59 @@ export default function QualityScreen() {
   const clearance = useTabBarClearance();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin' && !(user as any)?.is_demo;
+  const [view, setView] = useState('week');
   const [week, setWeek] = useState<string | undefined>(undefined);
+  const [month, setMonth] = useState<string | undefined>(undefined);
+  const [open, setOpen] = useState<string | null>(null);
   const q = useQuery({
-    queryKey: ['quality', week || 'latest'],
-    queryFn: () => apiService.getQuality(week).then((r) => r.data),
+    queryKey: ['quality', view, week || '', month || ''],
+    queryFn: () => apiService.getQuality({ view, week, month }).then((r) => r.data),
+    placeholderData: (prev: any) => prev,
   });
   const d = q.data;
   const measures: Measure[] = d?.measures || [];
+  const multi = (d?.period_weeks || 1) > 1;
   const tone = (rag: Cell['rag']) =>
     rag === 'green' ? { bg: c.greenBg, fg: c.green } : rag === 'amber' ? { bg: c.yellowBg, fg: c.yellow } : rag === 'red' ? { bg: c.redBg, fg: c.red } : { bg: c.surface, fg: c.textMuted };
 
+  // One line of the table: a name (or week) and a coloured pill per measure.
+  const line = (key: string, label: string, metrics: Record<string, Cell>, opts: { bold?: boolean; sub?: boolean; onPress?: () => void; chevron?: boolean; isOpen?: boolean } = {}) => (
+    <Pressable key={key} onPress={opts.onPress} disabled={!opts.onPress} style={[s.tr, opts.sub && s.subRow, opts.bold && s.totalRow]}>
+      <View style={[s.nameCol, s.nameWrap]}>
+        {opts.chevron ? <Ionicons name={opts.isOpen ? 'chevron-down' : 'chevron-forward'} size={13} color={c.textMuted} /> : null}
+        <Text style={[opts.sub ? s.subName : s.name, opts.bold && { fontFamily: fonts.bodyBold }]} numberOfLines={1}>{label}</Text>
+      </View>
+      {measures.map((m) => {
+        const cell = metrics?.[m.key];
+        const t = tone(cell?.rag ?? null);
+        return (
+          <View key={m.key} style={s.col}>
+            <Text style={[s.pill, opts.bold && s.pillBold, opts.sub && s.pillSub, { backgroundColor: t.bg, color: t.fg }]}>{fmt(m.key, cell?.value)}</Text>
+          </View>
+        );
+      })}
+    </Pressable>
+  );
+  const header = (first: string) => (
+    <View style={[s.tr, s.thRow]}>
+      <Text style={[s.th, s.nameCol, { textAlign: 'left' }]}>{first}</Text>
+      {measures.map((m) => (
+        <View key={m.key} style={s.col}>
+          <Text style={s.th}>{m.label}</Text>
+          {m.target ? <Text style={s.thTarget}>{m.target}</Text> : null}
+        </View>
+      ))}
+    </View>
+  );
+  const chip = (key: string, label: string, on: boolean, onPress: () => void) => (
+    <Pressable key={key} onPress={onPress} style={[s.chip, on && { backgroundColor: c.primary, borderColor: c.primary }]}>
+      <Text style={[s.chipText, on && { color: c.onPrimary }]}>{label}</Text>
+    </Pressable>
+  );
+
   return (
     <ScrollView style={s.page} contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + clearance + 40 }]}>
-      {isAdmin && <Upload onSaved={(w) => setWeek(w)} />}
+      {isAdmin && <Upload onSaved={(w) => { setView('week'); setWeek(w); }} />}
 
       {q.isLoading ? <ActivityIndicator color={c.primary} style={{ marginTop: 30 }} /> : !d?.week_ending ? (
         <View style={s.card}>
@@ -68,20 +109,23 @@ export default function QualityScreen() {
         </View>
       ) : (
         <>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.weeks}>
-            {(d.weeks || []).map((w: any) => {
-              const on = w.week_ending === d.week_ending;
-              return (
-                <Pressable key={w.week_ending} onPress={() => setWeek(w.week_ending)} style={[s.chip, on && { backgroundColor: c.primary, borderColor: c.primary }]}>
-                  <Text style={[s.chipText, on && { color: c.onPrimary }]}>{w.label}</Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
+          <View style={s.views}>
+            {(d.views || []).map((v: any) => chip(v.key, v.label, v.key === d.view, () => { setView(v.key); setOpen(null); }))}
+          </View>
+          {d.view === 'month' ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.weeks}>
+              {(d.months || []).map((m: any) => chip(m.month, m.label, m.month === d.month, () => setMonth(m.month)))}
+            </ScrollView>
+          ) : d.view !== 'all' ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.weeks}>
+              {(d.weeks || []).map((w: any) => chip(w.week_ending, d.view === 'week' ? w.label : `To ${w.label}`, w.week_ending === d.week_ending, () => setWeek(w.week_ending)))}
+            </ScrollView>
+          ) : null}
 
           {d.me && (
             <View style={s.card} testID="quality-me">
               <Text style={s.h}>Your quality · {d.label}</Text>
+              {multi && <Text style={s.note}>Your average over {d.me.weeks} week{d.me.weeks === 1 ? '' : 's'} on the report (sales added up).</Text>}
               <View style={s.tiles}>
                 {measures.map((m) => {
                   const cell: Cell | undefined = d.me.metrics[m.key];
@@ -99,50 +143,40 @@ export default function QualityScreen() {
                   );
                 })}
               </View>
+              {d.view !== 'all' && <Text style={s.note}>Arrows compare with the {d.view === 'week' ? 'week' : d.view === 'month' ? 'month' : 'period'} before.</Text>}
               {d.me.metrics.fourth_week == null && <Text style={s.note}>4th week shows once those customers reach their 4th delivery.</Text>}
+              {multi && d.me.history?.length > 0 && (
+                <ScrollView horizontal showsHorizontalScrollIndicator>
+                  <View>
+                    {header('Week by week')}
+                    {d.me.history.map((h: any) => line(h.week_ending, h.label.replace(/ \d{4}$/, ''), h.metrics, { sub: true }))}
+                  </View>
+                </ScrollView>
+              )}
             </View>
           )}
 
           {(d.team?.length > 0 || d.total) && (
             <View style={s.card} testID="quality-team">
               <Text style={s.h}>{d.total ? 'The office' : 'Your team'} · {d.label}</Text>
+              {multi && <Text style={s.note}>Averages for the period. Tap a name to see their week by week.</Text>}
               <ScrollView horizontal showsHorizontalScrollIndicator>
                 <View>
-                  <View style={[s.tr, s.thRow]}>
-                    <Text style={[s.th, s.nameCol]}>BA</Text>
-                    {measures.map((m) => (
-                      <View key={m.key} style={s.col}>
-                        <Text style={s.th}>{m.label}</Text>
-                        {m.target ? <Text style={s.thTarget}>{m.target}</Text> : null}
+                  {header('BA')}
+                  {(d.team || []).map((r: any) => {
+                    const key = r.user_id || r.badge;
+                    const isOpen = open === key;
+                    return (
+                      <View key={key}>
+                        {line(key, `${r.name}${r.linked ? '' : ' ⚠︎'}`, r.metrics, multi ? { chevron: true, isOpen, onPress: () => setOpen(isOpen ? null : key) } : {})}
+                        {isOpen && (r.history || []).map((h: any) => line(`${key}-${h.week_ending}`, h.label.replace(/ \d{4}$/, ''), h.metrics, { sub: true }))}
                       </View>
-                    ))}
-                  </View>
-                  {(d.team || []).map((r: any) => (
-                    <View key={r.badge} style={s.tr}>
-                      <Text style={[s.nameCol, s.name]} numberOfLines={1}>{r.name}{r.linked ? '' : ' ⚠︎'}</Text>
-                      {measures.map((m) => {
-                        const cell: Cell | undefined = r.metrics[m.key];
-                        const t = tone(cell?.rag ?? null);
-                        return (
-                          <View key={m.key} style={s.col}>
-                            <Text style={[s.pill, { backgroundColor: t.bg, color: t.fg }]}>{fmt(m.key, cell?.value)}</Text>
-                          </View>
-                        );
-                      })}
-                    </View>
-                  ))}
+                    );
+                  })}
                   {d.total && (
-                    <View style={[s.tr, s.totalRow]}>
-                      <Text style={[s.nameCol, s.name, { fontFamily: fonts.bodyBold }]}>Office</Text>
-                      {measures.map((m) => {
-                        const cell: Cell | undefined = d.total[m.key];
-                        const t = tone(cell?.rag ?? null);
-                        return (
-                          <View key={m.key} style={s.col}>
-                            <Text style={[s.pill, s.pillBold, { backgroundColor: t.bg, color: t.fg }]}>{fmt(m.key, cell?.value)}</Text>
-                          </View>
-                        );
-                      })}
+                    <View>
+                      {line('office', 'Office', d.total, { bold: true, ...(multi ? { chevron: true, isOpen: open === 'office', onPress: () => setOpen(open === 'office' ? null : 'office') } : {}) })}
+                      {open === 'office' && (d.total_history || []).map((h: any) => line(`office-${h.week_ending}`, h.label.replace(/ \d{4}$/, ''), h.metrics, { sub: true }))}
                     </View>
                   )}
                 </View>
@@ -340,6 +374,7 @@ const styles = (c: any) => StyleSheet.create({
   note: { fontFamily: fonts.body, fontSize: 12.5, color: c.textMuted },
   label: { fontFamily: fonts.bodySemibold, fontSize: 13.5, color: c.text },
   weeks: { gap: 8, paddingVertical: 2 },
+  views: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: c.border, backgroundColor: c.background },
   chipText: { fontFamily: fonts.bodySemibold, fontSize: 13, color: c.text },
   tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
@@ -353,7 +388,11 @@ const styles = (c: any) => StyleSheet.create({
   totalRow: { borderTopWidth: 2, borderTopColor: c.borderDark },
   th: { fontFamily: fonts.bodyBold, fontSize: 12, color: c.text, textAlign: 'center' },
   thTarget: { fontFamily: fonts.body, fontSize: 11, color: c.textMuted, textAlign: 'center' },
-  nameCol: { width: 120, paddingRight: 6, textAlign: 'left' },
+  nameCol: { width: 130, paddingRight: 6, textAlign: 'left' },
+  nameWrap: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  subRow: { borderTopWidth: 0, paddingVertical: 3 },
+  subName: { fontFamily: fonts.body, fontSize: 12.5, color: c.textMuted, paddingLeft: 16, flexShrink: 1 },
+  pillSub: { fontSize: 12, paddingVertical: 2 },
   col: { width: 78, alignItems: 'center' },
   name: { fontFamily: fonts.bodySemibold, fontSize: 13, color: c.text, flexShrink: 1 },
   pill: { fontFamily: fonts.bodySemibold, fontSize: 12.5, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8, overflow: 'hidden', textAlign: 'center', minWidth: 58 },

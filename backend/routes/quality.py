@@ -4,9 +4,11 @@
                              report → a preview with each row matched to a
                              person. Nothing is saved.
   POST /api/quality/import   Admin: save a checked preview for its week.
-  GET  /api/quality          a week's numbers: a BA sees their own row, a
-                             Coach themselves and everyone under them, an
-                             Admin (and Coach+) the whole office.
+  GET  /api/quality          a week, 4 weeks, a month, 13 weeks or all time
+                             (the running average), with each person's week
+                             by week: a BA sees their own, a Coach themselves
+                             and everyone under them, an Admin (and Coach+)
+                             the whole office.
 
 Stored in `quality_weeks`, one document per (office_id, week_ending). People
 are matched by badge number (users.amplifi_codes, ID badges, OwnerIQ rows,
@@ -27,8 +29,9 @@ from bson import ObjectId
 from fastapi import APIRouter, HTTPException, Request
 
 from auth import get_current_user, get_subtree_ids, require_admin, sees_whole_office
-from core.quality import (AI_PROMPT, LABELS, MEASURES, TARGETS, clean_metrics, excel_percent_fix,
-                          from_ai, from_tables, merge, parse_week, rag, xlsx_tables)
+from core.quality import (AI_PROMPT, LABELS, MEASURES, TARGETS, VIEWS, aggregate, clean_metrics,
+                          excel_percent_fix, from_ai, from_tables, merge, month_label, parse_week,
+                          pick_weeks, rag, week_label, xlsx_tables)
 from core.rate_limit import take_ai_quota
 from database import db
 from owneriq_sync import ID_LINKED
@@ -38,11 +41,6 @@ router = APIRouter()
 MAX_FILES = 6
 MAX_FILE_BYTES = 12 * 1024 * 1024
 WEEK_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-
-
-def _week_label(iso: str) -> str:
-    d = datetime.strptime(iso, "%Y-%m-%d")
-    return f"WE {d.day} {d.strftime('%b %Y')}"
 
 
 async def _office_people(office_id: str) -> list[dict]:
@@ -193,38 +191,66 @@ def _coloured(metrics: dict | None) -> dict:
 
 
 @router.get("/quality")
-async def get_quality(request: Request, week: Optional[str] = None):
+async def get_quality(request: Request, view: str = "week", week: Optional[str] = None, month: Optional[str] = None):
+    """A period's numbers. view: week | 4w | month | 13w | all (all time is
+    the running average). Each person's row is their average for the period
+    (core.quality.aggregate) plus their week-by-week history in it."""
     user = await get_current_user(request)
     office_id = user.get("office_id")
-    weeks = [d["week_ending"] async for d in db.quality_weeks.find({"office_id": office_id}, {"week_ending": 1}).sort("week_ending", -1).limit(26)]
-    base = {"weeks": [{"week_ending": w, "label": _week_label(w)} for w in weeks],
+    view = view if view in {v for v, _ in VIEWS} else "week"
+    weeks = [d["week_ending"] async for d in db.quality_weeks.find({"office_id": office_id}, {"week_ending": 1}).sort("week_ending", -1).limit(156)]
+    base = {"weeks": [{"week_ending": w, "label": week_label(w)} for w in weeks],
+            "months": [{"month": m, "label": month_label(m)} for m in sorted({w[:7] for w in weeks}, reverse=True)],
+            "views": [{"key": k, "label": label} for k, label in VIEWS], "view": view,
             "measures": [{"key": k, "label": LABELS[k], "target": (TARGETS.get(k) or {}).get("text")} for k, _, _ in MEASURES]}
     if not weeks:
         return {**base, "week_ending": None, "me": None, "team": [], "total": None}
-    week = week if week in weeks else weeks[0]
-    rep = await db.quality_weeks.find_one({"office_id": office_id, "week_ending": week}, {"_id": 0})
-    i = weeks.index(week)
-    prev = await db.quality_weeks.find_one({"office_id": office_id, "week_ending": weeks[i + 1]}, {"_id": 0, "bas": 1, "total": 1}) if i + 1 < len(weeks) else None
-    prev_by = {b["badge"]: b.get("metrics") or {} for b in (prev or {}).get("bas") or []}
+    now, before, label = pick_weeks(weeks, view, week, month)
+    docs = {d["week_ending"]: d async for d in db.quality_weeks.find(
+        {"office_id": office_id, "week_ending": {"$in": now + before}}, {"_id": 0, "week_ending": 1, "bas": 1, "total": 1})}
+
     uid = str(user.get("id"))
     whole = sees_whole_office(user)
     visible = None if whole else (set(await get_subtree_ids(uid)) | {uid} if user.get("role") == "leader" else {uid})
-    ids = [b["user_id"] for b in rep["bas"] if b.get("user_id")]
+
+    # Each person across the weeks: linked people by id, anyone else by badge.
+    people: dict[str, dict] = {}
+    for w in now + before:
+        for b in (docs.get(w) or {}).get("bas") or []:
+            if visible is not None and b.get("user_id") not in visible:
+                continue
+            key = b.get("user_id") or f"badge:{b['badge']}"
+            p = people.setdefault(key, {"user_id": b.get("user_id"), "badge": b["badge"], "label": b.get("label"),
+                                        "now": {}, "before": []})
+            if w in now:
+                p["now"][w] = b.get("metrics") or {}
+            else:
+                p["before"].append(b.get("metrics") or {})
+    ids = [p["user_id"] for p in people.values() if p["user_id"]]
     names = {str(u["_id"]): u.get("name") async for u in db.users.find(
         {"_id": {"$in": [ObjectId(x) for x in ids if ObjectId.is_valid(x)]}}, {"name": 1})}
+
     me, team = None, []
-    for b in rep["bas"]:
-        if visible is not None and b.get("user_id") not in visible:
+    for p in people.values():
+        if not p["now"]:
             continue
-        row = {"user_id": b.get("user_id"), "name": names.get(b.get("user_id")) or b.get("label"),
-               "badge": b.get("badge"), "linked": bool(b.get("user_id")),
-               "metrics": _coloured(b.get("metrics")), "prev": prev_by.get(b["badge"]) or {}}
-        if b.get("user_id") == uid:
+        row = {"user_id": p["user_id"], "name": names.get(p["user_id"]) or p["label"], "badge": p["badge"],
+               "linked": bool(p["user_id"]), "weeks": len(p["now"]),
+               "metrics": _coloured(aggregate(list(p["now"].values()))),
+               "prev": aggregate(p["before"]),
+               "history": [{"week_ending": w, "label": week_label(w), "metrics": _coloured(p["now"][w])}
+                           for w in now if w in p["now"]]}
+        if p["user_id"] == uid:
             me = row
         else:
             team.append(row)
-    team.sort(key=lambda r: -((r["metrics"].get("sales") or {}).get("value") or 0))
-    return {**base, "week_ending": week, "label": _week_label(week), "imported_at": rep.get("imported_at"),
-            "me": me, "team": team,
-            "total": _coloured(rep.get("total")) if whole else None,
-            "prev_total": (prev or {}).get("total") if whole else None}
+    team.sort(key=lambda r: (-((r["metrics"].get("sales") or {}).get("value") or 0), r["name"].lower()))
+
+    total = prev_total = total_history = None
+    if whole:
+        total = _coloured(aggregate([(docs.get(w) or {}).get("total") or {} for w in now]))
+        prev_total = aggregate([(docs.get(w) or {}).get("total") or {} for w in before])
+        total_history = [{"week_ending": w, "label": week_label(w), "metrics": _coloured((docs.get(w) or {}).get("total"))} for w in now]
+    return {**base, "week_ending": now[0], "month": now[0][:7] if view == "month" else None,
+            "label": label, "period_weeks": len(now), "me": me, "team": team,
+            "total": total, "prev_total": prev_total, "total_history": total_history}
