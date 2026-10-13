@@ -207,7 +207,8 @@ def my_hop_colour(sec: Optional[dict], user_id: str) -> Optional[str]:
 
 @router.post("/coverage/confirm")
 async def confirm_coverage(request: Request):
-    """The sector leader confirms the day's mark-offs: they turn solid black."""
+    """The sector leader saves the day's map: everything marked done (drawn
+    in black) is kept as worked, and the day's planned areas come off."""
     user = await get_current_user(request)
     body = await request.json()
     iso = str(body.get("date") or _today().isoformat())[:10]
@@ -222,7 +223,14 @@ async def confirm_coverage(request: Request):
     r = await db.coverage_marks.update_many(q, {"$set": {
         "status": "confirmed", "confirmed_by": user.get("name") or "",
         "confirmed_at": datetime.now(timezone.utc).isoformat()}})
-    return {"confirmed": r.modified_count}
+    # The black lines are the final map: the day's planned areas (and any
+    # requests still waiting) come off once something's been confirmed.
+    cleared = 0
+    if r.modified_count:
+        d = await db.coverage_marks.delete_many({**{k: v for k, v in q.items() if k != "status"},
+                                                 "status": {"$in": ["plan", "requested"]}})
+        cleared = d.deleted_count
+    return {"confirmed": r.modified_count, "cleared": cleared}
 
 
 @router.delete("/coverage/{mark_id}")

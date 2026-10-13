@@ -58,7 +58,7 @@ export default function HomeAreaMap() {
           : mk.status === 'requested'
             ? { color: hopHex(mk.colour, c.primary), weight: 4, opacity: 0.8, dashArray: '8 8' }
           : mk.status === 'draft'
-            ? { color: hopHex(mk.colour, c.primary), weight: 3.5, opacity: 0.95 }
+            ? { color: '#000', weight: 3.5, opacity: 0.95 }
             : { color: '#000', weight: 4, opacity: mk.days_ago > 28 ? 0.35 : 0.85 };
         for (const line of mk.lines || []) L.polyline(line, { ...style, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(m);
       }
