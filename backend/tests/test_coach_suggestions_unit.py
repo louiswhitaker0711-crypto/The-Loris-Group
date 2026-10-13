@@ -34,7 +34,7 @@ def test_a_silver_heavy_mix_asks_for_order_value_and_the_round():
     rows = [_week("2026-10-11", [("in", 1, 3, 1), ("in", 1, 2, 2), ("in", 0, 2, 0), ("in", 1, 1, 1), ("in", 0, 2, 1), ("in", 1, 1, 1)])]
     s = suggest("Sam Example", bells_days(rows), [], THROUGH)
     assert [x["kind"] for x in s] == ["order_value", "the_round"]
-    assert s[0]["why"] == "27% Gold over 2 weeks (target 55%)"
+    assert s[0]["why"] == "27% Gold over 2 weeks (target 90%)"
 
 
 def test_the_weakest_step_against_the_law_of_averages():
@@ -45,6 +45,6 @@ def test_the_weakest_step_against_the_law_of_averages():
 
 
 def test_nothing_to_say_when_things_are_good():
-    rows = [_week("2026-10-11", [("in", 3, 1, 4), ("in", 2, 2, 4), ("in", 3, 1, 3)])]
+    rows = [_week("2026-10-11", [("in", 4, 0, 4), ("in", 3, 1, 4), ("in", 4, 0, 3)])]
     field = [{"date": THROUGH - timedelta(days=i), "doors": 125, "spoken": 72, "pitched": 26, "closed": 16, "sales": 4} for i in range(1, 4)]
     assert suggest("Kit Example", bells_days(rows), field, THROUGH) == []

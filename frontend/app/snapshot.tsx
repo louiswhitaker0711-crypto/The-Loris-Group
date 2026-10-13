@@ -3,7 +3,8 @@
  *
  * Shows:
  *   • Sales-vs-Goal headline (with the absolute number remaining)
- *   • Target-vs-actual chips: P/A (target 2.5), Gold % (55%)
+ *   • Target-vs-actual chips: P/A (target 4, the Law of Averages), Gold % (90%+),
+ *     The Round (75%+): the Owner's targets
  *   • Top 5 by Sales volume   (rank · name · sales · P/A · £earnings)
  *   • Top 5 by earnings       (rank · name · £earnings · sales)
  *
@@ -36,9 +37,9 @@ import { useTabBarClearance } from '../src/customization/CustomTabBar';
 import { APP_LOCALE, formatMoney } from '../src/utils/appTime';
 
 // Fixed product-side targets (per user spec)
-const TARGET_PA = 2.5;
-const TARGET_MEM_PCT = 55;
-const TARGET_GOLD_PCT = 55;
+const TARGET_PA = 4;          // the Law of Averages: 4+ sign-ups a day
+const TARGET_MEM_PCT = 75;    // The Round
+const TARGET_GOLD_PCT = 90;
 
 /** Returns the ISO Sunday for the current week (used as Bells week_ending).
  * Uses LOCAL date parts (not toISOString) — same as bells.tsx — so an

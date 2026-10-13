@@ -12,6 +12,7 @@ import { teamColor, NO_TEAM_TINT } from '../../utils/teamColors';
 import { toast } from '../../utils/toast';
 import { Day, Entry, MIN_AB_REASON, TIER, isInDay, dayTotal } from './types';
 import { DAY_STATUS_LABEL, DAY_STATUS_SHORT, NO_NUMBER_STATUSES, statusSquare } from '../../utils/dayStatus';
+import { dayBandLook } from '../../utils/dayBands';
 import { APP_LOCALE, APP_TZ, formatMoney } from '../../utils/appTime';
 import { centerNotice } from '../../utils/centerNotice';
 import { APP_SHORT_NAME } from '../../theme/brand';
@@ -201,9 +202,9 @@ function cellForDay(d: Day, c: typeof colors, dark: boolean): DayLook {
   if (d.status === 'pc') return { text: DAY_STATUS_SHORT.pc, fg: dark ? '#67e8f9' : '#0e7490' };
   const tot = (d.over30 || 0) + (d.under30 || 0);
   if (d.status === 'rt') return { text: tot > 0 ? `RT ${tot}` : 'RT', fg: amber };
-  if (tot >= 2) return { text: String(tot), fg: green, bg: dark ? 'rgba(34,197,94,0.20)' : 'rgba(34,197,94,0.18)' };
-  if (tot === 1) return { text: '1', fg: amber, bg: dark ? 'rgba(245,158,11,0.20)' : 'rgba(245,158,11,0.20)' };
-  return { text: '0', fg: red, bg: dark ? 'rgba(239,68,68,0.18)' : 'rgba(239,68,68,0.14)' };
+  // 0–1 red, 2 amber, 3 light green, 4+ dark green (utils/dayBands).
+  const look = dayBandLook(tot, dark);
+  return { text: String(tot), fg: look.fg, bg: look.bg };
 }
 
 export default function TableView({ entries, weekEnding, onRefresh, miniGoal, officeId }: {
