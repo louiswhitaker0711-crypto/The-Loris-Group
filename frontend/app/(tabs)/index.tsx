@@ -37,6 +37,12 @@ import FieldAveragesCard from '../../src/components/home/FieldAveragesCard';
 import FieldIqWeekCard from '../../src/components/home/FieldIqWeekCard';
 import LiveOpsCard from '../../src/components/home/LiveOpsCard';
 import SectorSetupsCard from '../../src/components/home/SectorSetupsCard';
+import MyWeekCard from '../../src/components/home/today/MyWeekCard';
+import WaitingOnYouCard from '../../src/components/home/today/WaitingOnYouCard';
+import NewStartTodayHero from '../../src/components/home/today/NewStartTodayHero';
+import LearnTodayCard from '../../src/components/home/today/LearnTodayCard';
+import MoreSection from '../../src/components/home/today/MoreSection';
+import { dayTargetChips } from '../../src/utils/dayTargets';
 import PrimetimeCard from '../../src/components/home/PrimetimeCard';
 import SectorPromptCard from '../../src/components/home/SectorPromptCard';
 import { Stagger } from '../../src/components/ui/Reveal';
@@ -258,7 +264,6 @@ export default function HomeScreen() {
   const targetsQ = useQuery({
     queryKey: ['targets'],
     queryFn: () => apiService.getTargets().then((r) => r.data),
-    enabled: isTrainee,
   });
   // COD stage — the hero's game layer for a viewer with no sales ladder (an
   // admin's /sales-path/me answers {enabled:false}, so without this their ink
@@ -305,7 +310,7 @@ export default function HomeScreen() {
       const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       return apiService.getWeeklyPlanner(iso).then((r) => r.data);
     },
-    enabled: isLeader || isTrainee,
+    enabled: true,
     staleTime: 60 * 1000,
     retry: false,
   });
@@ -493,14 +498,16 @@ export default function HomeScreen() {
   const tintBg = (t?: QuickAction['tint']) =>
     t === 'green' ? colors.greenBg : t === 'accent' ? colors.accent + '22' : t === 'yellow' ? '#f59e0b22' : colors.primary + '18';
 
-  // The page in pieces, so a wide screen can set them in two columns and a
-  // phone can run them one under the other.
-  // A BA's own start, journey and sales path; a Coach's or Admin's new starts.
-  const blockTop = (
+  // Home, piece by piece: today first, the rest under "More".
+  const pSectorPrompt = (
     <>
       {/* ── Sector set-up / breakdown prompt during field time ── */}
       <SectorPromptCard />
 
+    </>
+  );
+  const pStartHere = (
+    <>
       {/* ── Trainee: Start Here banner ── */}
       {isTrainee && (
         <GlowButton breathe onPress={() => router.push('/onboarding')} style={styles.startHereCard} testID="home-start-here">
@@ -516,6 +523,10 @@ export default function HomeScreen() {
         </GlowButton>
       )}
 
+    </>
+  );
+  const pJourney = (
+    <>
       {/* ── Trainee: journey card ── */}
       {isTrainee && progressQ.isLoading && (
         <DepthCard style={styles.card}>
@@ -597,6 +608,10 @@ export default function HomeScreen() {
         </PressableScale>
       )}
 
+    </>
+  );
+  const pSalesPath = (
+    <>
       {/* ── Sales Path — the second ladder, front and center for every role.
           Ramping hires see their runway; everyone else sees their level and
           what earns the next one. "How the path works" → /sales-path-intro. ── */}
@@ -697,6 +712,10 @@ export default function HomeScreen() {
         );
       })()}
 
+    </>
+  );
+  const pNewStarts = (
+    <>
       {/* ── Coach/Admin: every new starter, where they are in Days 1-8 and how
           much of COD 1 and COD 2 is marked off. Tap a person for their COD;
           "Grade" jumps straight to the day that's waiting. ── */}
@@ -713,7 +732,7 @@ export default function HomeScreen() {
             <View style={styles.cardHeaderRow}>
               <View style={styles.hudTitle}>
                 <View style={styles.hudTick} />
-                <Text style={styles.cardTitle}>{APP_SHORT_NAME} New Starts</Text>
+                <Text style={styles.cardTitle}>New starts today</Text>
                 {starts.length > 0 && <Text style={styles.hudCount}>{starts.length}</Text>}
               </View>
               {!!counts?.awaiting && (
@@ -758,10 +777,32 @@ export default function HomeScreen() {
                         <Text style={styles.gradeSub} numberOfLines={1}>
                           {dayLabel(n.current_day)} · {n.days_done}/8 days graded{n.mine === false && n.coach ? ` · Coach: ${n.coach}` : ''}
                         </Text>
+                        {(() => {
+                          // Today for this new start: the day's objective and targets.
+                          const t = (targetsQ.data || []).find((x: any) => x.day_number === n.current_day);
+                          const obj = String(t?.day_objective || '').split(/\s+[—–-]\s+/).slice(-1)[0];
+                          const chips = dayTargetChips(t);
+                          return obj || chips.length ? (
+                            <Text style={styles.startToday} numberOfLines={2}>
+                              {obj}{obj && chips.length ? ' · ' : ''}{chips.join(' · ')}
+                            </Text>
+                          ) : null;
+                        })()}
                         <View style={styles.codRow}>
                           <CodMeter label="COD 1" done={n.cod1.done} total={n.cod1.total} styles={styles} />
                           <CodMeter label="COD 2" done={n.cod2.done} total={n.cod2.total} styles={styles} />
                         </View>
+                        {n.mine !== false && !!n.trainee_user_id && (
+                          <TouchableOpacity
+                            style={styles.signoffBtn}
+                            onPress={() => router.push(`/cod-signoff?user_id=${n.trainee_user_id}&stage=1&name=${encodeURIComponent(n.name)}` as never)}
+                            hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                            testID={`home-signoff-${n.hire_id}`}
+                          >
+                            <Ionicons name="checkmark-done" size={13} color={colors.primary} />
+                            <Text style={styles.signoffBtnText}>Sign off COD</Text>
+                          </TouchableOpacity>
+                        )}
                       </View>
                       {g && g.days_pending > 1 && (
                         <View style={styles.behindChip}>
@@ -813,38 +854,12 @@ export default function HomeScreen() {
       })()}
     </>
   );
-
-  // The field today: sectors, the Field IQ week, law of averages, Primetime.
-  const blockField = (
-    <>
-      {/* ── Live Operations — today's field teams (sectors) live from OwnerIQ,
-          scoped to the caller server-side. Tap a team → live KPIs + per-BA door
-          log. Self-hides when no teams are out. */}
-      <LiveOpsCard />
-      {/* Today's sector set-ups, right under Sectors: one tap away in the field. */}
-      <SectorSetupsCard />
-      <FieldIqWeekCard />
-
-      {/* ── Field KPIs LOA — admin office averages (Yesterday's LOA, expandable
-          to per-BA with hide-from-average) + leader personal averages with a
-          Today/Yesterday switcher. Self-gates by role (nothing for trainees). */}
-      {(isAdmin || isLeader) && <FieldAveragesCard />}
-
-      {/* ── Office Primetime — the WHOLE office's coaching plan for the next
-          plannable day: who's teaching what, and who on my team still has
-          nothing set. Tap through to the week grid to add my people to another
-          team's session. Self-gates by role (leaders + admins only). */}
-      <PrimetimeCard />
-    </>
-  );
-
-  // Planning and the team: planner, bulletins, breakdown, plans, checklist, pulse.
-  const blockRest = (
+  const pPlanner = (
     <>
       {/* ── Leader/Trainee: Weekly/Daily Planner hero — contextual CTA for today ──
           Leaders get the full week (Sunday wraps up + plans ahead); trainees
           only have the day pages, so there's nothing to show on a Sunday. */}
-      {(isLeader || isTrainee) && (() => {
+      {(() => {
         const todayIdx = (new Date().getDay() + 6) % 7; // Mon=0..Sun=6
         const isSunday = todayIdx === 6;
         if (isTrainee && isSunday) return null;
@@ -881,6 +896,10 @@ export default function HomeScreen() {
         );
       })()}
 
+    </>
+  );
+  const pBulletins = (
+    <>
       {/* ── Leader: ready-to-go countrywide weekly bulletins ── */}
       {isLeader && (
         <GlowButton
@@ -903,6 +922,10 @@ export default function HomeScreen() {
         </GlowButton>
       )}
 
+    </>
+  );
+  const pBreakdown = (
+    <>
       {/* ── Leader: Breakdown — last week's sales + quality KPIs ── */}
       {isLeader && (leaderPulseQ.data?.quality?.source || leaderPulseQ.data?.personal_quality?.source) && (() => {
         const st: any = leaderPulseQ.data;
@@ -975,6 +998,10 @@ export default function HomeScreen() {
         );
       })()}
 
+    </>
+  );
+  const pWeeklyPlans = (
+    <>
       {/* ── Admin: weekly-plan completion — who's submitted, tap to read ── */}
       {isAdmin && (planRosterQ.data?.items || []).length > 0 && (() => {
         const roster: any[] = planRosterQ.data?.items || [];
@@ -1034,6 +1061,10 @@ export default function HomeScreen() {
         );
       })()}
 
+    </>
+  );
+  const pDailyPlans = (
+    <>
       {/* ── Admin: today's daily-plan completions — only who's done one ── */}
       {isAdmin && dailyRosterQ.data?.is_plannable_day && (dailyRosterQ.data?.items || []).length > 0 && (() => {
         const items: any[] = dailyRosterQ.data?.items || [];
@@ -1075,6 +1106,10 @@ export default function HomeScreen() {
         );
       })()}
 
+    </>
+  );
+  const pChecklist = (
+    <>
       {/* ── Leader/Admin: this week checklist ── */}
       {!isTrainee && leaderTodayQ.data && (() => {
         const planner = leaderTodayQ.data.planner;
@@ -1116,6 +1151,10 @@ export default function HomeScreen() {
         );
       })()}
 
+    </>
+  );
+  const pPulse = (
+    <>
       {/* ── Leader/Admin: team pulse ── */}
       {!isTrainee && (
         <PressableScale onPress={() => router.push('/(tabs)/hires')} testID="home-team-pulse">
@@ -1273,9 +1312,7 @@ export default function HomeScreen() {
       )}
     </>
   );
-
-  // Today's timetable.
-  const blockToday = (
+  const pTimetable = (
     <>
       {/* ── Today at the office ── */}
       <DepthCard style={styles.card}>
@@ -1305,6 +1342,60 @@ export default function HomeScreen() {
       </DepthCard>
     </>
   );
+
+  // A new start's day (Days 1–8): their Home leads with it.
+  const todayTarget = nextPending ? (targetsQ.data || []).find((t: any) => t.day_number === nextPending.day_number) : null;
+  const coachName: string | null = (progressQ.data as any)?.hire?.leader && (progressQ.data as any)?.hire?.leader !== 'Unassigned'
+    ? (progressQ.data as any).hire.leader : null;
+
+  const todayCoach = (
+    <>
+      {pSectorPrompt}
+      <MyWeekCard hideWhenEmpty={isAdmin} />
+      {pPlanner}
+      <WaitingOnYouCard toGrade={leaderTodayQ.data?.counts?.awaiting || 0} />
+      {pNewStarts}
+      <SectorSetupsCard />
+      <LiveOpsCard />
+      <PrimetimeCard />
+      {pTimetable}
+      {pDailyPlans}
+    </>
+  );
+  const moreCoach = (
+    <>
+      <FieldIqWeekCard />
+      {(isAdmin || isLeader) && <FieldAveragesCard />}
+      {pSalesPath}
+      {pChecklist}
+      {pPulse}
+      {pWeeklyPlans}
+      {pBreakdown}
+      {pBulletins}
+    </>
+  );
+  const todayBA = (
+    <>
+      {pSectorPrompt}
+      {nextPending && <NewStartTodayHero day={nextPending.day_number} target={todayTarget} coach={coachName} />}
+      {pStartHere}
+      <LearnTodayCard stage={codStage || 1} />
+      <SectorSetupsCard />
+      {pPlanner}
+      <MyWeekCard />
+      {pTimetable}
+    </>
+  );
+  const moreBA = (
+    <>
+      {pJourney}
+      {pSalesPath}
+      <LiveOpsCard />
+      <FieldIqWeekCard />
+    </>
+  );
+  const todayBlock = isTrainee ? todayBA : todayCoach;
+  const moreBlock = isTrainee ? moreBA : moreCoach;
 
   return (
     <>
@@ -1359,13 +1450,18 @@ export default function HomeScreen() {
         </View>
       ) : null}
 
+      {/* Today first. On a wide screen the rest sits alongside; on a phone it
+          folds away under "More". */}
       {wide ? (
         <View style={styles.cols}>
-          <View style={styles.colMain}>{blockTop}{blockRest}</View>
-          <View style={styles.colSide}>{blockField}{blockToday}</View>
+          <View style={styles.colMain}>{todayBlock}</View>
+          <View style={styles.colSide}>{moreBlock}</View>
         </View>
       ) : (
-        <>{blockTop}{blockField}{blockRest}{blockToday}</>
+        <>
+          {todayBlock}
+          <MoreSection>{moreBlock}</MoreSection>
+        </>
       )}
 
       {/* ── Quick actions ── */}
@@ -1598,6 +1694,9 @@ const createStyles = (colors: any, isDark: boolean) => {
   hudCount: { fontFamily: fonts.mono, fontSize: 11, color: colors.textMuted, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: colors.border },
   // COD 1 / COD 2: how much is marked off.
   codRow: { flexDirection: 'row', gap: 10, marginTop: 7 },
+  startToday: { fontFamily: fonts.body, fontSize: 12.5, lineHeight: 17, color: colors.text, marginTop: 3 },
+  signoffBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start', marginTop: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, borderWidth: 1, borderColor: colors.primary },
+  signoffBtnText: { fontFamily: fonts.bodySemibold, fontSize: 12.5, color: colors.primary },
   codMeter: { flex: 1, maxWidth: 150 },
   codMeterHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 3 },
   codMeterLabel: { fontFamily: fonts.mono, fontSize: 9.5, letterSpacing: 0.8, color: colors.textMuted },
