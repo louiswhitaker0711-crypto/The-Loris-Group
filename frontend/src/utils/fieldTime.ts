@@ -26,3 +26,11 @@ export function inBreakdownHours(at: Date = new Date()): boolean {
   const end = day === 6 ? 17 * 60 : 20 * 60;
   return mins >= end && mins < end + 120;
 }
+
+/** Has today's field started (UK time)? From then on the plan to make is
+ * the next working day's. */
+export function fieldStarted(at: Date = new Date()): boolean {
+  const { day, mins } = ukNow(at);
+  if (day === 0) return false;
+  return mins >= (day === 6 ? 10 * 60 : 13 * 60 + 30);
+}

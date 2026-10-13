@@ -217,7 +217,7 @@ def test_an_admin_from_another_office_falls_back_to_their_tree(monkeypatch):
 
 
 # --------------------------------------------------------------------------
-# _planning_day — after 6pm the office is looking at tomorrow
+# _planning_day — once the field has started the office is looking at tomorrow
 # --------------------------------------------------------------------------
 
 def _at_hm(day: str, hour: int, minute: int = 0):
@@ -231,16 +231,19 @@ def _at(day: str, hour: int):
     return _at_hm(day, hour)
 
 
-def test_before_six_the_plan_is_todays():
-    # Tuesday 2026-08-04 at 09:00 and 17:59 → still Tuesday.
+def test_before_the_field_the_plan_is_todays():
+    # Tuesday 2026-08-04 at 09:00 and 13:29 → still Tuesday.
     assert pt._planning_day(_at("2026-08-04", 9)).isoformat() == "2026-08-04"
-    assert pt._planning_day(_at("2026-08-04", 17)).isoformat() == "2026-08-04"
+    assert pt._planning_day(_at_hm("2026-08-04", 13, 29)).isoformat() == "2026-08-04"
 
 
-def test_from_six_the_plan_rolls_to_tomorrow():
-    # 18:00 exactly is already tomorrow — the working day is done.
-    assert pt._planning_day(_at("2026-08-04", 18)).isoformat() == "2026-08-05"
+def test_from_field_start_the_plan_rolls_to_tomorrow():
+    # 13:30 (field start) is already tomorrow: today's Primetime is done.
+    assert pt._planning_day(_at_hm("2026-08-04", 13, 30)).isoformat() == "2026-08-05"
     assert pt._planning_day(_at("2026-08-04", 23)).isoformat() == "2026-08-05"
+    # Saturday's field starts at 10:00.
+    assert pt._planning_day(_at("2026-08-08", 9)).isoformat() == "2026-08-08"
+    assert pt._planning_day(_at("2026-08-08", 10)).isoformat() == "2026-08-10"
 
 
 def test_saturday_evening_skips_sunday_and_lands_on_monday():

@@ -39,7 +39,8 @@ import LiveOpsCard from '../../src/components/home/LiveOpsCard';
 import SectorSetupsCard from '../../src/components/home/SectorSetupsCard';
 import HomeAreaMap from '../../src/components/home/HomeAreaMap';
 import MyDayCard from '../../src/components/home/today/MyDayCard';
-import { inFieldHours, inBreakdownHours } from '../../src/utils/fieldTime';
+import { inFieldHours, inBreakdownHours, fieldStarted, ukNow } from '../../src/utils/fieldTime';
+import { addDays, todayISO } from '../../src/utils/calendarDates';
 import MyWeekCard from '../../src/components/home/today/MyWeekCard';
 import WaitingOnYouCard from '../../src/components/home/today/WaitingOnYouCard';
 import NewStartTodayHero from '../../src/components/home/today/NewStartTodayHero';
@@ -871,18 +872,26 @@ export default function HomeScreen() {
           Leaders get the full week (Sunday wraps up + plans ahead); trainees
           only have the day pages, so there's nothing to show on a Sunday. */}
       {(() => {
-        const todayIdx = (new Date().getDay() + 6) % 7; // Mon=0..Sun=6
-        const isSunday = todayIdx === 6;
+        const ukDay = ukNow().day; // Sun=0..Sat=6, UK time
+        const isSunday = ukDay === 0;
         if (isTrainee && isSunday) return null;
+        // Once today's field has started, the plan to make is the next
+        // working day's (Saturday rolls to Monday, next week).
+        const todayIdx = (ukDay + 6) % 7; // Mon=0..Sat=5
+        const rolls = !isSunday && fieldStarted();
+        const nextWeek = rolls && todayIdx === 5;
+        const planIdx = rolls ? (nextWeek ? 0 : todayIdx + 1) : todayIdx;
         const p = weeklyPlannerQ.data?.planner;
-        const day = (p?.days || {})[String(todayIdx)] || {};
+        const day = nextWeek ? {} : ((p?.days || {})[String(planIdx)] || {});
         const plannedKeys = isTrainee ? ['primetime', 'sector', 'networking'] : ['primetime', 'sector', 'networking', 'crew_plan'];
         const planned = plannedKeys.some((k) => ((day as any)[k] || '').trim());
-        const dayName = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][todayIdx] || '';
+        const dayName = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][planIdx] || '';
+        const nextSunday = addDays(todayISO(), 8); // Saturday → the Sunday ending next week
         return (
           <GlowButton
             style={styles.plannerHero}
-            onPress={() => router.push((isSunday && !isTrainee) ? '/weekly-planner' : (`/weekly-planner?day=${todayIdx}` as any))}
+            onPress={() => router.push((isSunday && !isTrainee) ? '/weekly-planner'
+              : nextWeek ? (`/weekly-planner?week=${nextSunday}&day=0` as any) : (`/weekly-planner?day=${planIdx}` as any))}
             testID="home-weekly-planner-hero"
           >
             <View style={styles.plannerHeroIcon}>
@@ -896,7 +905,7 @@ export default function HomeScreen() {
                 {(isSunday && !isTrainee)
                   ? 'Fill your weekly report and share it with the group'
                   : planned
-                    ? "See today's plan or take today's meeting notes"
+                    ? (rolls ? `See ${dayName}'s plan` : "See today's plan or take today's meeting notes")
                     : isTrainee
                       ? 'Declare your intention — Primetime · Sector · Networking'
                       : 'Declare your intention — Primetime · Sector · Networking · Crew'}

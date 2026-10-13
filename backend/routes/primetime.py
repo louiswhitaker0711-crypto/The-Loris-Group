@@ -80,19 +80,26 @@ def _today_local() -> date:
 
 # The hour (app time) after which the working day is over and everyone is looking at
 # tomorrow's plan rather than today's.
-ROLLOVER_HOUR = 18
+ROLLOVER_HOUR = 18   # kept for reference; the roll is now at field start
+# The field starts at 13:30 Monday to Friday and 10:00 on Saturday
+# (core/schedule_template.py): from then on, the plan is for tomorrow.
+FIELD_START = (13, 30)
+FIELD_START_SAT = (10, 0)
 
 
 def _planning_day(now: Optional[datetime] = None) -> date:
     """The day Primetime is being planned for, right now, in office time.
 
-    Before 6pm (app time) that's today. After it, the day is done and the useful
+    Before the field starts (13:30, Saturday 10:00) that's today. After it,
+    today's Primetime is done and the useful
     question is what's happening tomorrow — so Home and the planner both roll
     forward. Sunday has no Primetime, so it is skipped in either direction.
     """
     now = now or datetime.now(APP_TZ)
     target = now.date()
-    if now.hour >= ROLLOVER_HOUR:
+    # Once the field has started, today's Primetime is done: plan tomorrow.
+    start = FIELD_START_SAT if now.weekday() == 5 else FIELD_START
+    if (now.hour, now.minute) >= start:
         target += timedelta(days=1)
     if target.weekday() == 6:  # Sunday
         target += timedelta(days=1)
