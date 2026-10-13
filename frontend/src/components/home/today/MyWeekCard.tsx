@@ -20,7 +20,7 @@ export default function MyWeekCard({ hideWhenEmpty = false }: { hideWhenEmpty?: 
     : n < SUPER_GREEN_WEEK_MIN ? { at: SUPER_GREEN_WEEK_MIN, name: 'Super Green' } : null;
   const goal = Number(w?.weekly_goal || 0) || null;
   const scale = goal || next?.at || SUPER_GREEN_WEEK_MIN;
-  const tone = band === 'red' ? c.red : band === 'amber' ? (c.yellow || c.amber) : c.green;
+  const tone = band === 'red' ? c.red : band === 'amber' ? c.yellow : c.green;
   const pa = w?.days_worked ? (n / w.days_worked).toFixed(1) : null;
   return (
     <Pressable onPress={() => router.push('/(tabs)/pay' as never)} style={s.card} accessibilityRole="button" testID="home-my-week">
