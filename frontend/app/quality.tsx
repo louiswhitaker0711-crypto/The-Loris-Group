@@ -153,12 +153,12 @@ export default function QualityScreen() {
       </View>
       {row.metrics?.fourth_week == null && <Text style={s.note}>4th week shows once those customers reach their 4th delivery.</Text>}
       {multi && row.history?.length > 0 && (
-        <ScrollView horizontal showsHorizontalScrollIndicator>
+        <FitTable>
           <View>
             {header('Week by week')}
             {row.history.map((h: any) => line(`${testID}-${h.week_ending}`, h.label.replace(/ \d{4}$/, ''), h.metrics, { sub: true }))}
           </View>
-        </ScrollView>
+        </FitTable>
       )}
     </View>
   );
@@ -207,7 +207,7 @@ export default function QualityScreen() {
               <Text style={s.h}>{d.box?.kind === 'office' ? 'Every BA' : 'Your team’s BAs'} · {d.label}</Text>
               {multi && <Text style={s.note}>Averages for the period. Tap a name to see their week by week.</Text>}
               {(d.teams || []).length > 1 && <Text style={s.note}>Each team's line adds up everyone in it, including the teams under it, weighted by their sales.</Text>}
-              <ScrollView horizontal showsHorizontalScrollIndicator>
+              <FitTable>
                 <View>
                   {header('BA')}
                   {(() => {
@@ -234,13 +234,51 @@ export default function QualityScreen() {
                     ));
                   })()}
                 </View>
-              </ScrollView>
+              </FitTable>
               {(d.team || []).some((r: any) => !r.linked) && <Text style={s.note}>⚠︎ not linked to anyone in the app yet. Link them next time you add a report.</Text>}
             </View>
           )}
         </>
       )}
     </ScrollView>
+  );
+}
+
+// The whole table on screen at once: shrunk to fit the width, with a button
+// to see it full size (and swipe sideways) when the numbers are too small.
+function FitTable({ children }: { children: React.ReactNode }) {
+  const c = useColors();
+  const [box, setBox] = useState(0);
+  const [inner, setInner] = useState({ w: 0, h: 0 });
+  const [full, setFull] = useState(false);
+  const scale = !full && box && inner.w > box ? box / inner.w : 1;
+  const measured = (
+    <View style={{ alignSelf: 'flex-start' }} onLayout={(e) => {
+      const { width, height } = e.nativeEvent.layout;
+      if (Math.abs(width - inner.w) > 1 || Math.abs(height - inner.h) > 1) setInner({ w: width, h: height });
+    }}>
+      {children}
+    </View>
+  );
+  return (
+    <View onLayout={(e) => setBox(e.nativeEvent.layout.width)}>
+      {full ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator>{measured}</ScrollView>
+      ) : (
+        <View style={{ height: inner.h ? inner.h * scale : undefined, overflow: 'hidden' }}>
+          <View style={{ width: inner.w || undefined, transform: [
+            { translateX: -(inner.w * (1 - scale)) / 2 }, { translateY: -(inner.h * (1 - scale)) / 2 }, { scale }] }}>
+            {measured}
+          </View>
+        </View>
+      )}
+      {box > 0 && inner.w > box + 2 && (
+        <Pressable onPress={() => setFull(!full)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-end', paddingVertical: 6 }} accessibilityRole="button">
+          <Ionicons name={full ? 'contract-outline' : 'expand-outline'} size={14} color={c.primary} />
+          <Text style={{ fontFamily: fonts.bodySemibold, fontSize: 12.5, color: c.primary }}>{full ? 'Fit to screen' : 'Zoom in'}</Text>
+        </Pressable>
+      )}
+    </View>
   );
 }
 

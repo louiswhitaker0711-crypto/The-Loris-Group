@@ -34,6 +34,7 @@ export const MODE_ICON: Record<string, any> = {
   teaching: 'megaphone',
   learning: 'school',
   watching: 'eye',
+  free: 'hand-left',
 };
 
 // A stable colour per PERSON RUNNING the session, not per topic. Two people
@@ -145,7 +146,7 @@ export default function ImpactSummary({
               <Ionicons name={MODE_ICON[p.mode]} size={12} color={colors.textMuted} />
               <Text style={styles.soloName} numberOfLines={1}>{p.name}</Text>
               <Text style={styles.soloTopic} numberOfLines={1}>
-                {p.topic || p.mode}
+                {p.mode === 'free' ? `Free to work with${p.topic ? ` · ${p.topic}` : ''}` : (p.topic || p.mode)}
                 {p.with_label ? ` · ${p.with_label}` : ''}
               </Text>
             </View>

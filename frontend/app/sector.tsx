@@ -18,6 +18,7 @@ import { APP_LOCALE } from '../src/utils/appTime';
 import { openInWhatsApp, copyText } from '../src/utils/whatsapp';
 import { SectorPicker } from '../src/components/sector/SectorPicker';
 import { SectorMap } from '../src/components/sector/SectorMap';
+import BreakdownPrimetime from '../src/components/sector/BreakdownPrimetime';
 
 type Setup = { goal: number | null; kpi_metric: string | null; kpi_target: number | null; focus: string; positive?: string };
 type Breakdown = { doors: number | null; spoken: number | null; pitched: number | null; closed: number | null;
@@ -103,7 +104,7 @@ export default function SectorScreen() {
       {!!q.data?.can_manage && !!q.data?.sector && mode === 'breakdown' && (
         <View style={s.card}>
           <Text style={s.h}>🗺️ Today's map</Text>
-          <Text style={s.muted}>Dashed lines are what the sector marked off today. Add anything missing, remove anything that wasn't done, then confirm: it all turns solid black.</Text>
+          <Text style={s.muted}>Press Mark done and draw over the streets worked today in black, on top of the coloured areas. Remove anything that wasn't done, then Save the map: the black lines are kept and the coloured plan comes off.</Text>
           <SectorMap date={date} endOfDay />
         </View>
       )}
@@ -115,6 +116,8 @@ export default function SectorScreen() {
           : <BreakdownCard key={p.user_id + date} p={p} date={date} opts={opts} open={open === p.user_id}
               onToggle={() => setOpen(open === p.user_id ? null : p.user_id)} onSaved={() => q.refetch()} s={s} c={c} />
       ))}
+
+      {mode === 'breakdown' && !!q.data?.sector && <BreakdownPrimetime date={date} />}
 
       {hasText && (
         <View style={s.card}>

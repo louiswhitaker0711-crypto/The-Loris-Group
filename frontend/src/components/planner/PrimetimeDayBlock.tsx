@@ -42,6 +42,7 @@ const MODES: { key: PrimetimeMode; label: string; icon: any }[] = [
   { key: 'learning', label: 'Learning', icon: 'school-outline' },
   { key: 'teaching', label: 'Teaching', icon: 'megaphone-outline' },
   { key: 'watching', label: 'Watching', icon: 'eye-outline' },
+  { key: 'free', label: 'Free to work with', icon: 'hand-left-outline' },
 ];
 
 // The preposition changes with the mode — "Learning · with Ana" reads wrong
@@ -50,6 +51,7 @@ const WITH_LABEL: Record<PrimetimeMode, string> = {
   learning: 'From who',
   teaching: 'To who',
   watching: 'Watching who',
+  free: 'Note',
 };
 
 type RowDraft = {

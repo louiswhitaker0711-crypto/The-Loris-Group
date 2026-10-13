@@ -54,7 +54,9 @@ DAYS = list(range(0, 6))
 DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 DAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
-MODES = ("learning", "teaching", "watching")
+# "free" = free to work with: nothing of their own planned, so any Coach can
+# put them into something (see _guard_write).
+MODES = ("learning", "teaching", "watching", "free")
 
 MAX_TOPIC = 200
 MAX_WITH_TEXT = 200
@@ -541,7 +543,10 @@ async def get_primetime_home(request: Request, office: Optional[str] = None):
         key=lambda p: (not p["is_self"], not p["is_direct"], (p["name"] or "").lower())
     )
 
-    live = [e for e in entries if e.get("mode") and e["subject_user_id"] not in absent_ids]
+    free = [{"user_id": e["subject_user_id"], "name": e["subject_name"], "note": e.get("topic") or ""}
+            for e in entries if e.get("mode") == "free" and e["subject_user_id"] not in absent_ids]
+    free.sort(key=lambda p: (p["name"] or "").lower())
+    live = [e for e in entries if e.get("mode") and e.get("mode") != "free" and e["subject_user_id"] not in absent_ids]
     plans = [
         {
             "user_id": e["subject_user_id"],
@@ -569,6 +574,7 @@ async def get_primetime_home(request: Request, office: Optional[str] = None):
         "office_id": office_id,
         "plans": plans,
         "sessions": _build_sessions(live),
+        "free": free,
         "my_unplanned": mine_unplanned[:20],
         "my_unplanned_total": len(mine_unplanned),
     }
@@ -725,10 +731,16 @@ async def _guard_write(request: Request, office_param: Optional[str], subject_us
 
     editable = await _editable_ids(me, office_id)
     if editable is not None and subject_user_id not in editable:
-        raise HTTPException(
-            status_code=403,
-            detail="You can only plan Primetime for people on your own team",
-        )
+        # Someone who's said they're free to work with can be put into
+        # something by any Coach in the office.
+        free = await db.primetime_entries.find_one({
+            "office_id": office_id, "week_ending": week_ending, "day_index": day_index,
+            "subject_user_id": subject_user_id, "mode": "free"}, {"_id": 1})
+        if not free:
+            raise HTTPException(
+                status_code=403,
+                detail="You can only plan Primetime for people on your own team",
+            )
 
     subject = await db.users.find_one(
         {"_id": _oid_or_404(subject_user_id)},
@@ -917,6 +929,8 @@ async def upsert_primetime_entry(body: EntryBody, request: Request):
     # Silently drop ids that don't resolve in this office rather than 400 —
     # a counterpart who left mid-edit shouldn't block saving the row.
     with_ids = [uid for uid in with_ids if uid in name_by_id]
+    if mode == "free":
+        with_ids = []   # free to work with: nobody to pair them with yet
 
     existing = await db.primetime_entries.find_one(key)
 
@@ -1057,3 +1071,129 @@ async def clear_primetime_entry(request: Request, week_ending: str, day_index: i
         "subject_user_id": subject_user_id,
     })
     return {"ok": True, "deleted": res.deleted_count}
+
+
+# ---------------------------------------------------------------------------
+# Primetime at the sector breakdown
+# ---------------------------------------------------------------------------
+# At the end of the day the sector leader (a Coach or a BA) goes round the
+# sector and plans tomorrow's Primetime for everyone in it: learning or
+# teaching a topic, joining a session someone's running, watching, or "free
+# to work with" so a Coach can put them somewhere. Anyone can set their own.
+
+def _next_primetime_day(after: date) -> date:
+    d = after + timedelta(days=1)
+    return d + timedelta(days=1) if d.weekday() == 6 else d
+
+
+async def _sector_people(me: dict, sector_date: str) -> tuple[list[dict], bool]:
+    """(people this person can plan for at the breakdown, leads a sector)."""
+    sec = await db.sectors.find_one({"office_id": me.get("office_id"), "date": sector_date,
+                                     "leader_id": str(me["id"])}, {"_id": 0, "member_ids": 1})
+    ids = list(dict.fromkeys([str(me["id"])] + [str(x) for x in (sec or {}).get("member_ids") or []]))
+    oids = [ObjectId(i) for i in ids if ObjectId.is_valid(i)]
+    users = {str(u["_id"]): u async for u in db.users.find(
+        {"_id": {"$in": oids}, "office_id": me.get("office_id"), "deleted": {"$ne": True}}, {"name": 1})}
+    return [{"user_id": i, "name": users[i].get("name") or ""} for i in ids if i in users], bool(sec)
+
+
+@router.get("/primetime/sector")
+async def sector_primetime(request: Request, date: Optional[str] = None):  # noqa: A002 (query name)
+    """Tomorrow's Primetime for everyone in the caller's sector today."""
+    me = await get_current_user(request)
+    sector_date = date or _today_local().isoformat()
+    if not _is_iso_date(sector_date):
+        raise HTTPException(status_code=400, detail="Bad date")
+    target = _next_primetime_day(date_cls_from_iso(sector_date))
+    week_ending = _coerce_to_sunday(target.isoformat())
+    day_index = target.weekday()
+    people, leads = await _sector_people(me, sector_date)
+    office_id = me.get("office_id")
+    rows = {e["subject_user_id"]: _entry_out(_scrub(e)) async for e in db.primetime_entries.find(
+        {"office_id": office_id, "week_ending": week_ending, "day_index": day_index,
+         "subject_user_id": {"$in": [p["user_id"] for p in people]}})}
+    day_entries = [_entry_out(_scrub(e)) for e in await db.primetime_entries.find(
+        {"office_id": office_id, "week_ending": week_ending, "day_index": day_index, "mode": "teaching"}).to_list(MAX_ROSTER)]
+    out = []
+    for p in people:
+        e = rows.get(p["user_id"]) or {}
+        out.append({**p, "is_self": p["user_id"] == str(me["id"]), "mode": e.get("mode"), "topic": e.get("topic") or "",
+                    "session_id": e.get("session_id") or "",
+                    "with_label": ", ".join(e.get("with_names") or []) or e.get("with_text") or "",
+                    "set_by": e.get("updated_by_name") or ""})
+    return {"date": target.isoformat(), "day_name": DAY_NAMES[day_index], "week_ending": week_ending,
+            "day_index": day_index, "leads": leads, "people": out,
+            "sessions": [{"session_id": e["session_id"], "host_name": e["subject_name"], "topic": e["topic"]}
+                         for e in day_entries if e.get("session_id")]}
+
+
+def date_cls_from_iso(v: str) -> date:
+    return date.fromisoformat(v)
+
+
+class SectorEntryBody(BaseModel):
+    date: str
+    user_id: str
+    mode: Optional[str] = None
+    topic: Optional[str] = ""
+    session_id: Optional[str] = None
+
+
+@router.put("/primetime/sector")
+async def save_sector_primetime(body: SectorEntryBody, request: Request):
+    """Set one person's Primetime for tomorrow from the breakdown: yourself,
+    or anyone in the sector you're leading today."""
+    me = await get_current_user(request)
+    if not _is_iso_date(body.date):
+        raise HTTPException(status_code=400, detail="Bad date")
+    people, _ = await _sector_people(me, body.date)
+    person = next((p for p in people if p["user_id"] == body.user_id), None)
+    if not person:
+        raise HTTPException(status_code=403, detail="You can plan Primetime for yourself and the people in your sector")
+    mode = (body.mode or "").strip().lower() or None
+    if mode is not None and mode not in MODES:
+        raise HTTPException(status_code=400, detail=f"mode must be one of {', '.join(MODES)}")
+    office_id = me.get("office_id")
+    target = _next_primetime_day(date_cls_from_iso(body.date))
+    week_ending = _coerce_to_sunday(target.isoformat())
+    day_index = target.weekday()
+    key = {"office_id": office_id, "week_ending": week_ending, "day_index": day_index, "subject_user_id": body.user_id}
+    if mode is None:
+        await db.primetime_entries.delete_many(key)
+        return {"ok": True, "cleared": True}
+    host = None
+    session_id = ""
+    if body.session_id and mode in ("learning", "watching"):
+        host = await db.primetime_entries.find_one({**{k: v for k, v in key.items() if k != "subject_user_id"},
+                                                    "session_id": _s(body.session_id, 64), "mode": "teaching"})
+        if host and host["subject_user_id"] != body.user_id:
+            session_id = host["session_id"]
+        else:
+            host = None
+    if mode == "teaching":
+        session_id = _session_id(week_ending, day_index, body.user_id)
+    now = _now_iso()
+    doc = {
+        **key,
+        "day_date": target.isoformat(),
+        "subject_name": person["name"],
+        "mode": mode,
+        "topic": (host.get("topic") if host else _s(body.topic, MAX_TOPIC)) or "",
+        "session_id": session_id,
+        "with_ids": [host["subject_user_id"]] if host else [],
+        "with_names": [host.get("subject_name") or ""] if host else [],
+        "with_text": "",
+        "updated_at": now,
+        "updated_by_id": me["id"],
+        "updated_by_name": me.get("name") or "",
+    }
+    existing = await db.primetime_entries.find_one(key)
+    if existing:
+        await db.primetime_entries.update_one({"id": existing["id"]}, {"$set": doc})
+        doc["id"] = existing["id"]
+    else:
+        doc["id"] = str(uuid.uuid4())
+        doc["created_at"] = now
+        doc["created_by_id"] = me["id"]
+        await db.primetime_entries.insert_one(dict(doc))
+    return {"ok": True, "entry": _entry_out(doc)}
