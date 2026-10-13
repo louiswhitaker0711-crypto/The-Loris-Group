@@ -42,7 +42,11 @@ export default function HomeAreaMap() {
       if (dead || !el) return;
       if (map.current) { map.current.remove(); map.current = null; }
       const m = L.map(el, { zoomControl: false, attributionControl: true, dragging: false, touchZoom: false,
-        scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false, tap: false });
+        scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false });
+      // Place the map on their area FIRST: Leaflet can't draw lines on a map
+      // that doesn't know where it's looking yet.
+      const pts = plans.flatMap((p) => p.lines || []).flat();
+      m.fitBounds(L.latLngBounds(pts), { padding: [18, 18], maxZoom: 18 });
       L.tileLayer(OSM_TILES, { maxZoom: 19, attribution: OSM_ATTRIBUTION }).addTo(m);
       if (d?.shape?.geometry) {
         L.geoJSON(d.shape.geometry, { interactive: false, style: { color: c.primary, weight: 1.5, fillOpacity: 0.04 } }).addTo(m);
@@ -56,11 +60,10 @@ export default function HomeAreaMap() {
             : { color: '#000', weight: 4, opacity: mk.days_ago > 28 ? 0.35 : 0.85 };
         for (const line of mk.lines || []) L.polyline(line, { ...style, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(m);
       }
-      // Zoom to their own area's streets.
-      const pts = plans.flatMap((p) => p.lines || []).flat();
-      if (pts.length) m.fitBounds(L.latLngBounds(pts), { padding: [18, 18], maxZoom: 18 });
       map.current = m;
-      setTimeout(() => m.invalidateSize(), 200);
+      setFailed(false);
+      // Once the card has its final size, zoom to their streets again.
+      setTimeout(() => { m.invalidateSize(); m.fitBounds(L.latLngBounds(pts), { padding: [18, 18], maxZoom: 18 }); }, 250);
     }).catch(() => setFailed(true));
     return () => { dead = true; };
   }, [show, q.dataUpdatedAt]); // eslint-disable-line react-hooks/exhaustive-deps
