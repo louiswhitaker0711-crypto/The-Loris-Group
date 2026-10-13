@@ -1,8 +1,7 @@
-// "My day" on Home, under the map: today's set-up (goal, KPI, focus), this
-// week's focus, what one sign-up takes you, what today's goal takes, and your
-// average day. No running count: Field IQ is where you're at right now; the
-// check-in notifications carry it, straight after each hourly sync.
-// (GET /sector/my-day)
+// "My day" on Home, under the map: today's set-up (goal, KPI, focus), where
+// you're on so far (Field IQ, pulled hourly, with the time), what
+// one sign-up takes you, what's still to go for today's goal, your average day
+// and this week's focus. Live Operations is one tap away. (GET /sector/my-day)
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,6 +9,8 @@ import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useColors, fonts } from '../../../theme/ThemeContext';
 import { apiService } from '../../../api/client';
+import { dayBandText } from '../../../utils/dayBands';
+import { APP_LOCALE, APP_TZ } from '../../../utils/appTime';
 
 const STEPS = [['doors', 'doors'], ['spoken', 'spoken'], ['pitched', 'pitched'], ['closed', 'closes']] as const;
 const r0 = (n: number) => Math.round(n);
@@ -20,7 +21,7 @@ export default function MyDayCard() {
   const q = useQuery({
     queryKey: ['my-day'],
     queryFn: () => apiService.getMyDay().then((r) => r.data),
-    staleTime: 10 * 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
     retry: false,
   });
   const d = q.data;
@@ -30,7 +31,12 @@ export default function MyDayCard() {
   const av = d.averages || {};
   const per = av.per_sale || { doors: 30, spoken: 17.5, pitched: 6.25, closed: 3.75 };
   const day = av.per_day;
-
+  const live = d.live || {};
+  const hit = Number(live.hit || 0);
+  const left = Math.max(0, goal - hit);
+  const asOf = d.synced_at
+    ? new Date(d.synced_at).toLocaleTimeString(APP_LOCALE, { hour: '2-digit', minute: '2-digit', timeZone: APP_TZ })
+    : null;
   return (
     <View style={s.card} testID="home-my-day">
       <Pressable onPress={() => router.push('/my-sector' as never)} style={s.head} accessibilityRole="button">
@@ -45,6 +51,19 @@ export default function MyDayCard() {
       ) : (
         <Pressable onPress={() => router.push('/my-sector' as never)}><Text style={s.muted}>No set-up yet today. Tap to do yours.</Text></Pressable>
       )}
+      <View style={s.liveRow}>
+        <View style={[s.liveBig, { borderColor: dayBandText(hit) }]}>
+          <Text style={[s.liveNum, { color: dayBandText(hit) }]}>{hit}</Text>
+          <Text style={s.liveLabel}>of {goal} sign-ups</Text>
+        </View>
+        {STEPS.map(([k, label]) => (
+          <View key={k} style={s.liveStat}>
+            <Text style={s.liveStatNum}>{Number(live[k] || 0)}</Text>
+            <Text style={s.liveLabel}>{label}</Text>
+          </View>
+        ))}
+      </View>
+      <Text style={s.small}>{d.has_live ? `Where you're on, as of ${asOf || 'the last pull'} (Field IQ, updated hourly).` : 'Where you’re on shows once Field IQ has today’s doors (it updates hourly).'}</Text>
       {d.week_focus?.length > 0 && (
         <Text style={s.line}><Text style={s.bold}>This week’s focus:</Text> {d.week_focus.join(' · ')}</Text>
       )}
@@ -58,8 +77,8 @@ export default function MyDayCard() {
       </View>
 
       <View style={s.box}>
-        <Text style={s.boxTitle}>Today’s goal of {goal} takes</Text>
-        <Text style={s.big}>{STEPS.map(([k, label]) => `${r0(per[k] * goal)} ${label}`).join(' · ')}</Text>
+        <Text style={s.boxTitle}>{left > 0 ? `Still to go for your goal: ${left} more` : 'Goal hit 🎉 go for one more'}</Text>
+        <Text style={s.big}>{STEPS.map(([k, label]) => `${r0(per[k] * Math.max(left, 1))} ${label}`).join(' · ')}</Text>
       </View>
 
       {day && (
@@ -69,6 +88,10 @@ export default function MyDayCard() {
       )}
 
       <View style={s.row}>
+        <Pressable onPress={() => router.push('/live-ops' as never)} style={s.btn} accessibilityRole="button" testID="my-day-live">
+          <Ionicons name="radio-outline" size={15} color={c.onPrimary} />
+          <Text style={s.btnText}>Where I'm at now</Text>
+        </Pressable>
         <Pressable onPress={() => router.push('/field-kpis' as never)} style={s.ghost} accessibilityRole="button">
           <Ionicons name="speedometer-outline" size={15} color={c.primary} />
           <Text style={s.ghostText}>My numbers</Text>
