@@ -219,6 +219,69 @@ def finish(rep: dict) -> dict:
     return rep
 
 
+def aggregate(weeks: list[dict]) -> dict:
+    """Several weeks of one person's (or the office's) numbers → one set for
+    the period: sales added up; every other measure averaged weighted by that
+    week's sales, so a 1-sale week counts for less than an 8-sale week. A
+    week with no sales figure counts once; a week with 0 sales doesn't count
+    towards the averages."""
+    out: dict = {}
+    sales = [w["sales"] for w in weeks if w.get("sales") is not None]
+    if sales:
+        out["sales"] = sum(sales)
+    for key, _, kind in MEASURES:
+        if key == "sales":
+            continue
+        num = den = 0.0
+        for w in weeks:
+            v = w.get(key)
+            if v is None:
+                continue
+            weight = w["sales"] if w.get("sales") is not None else 1
+            num += v * weight
+            den += weight
+        if den:
+            out[key] = round(num / den, 2)
+    return out
+
+
+VIEWS = [("week", "Week"), ("4w", "4 weeks"), ("month", "Month"), ("13w", "13 weeks"), ("all", "All time")]
+_MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August",
+           "September", "October", "November", "December"]
+
+
+def week_label(iso: str) -> str:
+    d = date.fromisoformat(iso)
+    return f"WE {d.day} {d.strftime('%b %Y')}"
+
+
+def month_label(ym: str) -> str:
+    y, m = ym.split("-")
+    return f"{_MONTHS[int(m) - 1]} {y}"
+
+
+def pick_weeks(weeks: list[str], view: str, week: str | None = None, month: str | None = None):
+    """The saved weeks (newest first) → (weeks in the period, the period
+    before it for comparison, a label). A month holds the weeks that end in
+    it; 4 and 13 weeks run back from `week` (the newest if not given)."""
+    if not weeks:
+        return [], [], ""
+    if view == "all":
+        return list(weeks), [], f"All time · {len(weeks)} week{'' if len(weeks) == 1 else 's'} since {week_label(weeks[-1])}"
+    if view == "month":
+        months = sorted({w[:7] for w in weeks}, reverse=True)
+        ym = month if month in months else months[0]
+        i = months.index(ym)
+        before = [w for w in weeks if i + 1 < len(months) and w[:7] == months[i + 1]]
+        return [w for w in weeks if w[:7] == ym], before, month_label(ym)
+    i = weeks.index(week) if week in weeks else 0
+    n = {"4w": 4, "13w": 13}.get(view, 1)
+    now, before = weeks[i:i + n], weeks[i + n:i + 2 * n]
+    if n == 1:
+        return now, before, week_label(now[0])
+    return now, before, f"{len(now)} week{'' if len(now) == 1 else 's'} to {week_label(now[0])}"
+
+
 # ── Excel (.xlsx) without extra libraries ────────────────────────────────
 _NS = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
 

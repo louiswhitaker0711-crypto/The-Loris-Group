@@ -98,3 +98,34 @@ def test_quality_suggestions():
     assert s[0]["why"] == "19.23% fails in WE 4 Oct (target under 10%)"
     # Too few sales that week to judge.
     assert quality_suggestions("Example", {"sales": 1, "fail_rate": 100}) == []
+
+
+def test_averages_over_weeks_are_weighted_by_sales():
+    from core.quality import aggregate
+    weeks = [
+        {"sales": 8, "aov": 12.0, "drops": 2.0, "fail_rate": 25.0},
+        {"sales": 2, "aov": 17.0, "drops": 3.0, "fail_rate": 0.0},
+        {"sales": 0, "aov": 30.0},             # no sales: doesn't move the averages
+        {"aov": 13.0},                          # no sales figure: counts once
+    ]
+    agg = aggregate(weeks)
+    assert agg["sales"] == 10
+    assert agg["aov"] == round((96 + 34 + 13) / 11, 2)
+    assert agg["drops"] == 2.2
+    assert agg["fail_rate"] == 20.0
+    assert aggregate([]) == {}
+
+
+def test_picking_the_weeks_for_a_period():
+    from core.quality import pick_weeks
+    weeks = ["2026-10-11", "2026-10-04", "2026-09-27", "2026-09-20", "2026-09-13", "2026-09-06", "2026-08-30"]
+    assert pick_weeks(weeks, "week") == (["2026-10-11"], ["2026-10-04"], "WE 11 Oct 2026")
+    now, before, label = pick_weeks(weeks, "4w", "2026-10-04")
+    assert now == ["2026-10-04", "2026-09-27", "2026-09-20", "2026-09-13"] and before == ["2026-09-06", "2026-08-30"]
+    assert label == "4 weeks to WE 4 Oct 2026"
+    now, before, label = pick_weeks(weeks, "month", month="2026-09")
+    assert now == ["2026-09-27", "2026-09-20", "2026-09-13", "2026-09-06"] and before == ["2026-08-30"]
+    assert label == "September 2026"
+    assert pick_weeks(weeks, "month")[2] == "October 2026"
+    assert pick_weeks(weeks, "all")[0] == weeks
+    assert pick_weeks([], "4w") == ([], [], "")
