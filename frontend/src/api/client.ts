@@ -1161,6 +1161,11 @@ export const apiService = {
   getPendingChecks: () => api.get<{ checks: any[] }>('/cod/checks'),
   setCodTests: (userId: string, moduleIds: string[]) => api.post('/cod/test-requests', { user_id: userId, module_ids: moduleIds }),
   getMyCodTests: () => api.get<{ requests: any[] }>('/cod/test-requests/mine'),
+  // Weekly quality report (routes/quality.py)
+  getQuality: (week?: string) => api.get('/quality', { params: week ? { week } : {} }),
+  readQuality: (body: { files: { filename: string; data_b64: string }[]; week_ending?: string }) =>
+    api.post('/quality/read', body, { timeout: 120000 }),
+  importQuality: (body: { week_ending: string; rows: any[]; total: any }) => api.post('/quality/import', body),
   getCoachSuggestions: () => api.get<{ through: string; suggestions: any[] }>('/coach/suggestions'),
   listViewers: () => api.get<{ viewers: any[] }>('/admin/viewers'),
   addViewer: (body: { name: string; email: string; password: string }) => api.post('/admin/viewers', body),

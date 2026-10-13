@@ -1,85 +1,111 @@
-"""Fundraising quality — the charity's FR KPI report (Power BI), per BA.
+"""Quality: Acwyre's weekly Modern Milkman quality report (Power BI), per BA.
 
-The client reports quality in Power BI ("FR KPI Report (all charities)"). A
-report is imported per office per month (period "YYYY-MM") from its tables:
+The report is a page of tables, one per measure, for a week ending ("WE"):
+Sales Volume, AOV, Drops, 4th Delivery % and Fail Rate (and The Round when
+it's there). Each table's first column ("MC") is the row label: the office
+rollup ("Ginger Leeds"), then one row per BA as "First L BADGE" (e.g.
+"Example P MMC1234" or "Example P 12345"), then "Total".
 
-  overall        per-BA: sign-ups, average donation, completed call rate,
-                 wrong number rate, fail rate, average / modal supporter age,
-                 % Gift Aid, % phone / email opt-in, no show, 3rd payment %,
-                 neo bank %
-  kpis-over-wes  per-BA completed call rate for each week ending
-  fail-rate      per-BA total sales / fail count, plus fail reasons
-  no-show        per-BA net sign-ups / no show rate
+It reaches the app as a screenshot (read by the AI into the shape below) or
+as Excel exports of the tables. Either way it becomes:
 
-Each table's first column is the row label: the charity/agency/office rollup
-rows, then one row per BA as "First L BADGE" (e.g. "Faruq O FR6283"), then
-"Total". RAG bands mirror the report's own conditional formatting.
+  {"week_ending": "YYYY-MM-DD",
+   "rows":  [{"label", "badge", "metrics": {key: value}}],
+   "total": {key: value}}
+
+Colours follow the Owner's quality targets (Campaign Knowledge, "Quality and
+KPIs"): £13+ order value, 2.5+ drop days, fails under 10%, 75%+ taking The
+Round, 75%+ reaching their 4th week. No database here, so it's tested alone.
 """
 from __future__ import annotations
 
+import io
+import json
 import re
+import zipfile
+from datetime import date, datetime
+from xml.etree import ElementTree as ET
 
-# key, the report's column header, value kind
-OVERALL_COLUMNS = [
-    ("signups", "Count of sign ups", "int"),
-    ("avg_donation", "Average Donation Amount", "money"),
-    ("completed_call_rate", "Completed call rate", "pct"),
-    ("wrong_number_rate", "Wrong Number Rate", "pct"),
-    ("fail_rate", "Fail rate", "pct"),
-    ("avg_age", "Average of age", "num"),
-    ("age_group", "Mode of Age group of Supporter", "text"),
-    ("gift_aid", "% Gift Aid", "pct"),
-    ("phone_opt_in", "% Phone opt in", "pct"),
-    ("email_opt_in", "% Email opt in", "pct"),
-    ("no_show", "No Show", "pct"),
-    ("third_payment", "3rd payment %", "pct"),
-    ("neo_bank", "Neo bank %", "pct"),
+# key, label, value kind
+MEASURES = [
+    ("sales", "Sales", "int"),
+    ("aov", "Order value", "money"),
+    ("drops", "Drop days", "num"),
+    ("the_round", "The Round", "pct"),
+    ("fourth_week", "4th week", "pct"),
+    ("fail_rate", "Fails", "pct"),
+]
+KINDS = {k: kind for k, _, kind in MEASURES}
+LABELS = {k: label for k, label, _ in MEASURES}
+
+# Green at or above `green`, amber at or above `amber`, red below; for fails
+# (lower is better) green under `green`, amber under `amber`, red above.
+TARGETS = {
+    "aov": {"green": 13, "amber": 10, "text": "£13+"},
+    "drops": {"green": 2.5, "amber": 2.1, "text": "2.5+"},
+    "the_round": {"green": 75, "amber": 60, "text": "75%+"},
+    "fourth_week": {"green": 75, "amber": 60, "text": "75%+"},
+    "fail_rate": {"green": 10, "amber": 20, "lower_is_better": True, "text": "under 10%"},
+}
+
+# The report's column headers → our keys (lower-case "contains" matches).
+HEADER_KEYS = [
+    ("fail", "fail_rate"),
+    ("4th", "fourth_week"),
+    ("fourth", "fourth_week"),
+    ("round", "the_round"),
+    ("membership", "the_round"),
+    ("aov", "aov"),
+    ("order value", "aov"),
+    ("drop", "drops"),
+    ("sales", "sales"),
 ]
 
-LABELS = {k: h for k, h, _ in OVERALL_COLUMNS}
-LABELS.update({"completed_call_rate": "Completed call rate (Welcome Calls)", "no_show": "No show rate",
-               "age_group": "Most common supporter age group"})
-
-# Green / amber / red, as the report colours them. (low, high) = green at or
-# above `green`, amber at or above `amber`, red below; `lower_is_better` flips.
-RAG = {
-    "completed_call_rate": {"green": 65, "amber": 60},
-    "gift_aid": {"green": 90, "amber": 80},
-    "phone_opt_in": {"green": 90, "amber": 70},
-    "email_opt_in": {"green": 85, "amber": 70},
-    "avg_age": {"green": 45, "amber": 35},
-    "fail_rate": {"green": 0, "amber": 4, "lower_is_better": True},
-    "no_show": {"green": 14.99, "amber": 20, "lower_is_better": True},
-    "wrong_number_rate": {"green": 0.99, "amber": 0.99, "lower_is_better": True},
-}
-GREEN_AGE_GROUPS = {"43-54", "55-66"}
-
-ROLLUP_LABELS = {"total", "bdch", "door2door"}
-BADGE_RE = re.compile(r"\s([A-Z]{0,3}\d{3,})$")
+ROLLUP_LABELS = {"total", "grand total"}
+BADGE_RE = re.compile(r"\s([A-Z]{0,4}\d{3,})$")
+# Sane limits, so a misread number can't land as something silly.
+LIMITS = {"sales": (0, 1000), "aov": (0, 500), "drops": (0, 7), "the_round": (0, 100),
+          "fourth_week": (0, 100), "fail_rate": (0, 100)}
 
 
 def rag(key: str, value) -> str | None:
-    if key == "age_group":
-        return None if not value else ("green" if str(value).strip() in GREEN_AGE_GROUPS else "amber")
-    rule = RAG.get(key)
+    rule = TARGETS.get(key)
     if rule is None or value is None:
         return None
     if rule.get("lower_is_better"):
-        return "green" if value <= rule["green"] else ("amber" if value <= rule["amber"] else "red")
+        return "green" if value < rule["green"] else ("amber" if value < rule["amber"] else "red")
     return "green" if value >= rule["green"] else ("amber" if value >= rule["amber"] else "red")
 
 
-def parse_value(text: str, kind: str):
-    t = (text or "").strip().replace(",", "").replace("£", "")
-    if kind == "text":
-        return t or None
-    if not t or t.upper() == "N/A":
+def parse_value(raw, kind: str):
+    """'£11.60', '13.10 %', '43.00', 0.131 (Excel %), None → a number or None."""
+    if raw is None or isinstance(raw, bool):
         return None
-    m = re.match(r"^-?\d+(\.\d+)?", t)
-    if not m:
-        return None
-    v = float(m.group(0))
-    return int(v) if kind == "int" else round(v, 2)
+    if isinstance(raw, (int, float)):
+        v = float(raw)
+    else:
+        t = str(raw).strip().replace(",", "").replace("£", "").replace("%", "").strip()
+        if not t or t.upper() in ("N/A", "NA", "-", "(BLANK)"):
+            return None
+        m = re.match(r"^-?\d+(\.\d+)?", t)
+        if not m:
+            return None
+        v = float(m.group(0))
+    if kind == "int":
+        return int(round(v))
+    return round(v, 4) if kind == "pct" else round(v, 2)  # Excel keeps 13.1% as 0.131
+
+
+def clean_metrics(m: dict | None) -> dict:
+    out = {}
+    for key, kind in KINDS.items():
+        v = parse_value((m or {}).get(key), kind)
+        if v is None:
+            continue
+        lo, hi = LIMITS[key]
+        if lo <= v <= hi:
+            out[key] = v
+    return out
 
 
 def badge_of(label: str) -> str | None:
@@ -87,89 +113,185 @@ def badge_of(label: str) -> str | None:
     return m.group(1).upper() if m else None
 
 
-def _text_rows(grid) -> list[list[str]]:
-    """A table as rows of cell text. Accepts plain lists of strings or the
-    Power BI capture format (cells as {"t": text, "bg": colour})."""
-    rows = grid.get("rows") if isinstance(grid, dict) else grid
-    return [[(c.get("t") if isinstance(c, dict) else str(c or "")).strip() for c in r] for r in rows or []]
-
-
-def _ba_rows(rows: list[list[str]]):
-    """(label, badge, cells) for the BA rows of a table, skipping rollups."""
-    for r in rows[1:]:
-        if not r:
-            continue
-        label = r[0]
-        badge = badge_of(label)
-        if badge and label.strip().lower() not in ROLLUP_LABELS:
-            yield label, badge, r
-
-
-def _rollup(rows: list[list[str]], name: str) -> list[str] | None:
-    for r in rows[1:]:
-        if r and r[0].strip().lower() == name.lower():
-            return r
+def header_key(text: str) -> str | None:
+    t = (text or "").strip().lower()
+    if not t or t == "mc":
+        return None
+    for needle, key in HEADER_KEYS:
+        if needle in t:
+            return key
     return None
 
 
-def parse_report(pages: dict, office_name: str | None = None) -> dict:
-    """Parse the report's tables into {bas: {badge: {...}}, office: {...},
-    weeks: [...], fail_reasons: [...]}. Missing tables are simply skipped."""
-    out: dict = {"bas": {}, "office": {}, "weeks": [], "fail_reasons": []}
+def parse_week(text) -> str | None:
+    """'04 October 2026', '04/10/2026', '2026-10-04' → '2026-10-04'."""
+    if isinstance(text, (date, datetime)):
+        return (text.date() if isinstance(text, datetime) else text).isoformat()
+    t = re.sub(r"\s+", " ", str(text or "").strip())
+    for fmt in ("%Y-%m-%d", "%d %B %Y", "%d %b %Y", "%d/%m/%Y", "%d/%m/%y", "%A %d %B %Y"):
+        try:
+            return datetime.strptime(t, fmt).date().isoformat()
+        except ValueError:
+            continue
+    m = re.search(r"(\d{1,2} [A-Za-z]+ \d{4}|\d{1,2}/\d{1,2}/\d{2,4}|\d{4}-\d{2}-\d{2})", t)
+    return parse_week(m.group(1)) if m and m.group(1) != t else None
 
-    def first_grid(key, i=0):
-        g = pages.get(key)
-        if isinstance(g, dict) and "grids" in g:
-            g = g["grids"]
-        if isinstance(g, list) and g and isinstance(g[0], (dict, list)) and not isinstance(g[0], str):
-            if isinstance(g[0], dict) and "rows" in g[0]:
-                return _text_rows(g[i]) if len(g) > i else None
-            return _text_rows(g) if i == 0 else None
-        return None
 
-    ov = first_grid("overall")
-    if ov:
-        hdr = ov[0]
-        idx = {key: hdr.index(h) for key, h, _ in OVERALL_COLUMNS if h in hdr}
-        kinds = {k: kind for k, _, kind in OVERALL_COLUMNS}
+def from_tables(tables: list[list[list]]) -> dict:
+    """Grids of cells (each an exported table, or one sheet holding several)
+    → {week_ending, rows, total}. A table's header row is the one starting
+    'MC'; any measure columns it has are read for each BA row under it."""
+    rows: dict[str, dict] = {}
+    total: dict = {}
+    week = None
+    for grid in tables:
+        cols: dict[int, str] = {}
+        for r in grid:
+            cells = ["" if c is None else c for c in r]
+            if not cells:
+                continue
+            first = str(cells[0]).strip()
+            if not week:
+                for c in cells:
+                    if isinstance(c, (date, datetime)) or (isinstance(c, str) and re.search(r"\bWE\b|week ending", c, re.I)):
+                        week = parse_week(c) or week
+            if first.upper() == "MC":
+                cols = {i: k for i, c in enumerate(cells) if (k := header_key(str(c)))}
+                continue
+            if not cols or not first:
+                continue
+            vals = {k: cells[i] for i, k in cols.items() if i < len(cells)}
+            if first.lower() in ROLLUP_LABELS:
+                total.update(clean_metrics(vals))
+                continue
+            badge = badge_of(first)
+            if not badge:
+                continue  # the office rollup row ("Ginger Leeds")
+            row = rows.setdefault(badge, {"label": first, "badge": badge, "metrics": {}})
+            row["metrics"].update(clean_metrics(vals))
+    return finish({"week_ending": week, "rows": list(rows.values()), "total": total})
 
-        def metrics(cells):
-            return {k: parse_value(cells[i], kinds[k]) if i < len(cells) else None for k, i in idx.items()}
 
-        for label, badge, cells in _ba_rows(ov):
-            out["bas"].setdefault(badge, {"label": label, "badge": badge})["metrics"] = metrics(cells)
-        roll = (office_name and _rollup(ov, office_name)) or _rollup(ov, "Total")
-        if roll:
-            out["office"] = metrics(roll)
+def from_ai(text: str) -> dict:
+    """The AI's JSON reading of a screenshot → {week_ending, rows, total}."""
+    t = (text or "").strip()
+    t = re.sub(r"^```(?:json)?\s*|\s*```$", "", t)
+    start, end = t.find("{"), t.rfind("}")
+    data = json.loads(t[start:end + 1]) if start >= 0 and end > start else {}
+    rows: dict[str, dict] = {}
+    for r in data.get("rows") or []:
+        label = re.sub(r"\s+", " ", str(r.get("label") or "")).strip()
+        badge = badge_of(label) or (str(r.get("badge") or "").strip().upper() or None)
+        if not badge or label.lower() in ROLLUP_LABELS:
+            continue
+        if not badge_of(label):
+            label = f"{label} {badge}".strip()
+        rows.setdefault(badge, {"label": label, "badge": badge, "metrics": {}})["metrics"].update(clean_metrics(r))
+    return finish({"week_ending": parse_week(data.get("week_ending")), "rows": list(rows.values()),
+                   "total": clean_metrics(data.get("total"))})
 
-    wk = first_grid("kpis-over-wes")
-    if wk:
-        hdr = wk[0]
-        weeks = [(i, h) for i, h in enumerate(hdr) if re.match(r"\d{2}/\d{2}/\d{4}$", h)]
-        out["weeks"] = [h for _, h in weeks]
-        for label, badge, cells in _ba_rows(wk):
-            ba = out["bas"].setdefault(badge, {"label": label, "badge": badge})
-            ba["weekly_call_rate"] = {h: parse_value(cells[i], "pct") for i, h in weeks if i < len(cells)}
 
-    fr = first_grid("fail-rate")
-    if fr:
-        hdr = fr[0]
-        for label, badge, cells in _ba_rows(fr):
-            ba = out["bas"].setdefault(badge, {"label": label, "badge": badge})
-            ba["fails"] = {
-                "total_sales": parse_value(cells[hdr.index("Total sales")], "int") if "Total sales" in hdr else None,
-                "fail_count": parse_value(cells[hdr.index("Fail count")], "int") if "Fail count" in hdr else None,
-            }
-    reasons = first_grid("fail-rate", 1)
-    if reasons:
-        out["fail_reasons"] = [{"reason": r[0] or "Not given", "count": parse_value(r[1], "int")}
-                               for r in reasons[1:] if len(r) > 1 and r[0].strip().lower() != "total"]
+def merge(parts: list[dict]) -> dict:
+    """Several readings of the same week (one per screenshot or file)."""
+    rows: dict[str, dict] = {}
+    total: dict = {}
+    week = None
+    for p in parts:
+        week = week or p.get("week_ending")
+        total.update(p.get("total") or {})
+        for r in p.get("rows") or []:
+            cur = rows.setdefault(r["badge"], {"label": r["label"], "badge": r["badge"], "metrics": {}})
+            cur["metrics"].update(r.get("metrics") or {})
+    return finish({"week_ending": week, "rows": list(rows.values()), "total": total})
 
-    ns = first_grid("no-show")
-    if ns:
-        hdr = ns[0]
-        for label, badge, cells in _ba_rows(ns):
-            ba = out["bas"].setdefault(badge, {"label": label, "badge": badge})
-            if "Net Sign Ups" in hdr:
-                ba["net_signups"] = parse_value(cells[hdr.index("Net Sign Ups")], "int")
+
+def finish(rep: dict) -> dict:
+    """4th week only counts once it's due: a week where everyone (and the
+    total) shows 0% hasn't reached the 4th delivery yet, so it's left blank."""
+    rows = rep.get("rows") or []
+    fw = [r["metrics"].get("fourth_week") for r in rows if "fourth_week" in r["metrics"]]
+    if fw and all(v == 0 for v in fw) and not (rep.get("total") or {}).get("fourth_week"):
+        for r in rows:
+            r["metrics"].pop("fourth_week", None)
+        (rep.get("total") or {}).pop("fourth_week", None)
+        rep["fourth_week_due"] = False
+    rows.sort(key=lambda r: r["label"].lower())
+    return rep
+
+
+# ── Excel (.xlsx) without extra libraries ────────────────────────────────
+_NS = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+
+
+def _col(ref: str) -> int:
+    n = 0
+    for ch in re.match(r"[A-Z]+", ref).group(0):
+        n = n * 26 + ord(ch) - 64
+    return n - 1
+
+
+def xlsx_tables(data: bytes) -> list[list[list]]:
+    """Every sheet of an .xlsx as a grid of cell values (text or numbers)."""
+    z = zipfile.ZipFile(io.BytesIO(data))
+    names = z.namelist()
+    shared: list[str] = []
+    if "xl/sharedStrings.xml" in names:
+        root = ET.fromstring(z.read("xl/sharedStrings.xml"))
+        for si in root.findall("m:si", _NS):
+            shared.append("".join(t.text or "" for t in si.iter(f"{{{_NS['m']}}}t")))
+    out = []
+    for name in sorted(n for n in names if re.match(r"xl/worksheets/sheet\d+\.xml$", n)):
+        root = ET.fromstring(z.read(name))
+        grid: list[list] = []
+        for row in root.iter(f"{{{_NS['m']}}}row"):
+            cells: list = []
+            for c in row.findall("m:c", _NS):
+                i = _col(c.get("r", "A1"))
+                v = c.find("m:v", _NS)
+                t = c.get("t")
+                if t == "s" and v is not None:
+                    val = shared[int(v.text)]
+                elif t == "inlineStr":
+                    val = "".join(x.text or "" for x in c.iter(f"{{{_NS['m']}}}t"))
+                elif v is not None and v.text is not None:
+                    try:
+                        val = float(v.text)
+                    except ValueError:
+                        val = v.text
+                else:
+                    val = None
+                while len(cells) < i:
+                    cells.append(None)
+                cells.append(val)
+            grid.append(cells)
+        out.append(grid)
     return out
+
+
+def excel_percent_fix(rep: dict) -> dict:
+    """Excel keeps 13.10% as 0.131: a % measure whose values are all at most 1
+    across the file is scaled up."""
+    for key in ("the_round", "fourth_week", "fail_rate"):
+        vals = [r["metrics"][key] for r in rep["rows"] if key in r["metrics"]]
+        tot = (rep.get("total") or {}).get(key)
+        if vals and max(vals + ([tot] if tot is not None else [])) <= 1:
+            for r in rep["rows"]:
+                if key in r["metrics"]:
+                    r["metrics"][key] = round(r["metrics"][key] * 100, 2)
+            if tot is not None:
+                rep["total"][key] = round(tot * 100, 2)
+    return rep
+
+
+AI_PROMPT = """This is a screenshot of a weekly quality report (Power BI) for a door-to-door sales office.
+It has a week ending ("WE") and one or more tables. Each table's first column is "MC": an office row,
+then one row per person written like "Example P MMC1234" or "Example P 12345", then "Total".
+The tables are measures such as Sales Volume, AOV, Drops, 4th Delivery %, Fail Rate and possibly The Round.
+
+Read every number exactly as shown. Return ONLY JSON, no commentary:
+{"week_ending": "YYYY-MM-DD or null",
+ "rows": [{"label": "the MC text exactly, name and badge", "sales": number|null, "aov": number|null,
+           "drops": number|null, "fourth_week": number|null, "fail_rate": number|null, "the_round": number|null}],
+ "total": {"sales": ..., "aov": ..., "drops": ..., "fourth_week": ..., "fail_rate": ..., "the_round": ...}}
+Percentages as plain numbers (13.10 % → 13.1). Money without the £. Use null for a measure not in the
+screenshot. One entry per person, combining all the tables. Leave out the office row."""

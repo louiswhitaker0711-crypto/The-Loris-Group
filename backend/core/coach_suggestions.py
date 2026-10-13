@@ -11,6 +11,9 @@ days (doors → spoken → pitched → closed → sign-ups):
                last 5 field days: getting spoken to (intros), getting to the
                pitch, closing, or turning closes into sign-ups (rehash)
   work rate    under 100 doors a day over those days
+  quality      from the latest weekly quality report (routes/quality.py), with
+               3+ sales that week: fails 10%+, order value under £13, drop
+               days under 2.5, under 75% reaching their 4th week
 
 Each person gets their two most important suggestions, most important first.
 No database here, so it's tested on its own.
@@ -60,10 +63,45 @@ def bells_days(entries: Iterable[dict]) -> list[dict]:
     return out
 
 
-def suggest(name: str, days: list[dict], field: list[dict], through: date) -> list[dict]:
+QUALITY_MIN_SALES = 3
+
+
+def quality_suggestions(first: str, q: dict | None, week_label: str = "") -> list[dict]:
+    """From one person's latest weekly quality numbers {sales, aov, drops,
+    fourth_week, fail_rate}."""
+    if not q or (q.get("sales") or 0) < QUALITY_MIN_SALES:
+        return []
+    wk = f" in {week_label}" if week_label else ""
+    out = []
+    fr = q.get("fail_rate")
+    if fr is not None and fr >= 10:
+        out.append({"kind": "fails", "priority": 2, "topic": "Fails and who not to sign up",
+                    "title": f"Go over fails with {first}",
+                    "why": f"{fr:g}% fails{wk} (target under 10%)"})
+    aov = q.get("aov")
+    if aov is not None and aov < 13:
+        out.append({"kind": "order_value", "priority": 3, "topic": "Order value",
+                    "title": f"Teach {first} order value",
+                    "why": f"£{aov:.2f} average order{wk} (target £13+)"})
+    drops = q.get("drops")
+    if drops is not None and drops < 2.5:
+        out.append({"kind": "drops", "priority": 5, "topic": "Drop days",
+                    "title": f"Talk drop days with {first}",
+                    "why": f"{drops:g} drop days{wk} (target 2.5+)"})
+    fw = q.get("fourth_week")
+    if fw is not None and fw < 75:
+        out.append({"kind": "fourth_week", "priority": 5, "topic": "Keeping customers to week 4",
+                    "title": f"Talk 4th week with {first}",
+                    "why": f"{fw:g}% reaching their 4th week{wk} (target 75%+)"})
+    return out
+
+
+def suggest(name: str, days: list[dict], field: list[dict], through: date,
+            quality: dict | None = None, quality_week: str = "") -> list[dict]:
     """Suggestions for one person. `days` from bells_days; `field` is their
     OwnerIQ days [{date, doors, spoken, pitched, closed, sales}]; `through`
-    is the last day whose numbers are final."""
+    is the last day whose numbers are final; `quality` their latest weekly
+    quality numbers, if there are any."""
     first = _first(name)
     out: list[dict] = []
 
@@ -84,12 +122,12 @@ def suggest(name: str, days: list[dict], field: list[dict], through: date) -> li
     if total >= MIN_SIGNUPS_FOR_MIX:
         g = round(100 * gold / total)
         if g < GOLD_TARGET:
-            out.append({"kind": "order_value", "priority": 2, "topic": "Order value",
+            out.append({"kind": "order_value", "priority": 3, "topic": "Order value",
                         "title": f"Teach {first} order value",
                         "why": f"{g}% Gold over 2 weeks (target {GOLD_TARGET}%)"})
         r = round(100 * min(rounds, total) / total)
         if r < ROUND_TARGET:
-            out.append({"kind": "the_round", "priority": 3, "topic": "The Round",
+            out.append({"kind": "the_round", "priority": 4, "topic": "The Round",
                         "title": f"Teach {first} The Round",
                         "why": f"{r}% taking The Round over 2 weeks (target {ROUND_TARGET}%)"})
 
@@ -106,14 +144,23 @@ def suggest(name: str, days: list[dict], field: list[dict], through: date) -> li
         if worst:
             _, num, den, topic, means = worst
             per = len(recent)
-            out.append({"kind": "funnel", "priority": 4, "topic": topic,
+            out.append({"kind": "funnel", "priority": 6, "topic": topic,
                         "title": f"Work on {topic.lower()} with {first}",
                         "why": f"{round(tot[num] / per)} {num} from {round(tot[den] / per)} {den} a day "
                                f"(Law of Averages {LOA[num]} from {LOA[den]}): {means}"})
         if tot["doors"] / len(recent) < LOW_DOORS:
-            out.append({"kind": "work_rate", "priority": 5, "topic": "Work rate",
+            out.append({"kind": "work_rate", "priority": 7, "topic": "Work rate",
                         "title": f"Lift {first}'s work rate",
                         "why": f"{round(tot['doors'] / len(recent))} doors a day (Law of Averages {LOA['doors']})"})
+
+    # Quality: order value from the report sits alongside the Gold mix as one
+    # suggestion (both reasons), never two.
+    for qs in quality_suggestions(first, quality, quality_week):
+        same = next((s for s in out if s["kind"] == qs["kind"]), None)
+        if same:
+            same["why"] = f"{same['why']}; {qs['why']}"
+        else:
+            out.append(qs)
 
     out.sort(key=lambda s: s["priority"])
     return out[:2]

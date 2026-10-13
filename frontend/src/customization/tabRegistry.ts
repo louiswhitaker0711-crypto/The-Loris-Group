@@ -161,6 +161,15 @@ export const TAB_REGISTRY: TabItem[] = [
     defaultVisibleByRole: { trainee: false, leader: false, admin: true },
   },
   {
+    // Acwyre's weekly quality report: order value, drop days, The Round, 4th
+    // week and fails against the Owner's targets. Everyone sees their own;
+    // Coaches their team; Admins add the week's screenshot.
+    id: 'quality', label: 'Quality', longLabel: 'Quality — order value, drops, 4th week and fails',
+    icon: 'shield-checkmark-outline', kind: 'route', target: '/quality',
+    visibleFor: ['trainee', 'leader', 'admin'],
+    defaultVisibleByRole: { trainee: true, leader: true, admin: true },
+  },
+  {
     id: 'notifications', label: 'Inbox', longLabel: 'Inbox — Notification History',
     icon: 'mail-outline', kind: 'route', target: '/notifications',
     visibleFor: ['trainee', 'leader', 'admin'],
