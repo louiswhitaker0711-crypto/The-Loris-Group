@@ -77,6 +77,7 @@ from routes.areas import router as areas_router
 from routes.coverage import router as coverage_router
 from routes.territory import router as territory_router
 from routes.cod_tests import router as cod_tests_router
+from routes.coach_suggestions import router as coach_suggestions_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -177,6 +178,7 @@ api_router.include_router(areas_router)
 api_router.include_router(coverage_router)
 api_router.include_router(territory_router)
 api_router.include_router(cod_tests_router)
+api_router.include_router(coach_suggestions_router)
 
 app.include_router(api_router)
 

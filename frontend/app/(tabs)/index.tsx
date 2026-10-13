@@ -42,6 +42,7 @@ import WaitingOnYouCard from '../../src/components/home/today/WaitingOnYouCard';
 import NewStartTodayHero from '../../src/components/home/today/NewStartTodayHero';
 import LearnTodayCard from '../../src/components/home/today/LearnTodayCard';
 import MoreSection from '../../src/components/home/today/MoreSection';
+import SuggestionsCard from '../../src/components/home/today/SuggestionsCard';
 import { dayTargetChips } from '../../src/utils/dayTargets';
 import PrimetimeCard from '../../src/components/home/PrimetimeCard';
 import SectorPromptCard from '../../src/components/home/SectorPromptCard';
@@ -1353,11 +1354,13 @@ export default function HomeScreen() {
       {pSectorPrompt}
       <MyWeekCard hideWhenEmpty={isAdmin} />
       {pPlanner}
+      {/* What each person needs today, then the Primetime plan it feeds. */}
+      <SuggestionsCard />
+      <PrimetimeCard />
       <WaitingOnYouCard toGrade={leaderTodayQ.data?.counts?.awaiting || 0} />
       {pNewStarts}
       <SectorSetupsCard />
       <LiveOpsCard />
-      <PrimetimeCard />
       {pTimetable}
       {pDailyPlans}
     </>
