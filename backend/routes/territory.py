@@ -28,7 +28,7 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request
 
-from auth import require_admin, require_admin_or_leader
+from auth import get_current_user, require_admin
 from core.app_time import APP_TZ
 from core.territory import KIND_LABEL, parse_territory_file, postcode_to_sector, summary
 from database import db
@@ -131,7 +131,13 @@ async def sector_for_postcode(office_id: Optional[str], postcode: str, with_shap
 async def territory_check(request: Request, postcode: str = ""):
     """For the set-up screen: is this postcode in the territory, and how has
     its sector been worked? One sector's figures only."""
-    user = await require_admin_or_leader(request)
+    user = await get_current_user(request)
+    if (user.get("role") or "").lower() not in ("leader", "admin"):
+        # A BA only when they lead a sector today: one sector at a time.
+        from routes.coverage import _today
+        if not await db.sectors.find_one({"office_id": user.get("office_id"), "date": _today().isoformat(),
+                                          "leader_id": str(user["id"])}, {"_id": 1}):
+            raise HTTPException(status_code=403, detail="For sector leaders")
     has = await db.territory_sectors.find_one({"office_id": user.get("office_id")}, {"_id": 1})
     if not has:
         return {"loaded": False}

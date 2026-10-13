@@ -239,6 +239,7 @@ function RootNavigator() {
       <Stack.Screen name="report" options={{ headerShown: true, title: 'AI Report', headerBackTitle: 'Back' }} />
       <Stack.Screen name="owneriq-admin" options={{ headerShown: true, title: 'OwnerIQ Sync', headerBackTitle: 'Back' }} />
       <Stack.Screen name="live-ops" options={{ headerShown: true, title: 'Live Operations', headerLeft: () => null, headerBackVisible: false, animation: 'none', ...MASTHEAD_COMPACT }} />
+      <Stack.Screen name="my-sector" options={{ headerShown: true, title: 'Sector', headerLeft: () => null, headerBackVisible: false, animation: 'none', ...MASTHEAD_COMPACT }} />
       <Stack.Screen name="territory" options={{ headerShown: true, title: 'Territory', headerLeft: () => null, headerBackVisible: false, animation: 'none', ...MASTHEAD_COMPACT }} />
       <Stack.Screen name="live-sector" options={{ headerShown: true, title: 'Sector', headerBackTitle: 'Back', ...MASTHEAD_COMPACT }} />
       <Stack.Screen name="person/[id]" options={{ headerShown: true, title: 'Person', headerBackTitle: 'Back', ...MASTHEAD_COMPACT }} />

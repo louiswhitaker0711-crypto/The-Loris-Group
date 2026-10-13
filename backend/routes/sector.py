@@ -219,7 +219,8 @@ async def _people(user: dict, iso: Optional[str] = None) -> list[dict]:
     """Who the caller works with on a day: a sector leader's sector when they
     have one, otherwise their team (Coach), the office (Admin) or themselves."""
     role = (user.get("role") or "").lower()
-    if iso and role in ("leader", "admin"):
+    if iso:
+        # Whoever leads a sector that day (a Coach or a BA) works with it.
         sec = await _sector_of_leader(str(user["id"]), iso)
         if sec and sec.get("member_ids"):
             return await _users_by_ids(sec["member_ids"])
@@ -297,7 +298,7 @@ async def sector_day(request: Request, date: Optional[str] = None):
         })
     return {
         "date": iso, "previous_date": prev,
-        "can_manage": (user.get("role") or "").lower() in ("leader", "admin"),
+        "can_manage": (user.get("role") or "").lower() in ("leader", "admin") or bool(sector),
         "sector": sector,
         "options": {"proud": PROUD_OPTIONS, "change": CHANGE_OPTIONS,
                     "kpi_metrics": [{"key": k, "label": v, "loa": LOA.get(k)} for k, v in KPI_METRICS.items()]},
@@ -337,9 +338,9 @@ async def save_sector_day(user_id: str, request: Request, date: Optional[str] = 
 async def notify_setups(request: Request, date: Optional[str] = None):
     """Send each person on the caller's team their own set-up for the day."""
     user = await get_current_user(request)
-    if (user.get("role") or "").lower() not in ("leader", "admin"):
-        raise HTTPException(status_code=403, detail="Coach or admin access required")
     iso = _clean_date(date)
+    if (user.get("role") or "").lower() not in ("leader", "admin") and not await _sector_of_leader(str(user["id"]), iso):
+        raise HTTPException(status_code=403, detail="Only the sector leader can send the set-ups")
     ids = [p["user_id"] for p in await _people(user, iso)]
     from core.push import send_push_to_user
     sent = 0
@@ -503,10 +504,9 @@ async def breakdown_prompt_tick() -> int:
 @router.get("/sector/roster")
 async def sector_roster(request: Request, date: Optional[str] = None):
     """The office's people, for picking who's in your sector; shows who is
-    already in someone else's sector that day."""
+    already in someone else's sector that day. Anyone can lead a sector
+    (a Coach or a BA), so anyone can pick from the office."""
     user = await get_current_user(request)
-    if (user.get("role") or "").lower() not in ("leader", "admin"):
-        raise HTTPException(status_code=403, detail="Coach or admin access required")
     iso = _clean_date(date)
     taken: dict[str, str] = {}
     async for sec in db.sectors.find({"office_id": user.get("office_id"), "date": iso}, {"_id": 0}):
@@ -527,9 +527,8 @@ async def sector_roster(request: Request, date: Optional[str] = None):
 
 @router.put("/sector/sectors")
 async def save_my_sector(request: Request, date: Optional[str] = None):
+    """Lead a sector: anyone in the office (a Coach or a BA)."""
     user = await get_current_user(request)
-    if (user.get("role") or "").lower() not in ("leader", "admin"):
-        raise HTTPException(status_code=403, detail="Coach or admin access required")
     iso = _clean_date(date)
     body = await request.json()
     wanted = [str(i) for i in (body.get("member_ids") or []) if ObjectId.is_valid(str(i))][:40]
@@ -610,8 +609,9 @@ async def sector_status(request: Request):
     start_win = (9 * 60 + 30, 12 * 60) if sat else (13 * 60, 16 * 60)
     end_win = (16 * 60 + 30, 19 * 60) if sat else (19 * 60 + 30, 22 * 60)
     phase = None if sun else "setup" if start_win[0] <= mins < start_win[1] else "breakdown" if end_win[0] <= mins < end_win[1] else None
-    is_leader = (user.get("role") or "").lower() in ("leader", "admin")
-    sec = await _sector_of_leader(str(user["id"]), iso) if is_leader else None
+    is_coach = (user.get("role") or "").lower() in ("leader", "admin")
+    sec = await _sector_of_leader(str(user["id"]), iso)
+    is_leader = is_coach or bool(sec)
     members = (sec or {}).get("member_ids") or []
     setups = breakdowns = 0
     if members:
@@ -619,8 +619,15 @@ async def sector_status(request: Request):
             setups += 1 if d.get("setup") else 0
             breakdowns += 1 if d.get("breakdown") else 0
     from routes.coverage import sector_of
-    in_sector = bool(await sector_of(str(user["id"]), iso, user.get("office_id")))
-    return {"date": iso, "phase": phase, "is_leader": is_leader, "has_sector": bool(members), "in_sector": in_sector,
+    mine = await sector_of(str(user["id"]), iso, user.get("office_id"))
+    in_sector = bool(mine)
+    sector_info = None
+    if mine:
+        names = [p["user_name"] for p in await _users_by_ids(mine.get("member_ids") or [])]
+        sector_info = {"leader_name": mine.get("leader_name") or "", "postcode": mine.get("postcode") or "",
+                       "goal": mine.get("goal"), "leads": mine.get("leader_id") == str(user["id"]), "members": names}
+    return {"date": iso, "phase": phase, "is_leader": is_leader, "is_coach": is_coach, "has_sector": bool(members),
+            "in_sector": in_sector, "sector": sector_info,
             "members": len(members), "setups": setups, "breakdowns": breakdowns,
             "my_setup": await my_setup(str(user["id"]), iso)}
 
