@@ -24,11 +24,15 @@ from datetime import date, datetime, timedelta
 from typing import Iterable, Optional
 
 from core.app_time import APP_TZ
+from core.areas import clean_pc
 
 # How a door ended, as far as the funnel got.
 _SPOKEN = {"spoken", "pitching", "pitched"}
 _PITCHED = {"pitching", "pitched"}
 HERO = ("doors_knocked", "spoken_to", "pitches_commenced", "pitches_closed", "sales", "points")
+# Bump when the record gains fields, so saved logs are summarised again
+# (2: `areas`, the day by street and postcode, for area history).
+FIELD_DAY_VERSION = 2
 
 
 def _local(ts) -> Optional[datetime]:
@@ -59,10 +63,17 @@ def summarise_ba_day(payload: dict, iso_date: str) -> Optional[dict]:
         return None
     hours: dict[str, dict] = {}
     laps: list[dict] = []
+    areas: dict[tuple, dict] = {}
     for lap in payload.get("laps") or []:
         times: list[datetime] = []
         lap_sales = 0
         for address in lap.get("interactions_by_address") or []:
+            pc = clean_pc(address.get("postal_code"))
+            area = None
+            if pc:
+                street = (address.get("street_name") or "").strip()
+                area = areas.setdefault((pc, street), {"pc": pc, "street": street, "city": (address.get("city") or "").strip(),
+                                                       "doors": 0, "spoken": 0, "pitched": 0, "sales": 0})
             for door in address.get("interactions") or []:
                 t = _local(door.get("created_at"))
                 if not t:
@@ -79,6 +90,11 @@ def summarise_ba_day(payload: dict, iso_date: str) -> Optional[dict]:
                 if won:
                     cell["sales"] += 1
                     lap_sales += 1
+                if area is not None:
+                    area["doors"] += 1
+                    area["spoken"] += 1 if (won or state == "partially_won" or how in _SPOKEN) else 0
+                    area["pitched"] += 1 if (won or state == "partially_won" or how in _PITCHED) else 0
+                    area["sales"] += 1 if won else 0
         if times:
             laps.append({"n": lap.get("number"), "first_min": _minute(min(times)), "last_min": _minute(max(times)),
                          "doors": len(times), "sales": lap_sales})
@@ -109,6 +125,8 @@ def summarise_ba_day(payload: dict, iso_date: str) -> Optional[dict]:
         "break_minutes": break_minutes,
         "laps": laps,
         "hours": hours,
+        "areas": [a for a in areas.values() if a["doors"]],
+        "v": FIELD_DAY_VERSION,
     }
 
 
