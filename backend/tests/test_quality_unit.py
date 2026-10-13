@@ -100,20 +100,34 @@ def test_quality_suggestions():
     assert quality_suggestions("Example", {"sales": 1, "fail_rate": 100}) == []
 
 
-def test_averages_over_weeks_are_weighted_by_sales():
-    from core.quality import aggregate
-    weeks = [
-        {"sales": 8, "aov": 12.0, "drops": 2.0, "fail_rate": 25.0},
-        {"sales": 2, "aov": 17.0, "drops": 3.0, "fail_rate": 0.0},
-        {"sales": 0, "aov": 30.0},             # no sales: doesn't move the averages
-        {"aov": 13.0},                          # no sales figure: counts once
+def test_averages_count_each_person_by_their_volume():
+    from core.quality import aggregate, signups
+    assert signups({"sales": 8, "fail_rate": 20}) == 10
+    assert signups({"sales": 0, "fail_rate": 100}) == 1
+    people = [
+        {"sales": 8, "aov": 12.0, "drops": 2.0, "fail_rate": 20.0},   # 10 sign-ups, 2 fails
+        {"sales": 2, "aov": 17.0, "drops": 3.0, "fail_rate": 0.0},    # 2 sign-ups
+        {"sales": 0, "aov": 30.0},                                     # nothing signed: no weight
     ]
-    agg = aggregate(weeks)
+    agg = aggregate(people)
     assert agg["sales"] == 10
-    assert agg["aov"] == round((96 + 34 + 13) / 11, 2)
-    assert agg["drops"] == 2.2
-    assert agg["fail_rate"] == 20.0
+    assert agg["aov"] == round((10 * 12 + 2 * 17) / 12, 2)            # 12.83, not the plain 14.50
+    assert agg["drops"] == round((10 * 2 + 2 * 3) / 12, 2)
+    assert agg["fail_rate"] == round(100 * 2 / 12, 2)                  # 2 fails in 12 sign-ups
     assert aggregate([]) == {}
+
+
+def test_matches_the_reports_own_total():
+    """WE 27 Sep 2026 as the report showed it (names swapped for examples):
+    the report's total order value was £11.10 and drops 2.23."""
+    from core.quality import aggregate
+    rows = [(6, 7.58, 2.57, 0), (17, 13.06, 1.72, 5.26), (4, 15.75, 2.50, 0), (16, 7.69, 2.11, 0),
+            (1, 9.65, 2.00, 0), (3, 11.65, 3.00, 0), (10, 13.00, 2.36, 9.09), (12, 12.32, 2.58, 0)]
+    agg = aggregate([{"sales": s, "aov": a, "drops": d, "fail_rate": f} for s, a, d, f in rows])
+    assert agg["sales"] == 69
+    assert abs(agg["aov"] - 11.10) < 0.25 and abs(agg["drops"] - 2.23) < 0.02
+    plain = sum(r[1] for r in rows) / len(rows)
+    assert abs(plain - 11.10) > abs(agg["aov"] - 11.10)
 
 
 def test_picking_the_weeks_for_a_period():
