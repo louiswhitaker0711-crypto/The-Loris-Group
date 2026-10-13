@@ -20,6 +20,9 @@ import { toast } from '../src/utils/toast';
 import { showAlert } from '../src/utils/showAlert';
 import { formatMoney } from '../src/utils/appTime';
 import { useTabBarClearance } from '../src/customization/CustomTabBar';
+import { APP_SHORT_NAME } from '../src/theme/brand';
+
+const MINI_TEAM = `Mini ${APP_SHORT_NAME}`;
 
 type Measure = { key: string; label: string; target?: string };
 type Cell = { value: number | null; rag: 'green' | 'amber' | 'red' | null };
@@ -64,18 +67,18 @@ export default function QualityScreen() {
     rag === 'green' ? { bg: c.greenBg, fg: c.green } : rag === 'amber' ? { bg: c.yellowBg, fg: c.yellow } : rag === 'red' ? { bg: c.redBg, fg: c.red } : { bg: c.surface, fg: c.textMuted };
 
   // One line of the table: a name (or week) and a coloured pill per measure.
-  const line = (key: string, label: string, metrics: Record<string, Cell>, opts: { bold?: boolean; sub?: boolean; onPress?: () => void; chevron?: boolean; isOpen?: boolean } = {}) => (
-    <Pressable key={key} onPress={opts.onPress} disabled={!opts.onPress} style={[s.tr, opts.sub && s.subRow, opts.bold && s.totalRow]}>
+  const line = (key: string, label: string, metrics: Record<string, Cell>, opts: { bold?: boolean; sub?: boolean; team?: boolean; onPress?: () => void; chevron?: boolean; isOpen?: boolean } = {}) => (
+    <Pressable key={key} onPress={opts.onPress} disabled={!opts.onPress} style={[s.tr, opts.sub && s.subRow, opts.bold && s.totalRow, opts.team && s.teamRow]}>
       <View style={[s.nameCol, s.nameWrap]}>
         {opts.chevron ? <Ionicons name={opts.isOpen ? 'chevron-down' : 'chevron-forward'} size={13} color={c.textMuted} /> : null}
-        <Text style={[opts.sub ? s.subName : s.name, opts.bold && { fontFamily: fonts.bodyBold }]} numberOfLines={1}>{label}</Text>
+        <Text style={[opts.sub ? s.subName : s.name, (opts.bold || opts.team) && { fontFamily: fonts.bodyBold }, opts.team && { color: c.primary }]} numberOfLines={1}>{label}</Text>
       </View>
       {measures.map((m) => {
         const cell = metrics?.[m.key];
         const t = tone(cell?.rag ?? null);
         return (
           <View key={m.key} style={s.col}>
-            <Text style={[s.pill, opts.bold && s.pillBold, opts.sub && s.pillSub, { backgroundColor: t.bg, color: t.fg }]}>{fmt(m.key, cell?.value)}</Text>
+            <Text style={[s.pill, (opts.bold || opts.team) && s.pillBold, opts.sub && s.pillSub, { backgroundColor: t.bg, color: t.fg }]}>{fmt(m.key, cell?.value)}</Text>
           </View>
         );
       })}
@@ -160,19 +163,33 @@ export default function QualityScreen() {
             <View style={s.card} testID="quality-team">
               <Text style={s.h}>{d.total ? 'The office' : 'Your team'} · {d.label}</Text>
               {multi && <Text style={s.note}>Averages for the period. Tap a name to see their week by week.</Text>}
+              {(d.teams || []).length > 1 && <Text style={s.note}>Each team's line is its average across everyone in it.</Text>}
               <ScrollView horizontal showsHorizontalScrollIndicator>
                 <View>
                   {header('BA')}
-                  {(d.team || []).map((r: any) => {
-                    const key = r.user_id || r.badge;
-                    const isOpen = open === key;
-                    return (
-                      <View key={key}>
-                        {line(key, `${r.name}${r.linked ? '' : ' ⚠︎'}`, r.metrics, multi ? { chevron: true, isOpen, onPress: () => setOpen(isOpen ? null : key) } : {})}
-                        {isOpen && (r.history || []).map((h: any) => line(`${key}-${h.week_ending}`, h.label.replace(/ \d{4}$/, ''), h.metrics, { sub: true }))}
+                  {(() => {
+                    const person = (r: any) => {
+                      const key = r.user_id || r.badge;
+                      const isOpen = open === key;
+                      const isMe = d.me && r === d.me;
+                      return (
+                        <View key={key}>
+                          {line(key, `${isMe ? 'You' : r.name}${r.linked ? '' : ' ⚠︎'}`, r.metrics, multi ? { chevron: true, isOpen, onPress: () => setOpen(isOpen ? null : key) } : {})}
+                          {isOpen && (r.history || []).map((h: any) => line(`${key}-${h.week_ending}`, h.label.replace(/ \d{4}$/, ''), h.metrics, { sub: true }))}
+                        </View>
+                      );
+                    };
+                    const teams: any[] = d.teams || [];
+                    if (teams.length < 2) return (d.team || []).map(person);
+                    // Grouped like the Bells sheet: each team's average, then its people.
+                    const everyone = [...(d.me ? [d.me] : []), ...(d.team || [])];
+                    return teams.map((g) => (
+                      <View key={g.key} style={s.teamBlock}>
+                        {line(`team-${g.key}`, g.key === 'mini' ? MINI_TEAM : (g.team_name || `${(g.leader_name || '').split(' ')[0]}'s team`), g.metrics, { team: true })}
+                        {everyone.filter((r: any) => r.team_key === g.key).map(person)}
                       </View>
-                    );
-                  })}
+                    ));
+                  })()}
                   {d.total && (
                     <View>
                       {line('office', 'Office', d.total, { bold: true, ...(multi ? { chevron: true, isOpen: open === 'office', onPress: () => setOpen(open === 'office' ? null : 'office') } : {}) })}
@@ -205,6 +222,7 @@ function Upload({ onSaved }: { onSaved: (week: string) => void }) {
   const [weekText, setWeekText] = useState('');
   const [links, setLinks] = useState<Record<string, string | null>>({});
   const [choosing, setChoosing] = useState<string | null>(null);
+  const [notify, setNotify] = useState(true);
 
   const toB64 = (blob: Blob) => new Promise<string>((resolve) => {
     const r = new FileReader();
@@ -220,6 +238,8 @@ function Upload({ onSaved }: { onSaved: (week: string) => void }) {
       const r = await apiService.readQuality({ files: picked.map((p) => ({ filename: p.name, data_b64: p.b64 })) });
       setPreview(r.data);
       setWeekText(r.data.week_ending ? ukDate(r.data.week_ending) : '');
+      // Tell the team for a new latest week; not when back-filling old ones.
+      setNotify(!r.data.newest_saved || !r.data.week_ending || r.data.week_ending > r.data.newest_saved);
       setLinks(Object.fromEntries((r.data.rows || []).map((row: any) => [row.badge, row.user_id || null])));
       if (!(r.data.rows || []).length) showAlert('Nothing to read', 'No BA rows found. Try a screenshot that shows the tables with names down the left.');
     } catch (e: any) {
@@ -274,8 +294,8 @@ function Upload({ onSaved }: { onSaved: (week: string) => void }) {
     setBusy('save');
     try {
       const rows = (preview.rows || []).map((r: any) => ({ label: r.label, badge: r.badge, metrics: r.metrics, user_id: links[r.badge] || null }));
-      const r = await apiService.importQuality({ week_ending: iso, rows, total: preview.total || {} });
-      toast.success(`Saved ${r.data.rows} BAs for WE ${ukDate(iso)}`);
+      const r = await apiService.importQuality({ week_ending: iso, rows, total: preview.total || {}, notify });
+      toast.success(`Saved ${r.data.rows} BAs for WE ${ukDate(iso)}${r.data.notified ? ` · ${r.data.notified} told` : ''}`);
       setPreview(null);
       qc.invalidateQueries({ queryKey: ['quality'] });
       qc.invalidateQueries({ queryKey: ['coach-suggestions'] });
@@ -351,6 +371,11 @@ function Upload({ onSaved }: { onSaved: (week: string) => void }) {
               </View>
             );
           })}
+          <Pressable onPress={() => setNotify(!notify)} style={s.notifyRow} accessibilityRole="checkbox" accessibilityState={{ checked: notify }}>
+            <Ionicons name={notify ? 'checkbox' : 'square-outline'} size={20} color={notify ? c.primary : c.textMuted} />
+            <Text style={s.label}>Tell everyone on it "Quality report added"</Text>
+          </Pressable>
+          {!notify && <Text style={s.note}>Off for older weeks, so back-filling doesn't flood phones.</Text>}
           <View style={s.actions}>
             <Pressable onPress={() => setPreview(null)} style={[s.btn, s.btnGhost]} accessibilityRole="button">
               <Text style={[s.btnText, { color: c.text }]}>Cancel</Text>
@@ -385,6 +410,8 @@ const styles = (c: any) => StyleSheet.create({
   tileTarget: { fontFamily: fonts.body, fontSize: 11.5, color: c.textMuted },
   tr: { flexDirection: 'row', alignItems: 'center', paddingVertical: 5, borderTopWidth: 1, borderTopColor: c.border },
   thRow: { borderTopWidth: 0, alignItems: 'flex-end' },
+  teamRow: { backgroundColor: c.surface, borderTopWidth: 2, borderTopColor: c.borderDark },
+  teamBlock: { marginTop: 6 },
   totalRow: { borderTopWidth: 2, borderTopColor: c.borderDark },
   th: { fontFamily: fonts.bodyBold, fontSize: 12, color: c.text, textAlign: 'center' },
   thTarget: { fontFamily: fonts.body, fontSize: 11, color: c.textMuted, textAlign: 'center' },
@@ -411,5 +438,6 @@ const styles = (c: any) => StyleSheet.create({
   chooser: { borderWidth: 1, borderColor: c.border, borderRadius: 10, maxHeight: 220, overflow: 'scroll' as any },
   choice: { paddingHorizontal: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: c.border },
   choiceText: { fontFamily: fonts.body, fontSize: 14, color: c.text },
+  notifyRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 6 },
   actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, paddingTop: 4 },
 });

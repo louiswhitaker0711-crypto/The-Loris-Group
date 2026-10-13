@@ -1166,7 +1166,7 @@ export const apiService = {
     api.get('/quality', { params: Object.fromEntries(Object.entries(p).filter(([, v]) => v)) }),
   readQuality: (body: { files: { filename: string; data_b64: string }[]; week_ending?: string }) =>
     api.post('/quality/read', body, { timeout: 120000 }),
-  importQuality: (body: { week_ending: string; rows: any[]; total: any }) => api.post('/quality/import', body),
+  importQuality: (body: { week_ending: string; rows: any[]; total: any; notify?: boolean }) => api.post('/quality/import', body),
   getCoachSuggestions: () => api.get<{ through: string; suggestions: any[] }>('/coach/suggestions'),
   listViewers: () => api.get<{ viewers: any[] }>('/admin/viewers'),
   addViewer: (body: { name: string; email: string; password: string }) => api.post('/admin/viewers', body),

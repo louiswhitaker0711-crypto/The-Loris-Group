@@ -61,6 +61,15 @@ export const TAB_REGISTRY: TabItem[] = [
     defaultVisibleByRole: { trainee: true, leader: true, admin: true },
   },
   {
+    // Acwyre's weekly quality report: order value, drop days, The Round, 4th
+    // week and fails against the Owner's targets. Everyone sees their own;
+    // Coaches their team; Admins add the week's screenshot.
+    id: 'quality', label: 'Quality', longLabel: 'Quality — order value, drops, 4th week and fails',
+    icon: 'shield-checkmark-outline', kind: 'route', target: '/quality',
+    visibleFor: ['trainee', 'leader', 'admin'],
+    defaultVisibleByRole: { trainee: true, leader: true, admin: true },
+  },
+  {
     // One surface for the whole Cycle of Development: trainees see their
     // journey + Stage 2, leaders/admins the full Stage 1→SL hub. "My
     // Progress" and "COD" were two names for the same thing — now it's one.
@@ -159,15 +168,6 @@ export const TAB_REGISTRY: TabItem[] = [
     icon: 'earth-outline', kind: 'route', target: '/territory',
     visibleFor: ['admin'],
     defaultVisibleByRole: { trainee: false, leader: false, admin: true },
-  },
-  {
-    // Acwyre's weekly quality report: order value, drop days, The Round, 4th
-    // week and fails against the Owner's targets. Everyone sees their own;
-    // Coaches their team; Admins add the week's screenshot.
-    id: 'quality', label: 'Quality', longLabel: 'Quality — order value, drops, 4th week and fails',
-    icon: 'shield-checkmark-outline', kind: 'route', target: '/quality',
-    visibleFor: ['trainee', 'leader', 'admin'],
-    defaultVisibleByRole: { trainee: true, leader: true, admin: true },
   },
   {
     id: 'notifications', label: 'Inbox', longLabel: 'Inbox — Notification History',
