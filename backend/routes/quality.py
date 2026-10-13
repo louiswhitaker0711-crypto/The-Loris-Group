@@ -143,10 +143,12 @@ async def read_quality(request: Request):
         rows.append({**r, "user_id": uid, "user_name": names.get(uid) if uid else None,
                      "matched_by": how if uid else None})
     existing = bool(week and await db.quality_weeks.find_one({"office_id": office_id, "week_ending": week}, {"_id": 1}))
+    newest = await db.quality_weeks.find_one({"office_id": office_id}, {"week_ending": 1}, sort=[("week_ending", -1)])
     people = sorted(({"id": str(u["_id"]), "name": u.get("name") or ""} for u in users if u.get("is_active") is not False),
                     key=lambda p: p["name"].lower())
     return {"week_ending": week, "rows": rows, "total": rep.get("total") or {},
             "fourth_week_due": rep.get("fourth_week_due", True), "existing": existing, "people": people,
+            "newest_saved": (newest or {}).get("week_ending"),
             "measures": [{"key": k, "label": LABELS[k]} for k, _, _ in MEASURES]}
 
 
@@ -183,7 +185,42 @@ async def import_quality(request: Request):
                   "total": clean_metrics(body.get("total")),
                   "imported_at": datetime.now(timezone.utc).isoformat(), "imported_by": admin.get("id")}},
         upsert=True)
-    return {"week_ending": week, "rows": len(bas), "linked": sum(1 for b in bas if b["user_id"])}
+    sent = await _tell_the_team(bas, week) if body.get("notify") else 0
+    return {"week_ending": week, "rows": len(bas), "linked": sum(1 for b in bas if b["user_id"]), "notified": sent}
+
+
+def _headline(m: dict) -> str:
+    bits = []
+    if m.get("sales") is not None:
+        bits.append(f"{m['sales']} sale{'' if m['sales'] == 1 else 's'}")
+    if m.get("aov") is not None:
+        bits.append(f"£{m['aov']:.2f} order value")
+    if m.get("drops") is not None:
+        bits.append(f"{m['drops']:g} drop days")
+    if m.get("fail_rate") is not None:
+        bits.append(f"{m['fail_rate']:g}% fails")
+    return " · ".join(bits)
+
+
+async def _tell_the_team(bas: list[dict], week: str) -> int:
+    """'Quality report added' to everyone on it who's in the app, with their
+    own headline numbers. The Admin chooses at save (on by default for a new
+    newest week, so back-filling old weeks doesn't flood phones)."""
+    from core.push import send_push_to_user
+    label = week_label(week).rsplit(" ", 1)[0]
+    sent = 0
+    for b in bas:
+        if not b.get("user_id"):
+            continue
+        line = _headline(b.get("metrics") or {})
+        try:
+            await send_push_to_user(b["user_id"], "📊 Quality report added",
+                                    f"{label}: {line}" if line else f"{label} is in. Tap to see your quality.",
+                                    {"type": "quality", "url": "/quality"})
+            sent += 1
+        except Exception:
+            pass
+    return sent
 
 
 def _coloured(metrics: dict | None) -> dict:
@@ -246,11 +283,34 @@ async def get_quality(request: Request, view: str = "week", week: Optional[str] 
             team.append(row)
     team.sort(key=lambda r: (-((r["metrics"].get("sales") or {}).get("value") or 0), r["name"].lower()))
 
+    # Group by team, the same teams as the Bells sheet (a named team's Coach
+    # and everyone under them; anyone else is the Mini team).
+    teams = []
+    if whole or user.get("role") == "leader":
+        from routes.bells import _enrich_entries_with_teams
+        rows = [r for r in ([me] if me else []) + team]
+        entries = [{"user_id": r["user_id"], "office_id": office_id} for r in rows]
+        await _enrich_entries_with_teams(entries)
+        groups: dict[str, dict] = {}
+        for r, e in zip(rows, entries):
+            pt = e.get("primary_team") or {}
+            gk = pt.get("leader_id") or "mini"
+            r["team_key"] = gk
+            g = groups.setdefault(gk, {"key": gk, "team_name": pt.get("team_name") or None,
+                                       "leader_name": pt.get("leader_name"), "people": 0, "weeks": []})
+            g["people"] += 1
+            p = people.get(r["user_id"] or f"badge:{r['badge']}") or {}
+            g["weeks"].extend((p.get("now") or {}).values())
+        for g in groups.values():
+            g["metrics"] = _coloured(aggregate(g.pop("weeks")))
+            teams.append(g)
+        teams.sort(key=lambda g: (g["key"] == "mini", -((g["metrics"].get("sales") or {}).get("value") or 0)))
+
     total = prev_total = total_history = None
     if whole:
         total = _coloured(aggregate([(docs.get(w) or {}).get("total") or {} for w in now]))
         prev_total = aggregate([(docs.get(w) or {}).get("total") or {} for w in before])
         total_history = [{"week_ending": w, "label": week_label(w), "metrics": _coloured((docs.get(w) or {}).get("total"))} for w in now]
     return {**base, "week_ending": now[0], "month": now[0][:7] if view == "month" else None,
-            "label": label, "period_weeks": len(now), "me": me, "team": team,
+            "label": label, "period_weeks": len(now), "me": me, "team": team, "teams": teams,
             "total": total, "prev_total": prev_total, "total_history": total_history}
