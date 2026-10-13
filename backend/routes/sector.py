@@ -448,17 +448,71 @@ async def sector_leader_nudges(slot: str, iso: str) -> int:
     return sent
 
 
+# The check-ins go out straight after the app pulls fresh numbers from
+# OwnerIQ (hourly), so they're never a stale read: after each sync in field
+# hours, the latest slot that's due and not yet sent today goes out. If a
+# sync doesn't happen (OwnerIQ down), a fallback sends it FALLBACK_MINUTES
+# after the slot time. Each slot goes out once a day (`field_nudge_runs`).
+FALLBACK_MINUTES = 50
+
+
+def _slots_for(day: int):
+    return () if day == 6 else SATURDAY_SLOTS if day == 5 else WEEKDAY_SLOTS
+
+
+def due_slot(now: datetime) -> Optional[str]:
+    """The latest check-in due at `now` (UK time), while the field's still on."""
+    field_end = 17 * 60 if now.weekday() == 5 else 20 * 60
+    mins = now.hour * 60 + now.minute
+    if mins >= field_end:
+        return None
+    due = [slot for h, m, slot in _slots_for(now.weekday()) if h * 60 + m <= mins]
+    return due[-1] if due else None
+
+
+async def _claim_slot(iso: str, slot: str) -> bool:
+    r = await db.field_nudge_runs.update_one({"_id": f"{iso}:{slot}"},
+                                             {"$setOnInsert": {"at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+    return bool(getattr(r, "upserted_id", None))
+
+
+async def field_nudge_after_sync(now: Optional[datetime] = None) -> int:
+    """Called right after each OwnerIQ sync."""
+    now = now or datetime.now(APP_TZ)
+    slot = due_slot(now)
+    if not slot or not await _claim_slot(now.date().isoformat(), slot):
+        return 0
+    return await field_nudge_tick(slot)
+
+
+async def field_nudge_fallback(slot: str) -> int:
+    """The slot's safety net, when no sync has sent it."""
+    if not await _claim_slot(today_iso(), slot):
+        return 0
+    return await field_nudge_tick(slot)
+
+
 async def field_nudge_tick(slot: str) -> int:
     from core.push import send_push_to_user
     iso = today_iso()
     docs = [d async for d in db.sector_days.find({"date": iso, "setup": {"$ne": None}}, {"_id": 0})]
     live = await _prefill([d["user_id"] for d in docs], iso) if docs else {}
+    # Say how fresh the numbers are, so a lag in Field IQ reads as one.
+    last = await db.owneriq_kpis.find_one({"date": iso}, {"synced_at": 1}, sort=[("synced_at", -1)])
+    as_of = ""
+    if (last or {}).get("synced_at"):
+        try:
+            as_of = datetime.fromisoformat(str(last["synced_at"]).replace("Z", "+00:00")).astimezone(APP_TZ).strftime("%H:%M")
+        except ValueError:
+            as_of = ""
     sent = 0
     for d in docs:
         s = d.get("setup") or {}
         if s.get("goal") is None and not s.get("kpi_metric") and not s.get("focus") and not s.get("positive"):
             continue
         title, body = nudge_text(s, live.get(d["user_id"]) or {}, slot)
+        if as_of:
+            body = f"{body} (Field IQ at {as_of})"
         try:
             await send_push_to_user(d["user_id"], title, body, {"type": "field_nudge", "url": "/field-reset"})
             sent += 1
