@@ -247,8 +247,11 @@ async def get_quality(request: Request, view: str = "week", week: Optional[str] 
         {"office_id": office_id, "week_ending": {"$in": now + before}}, {"_id": 0, "week_ending": 1, "bas": 1, "total": 1})}
 
     uid = str(user.get("id"))
+    role = user.get("role")
     whole = sees_whole_office(user)
-    visible = None if whole else (set(await get_subtree_ids(uid)) | {uid} if user.get("role") == "leader" else {uid})
+    # Coaches see themselves and everyone under them; a BA sees their own
+    # team (worked out from the Bells teams below); Admins and Coach+ the lot.
+    visible = set(await get_subtree_ids(uid)) | {uid} if (role == "leader" and not whole) else None
 
     # Each person across the weeks: linked people by id, anyone else by badge.
     people: dict[str, dict] = {}
@@ -267,72 +270,108 @@ async def get_quality(request: Request, view: str = "week", week: Optional[str] 
     names = {str(u["_id"]): u.get("name") async for u in db.users.find(
         {"_id": {"$in": [ObjectId(x) for x in ids if ObjectId.is_valid(x)]}}, {"name": 1})}
 
-    me, team = None, []
-    for p in people.values():
+    rows = []
+    for key, p in people.items():
         if not p["now"]:
             continue
-        row = {"user_id": p["user_id"], "name": names.get(p["user_id"]) or p["label"], "badge": p["badge"],
-               "linked": bool(p["user_id"]), "weeks": len(p["now"]),
-               "metrics": _coloured(aggregate(list(p["now"].values()))),
-               "prev": aggregate(p["before"]),
-               "history": [{"week_ending": w, "label": week_label(w), "metrics": _coloured(p["now"][w])}
-                           for w in now if w in p["now"]]}
-        if p["user_id"] == uid:
-            me = row
-        else:
-            team.append(row)
-    team.sort(key=lambda r: (-((r["metrics"].get("sales") or {}).get("value") or 0), r["name"].lower()))
+        rows.append({"user_id": p["user_id"], "name": names.get(p["user_id"]) or p["label"], "badge": p["badge"],
+                     "linked": bool(p["user_id"]), "weeks": len(p["now"]),
+                     "metrics": _coloured(aggregate(list(p["now"].values()))),
+                     "prev": aggregate(p["before"]),
+                     "history": [{"week_ending": w, "label": week_label(w), "metrics": _coloured(aggregate([p["now"][w]]))}
+                                 for w in now if w in p["now"]],
+                     "_key": key})
 
-    # Group by team, the same teams as the Bells sheet. A team includes the
-    # teams under it (everyone in Next Gen under John's team counts in John's
-    # team too); each person is listed under their nearest team. Anyone with
-    # no team is the Mini team.
-    teams = []
-    if whole or user.get("role") == "leader":
-        from routes.bells import _enrich_entries_with_teams
-        rows = [r for r in ([me] if me else []) + team]
-        entries = [{"user_id": r["user_id"], "office_id": office_id} for r in rows]
-        await _enrich_entries_with_teams(entries)
-        groups: dict[str, dict] = {}
-        parent: dict[str, str] = {}
+    # Teams, the same as the Bells sheet. A team includes the teams under it
+    # (everyone in a sub-team counts in the team above too); each person is
+    # listed under their nearest team; anyone with no team is the Mini team.
+    from routes.bells import _enrich_entries_with_teams
+    entries = [{"user_id": r["user_id"], "office_id": office_id} for r in rows] + [{"user_id": uid, "office_id": office_id}]
+    await _enrich_entries_with_teams(entries)
+    my_chain = [t for t in (entries[-1].get("teams") or []) if t.get("leader_id")]
+    my_team = my_chain[0]["leader_id"] if my_chain else "mini"
+    meta: dict[str, dict] = {"mini": {"leader_id": "mini"}}
+    for r, e in zip(rows, entries):
+        chain = [t for t in (e.get("teams") or []) if t.get("leader_id")]
+        for t in chain:
+            meta.setdefault(t["leader_id"], t)
+        r["_chain"] = [t["leader_id"] for t in chain] or ["mini"]
+        r["team_key"] = r["_chain"][0]
+    if not whole and role != "leader":
+        # A BA: their team (and any team under it), nothing above it.
+        rows = [r for r in rows if my_team in r["_chain"]]
+        for r in rows:
+            r["_chain"] = r["_chain"][:r["_chain"].index(my_team) + 1]
 
-        def group(key: str, t: dict) -> dict:
-            return groups.setdefault(key, {"key": key, "team_name": t.get("team_name") or None,
-                                           "leader_name": t.get("leader_name"), "people": 0, "weeks": []})
+    groups: dict[str, dict] = {}
+    parent: dict[str, str] = {}
+    for r in rows:
+        p = people[r["_key"]]
+        for i, k in enumerate(r["_chain"]):
+            if i + 1 < len(r["_chain"]):
+                parent.setdefault(k, r["_chain"][i + 1])
+            t = meta.get(k) or {}
+            g = groups.setdefault(k, {"key": k, "team_name": t.get("team_name") or None,
+                                      "leader_name": t.get("leader_name"), "people": 0, "weeks": [], "before": []})
+            g["people"] += 1
+            g["weeks"].extend(p["now"].values())
+            g["before"].extend(p["before"])
+    for g in groups.values():
+        g["metrics"] = _coloured(aggregate(g.pop("weeks")))
+        g["prev"] = aggregate(g.pop("before"))
+        g["parent_key"] = parent.get(g["key"]) if parent.get(g["key"]) in groups else None
+    sales_of = lambda g: -((g["metrics"].get("sales") or {}).get("value") or 0)
+    teams: list[dict] = []
 
-        for r, e in zip(rows, entries):
-            chain = [t for t in (e.get("teams") or []) if t.get("leader_id")]
-            r["team_key"] = chain[0]["leader_id"] if chain else "mini"
-            for i, t in enumerate(chain[:-1]):
-                parent.setdefault(t["leader_id"], chain[i + 1]["leader_id"])
-            p = people.get(r["user_id"] or f"badge:{r['badge']}") or {}
-            for t in (chain or [{"leader_id": "mini"}]):
-                g = group(t["leader_id"], t)
-                g["people"] += 1
-                g["weeks"].extend((p.get("now") or {}).values())
-        for g in groups.values():
-            g["metrics"] = _coloured(aggregate(g.pop("weeks")))
-            g["parent_key"] = parent.get(g["key"]) if parent.get(g["key"]) in groups else None
-        sales_of = lambda g: -((g["metrics"].get("sales") or {}).get("value") or 0)
+    def walk(key, depth: int):
+        kids = sorted((g for g in groups.values() if g["parent_key"] == key and g["key"] != "mini"), key=sales_of)
+        for g in kids:
+            g["depth"] = depth
+            g["includes"] = [c["team_name"] or c["leader_name"] for c in groups.values() if c["parent_key"] == g["key"]]
+            teams.append(g)
+            walk(g["key"], depth + 1)
+    walk(None, 0)
+    if "mini" in groups:
+        groups["mini"].update(depth=0, includes=[])
+        teams.append(groups["mini"])
 
-        # Parents first, each followed by the teams under it.
-        def walk(key: str | None, depth: int):
-            kids = sorted((g for g in groups.values() if g["parent_key"] == key and g["key"] != "mini"), key=sales_of)
-            for g in kids:
-                g["depth"] = depth
-                g["includes"] = [c["team_name"] or c["leader_name"] for c in groups.values() if c["parent_key"] == g["key"]]
-                teams.append(g)
-                walk(g["key"], depth + 1)
-        walk(None, 0)
-        if "mini" in groups:
-            groups["mini"].update(depth=0, includes=[])
-            teams.append(groups["mini"])
+    def team_title(g: dict) -> str:
+        return "Mini" if g["key"] == "mini" else (g["team_name"] or f"{(g['leader_name'] or '').split(' ')[0]}'s team")
 
-    total = prev_total = total_history = None
+    me = next((r for r in rows if r["user_id"] == uid), None)
+    team = sorted((r for r in rows if r is not me),
+                  key=lambda r: (-((r["metrics"].get("sales") or {}).get("value") or 0), r["name"].lower()))
+    for r in rows:
+        r.pop("_chain", None)
+        r.pop("_key", None)
+
+    # The box under "Your quality": the office for Admins and Coach+, the
+    # Coach's own team, or the BA's team, in the same format.
+    box = None
     if whole:
-        total = _coloured(aggregate([(docs.get(w) or {}).get("total") or {} for w in now]))
-        prev_total = aggregate([(docs.get(w) or {}).get("total") or {} for w in before])
-        total_history = [{"week_ending": w, "label": week_label(w), "metrics": _coloured((docs.get(w) or {}).get("total"))} for w in now]
+        box = {"title": "The office", "kind": "office",
+               "metrics": _coloured(aggregate([(docs.get(w) or {}).get("total") or {} for w in now])),
+               "prev": aggregate([(docs.get(w) or {}).get("total") or {} for w in before]),
+               "history": [{"week_ending": w, "label": week_label(w), "metrics": _coloured(aggregate([(docs.get(w) or {}).get("total") or {}]))} for w in now]}
+    elif role == "leader":
+        g = groups.get(uid)
+        if g:
+            box = {"title": f"Your team · {team_title(g)}", "kind": "team", "metrics": g["metrics"], "prev": g["prev"]}
+        elif team:
+            box = {"title": "Your team", "kind": "team",
+                   "metrics": _coloured(aggregate([m for r in rows for m in people_now(people, r)])), "prev": {}}
+    else:
+        g = groups.get(my_team)
+        if g:
+            box = {"title": f"Your team · {team_title(g)}", "kind": "team", "metrics": g["metrics"], "prev": g["prev"]}
+
     return {**base, "week_ending": now[0], "month": now[0][:7] if view == "month" else None,
-            "label": label, "period_weeks": len(now), "me": me, "team": team, "teams": teams,
-            "total": total, "prev_total": prev_total, "total_history": total_history}
+            "label": label, "period_weeks": len(now), "me": me, "team": team, "teams": teams, "box": box,
+            # older screens read these two
+            "total": box["metrics"] if box and box["kind"] == "office" else None,
+            "total_history": box.get("history") if box and box["kind"] == "office" else None}
+
+
+def people_now(people: dict, row: dict) -> list:
+    p = people.get(row.get("user_id") or f"badge:{row['badge']}") or {}
+    return list((p.get("now") or {}).values())

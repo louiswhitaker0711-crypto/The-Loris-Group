@@ -143,3 +143,10 @@ def test_picking_the_weeks_for_a_period():
     assert pick_weeks(weeks, "month")[2] == "October 2026"
     assert pick_weeks(weeks, "all")[0] == weeks
     assert pick_weeks([], "4w") == ([], [], "")
+
+
+def test_fails_as_a_count():
+    from core.quality import aggregate
+    agg = aggregate([{"sales": 10, "fail_rate": 9.09}, {"sales": 17, "fail_rate": 5.26}, {"sales": 4, "fail_rate": 0}])
+    assert agg["fails"] == 2 and agg["signups"] == 33
+    assert "fails" not in aggregate([{"sales": 3}])
