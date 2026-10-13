@@ -35,7 +35,6 @@ import { AnimatedNumber } from '../../src/components/ui/AnimatedNumber';
 import { Skeleton } from '../../src/components/ui/Skeleton';
 import FieldAveragesCard from '../../src/components/home/FieldAveragesCard';
 import FieldIqWeekCard from '../../src/components/home/FieldIqWeekCard';
-import LiveOpsCard from '../../src/components/home/LiveOpsCard';
 import SectorSetupsCard from '../../src/components/home/SectorSetupsCard';
 import HomeAreaMap from '../../src/components/home/HomeAreaMap';
 import MyDayCard from '../../src/components/home/today/MyDayCard';
@@ -1378,7 +1377,6 @@ export default function HomeScreen() {
       <MyWeekCard hideWhenEmpty={isAdmin} />
       <SectorSetupsCard />
       {pSectorPrompt}
-      <LiveOpsCard />
     </>
   );
   const coachPlanning = (
@@ -1412,7 +1410,6 @@ export default function HomeScreen() {
       <MyDayCard />
       <MyWeekCard hideWhenEmpty={isAdmin} />
       <SectorSetupsCard />
-      <LiveOpsCard />
     </>
   );
   const moreCoach = (
@@ -1471,7 +1468,6 @@ export default function HomeScreen() {
       {inField && baPlanning}
       {pJourney}
       {pSalesPath}
-      <LiveOpsCard />
       <FieldIqWeekCard />
     </>
   );

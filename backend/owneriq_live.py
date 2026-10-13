@@ -29,7 +29,7 @@ from datetime import datetime, timedelta, timezone
 import httpx
 
 from database import db
-from owneriq_sync import OWNERIQ_API_BASE, _UA, _login, OwnerIQError
+from owneriq_sync import OWNERIQ_API_BASE, _UA, _forget_shared_login, _login_cached, OwnerIQError
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +63,8 @@ async def _get(client: httpx.AsyncClient, token: str, path: str, iso_date: str, 
         headers=_headers(token),
     )
     if r.status_code != 200:
+        if r.status_code == 401:
+            _forget_shared_login()
         raise OwnerIQError(f"GET {path} failed: HTTP {r.status_code} {r.text[:200]}")
     return r.json()
 
@@ -74,6 +76,8 @@ async def _company_ids(client: httpx.AsyncClient, token: str) -> list[str]:
         headers=_headers(token),
     )
     if r.status_code != 200:
+        if r.status_code == 401:
+            _forget_shared_login()
         raise OwnerIQError(f"GET light_index failed: HTTP {r.status_code} {r.text[:200]}")
     return [str(c["id"]) for c in (r.json().get("data") or []) if c.get("id") is not None]
 
@@ -94,21 +98,21 @@ async def fetch_live_top(client: httpx.AsyncClient, token: str, iso_date: str) -
 async def fetch_live_operations(iso_date: str) -> dict:
     """Top-level Live Operations for a day: KPIs + every sector out in the field."""
     async with httpx.AsyncClient(timeout=45.0) as client:
-        token = await _login(client)
+        token = await _login_cached(client)
         return await fetch_live_top(client, token, iso_date)
 
 
 async def fetch_sector(sector_id, iso_date: str) -> dict:
     """One team's live detail: hero totals + per-BA rows for the day."""
     async with httpx.AsyncClient(timeout=45.0) as client:
-        token = await _login(client)
+        token = await _login_cached(client)
         return await _get(client, token, f"/v3/owner/live_operations/sectors/{sector_id}", iso_date)
 
 
 async def fetch_ba(ba_id, iso_date: str) -> dict:
     """One BA's live detail: hero totals + door-by-door laps for the day."""
     async with httpx.AsyncClient(timeout=45.0) as client:
-        token = await _login(client)
+        token = await _login_cached(client)
         return await _get(client, token, f"/v3/owner/live_operations/bas/{ba_id}", iso_date)
 
 
@@ -208,7 +212,7 @@ async def compile_funnel(sector_ids: list, iso_date: str, force: bool = False) -
             missing.append(sid)
     if missing:
         async with httpx.AsyncClient(timeout=60.0) as client:
-            token = await _login(client)
+            token = await _login_cached(client)
             for sid in missing:
                 try:
                     d = await _get(client, token, f"/v3/owner/live_operations/sectors/{sid}", iso_date)
@@ -234,7 +238,7 @@ async def resettle_day(iso_date: str) -> dict:
     the settled copy. Idempotent."""
     counts = {"sectors": 0, "bas": 0}
     async with httpx.AsyncClient(timeout=90.0) as client:
-        token = await _login(client)
+        token = await _login_cached(client)
         top = await fetch_live_top(client, token, iso_date)
         await _cache_write(f"live:all:{iso_date}", "live", "all", iso_date, top)
         for sector in (top.get("sectors") or []):

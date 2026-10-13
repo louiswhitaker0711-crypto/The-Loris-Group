@@ -153,13 +153,12 @@ export const TAB_REGISTRY: TabItem[] = [
     defaultVisibleByRole: { trainee: false, leader: false, admin: false },
   },
   {
-    // New id (was 'sectors', hidden by default): a fresh id is added to
-    // everyone's saved sidebar with the defaults below, so Coaches and admins
-    // get Live Operations pinned without touching their other choices.
+    // Off the menu (Owner's call, Oct 2026): it reads OwnerIQ live every time
+    // it's opened. The numbers people need come from the hourly sync instead.
     id: 'live-ops', label: 'Live Operations', short: 'Live Ops', longLabel: 'Live Operations — sectors in the field, door by door',
     icon: 'radio-outline', kind: 'route', target: '/live-ops',
-    visibleFor: ['trainee', 'leader', 'admin'],
-    defaultVisibleByRole: { trainee: false, leader: true, admin: true },
+    visibleFor: [],
+    defaultVisibleByRole: { trainee: false, leader: false, admin: false },
   },
   {
     // Acwyre's territory, the big map, sector maps and area history in one

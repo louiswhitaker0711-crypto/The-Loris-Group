@@ -75,14 +75,14 @@ OWNERIQ_API_BASE=<host>                                  # only if OwnerIQ told 
 
 Leave `OWNERIQ_WRITES_ENABLED` unset for now. Click **Update Variables**, then **Deploy** on the banner (Railway holds variable changes until you deploy).
 
-Never put the password in `backend/.env` on your computer: a local server would start the same 10-minute sync as production.
+Never put the password in `backend/.env` on your computer: a local server would start the same hourly sync as production.
 
 ## 4. Link your people
 
 Each OwnerIQ person is linked to an app account in this order:
 
 1. A link the app already made (stored on the account).
-2. The same **email address** in both systems (checked every 10 minutes).
+2. The same **email address** in both systems (checked every hour).
 3. The **badge number**: in the app, **Admin → Users →** the person's card **→ Badge number → Add badge number**. Enter it exactly as OwnerIQ has it (letters, numbers and dashes; several separated by commas).
 Making someone's ID badge in the **Badge Studio** also adds its number for them, but only when you make it from that person's own page (**Admin → Users →** tap their name **→ Badge**); a badge made in the studio without starting from a person is saved unlinked. One badge number can belong to only one person: the app refuses a number someone else already holds.
 A matching **name** never links anyone: people can change their own display name, so a name only shows up as a hint (`name_in_app` on the link-debug page below) telling you whose badge number to add. Until a person is linked by one of the three above, their OwnerIQ figures count in the office totals but not on their own screens.
@@ -107,7 +107,7 @@ After the deploy finishes:
 
 1. Open **Field KPIs** (go to `/field-kpis`, or pin **KPIs** to your sidebar from **Customise**) and, as an Admin, tap **Sync now** (or pull down to refresh). You should see doors, spoken to, presented, closed and sign-ups for yesterday and today, and when it last synced.
 2. **Live Operations** shows today's sectors once your teams are out (it's empty before the first knock).
-3. **Performance Hub** (Admins and Coach+) fills in after the first scheduled run. There is no button for it in the app: the scheduled job runs it every 10 minutes, so wait for the first run after your deploy. **Field KPIs → Sync now** pulls the door figures only, not the Hub. Claude Code can't trigger the Hub sync for you, because it has no admin session on your app.
+3. **Performance Hub** (Admins and Coach+) fills in after the first scheduled run. There is no button for it in the app: the scheduled job runs it every hour, so wait for the first run after your deploy. **Field KPIs → Sync now** pulls the door figures only, not the Hub. Claude Code can't trigger the Hub sync for you, because it has no admin session on your app.
 4. **Profile → OwnerIQ Sync → Check alignment** (the owner, i.e. the super-admin, only: it covers every office). This is a dry run: it lists the differences between OwnerIQ and the app (who is active, who coaches whom, who is a Coach) and changes nothing. A long list on day one is normal.
 
 If people show as unlinked, an admin can open `https://<your app>/api/owneriq/link-debug` in the browser while logged in (this is a page you open yourself, not something for Claude Code to call): it shows how many badge numbers the app holds and samples of OwnerIQ rows that didn't match, for the admin's own office (the owner sees every office). `name_in_app: true` means an app account has that name but no badge link yet: add the badge number.
@@ -134,14 +134,15 @@ All times are UK time (`APP_TIMEZONE`). Nothing runs until `OWNERIQ_EMAIL` and `
 
 | When | What | Direction |
 | --- | --- | --- |
-| **Every 10 minutes** | **KPI sync:** yesterday's and today's door figures per BA (doors, spoken to, pitches started, pitches closed, sign-ups, points), for every company synced. Re-reading yesterday picks up OwnerIQ's same-day corrections | OwnerIQ → app |
-| Every 10 minutes, straight after | **Performance Hub sync:** this week and last week: each BA's weekly target and goal status, daily attendance and sign-ups, team names and leaders. Weekly goals go into Bells **unless someone typed a goal in the app**, which then always wins. Days nobody has filled in on Bells get the BA's OwnerIQ sign-ups as Silver sign-ups, flagged so a coach can correct the Silver/Gold split and add The Round; once someone edits a day the sync leaves it alone. Also refreshes everyone's OwnerIQ stage for the spider diagram | OwnerIQ → app |
-| Every 10 minutes, straight after, in field hours | **Set-up check-ins** (goal, KPI, focus against the numbers just pulled) go out, three a day, only after a pull that worked, so they always match that moment | App → people |
-| Every 10 minutes, straight after | **People sync:** compares who is active, who coaches whom, and who is a Coach (stage 3 and up) on both sides. With writes **off** it only works out the differences; nothing changes on either side | Both ways, only with writes on |
-| **Every 10 minutes** | **Timeline:** refreshes today's door logs between 10:00 and 22:00, and fills in one missing past day at a time, back eight weeks. Then the "two zeroes in a row" check, which sends one "Retrain needed" alert per person to the Owner and their Coaches | OwnerIQ → app |
+| **Every hour** | **KPI sync:** yesterday's and today's door figures per BA (doors, spoken to, pitches started, pitches closed, sign-ups, points), for every company synced. Re-reading yesterday picks up OwnerIQ's same-day corrections | OwnerIQ → app |
+| Every hour, straight after | **Performance Hub sync:** this week and last week: each BA's weekly target and goal status, daily attendance and sign-ups, team names and leaders. Weekly goals go into Bells **unless someone typed a goal in the app**, which then always wins. Days nobody has filled in on Bells get the BA's OwnerIQ sign-ups as Silver sign-ups, flagged so a coach can correct the Silver/Gold split and add The Round; once someone edits a day the sync leaves it alone. Also refreshes everyone's OwnerIQ stage for the spider diagram | OwnerIQ → app |
+| Every hour, straight after, in field hours | **Set-up check-ins** (goal, KPI, focus against the numbers just pulled) go out, three a day, only after a pull that worked, so they always match that moment | App → people |
+| Every hour, straight after | **People sync:** compares who is active, who coaches whom, and who is a Coach (stage 3 and up) on both sides. With writes **off** it only works out the differences; nothing changes on either side | Both ways, only with writes on |
+| **Every hour** | **Timeline:** refreshes today's door logs between 10:00 and 22:00, and fills in one missing past day at a time, back eight weeks. Then the "two zeroes in a row" check, which sends one "Retrain needed" alert per person to the Owner and their Coaches | OwnerIQ → app |
 | **03:00 daily** | **Live Operations re-settle:** re-reads yesterday's whole Live Operations tree once, so late corrections replace the cached copy | OwnerIQ → app |
 | **04:30 daily** | **People sync** again (the safety net) | Both ways, only with writes on |
-| When someone opens a screen | **Live Operations** (sectors → sector → BA door log) is fetched live: today's data is reused for `OWNERIQ_LIVE_TTL` seconds; finished days are kept for good. **Performance Hub** views are reused for 3 minutes for the current week and 6 hours for settled weeks; if OwnerIQ can't be reached the last copy is shown, marked stale | OwnerIQ → app |
+| When someone opens a screen | **Live Operations** (an Admin tool now, not on Home) (sectors → sector → BA door log) is fetched live: today's data is reused for `OWNERIQ_LIVE_TTL` seconds; finished days are kept for good. **Performance Hub** views are reused for 3 minutes for the current week and 6 hours for settled weeks; if OwnerIQ can't be reached the last copy is shown, marked stale | OwnerIQ → app |
+| Signing in | The scheduled runs sign in once per run. Screens that read OwnerIQ when opened (the Performance Hub views) share one sign-in for up to 30 minutes, so opening screens doesn't mean a sign-in each time | — |
 | When an **Admin** refreshes **Field KPIs** (or the Home field averages card) | A KPI sync of at most the last 14 days of the range shown, at most once a minute for the whole app. Coaches and BAs refreshing just re-read what the scheduled sync stored | OwnerIQ → app |
 
 **Notes**
@@ -165,7 +166,7 @@ With `OWNERIQ_WRITES_ENABLED=true` these start writing to OwnerIQ:
 | A BA is assigned to a Coach | Moved under that Coach in the OwnerIQ tree |
 | Spider diagram: **Advance**, **Demote**, **Remove**, or dragging someone onto a Coach (Admins) | Stage up/down, deactivate, or move under that Coach |
 | **Profile → OwnerIQ Sync → Apply** | Applies the differences "Check alignment" listed |
-| The 10-minute and 04:30 people sync | Changes made in the app are sent to OwnerIQ; changes made in OwnerIQ (deactivations, coach moves, stage 3 and up) are copied into the app |
+| The hourly and 04:30 people sync | Changes made in the app are sent to OwnerIQ; changes made in OwnerIQ (deactivations, coach moves, stage 3 and up) are copied into the app |
 
 The people sync only moves **changes**: something that changed on one side since its last run. A difference that was already there when it first ran (or that changed on both sides) is listed under mismatches for you to settle by hand; it is never "fixed" automatically. Your own owner account and other admin accounts are never moved or re-staged. Every write is logged in the `owneriq_write_log` collection.
 
@@ -180,7 +181,7 @@ To stop all writes at once, delete the variable (or set it to `false`) and deplo
 
 **Who can trigger what** (checked on the server):
 
-- `POST /api/owneriq/sync` (manual KPI sync): Admins only, a range of at most 14 days, and one run a minute across the whole app. Missing dates are filled in first (to = today, from = the day before) and a `to_date` after today is pulled back to today, so the 14-day cap always applies to what is really pulled. The scheduled 10-minute sync is unaffected.
+- `POST /api/owneriq/sync` (manual KPI sync): Admins only, a range of at most 14 days, and one run a minute across the whole app. Missing dates are filled in first (to = today, from = the day before) and a `to_date` after today is pulled back to today, so the 14-day cap always applies to what is really pulled. The scheduled hourly sync is unaffected.
 - `POST /api/owneriq/performance/sync`: Admins, sharing the same one-a-minute slot. `bells_weeks` (re-fill Bells from OwnerIQ for earlier weeks) is up to 2 for an Admin; up to 8 is the owner's backfill tool.
 - `POST /api/owneriq/reconcile` (Check alignment / Apply): the owner (super-admin) only, because it covers every office. `dry_run=false` also needs `OWNERIQ_WRITES_ENABLED`.
 - `POST /api/owneriq/rep-action` (the spider diagram's Advance / Demote / Remove / move): an Admin may only act on people in their own office, named by their app account (`cg1_user_id`); the new Coach in a move must be in the same office. Targeting a raw OwnerIQ id (`owneriq_user_id`, digits only) is for the owner only. Anything not a dry run needs `OWNERIQ_WRITES_ENABLED`.
@@ -206,7 +207,7 @@ Nothing breaks. Specifically:
 | `select company <pin> failed` | A pin in `OWNERIQ_MC_PINS` that this login can't see | Re-run the check script and copy the pins it lists |
 | Numbers appear in OwnerIQ but not for a person in the app | That person isn't linked | Add their badge number exactly as OwnerIQ has it, or make the emails match; check `/api/owneriq/link-debug` |
 | An office shows nothing, another office's figures appear in it, or the office switcher shows "Office 12345" | Office-to-company mapping | Set `OWNERIQ_OFFICE_PINS` with your app office names |
-| "No Performance Hub data for that week yet." | The scheduled run hasn't happened yet, or the week has no data | Wait for the next run (every 10 minutes) (there's no button for it in the app) |
+| "No Performance Hub data for that week yet." | The scheduled run hasn't happened yet, or the week has no data | Wait for the next run (every hour) (there's no button for it in the app) |
 | "You weren't in a team in OwnerIQ that week…" (a Coach) | That Coach doesn't lead a named team in OwnerIQ for that week | Name the team in OwnerIQ (or, with writes on, in the app's Profile) |
 | "OwnerIQ writes are off…" | `OWNERIQ_WRITES_ENABLED` isn't on | Expected. Turn it on only when you're ready (above) |
 | `OwnerIQ could not be reached. Try again in a moment.` | OwnerIQ slow or down | Wait; the last saved copy is still shown where there is one |
@@ -217,7 +218,7 @@ OwnerIQ's API isn't a published public API: the app talks to it the way the Owne
 
 | File | What it does |
 | --- | --- |
-| `backend/owneriq_sync.py` | Login, the 10-minute KPI sync, matching rows to people |
+| `backend/owneriq_sync.py` | Login, the hourly KPI sync, matching rows to people |
 | `backend/owneriq_config.py` | Which companies to sync and how offices map to them |
 | `backend/owneriq_performance.py` | Performance Hub sync, Bells goals and fill-in, linking by email/badge, stages |
 | `backend/owneriq_hub.py` | The Performance Hub screen's data and caching |
