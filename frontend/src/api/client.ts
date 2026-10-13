@@ -1008,6 +1008,7 @@ export const apiService = {
   saveSectorGoal: (date: string, goal: number | null, postcode = '') => api.put('/sector/goal', { goal, postcode }, { params: { date } }),
   getSectorBoard: (date: string) => api.get('/sector/board', { params: { date } }),
   getSectorStatus: () => api.get('/sector/status'),
+  getMyDay: () => api.get('/sector/my-day'),
   getAreas: (days?: number) => api.get('/areas', { params: { days } }),
   getAreaDistrict: (name: string, days?: number) => api.get(`/areas/district/${encodeURIComponent(name)}`, { params: { days } }),
   lookupArea: (postcode: string) => api.get('/areas/lookup', { params: { postcode } }),

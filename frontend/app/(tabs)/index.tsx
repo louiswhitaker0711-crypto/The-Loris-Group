@@ -38,6 +38,7 @@ import FieldIqWeekCard from '../../src/components/home/FieldIqWeekCard';
 import LiveOpsCard from '../../src/components/home/LiveOpsCard';
 import SectorSetupsCard from '../../src/components/home/SectorSetupsCard';
 import HomeAreaMap from '../../src/components/home/HomeAreaMap';
+import MyDayCard from '../../src/components/home/today/MyDayCard';
 import MyWeekCard from '../../src/components/home/today/MyWeekCard';
 import WaitingOnYouCard from '../../src/components/home/today/WaitingOnYouCard';
 import NewStartTodayHero from '../../src/components/home/today/NewStartTodayHero';
@@ -1352,16 +1353,18 @@ export default function HomeScreen() {
 
   const todayCoach = (
     <>
+      {/* Open the app: the map, then your own day and live numbers. */}
       <HomeAreaMap />
+      <MyDayCard />
       {pSectorPrompt}
       <MyWeekCard hideWhenEmpty={isAdmin} />
+      <SectorSetupsCard />
       {pPlanner}
       {/* What each person needs today, then the Primetime plan it feeds. */}
       <SuggestionsCard />
       <PrimetimeCard />
       <WaitingOnYouCard toGrade={leaderTodayQ.data?.counts?.awaiting || 0} />
       {pNewStarts}
-      <SectorSetupsCard />
       <LiveOpsCard />
       {pTimetable}
       {pDailyPlans}
@@ -1383,13 +1386,14 @@ export default function HomeScreen() {
     <>
       {/* Their map first: open the app and it's there. */}
       <HomeAreaMap />
+      <MyDayCard />
       {pSectorPrompt}
+      <MyWeekCard />
       {nextPending && <NewStartTodayHero day={nextPending.day_number} target={todayTarget} coach={coachName} />}
       {pStartHere}
       <LearnTodayCard stage={codStage || 1} />
       <SectorSetupsCard />
       {pPlanner}
-      <MyWeekCard />
       {pTimetable}
     </>
   );

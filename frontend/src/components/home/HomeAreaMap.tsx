@@ -99,7 +99,7 @@ const styles = (c: any) => StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4, paddingTop: 2 },
   dot: { width: 14, height: 14, borderRadius: 7 },
   title: { fontFamily: fonts.bodyBold, fontSize: 15.5, color: c.text, flex: 1 },
-  mapBox: { height: 260, borderRadius: 12, overflow: 'hidden', backgroundColor: c.surface },
+  mapBox: { height: 210, borderRadius: 12, overflow: 'hidden', backgroundColor: c.surface },
   overlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', padding: 12 },
   foot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4, paddingBottom: 2 },
   muted: { fontFamily: fonts.body, fontSize: 12.5, color: c.textMuted, flex: 1 },
