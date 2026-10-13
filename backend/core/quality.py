@@ -240,7 +240,8 @@ def aggregate(weeks: list[dict]) -> dict:
     with 1.
 
       sales            added up
-      fails            total fails ÷ total sign-ups (sales + fails)
+      fails            total fails ÷ total sign-ups (sales + fails); also
+                       the counts, as `fails` and `signups`
       order value,     weighted by sign-ups (the report's order value
       drop days        includes the failed orders)
       The Round,       weighted by sales
@@ -252,7 +253,11 @@ def aggregate(weeks: list[dict]) -> dict:
     sales = [w["sales"] for w in weeks if w.get("sales") is not None]
     if sales:
         out["sales"] = sum(sales)
-    su_num = su_den = 0.0
+    # Fails as a count ("1 fail out of 11 sign-ups"), from sales and fail rate.
+    known = [(signups(w), w["sales"]) for w in weeks if w.get("sales") is not None and w.get("fail_rate") is not None]
+    if known:
+        out["signups"] = int(round(sum(g for g, _ in known)))
+        out["fails"] = int(round(sum(g - s for g, s in known)))
     for key, _, _ in MEASURES:
         if key == "sales":
             continue

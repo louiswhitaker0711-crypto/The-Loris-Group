@@ -21,6 +21,8 @@ import { showAlert } from '../src/utils/showAlert';
 import { formatMoney } from '../src/utils/appTime';
 import { useTabBarClearance } from '../src/customization/CustomTabBar';
 import { APP_SHORT_NAME } from '../src/theme/brand';
+import { buildQualityBulletinHtml } from '../src/utils/qualityBulletin';
+import { exportPdfFromHtml, openBlankPrintWindow } from '../src/utils/deliverPdf';
 
 const MINI_TEAM = `Mini ${APP_SHORT_NAME}`;
 
@@ -55,6 +57,8 @@ export default function QualityScreen() {
   const [week, setWeek] = useState<string | undefined>(undefined);
   const [month, setMonth] = useState<string | undefined>(undefined);
   const [open, setOpen] = useState<string | null>(null);
+  const [sharing, setSharing] = useState(false);
+  const canBulletin = user?.role === 'admin' || user?.role === 'leader';
   const q = useQuery({
     queryKey: ['quality', view, week || '', month || ''],
     queryFn: () => apiService.getQuality({ view, week, month }).then((r) => r.data),
@@ -77,8 +81,11 @@ export default function QualityScreen() {
         const cell = metrics?.[m.key];
         const t = tone(cell?.rag ?? null);
         return (
-          <View key={m.key} style={s.col}>
+          <View key={m.key} style={[s.col, m.key === 'fail_rate' && s.failCol]}>
             <Text style={[s.pill, (opts.bold || opts.team) && s.pillBold, opts.sub && s.pillSub, { backgroundColor: t.bg, color: t.fg }]}>{fmt(m.key, cell?.value)}</Text>
+            {m.key === 'fail_rate' && (metrics as any)?.fails?.value != null ? (
+              <Text style={s.failCount}>{(metrics as any).fails.value} fail{(metrics as any).fails.value === 1 ? '' : 's'}</Text>
+            ) : null}
           </View>
         );
       })}
@@ -88,7 +95,7 @@ export default function QualityScreen() {
     <View style={[s.tr, s.thRow]}>
       <Text style={[s.th, s.nameCol, { textAlign: 'left' }]}>{first}</Text>
       {measures.map((m) => (
-        <View key={m.key} style={s.col}>
+        <View key={m.key} style={[s.col, m.key === 'fail_rate' && s.failCol]}>
           <Text style={s.th}>{m.label}</Text>
           {m.target ? <Text style={s.thTarget}>{m.target}</Text> : null}
         </View>
@@ -99,6 +106,61 @@ export default function QualityScreen() {
     <Pressable key={key} onPress={onPress} style={[s.chip, on && { backgroundColor: c.primary, borderColor: c.primary }]}>
       <Text style={[s.chipText, on && { color: c.onPrimary }]}>{label}</Text>
     </Pressable>
+  );
+
+  // The Quality Bulletin: this view as a poster for the team's WhatsApp.
+  const shareBulletin = async () => {
+    if (!d) return;
+    const win = openBlankPrintWindow(); // before any await (iOS pop-up blocker)
+    setSharing(true);
+    try {
+      await exportPdfFromHtml(buildQualityBulletinHtml(d), {
+        filename: `quality-bulletin-${d.week_ending}.pdf`, dialogTitle: 'Share Quality Bulletin', width: 612, sizeToContent: true,
+      }, win);
+    } catch (e: any) {
+      if (win && !win.closed) { try { win.close(); } catch { /* ignore */ } }
+      showAlert('Could not make the bulletin', e?.message || 'Try again.');
+    } finally { setSharing(false); }
+  };
+  const failText = (m: Record<string, Cell> | undefined) => {
+    const f = (m as any)?.fails?.value, n = (m as any)?.signups?.value;
+    if (f == null) return null;
+    return n != null ? `${f} fail${f === 1 ? '' : 's'} of ${n} sign-up${n === 1 ? '' : 's'}` : `${f} fail${f === 1 ? '' : 's'}`;
+  };
+  // A card of tiles: the same look for you, your team and the office.
+  const statBox = (testID: string, title: string, row: any, note: string | null) => (
+    <View style={s.card} testID={testID}>
+      <Text style={s.h}>{title}</Text>
+      {note ? <Text style={s.note}>{note}</Text> : null}
+      <View style={s.tiles}>
+        {measures.map((m) => {
+          const cell: Cell | undefined = row.metrics?.[m.key];
+          const t = tone(cell?.rag ?? null);
+          const dir = better(m.key, cell?.value, row.prev?.[m.key]);
+          const extra = m.key === 'fail_rate' ? failText(row.metrics) : m.key === 'sales' && row.metrics?.signups?.value != null ? `${row.metrics.signups.value} signed up` : null;
+          return (
+            <View key={m.key} style={[s.tile, { backgroundColor: t.bg }]}>
+              <Text style={s.tileLabel}>{m.label}</Text>
+              <View style={s.tileRow}>
+                <Text style={[s.tileValue, { color: t.fg }]}>{fmt(m.key, cell?.value)}</Text>
+                {dir !== 0 && <Ionicons name={dir > 0 ? 'arrow-up' : 'arrow-down'} size={14} color={dir > 0 ? c.green : c.red} />}
+              </View>
+              {extra ? <Text style={s.tileExtra}>{extra}</Text> : null}
+              <Text style={s.tileTarget}>{m.target ? `Target ${m.target}` : ' '}</Text>
+            </View>
+          );
+        })}
+      </View>
+      {row.metrics?.fourth_week == null && <Text style={s.note}>4th week shows once those customers reach their 4th delivery.</Text>}
+      {multi && row.history?.length > 0 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator>
+          <View>
+            {header('Week by week')}
+            {row.history.map((h: any) => line(`${testID}-${h.week_ending}`, h.label.replace(/ \d{4}$/, ''), h.metrics, { sub: true }))}
+          </View>
+        </ScrollView>
+      )}
+    </View>
   );
 
   return (
@@ -114,6 +176,12 @@ export default function QualityScreen() {
         <>
           <View style={s.views}>
             {(d.views || []).map((v: any) => chip(v.key, v.label, v.key === d.view, () => { setView(v.key); setOpen(null); }))}
+            {canBulletin && d.box && (
+              <Pressable onPress={shareBulletin} disabled={sharing} style={[s.chip, s.bulletinChip]} accessibilityRole="button" testID="quality-bulletin">
+                {sharing ? <ActivityIndicator size="small" color={c.primary} /> : <Ionicons name="megaphone-outline" size={15} color={c.primary} />}
+                <Text style={[s.chipText, { color: c.primary }]}>Quality bulletin</Text>
+              </Pressable>
+            )}
           </View>
           {d.view === 'month' ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.weeks}>
@@ -125,43 +193,18 @@ export default function QualityScreen() {
             </ScrollView>
           ) : null}
 
-          {d.me && (
-            <View style={s.card} testID="quality-me">
-              <Text style={s.h}>Your quality · {d.label}</Text>
-              {multi && <Text style={s.note}>Your average over {d.me.weeks} week{d.me.weeks === 1 ? '' : 's'} on the report (sales added up).</Text>}
-              <View style={s.tiles}>
-                {measures.map((m) => {
-                  const cell: Cell | undefined = d.me.metrics[m.key];
-                  const t = tone(cell?.rag ?? null);
-                  const dir = better(m.key, cell?.value, d.me.prev?.[m.key]);
-                  return (
-                    <View key={m.key} style={[s.tile, { backgroundColor: t.bg }]}>
-                      <Text style={s.tileLabel}>{m.label}</Text>
-                      <View style={s.tileRow}>
-                        <Text style={[s.tileValue, { color: t.fg }]}>{fmt(m.key, cell?.value)}</Text>
-                        {dir !== 0 && <Ionicons name={dir > 0 ? 'arrow-up' : 'arrow-down'} size={14} color={dir > 0 ? c.green : c.red} />}
-                      </View>
-                      <Text style={s.tileTarget}>{m.target ? `Target ${m.target}` : ' '}</Text>
-                    </View>
-                  );
-                })}
-              </View>
-              {d.view !== 'all' && <Text style={s.note}>Arrows compare with the {d.view === 'week' ? 'week' : d.view === 'month' ? 'month' : 'period'} before.</Text>}
-              {d.me.metrics.fourth_week == null && <Text style={s.note}>4th week shows once those customers reach their 4th delivery.</Text>}
-              {multi && d.me.history?.length > 0 && (
-                <ScrollView horizontal showsHorizontalScrollIndicator>
-                  <View>
-                    {header('Week by week')}
-                    {d.me.history.map((h: any) => line(h.week_ending, h.label.replace(/ \d{4}$/, ''), h.metrics, { sub: true }))}
-                  </View>
-                </ScrollView>
-              )}
-            </View>
+          {d.me && statBox('quality-me', `Your quality · ${d.label}`, d.me,
+            multi ? `Your average over ${d.me.weeks} week${d.me.weeks === 1 ? '' : 's'} on the report (sales added up).` : null)}
+          {d.box && statBox('quality-box', `${d.box.title} · ${d.label}`, d.box,
+            d.box.kind === 'office' ? 'Everyone on the report, as Power BI adds it up.' : 'Everyone in your team, including the teams under it.')}
+          {!d.me && !d.box && (
+            <View style={s.card}><Text style={s.muted}>You're not on the report for {d.label}.</Text></View>
           )}
+          {d.view !== 'all' && (d.me || d.box) && <Text style={s.note}>Arrows compare with the {d.view === 'week' ? 'week' : d.view === 'month' ? 'month' : 'period'} before.</Text>}
 
-          {(d.team?.length > 0 || d.total) && (
+          {(d.team?.length > 0) && (
             <View style={s.card} testID="quality-team">
-              <Text style={s.h}>{d.total ? 'The office' : 'Your team'} · {d.label}</Text>
+              <Text style={s.h}>{d.box?.kind === 'office' ? 'Every BA' : 'Your team’s BAs'} · {d.label}</Text>
               {multi && <Text style={s.note}>Averages for the period. Tap a name to see their week by week.</Text>}
               {(d.teams || []).length > 1 && <Text style={s.note}>Each team's line adds up everyone in it, including the teams under it, weighted by their sales.</Text>}
               <ScrollView horizontal showsHorizontalScrollIndicator>
@@ -180,29 +223,20 @@ export default function QualityScreen() {
                       );
                     };
                     const teams: any[] = d.teams || [];
-                    if (teams.length < 2) return (d.team || []).map(person);
-                    // Grouped like the Bells sheet: each team's average, then its people.
                     const everyone = [...(d.me ? [d.me] : []), ...(d.team || [])];
+                    if (teams.length < 2) return everyone.map(person);
+                    // Grouped like the Bells sheet: each team's line, then its people.
                     return teams.map((g) => (
-                      <View key={g.key} style={[s.teamBlock, g.depth ? { marginLeft: 0 } : null]}>
+                      <View key={g.key} style={s.teamBlock}>
                         {line(`team-${g.key}`, `${g.key === 'mini' ? MINI_TEAM : (g.team_name || `${(g.leader_name || '').split(' ')[0]}'s team`)}${g.includes?.length ? ` (incl. ${g.includes.join(', ')})` : ''}`, g.metrics, { team: true, indent: g.depth || 0 })}
                         {everyone.filter((r: any) => r.team_key === g.key).map(person)}
                       </View>
                     ));
                   })()}
-                  {d.total && (
-                    <View>
-                      {line('office', 'Office', d.total, { bold: true, ...(multi ? { chevron: true, isOpen: open === 'office', onPress: () => setOpen(open === 'office' ? null : 'office') } : {}) })}
-                      {open === 'office' && (d.total_history || []).map((h: any) => line(`office-${h.week_ending}`, h.label.replace(/ \d{4}$/, ''), h.metrics, { sub: true }))}
-                    </View>
-                  )}
                 </View>
               </ScrollView>
               {(d.team || []).some((r: any) => !r.linked) && <Text style={s.note}>⚠︎ not linked to anyone in the app yet. Link them next time you add a report.</Text>}
             </View>
-          )}
-          {!d.me && !d.team?.length && !d.total && (
-            <View style={s.card}><Text style={s.muted}>You're not on the report for {d.label}.</Text></View>
           )}
         </>
       )}
@@ -400,6 +434,7 @@ const styles = (c: any) => StyleSheet.create({
   label: { fontFamily: fonts.bodySemibold, fontSize: 13.5, color: c.text },
   weeks: { gap: 8, paddingVertical: 2 },
   views: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  bulletinChip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderColor: c.primary },
   chip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: c.border, backgroundColor: c.background },
   chipText: { fontFamily: fonts.bodySemibold, fontSize: 13, color: c.text },
   tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
@@ -421,6 +456,9 @@ const styles = (c: any) => StyleSheet.create({
   subName: { fontFamily: fonts.body, fontSize: 12.5, color: c.textMuted, paddingLeft: 16, flexShrink: 1 },
   pillSub: { fontSize: 12, paddingVertical: 2 },
   col: { width: 78, alignItems: 'center' },
+  failCol: { width: 86 },
+  failCount: { fontFamily: fonts.body, fontSize: 11, color: c.textMuted, marginTop: 1 },
+  tileExtra: { fontFamily: fonts.bodySemibold, fontSize: 12, color: c.text },
   name: { fontFamily: fonts.bodySemibold, fontSize: 13, color: c.text, flexShrink: 1 },
   pill: { fontFamily: fonts.bodySemibold, fontSize: 12.5, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8, overflow: 'hidden', textAlign: 'center', minWidth: 58 },
   pillBold: { fontFamily: fonts.bodyBold },
