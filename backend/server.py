@@ -670,6 +670,15 @@ async def _startup_work():
                 await performance_tick()
             except Exception as ex:
                 logger.error(f"OwnerIQ performance tick failed: {ex}")
+            # Then, in field hours, the set-up check-ins: sent now, on the
+            # numbers just pulled, rather than at a fixed time on old ones.
+            try:
+                from routes.sector import field_nudge_after_sync
+                n = await field_nudge_after_sync()
+                if n:
+                    logger.info(f"field_nudge after sync: {n} sent")
+            except Exception as ex:
+                logger.error(f"field nudge after sync failed: {ex}")
             # Then the two-way people sync: changes made in OwnerIQ come into the
             # app, the app's changes go to OwnerIQ (writes only when enabled).
             try:
@@ -901,19 +910,23 @@ async def _startup_work():
                 logger.error(f"6pm reset push failed: {ex}")
 
         # ── Through the field day: set-up check-ins, then the breakdown ask ──
+        # The check-ins normally go out straight after an OwnerIQ sync (see
+        # _owneriq_job). These are the safety net: FALLBACK_MINUTES after each
+        # slot, only if no sync has sent it yet.
         def _nudge_job(slot):
             async def _run():
                 try:
-                    from routes.sector import field_nudge_tick
-                    logger.info(f"field_nudge {slot}: {await field_nudge_tick(slot)} sent")
+                    from routes.sector import field_nudge_fallback
+                    logger.info(f"field_nudge fallback {slot}: {await field_nudge_fallback(slot)} sent")
                 except Exception as ex:
                     logger.error(f"field nudge failed: {ex}")
             return _run
 
-        from routes.sector import WEEKDAY_SLOTS, SATURDAY_SLOTS
+        from routes.sector import WEEKDAY_SLOTS, SATURDAY_SLOTS, FALLBACK_MINUTES
         for _days, _slots in (("mon-fri", WEEKDAY_SLOTS), ("sat", SATURDAY_SLOTS)):
             for _h, _m, _slot in _slots:
-                scheduler.add_job(_nudge_job(_slot), "cron", day_of_week=_days, hour=_h, minute=_m,
+                _at = _h * 60 + _m + FALLBACK_MINUTES
+                scheduler.add_job(_nudge_job(_slot), "cron", day_of_week=_days, hour=_at // 60, minute=_at % 60,
                                   id=f"field_nudge_{_days}_{_h:02d}{_m:02d}", replace_existing=True)
 
         async def _sector_start():

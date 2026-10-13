@@ -157,3 +157,17 @@ def test_a_ba_can_lead_a_sector_and_manage_its_people(monkeypatch):
     assert not run(sec._can_edit(me, str(other), "2026-10-13"))      # not in the sector
     people = [p["user_name"] for p in run(sec._people(me, "2026-10-13"))]
     assert people == ["Lead Example", "Example One"]
+
+
+def test_check_ins_follow_the_sync():
+    from datetime import datetime
+    from routes.sector import due_slot
+    tue = lambda h, m: datetime(2026, 10, 13, h, m)   # noqa: E731
+    sat = lambda h, m: datetime(2026, 10, 17, h, m)   # noqa: E731
+    assert due_slot(tue(14, 40)) is None              # before the first check-in
+    assert due_slot(tue(15, 42)) == "early"           # a sync at 15:42 sends the 15:00 one
+    assert due_slot(tue(17, 42)) == "mid"
+    assert due_slot(tue(19, 5)) == "late"
+    assert due_slot(tue(20, 10)) is None              # the field's over
+    assert due_slot(sat(14, 30)) == "mid" and due_slot(sat(17, 5)) is None
+    assert due_slot(datetime(2026, 10, 18, 15, 0)) is None   # Sunday
