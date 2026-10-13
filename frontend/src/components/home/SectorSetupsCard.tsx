@@ -1,4 +1,5 @@
-// Home, under Sectors: today's sector set-ups, so they're one tap from
+// Home, under Sectors: today's sector set-ups (and each breakdown once the
+// sector leader posts it), so they're one tap from
 // opening the app in the field. Coaches and Admins see every sector's
 // set-up; a BA sees their own sector's. Not in a sector yet? "Start a
 // sector". (GET /sector/board, /sector/status)
@@ -40,7 +41,7 @@ export default function SectorSetupsCard() {
   return (
     <View style={s.card} testID="home-sector-setups">
       <View style={s.head}>
-        <Text style={s.title}>Today's set-ups</Text>
+        <Text style={s.title}>Today's sectors</Text>
         {inSector ? (
           <Pressable onPress={() => router.push('/my-sector' as never)} style={s.link} accessibilityRole="button" hitSlop={6}>
             <Text style={s.linkText}>My sector</Text>
@@ -57,15 +58,22 @@ export default function SectorSetupsCard() {
           <View key={sec.leader_id} style={s.sector}>
             <Text style={s.secName} numberOfLines={1}>
               {first(sec.leader_name)}'s sector{sec.postcode ? ` · ${sec.postcode}` : ''}
-              <Text style={s.secMeta}>{sec.goal ? `  ·  goal ${sec.goal}` : ''}</Text>
+              <Text style={s.secMeta}>{sec.goal ? `  ·  goal ${sec.goal}${sec.breakdown_posted_at ? `, hit ${sec.hit}` : ''}` : ''}</Text>
             </Text>
+            {sec.breakdown_posted_at ? <Text style={s.posted}>✅ Breakdown posted</Text> : null}
             {people.map((p) => {
               const su = p.setup;
-              const bits = su ? [su.goal != null ? `Goal ${su.goal}` : '', su.kpi ? `KPI ${su.kpi}` : '', su.focus ? `Focus: ${su.focus}` : ''].filter(Boolean) : [];
+              const b = p.breakdown;
+              // Once the breakdown's posted, show it; until then, the set-up.
+              const bits = sec.breakdown_posted_at && b
+                ? [[b.doors, b.spoken, b.pitched, b.closed].map((v: any) => (v == null ? '-' : v)).join('/'),
+                   b.goal != null || b.hit != null ? `${b.hit ?? 0} of ${b.goal ?? '-'}` : '',
+                   b.proud ? `Proud: ${b.proud}` : '', b.change ? `Change: ${b.change}` : ''].filter(Boolean)
+                : su ? [su.goal != null ? `Goal ${su.goal}` : '', su.kpi ? `KPI ${su.kpi}` : '', su.focus ? `Focus: ${su.focus}` : ''].filter(Boolean) : [];
               return (
                 <View key={p.user_id} style={s.person}>
                   <Text style={[s.name, p.user_id === me && { color: c.primary }]}>{first(p.user_name)}</Text>
-                  <Text style={s.line} numberOfLines={2}>{bits.length ? bits.join(' · ') : 'No set-up yet'}</Text>
+                  <Text style={s.line} numberOfLines={3}>{bits.length ? bits.join(' · ') : sec.breakdown_posted_at ? 'No breakdown' : 'No set-up yet'}</Text>
                 </View>
               );
             })}
@@ -92,6 +100,7 @@ const styles = (c: any) => StyleSheet.create({
   muted: { fontFamily: fonts.body, fontSize: 13.5, color: c.textMuted },
   sector: { gap: 4, paddingTop: 8, borderTopWidth: 1, borderTopColor: c.border },
   secName: { fontFamily: fonts.bodyBold, fontSize: 14.5, color: c.text },
+  posted: { fontFamily: fonts.bodySemibold, fontSize: 12.5, color: c.green },
   secMeta: { fontFamily: fonts.body, fontSize: 13, color: c.textMuted },
   person: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   name: { fontFamily: fonts.bodySemibold, fontSize: 13.5, color: c.text, width: 72 },

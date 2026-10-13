@@ -5,7 +5,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors, fonts } from '../src/theme/ThemeContext';
@@ -14,7 +14,7 @@ import { toast } from '../src/utils/toast';
 import { showAlert } from '../src/utils/showAlert';
 import { useKeyboardInset } from '../src/hooks/useKeyboardInset';
 import { todayISO } from '../src/utils/calendarDates';
-import { APP_LOCALE } from '../src/utils/appTime';
+import { APP_LOCALE, APP_TZ } from '../src/utils/appTime';
 import { openInWhatsApp, copyText } from '../src/utils/whatsapp';
 import { SectorPicker } from '../src/components/sector/SectorPicker';
 import { SectorMap } from '../src/components/sector/SectorMap';
@@ -119,6 +119,12 @@ export default function SectorScreen() {
 
       {mode === 'breakdown' && !!q.data?.sector && <BreakdownPrimetime date={date} />}
 
+      {mode === 'breakdown' && !!q.data?.can_manage && !!q.data?.sector && (
+        <PostBreakdown date={date} postedAt={q.data.sector.breakdown_posted_at || null}
+          missing={people.filter((p) => !p.breakdown).map((p) => p.user_name.split(' ')[0])}
+          onPosted={() => q.refetch()} s={s} c={c} />
+      )}
+
       {hasText && (
         <View style={s.card}>
           <Text style={s.h}>WhatsApp</Text>
@@ -142,6 +148,38 @@ export default function SectorScreen() {
         </View>
       )}
     </ScrollView>
+  );
+}
+
+// The end of the breakdown: post it. That marks it done and puts it on every
+// Coach's Home under Today's sectors, the same as the set-up.
+function PostBreakdown({ date, postedAt, missing, onPosted, s, c }: { date: string; postedAt: string | null; missing: string[]; onPosted: () => void; s: any; c: any }) {
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const post = async () => {
+    setBusy(true);
+    try {
+      await apiService.postBreakdown(date);
+      toast.success('Breakdown posted');
+      qc.invalidateQueries({ queryKey: ['sector-board'] });
+      onPosted();
+    } catch (e) { showAlert('Could not post', errText(e, 'Try again.')); }
+    finally { setBusy(false); }
+  };
+  const go = () => missing.length
+    ? showAlert('Post the breakdown?', `No breakdown yet for ${missing.join(', ')}. Post it anyway?`, [
+        { text: 'Cancel', style: 'cancel' }, { text: 'Post', onPress: post }])
+    : post();
+  const when = postedAt ? new Date(postedAt).toLocaleTimeString(APP_LOCALE, { hour: '2-digit', minute: '2-digit', timeZone: APP_TZ }) : null;
+  return (
+    <View style={s.card}>
+      {when ? <Text style={s.muted}>✅ Posted at {when}. Changed something? Post it again.</Text>
+        : <Text style={s.muted}>Done? Post it: it goes on every Coach's Home with today's set-ups.</Text>}
+      <Pressable onPress={go} disabled={busy} style={[s.btn, { alignSelf: 'stretch', justifyContent: 'center' }]} accessibilityRole="button" testID="breakdown-post">
+        {busy ? <ActivityIndicator color={c.onPrimary} /> : <Ionicons name="checkmark-done" size={17} color={c.onPrimary} />}
+        <Text style={s.btnText}>{when ? 'Post again' : 'Post breakdown'}</Text>
+      </Pressable>
+    </View>
   );
 }
 

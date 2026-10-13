@@ -1,6 +1,7 @@
 // Top of Home during field time. A sector leader sees "Start your sector
 // set-up" (or how far through it they are); at the end of the day, "Do your
-// sector's breakdown". A BA sees the set-up their leader wrote for them.
+// sector's breakdown", then "Post your sector's breakdown", then that it's
+// posted. A BA sees their set-up, and at the end of the day their breakdown.
 // Hidden outside those windows. (GET /sector/status)
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
@@ -31,9 +32,17 @@ export default function SectorPromptCard() {
       icon = 'create'; title = `Finish set-up · ${data.setups}/${data.members}`;
       sub = 'A few people still need their goal, KPI and focus.'; url = '/sector';
     }
-  } else if (data.is_leader && data.phase === 'breakdown' && data.has_sector && data.breakdowns < data.members) {
-    icon = 'clipboard'; title = `Do your sector's breakdown · ${data.breakdowns}/${data.members}`;
-    sub = 'Numbers, goal against hit, proud of and change.'; url = '/sector?mode=breakdown';
+  } else if (data.is_leader && data.phase === 'breakdown' && data.has_sector) {
+    if (data.breakdowns < data.members) {
+      icon = 'clipboard'; title = `Do your sector's breakdown · ${data.breakdowns}/${data.members}`;
+      sub = 'Numbers, goal against hit, proud of and change, the map, then post it.'; url = '/sector?mode=breakdown';
+    } else if (!data.breakdown_posted_at) {
+      icon = 'checkmark-done'; title = 'Post your sector’s breakdown';
+      sub = 'Everyone’s in. Save the map and post it for the Coaches.'; url = '/sector?mode=breakdown';
+    }
+  } else if (data.phase === 'breakdown' && data.in_sector && !data.my_breakdown_done) {
+    icon = 'clipboard'; title = 'Your breakdown';
+    sub = 'What you’re proud of today and what you’ll change tomorrow.'; url = '/sector?mode=breakdown';
   }
 
   if (url) {
@@ -45,6 +54,15 @@ export default function SectorPromptCard() {
           <Text style={s.sub}>{sub}</Text>
         </View>
         <Ionicons name="arrow-forward" size={18} color={c.onPrimary} />
+      </Pressable>
+    );
+  }
+
+  if (data.phase === 'breakdown' && data.breakdown_posted_at && data.is_leader) {
+    return (
+      <Pressable onPress={() => router.push('/sector?mode=breakdown' as never)} style={s.plain} accessibilityRole="button" testID="home-breakdown-posted">
+        <Text style={s.plainTitle}>✅ Sector breakdown posted</Text>
+        <Text style={s.plainSub}>It’s on the Coaches’ Home with today’s set-ups. Tap to change it.</Text>
       </Pressable>
     );
   }

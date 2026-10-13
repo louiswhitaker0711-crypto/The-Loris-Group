@@ -39,7 +39,7 @@ import LiveOpsCard from '../../src/components/home/LiveOpsCard';
 import SectorSetupsCard from '../../src/components/home/SectorSetupsCard';
 import HomeAreaMap from '../../src/components/home/HomeAreaMap';
 import MyDayCard from '../../src/components/home/today/MyDayCard';
-import { inFieldHours } from '../../src/utils/fieldTime';
+import { inFieldHours, inBreakdownHours } from '../../src/utils/fieldTime';
 import MyWeekCard from '../../src/components/home/today/MyWeekCard';
 import WaitingOnYouCard from '../../src/components/home/today/WaitingOnYouCard';
 import NewStartTodayHero from '../../src/components/home/today/NewStartTodayHero';
@@ -201,8 +201,9 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   // Field hours (UK time) decide what Home leads with; re-checked each minute.
   const [inField, setInField] = useState(() => inFieldHours());
+  const [inBreakdown, setInBreakdown] = useState(() => inBreakdownHours());
   useEffect(() => {
-    const t = setInterval(() => setInField(inFieldHours()), 60_000);
+    const t = setInterval(() => { setInField(inFieldHours()); setInBreakdown(inBreakdownHours()); }, 60_000);
     return () => clearInterval(t);
   }, []);
   const queryClient = useQueryClient();
@@ -1383,7 +1384,18 @@ export default function HomeScreen() {
       {pDailyPlans}
     </>
   );
-  const todayCoach = inField ? coachField : (
+  // Straight after the field: the breakdown first (post it, see every
+  // sector's), then tomorrow's planning.
+  const coachBreakdown = (
+    <>
+      {pSectorPrompt}
+      <SectorSetupsCard />
+      <HomeAreaMap />
+      {coachPlanning}
+      <MyWeekCard hideWhenEmpty={isAdmin} />
+    </>
+  );
+  const todayCoach = inField ? coachField : inBreakdown ? coachBreakdown : (
     <>
       {pSectorPrompt}
       {coachPlanning}
@@ -1426,7 +1438,16 @@ export default function HomeScreen() {
       {pTimetable}
     </>
   );
-  const todayBA = inField ? baField : (
+  const baBreakdown = (
+    <>
+      {pSectorPrompt}
+      <HomeAreaMap />
+      <SectorSetupsCard />
+      {baPlanning}
+      <MyWeekCard />
+    </>
+  );
+  const todayBA = inField ? baField : inBreakdown ? baBreakdown : (
     <>
       {pSectorPrompt}
       {baPlanning}
