@@ -370,33 +370,17 @@ function TabStrip({ tabs, activeKey, onClose, topInset, onMenu, unread, inboxAct
           <Ionicons name="menu" size={22} color={C.text} />
         </Pressable>
       )}
-      <ScrollView
-        ref={scroll}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={{ flex: 1 }}
-        contentContainerStyle={{ alignItems: 'flex-end', paddingRight: 8 }}
-        onLayout={(e) => setStripW(e.nativeEvent.layout.width)}
-      >
-        {tabs.map((t) => {
-          const active = t.key === activeKey;
-          const pinned = t.key === HOME_KEY;
-          return (
-            <TabChip
-              key={t.key}
-              t={t}
-              active={active}
-              pinned={pinned}
-              phone={phone}
-              page={colors.page}
-              text={colors.text}
-              onPress={() => { if (!active) go(t.href); }}
-              onClose={() => onClose(t.key)}
-              onLayout={(x, w) => { boxes.current[t.key] = { x, w }; }}
-            />
-          );
-        })}
-      </ScrollView>
+      {/* No open-tabs row: the menu on the left is how you move around. The
+          bar just names the page you're on. */}
+      {(() => {
+        const cur = tabs.find((t) => t.key === activeKey);
+        return (
+          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, height: phone ? 46 : TAB_H, paddingLeft: phone ? 0 : 14 }}>
+            {cur ? <Ionicons name={cur.icon as any} size={17} color={C.lime} /> : null}
+            <Text style={{ color: C.text, fontSize: 15.5, fontFamily: fonts.bodySemibold }} numberOfLines={1}>{cur?.label || ''}</Text>
+          </View>
+        );
+      })()}
       {/* The inbox bell, always in reach, with the unread count on it. */}
       <Pressable
         onPress={() => { if (!inboxActive) go('/notifications'); }}

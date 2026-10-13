@@ -35,7 +35,7 @@ export default function MyDayCard() {
     ? new Date(d.synced_at).toLocaleTimeString(APP_LOCALE, { hour: '2-digit', minute: '2-digit', timeZone: APP_TZ })
     : null;
   return (
-    <Pressable onPress={() => router.push('/my-sector' as never)} style={s.card} accessibilityRole="button" testID="home-my-day">
+    <Pressable onPress={() => router.push('/field-kpis' as never)} style={s.card} accessibilityRole="button" testID="home-my-day">
       <View style={s.head}>
         <Text style={s.title}>My day · {d.label}</Text>
         <Ionicons name="chevron-forward" size={15} color={c.textMuted} />
@@ -81,7 +81,7 @@ export default function MyDayCard() {
         <Text style={s.line} numberOfLines={2}><Text style={s.bold}>This week’s focus:</Text> {d.week_focus.join(' · ')}</Text>
       )}
       <Text style={s.small}>
-        {d.has_live ? `Field IQ${synced ? `, updated ${synced}` : ''}. It syncs through the day, so it can be up to an hour behind.` : 'Your numbers show here once Field IQ has today’s doors (it syncs through the day).'}
+        {d.has_live ? `Field IQ${synced ? `, updated ${synced}` : ''}. It updates every 20 minutes.` : 'Your numbers show here once Field IQ has today’s doors (it updates every 20 minutes).'}
       </Text>
     </Pressable>
   );
