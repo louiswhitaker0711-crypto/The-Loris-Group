@@ -54,7 +54,7 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
   const [failed, setFailed] = useState(false);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [kind, setKind] = useState<Kind>(endOfDay ? 'done' : 'plan');
+  const [kind, setKind] = useState<Kind>('move');
   const [colour, setColour] = useState<string>('red');
   const [hopsOpen, setHopsOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -72,23 +72,18 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
     finally { setLoading(false); }
   }, [date, leaderId]);
   useEffect(() => { load(); }, [load]);
-  // Once the map's been sent it's set: one finger moves the map for
-  // everyone, and nobody draws until they press a button (a BA: Mark done or
-  // Request more streets; the leader: Plan areas or Mark done). Before it's
-  // sent, the leader opens straight into planning.
+  // The map always opens on Move map: one finger moves it, for everyone,
+  // the sector leader included. Nobody draws until they press a button (a
+  // BA: Mark done or Request more streets; the leader: Plan areas or Mark
+  // done).
   const chosen = useRef(false);
   useEffect(() => {
     if (!data) return;
     // A BA draws in their hop's colour.
     if (!data.leads && data.my_colour) setColour(data.my_colour);
-    if (!chosen.current) {
-      chosen.current = true;
-      const leads = !!data.can_confirm;
-      setKind(leads && !data.shared ? (endOfDay ? 'done' : 'plan') : 'move');
-    } else if (!data.can_confirm) {
-      setKind((k) => (k === 'plan' ? 'move' : k));
-    }
-  }, [data, endOfDay]);
+    if (!chosen.current) { chosen.current = true; setKind('move'); }
+    else if (!data.can_confirm) setKind((k) => (k === 'plan' ? 'move' : k));
+  }, [data]);
   const pick = (k: Kind) => { chosen.current = true; setKind(k); };
   const drawing = !!data?.can_draw && kind !== 'move';
 
