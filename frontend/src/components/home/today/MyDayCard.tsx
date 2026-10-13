@@ -1,8 +1,7 @@
-// "My day" on Home, under the map: what you're doing today, not a score that
-// Field IQ will always beat. Today's set-up (goal, KPI, focus), this week's
-// focus, your average day over your recent field days, what one sign-up takes
-// you, and so what today's goal takes. Live Operations is one tap away for
-// where you're at right now. (GET /sector/my-day)
+// "My day" on Home, under the map: today's set-up (goal, KPI, focus), where
+// you're on so far (Field IQ, pulled every 10 minutes, with the time), what
+// one sign-up takes you, what's still to go for today's goal, your average day
+// and this week's focus. Live Operations is one tap away. (GET /sector/my-day)
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,6 +9,8 @@ import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useColors, fonts } from '../../../theme/ThemeContext';
 import { apiService } from '../../../api/client';
+import { dayBandText } from '../../../utils/dayBands';
+import { APP_LOCALE, APP_TZ } from '../../../utils/appTime';
 
 const STEPS = [['doors', 'doors'], ['spoken', 'spoken'], ['pitched', 'pitched'], ['closed', 'closes']] as const;
 const r0 = (n: number) => Math.round(n);
@@ -20,7 +21,7 @@ export default function MyDayCard() {
   const q = useQuery({
     queryKey: ['my-day'],
     queryFn: () => apiService.getMyDay().then((r) => r.data),
-    staleTime: 10 * 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
     retry: false,
   });
   const d = q.data;
@@ -30,6 +31,12 @@ export default function MyDayCard() {
   const av = d.averages || {};
   const per = av.per_sale || { doors: 30, spoken: 17.5, pitched: 6.25, closed: 3.75 };
   const day = av.per_day;
+  const live = d.live || {};
+  const hit = Number(live.hit || 0);
+  const left = Math.max(0, goal - hit);
+  const asOf = d.synced_at
+    ? new Date(d.synced_at).toLocaleTimeString(APP_LOCALE, { hour: '2-digit', minute: '2-digit', timeZone: APP_TZ })
+    : null;
   return (
     <View style={s.card} testID="home-my-day">
       <Pressable onPress={() => router.push('/my-sector' as never)} style={s.head} accessibilityRole="button">
@@ -44,6 +51,19 @@ export default function MyDayCard() {
       ) : (
         <Pressable onPress={() => router.push('/my-sector' as never)}><Text style={s.muted}>No set-up yet today. Tap to do yours.</Text></Pressable>
       )}
+      <View style={s.liveRow}>
+        <View style={[s.liveBig, { borderColor: dayBandText(hit) }]}>
+          <Text style={[s.liveNum, { color: dayBandText(hit) }]}>{hit}</Text>
+          <Text style={s.liveLabel}>of {goal} sign-ups</Text>
+        </View>
+        {STEPS.map(([k, label]) => (
+          <View key={k} style={s.liveStat}>
+            <Text style={s.liveStatNum}>{Number(live[k] || 0)}</Text>
+            <Text style={s.liveLabel}>{label}</Text>
+          </View>
+        ))}
+      </View>
+      <Text style={s.small}>{d.has_live ? `Where you're on, as of ${asOf || 'the last pull'} (Field IQ, every 10 minutes).` : 'Where you’re on shows once Field IQ has today’s doors (every 10 minutes).'}</Text>
       {d.week_focus?.length > 0 && (
         <Text style={s.line}><Text style={s.bold}>This week’s focus:</Text> {d.week_focus.join(' · ')}</Text>
       )}
@@ -57,8 +77,8 @@ export default function MyDayCard() {
       </View>
 
       <View style={s.box}>
-        <Text style={s.boxTitle}>Today’s goal of {goal} takes</Text>
-        <Text style={s.big}>{STEPS.map(([k, label]) => `${r0(per[k] * goal)} ${label}`).join(' · ')}</Text>
+        <Text style={s.boxTitle}>{left > 0 ? `Still to go for your goal: ${left} more` : 'Goal hit 🎉 go for one more'}</Text>
+        <Text style={s.big}>{STEPS.map(([k, label]) => `${r0(per[k] * Math.max(left, 1))} ${label}`).join(' · ')}</Text>
       </View>
 
       {day && (
@@ -94,6 +114,12 @@ const styles = (c: any) => StyleSheet.create({
   big: { fontFamily: fonts.bodyBold, fontSize: 14.5, color: c.text },
   small: { fontFamily: fonts.body, fontSize: 11.5, color: c.textMuted },
   row: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  liveRow: { flexDirection: 'row', gap: 6, alignItems: 'stretch' },
+  liveBig: { borderWidth: 2, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 5, alignItems: 'center', justifyContent: 'center', minWidth: 70 },
+  liveNum: { fontFamily: fonts.bodyBold, fontSize: 22 },
+  liveStat: { flex: 1, backgroundColor: c.surface, borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingVertical: 5 },
+  liveStatNum: { fontFamily: fonts.bodyBold, fontSize: 16, color: c.text },
+  liveLabel: { fontFamily: fonts.body, fontSize: 10.5, color: c.textMuted },
   btn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 12, backgroundColor: c.primary },
   btnText: { fontFamily: fonts.bodyBold, fontSize: 13.5, color: c.onPrimary },
   ghost: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 12, borderWidth: 1, borderColor: c.primary },
