@@ -180,7 +180,7 @@ export default function DayBreakdownModal({ dayIdx, entries, weekEnding, onClose
           return;
         }
       }
-      const willClear = raw === 'off' || raw === 'nc' || raw === 'ab' || raw === 'ns';
+      const willClear = raw === 'off' || raw === 'nc' || raw === 'ab' || raw === 'ns' || raw === 'pc';
       const d = target?.dayValue;
       const hasData = !!d && (
         (d.over30 != null && d.over30 > 0) ||
@@ -213,7 +213,7 @@ export default function DayBreakdownModal({ dayIdx, entries, weekEnding, onClose
       const next: Day = { ...p.dayValue };
       if (field === 'status') {
         next.status = String(raw);
-        if (next.status === 'off' || next.status === 'nc' || next.status === 'ab' || next.status === 'ns') {
+        if (next.status === 'off' || next.status === 'nc' || next.status === 'ab' || next.status === 'ns' || next.status === 'pc') {
           next.over30 = null; next.under30 = null; next.memberships = null;
         }
       } else {
@@ -435,7 +435,7 @@ function ReadOnlyPersonDayRow({ name, day, total }: { name: string; day: Day; to
   const inStatus = isInDay(day);
   const sq = statusSquare(day.status, false);
   const badgeColor = sq ? sq.bg : day.status === 'off' ? colors.textMuted : day.status === 'nc' ? '#6b7280' : day.status === 'rt' ? '#d97706' : inStatus && total > 0 ? colors.primary : colors.textMuted;
-  const badgeText = sq ? DAY_STATUS_SHORT[day.status] : day.status === 'off' ? 'Off' : day.status === 'nc' ? 'NC' : day.status === 'rt' ? 'RT' : `${total}`;
+  const badgeText = sq ? DAY_STATUS_SHORT[day.status] : day.status === 'off' ? 'Off' : day.status === 'nc' ? 'NC' : day.status === 'rt' ? 'RT' : day.status === 'pc' ? DAY_STATUS_SHORT.pc : `${total}`;
   return (
     <View style={styles.personRow}>
       <View style={{ flex: 1 }}>
@@ -445,6 +445,7 @@ function ReadOnlyPersonDayRow({ name, day, total }: { name: string; day: Day; to
             day.status === 'ab' ? 'Not scheduled' :
             day.status === 'ns' ? 'No show' :
             day.status === 'nc' ? 'Not counted' :
+            day.status === 'pc' ? 'In office' :
             day.status === 'rt' ? `Retrain${(day.over30 || 0) + (day.under30 || 0) > 0 ? ` · ${signUps((day.over30 || 0) + (day.under30 || 0))} (not scored)` : ''}` :
             `${TIER.over30.short}: ${day.over30 ?? 0} · ${TIER.under30.short}: ${day.under30 ?? 0} · ${TIER.memberships.short}: ${day.memberships ?? 0}`
           }
@@ -471,8 +472,9 @@ function EditablePersonDayRow({ name, role, dayName, day, saveState, onChange }:
   const rt = day.status === 'rt';
   const ab = day.status === 'ab';
   const ns = day.status === 'ns';
+  const pc = day.status === 'pc';
   const total = inStatus ? ((day.over30 || 0) + (day.under30 || 0)) : 0;
-  const inputsDisabled = off || nc || ab || ns;
+  const inputsDisabled = off || nc || ab || ns || pc;
   const roleLabel = role === 'trainee' ? 'BA' : role === 'leader' ? 'C' : '';
 
   return (
@@ -486,7 +488,7 @@ function EditablePersonDayRow({ name, role, dayName, day, saveState, onChange }:
           {saveState === 'error' && <Ionicons name="alert-circle" size={14} color="#b91c1c" />}
         </View>
         <View style={[styles.editRowTotal, { backgroundColor: statusSquare(day.status, false)?.bg || (off ? colors.textMuted : nc ? '#6b7280' : rt ? '#d97706' : total > 0 ? colors.primary : colors.borderDark) }]}>
-          <Text style={[styles.editRowTotalText, !off && !nc && !rt && total > 0 && { color: colors.onPrimary }, (ab || ns) && { color: statusSquare(day.status, false)!.fg }]}>{ab || ns ? DAY_STATUS_SHORT[day.status] : off ? 'Off' : nc ? 'NC' : rt ? 'RT' : total}</Text>
+          <Text style={[styles.editRowTotalText, !off && !nc && !rt && total > 0 && { color: colors.onPrimary }, (ab || ns) && { color: statusSquare(day.status, false)!.fg }]}>{ab || ns || pc ? DAY_STATUS_SHORT[day.status] : off ? 'Off' : nc ? 'NC' : rt ? 'RT' : total}</Text>
         </View>
       </View>
 
@@ -501,6 +503,7 @@ function EditablePersonDayRow({ name, role, dayName, day, saveState, onChange }:
         <EditStatusChip active={off} label="Off" onPress={() => onChange('status', off ? 'in' : 'off')} />
         <EditStatusChip active={ab} label="Not scheduled" onPress={() => onChange('status', ab ? 'in' : 'ab')} />
         <EditStatusChip active={ns} label="No show" onPress={() => onChange('status', ns ? 'in' : 'ns')} />
+        <EditStatusChip active={pc} label="In office" onPress={() => onChange('status', pc ? 'in' : 'pc')} />
         <EditStatusChip active={rt} label="RT" onPress={() => onChange('status', rt ? 'in' : 'rt')} />
         <EditStatusChip active={nc} label="NC" onPress={() => onChange('status', nc ? 'in' : 'nc')} />
       </View>

@@ -46,3 +46,9 @@ def test_our_own_earlier_value_follows_field_iq_and_clears():
 def test_someone_elses_not_scheduled_is_kept():
     # Set in the app (not by the sync): Field IQ saying "planned in" doesn't undo it.
     assert schedule_status_updates(_days(d4="ab"), _oiq(d4="planned_in"), {}) == {}
+
+
+def test_an_in_office_day_set_in_the_app_is_kept():
+    # Field IQ only knows the field: "not present" must not undo In office.
+    assert schedule_status_updates(_days(d1="pc"), _oiq(d1="not_present"), {}) == {}
+    assert schedule_status_updates(_days(d1="pc"), _oiq(d1="not_present"), {"1": "ab"}) == {}

@@ -142,7 +142,7 @@ async def team_resets(request: Request, date: Optional[str] = None):
 
 async def reset_push_tick() -> int:
     """18:00 UK, Monday to Friday: push everyone out in the field today. People
-    marked not scheduled / no show / off sick for today on Bells are skipped."""
+    marked not scheduled / no show / retrain / in office for today on Bells are skipped."""
     from core.push import send_push_to_user
     now = datetime.now(APP_TZ)
     if now.weekday() > 4:  # Saturday's field ends at 17:00
@@ -153,7 +153,7 @@ async def reset_push_tick() -> int:
     away: set[str] = set()
     async for e in db.bells_entries.find({"week_ending": week_ending}, {"user_id": 1, "days": 1}):
         days = e.get("days") or []
-        if idx < len(days) and (days[idx] or {}).get("status") in ("ab", "ns", "rt"):
+        if idx < len(days) and (days[idx] or {}).get("status") in ("ab", "ns", "rt", "pc"):
             away.add(str(e.get("user_id")))
     sent = 0
     async for u in db.users.find({"role": {"$in": ["trainee", "leader"]}, "deleted": {"$ne": True},

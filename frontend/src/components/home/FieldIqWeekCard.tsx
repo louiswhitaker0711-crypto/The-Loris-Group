@@ -26,7 +26,7 @@ const DAY_LABEL: Record<string, string> = {
   monday: 'M', tuesday: 'T', wednesday: 'W', thursday: 'T', friday: 'F', saturday: 'S', sunday: 'S',
 };
 const STATUS_LABEL: Record<string, string> = {
-  present: 'In', not_present: 'Not scheduled', absent: 'No show', not_set: 'Not set', na: '—',
+  present: 'In', not_present: 'Not scheduled', absent: 'No show', in_office: 'In office', not_set: 'Not set', na: '—',
 };
 const TEAM_PREVIEW = 6;
 
@@ -49,6 +49,7 @@ export default function FieldIqWeekCard() {
 
   const statusColour = (s?: string | null) =>
     s === 'present' ? colors.green : s === 'absent' ? colors.red : s === 'not_present' ? colors.textMuted
+      : s === 'in_office' ? '#0891b2'
       : 'transparent';
   const k = me?.kpis || {};
   const target = k.sales_target;
