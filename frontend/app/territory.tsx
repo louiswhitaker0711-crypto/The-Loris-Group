@@ -10,6 +10,8 @@ import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import { todayISO } from '../src/utils/calendarDates';
 import { useColors, fonts } from '../src/theme/ThemeContext';
 import { apiService } from '../src/api/client';
 import { useAuth } from '../src/auth/AuthContext';
@@ -122,8 +124,46 @@ export default function TerritoryScreen() {
         )}
       </View>
 
+      <TodayCard s={s} c={c} />
+
       {uploads.length > 0 && <BigMap s={s} c={c} />}
     </ScrollView>
+  );
+}
+
+// Today's sectors, each opening its own map, and the ways into the rest.
+function TodayCard({ s, c }: { s: any; c: any }) {
+  const router = useRouter();
+  const today = todayISO();
+  const q = useQuery({ queryKey: ['sector-board', today], queryFn: () => apiService.getSectorBoard(today).then((r) => r.data) });
+  const sectors: any[] = q.data?.sectors || [];
+  const link = (icon: any, label: string, to: string, testID: string) => (
+    <Pressable onPress={() => router.push(to as never)} style={s.ghost} accessibilityRole="button" testID={testID}>
+      <Ionicons name={icon} size={15} color={c.primary} />
+      <Text style={s.ghostText}>{label}</Text>
+    </Pressable>
+  );
+  return (
+    <View style={s.card}>
+      <Text style={s.h}>Today's sectors</Text>
+      {q.isLoading ? <ActivityIndicator color={c.primary} /> : sectors.length === 0 ? (
+        <Text style={s.muted}>No sectors set up yet today. To try it yourself: set up your own sector, save a postcode, then open its map.</Text>
+      ) : sectors.map((sec) => (
+        <Pressable key={sec.leader_id} onPress={() => router.push(`/sector-map?leader=${sec.leader_id}&date=${today}` as never)}
+          style={s.sectorRow} accessibilityRole="button">
+          <View style={{ flex: 1 }}>
+            <Text style={s.line}>{sec.leader_name || 'Sector'}{sec.postcode ? ` · ${sec.postcode}` : ''}</Text>
+            <Text style={s.small}>{sec.people?.length || 0} in the sector · {sec.hit}/{sec.goal} sign-ups</Text>
+          </View>
+          <Ionicons name="map-outline" size={18} color={c.primary} />
+        </Pressable>
+      ))}
+      <View style={s.links}>
+        {link('rocket-outline', 'Set up my sector', '/sector?start=1', 'terr-setup')}
+        {link('grid-outline', 'Sectors board', '/sectors', 'terr-board')}
+        {link('analytics-outline', 'Area history', '/areas', 'terr-areas')}
+      </View>
+    </View>
   );
 }
 
@@ -229,6 +269,10 @@ const styles = (c: any) => StyleSheet.create({
   btn: { flexDirection: 'row', alignItems: 'center', gap: 7, alignSelf: 'flex-start', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: c.primary },
   btnText: { fontFamily: fonts.bodyBold, fontSize: 14, color: c.onPrimary },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  links: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
+  ghost: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 12, borderWidth: 1, borderColor: c.border },
+  ghostText: { fontFamily: fonts.bodySemibold, fontSize: 13.5, color: c.primary },
+  sectorRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, borderTopWidth: 1, borderTopColor: c.border },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: c.border },
   chipText: { fontFamily: fonts.bodySemibold, fontSize: 12.5, color: c.text },
   dot: { width: 10, height: 10, borderRadius: 5 },
