@@ -201,6 +201,16 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
     shapeLayer.current.clearLayers();
     marksLayer.current.clearLayers();
     const shape = data.shape;
+    // Open on YOUR area: a BA in a bunny hop lands zoomed in on the streets
+    // drawn in their colour; otherwise on the sector.
+    if (!placed.current && data.my_colour) {
+      const mine = (data.marks || []).filter((mk: any) => mk.status === 'plan' && mk.colour === data.my_colour)
+        .flatMap((mk: any) => mk.lines || []).flat();
+      if (mine.length) {
+        map.current.fitBounds(L.latLngBounds(mine), { padding: [24, 24], maxZoom: 18 });
+        placed.current = true;
+      }
+    }
     if (shape?.geometry) {
       const notActive = shape.kind === 'not_active';
       const gj = L.geoJSON(shape.geometry, { interactive: false, style: {
