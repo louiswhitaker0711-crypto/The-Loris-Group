@@ -273,6 +273,20 @@ async def owneriq_hub_view(request: Request, week_start: Optional[str] = None,
             "weeks": week_options(), "app_users": app_users, "view": view}
 
 
+def mark_office_days(row: dict, idx: Optional[set]) -> dict:
+    """Set `status` to in_office on the days (Mon=0) in `idx`."""
+    if not row or not idx:
+        return row
+    for d in row.get("days") or []:
+        try:
+            i = date.fromisoformat(str(d.get("date"))[:10]).weekday()
+        except (TypeError, ValueError):
+            continue
+        if i in idx:
+            d["status"] = "in_office"
+    return row
+
+
 @router.get("/owneriq/performance/week")
 async def owneriq_performance_week(request: Request, week_ending: Optional[str] = None):
     """The caller's Field IQ week (target, attendance, KPIs) plus, for coaches
@@ -301,6 +315,18 @@ async def owneriq_performance_week(request: Request, week_ending: Optional[str] 
                          "sales": k.get("sales"), "sales_target": k.get("sales_target"),
                          "days": r.get("days") or []})
         team.sort(key=lambda x: (-(x["sales"] or 0), x["name"] or ""))
+    # A day marked In office in the app (Bells `pc`) shows as in_office, not
+    # Field IQ's "not present": Field IQ only knows the field.
+    ids = [uid] + [t["user_id"] for t in team]
+    office: dict[str, set] = {}
+    async for e in db.bells_entries.find({"week_ending": we, "user_id": {"$in": ids}}, {"user_id": 1, "days": 1}):
+        idx = {i for i, d in enumerate(e.get("days") or []) if (d or {}).get("status") == "pc"}
+        if idx:
+            office.setdefault(str(e.get("user_id")), set()).update(idx)
+    if office:
+        mine = mark_office_days(mine, office.get(uid)) if mine else mine
+        for t in team:
+            mark_office_days(t, office.get(t["user_id"]))
     state = await db.owneriq_sync_state.find_one({"_id": "performance"}, {"_id": 0})
     return {"week_ending": we, "today": today.isoformat(), "me": mine, "team": team,
             "synced_at": (state or {}).get("synced_at")}

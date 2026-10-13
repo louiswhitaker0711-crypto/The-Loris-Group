@@ -1030,6 +1030,10 @@ async def scan_notes_image(request: Request, file: UploadFile = File(...)):
     return {"text": text[:8000]}
 
 
+def _has_numbers(day: dict) -> bool:
+    return any((day.get(k) or 0) > 0 for k in ("over30", "under30", "memberships"))
+
+
 @router.put("/weekly-planners/crew/{member_id}")
 async def set_crew_member_plan(member_id: str, request: Request):
     """Leader sets a crew member's week: Mon–Sat schedule statuses and/or
@@ -1091,9 +1095,12 @@ async def set_crew_member_plan(member_id: str, request: Request):
     # poisons piece-average/scoring reporting. 'In' happens the way bells
     # already does it: automatically, when sales values are entered.
     #   • incoming 'ab'                → admin: mark absent · leader: request
-    #   • incoming 'off' on an 'ab' day → clear the absence back to off
+    #   • incoming 'pc'                → In office (product coaching, office
+    #     work): not in the field, never an absence, left out of reliability
+    #     and scoring. Only on a day with no sign-ups entered.
+    #   • incoming 'off' on an 'ab' or 'pc' day → clear it back to off
     #   • anything else                 → leave the bells cell untouched
-    #     (protects in/rt/nc/pc statuses set on the Bells screen)
+    #     (protects in/rt/nc statuses set on the Bells screen)
     statuses_in = body.get("day_statuses")
     requested_ab: list = []
     if isinstance(statuses_in, list):
@@ -1105,7 +1112,9 @@ async def set_crew_member_plan(member_id: str, request: Request):
                     days[i]["status"] = "ab"
                 elif cur != "ab":
                     requested_ab.append(i)
-            elif s == "off" and cur == "ab":
+            elif s == "pc" and cur in ("off", "ab", "pc", None) and not _has_numbers(days[i]):
+                days[i]["status"] = "pc"
+            elif s == "off" and cur in ("ab", "pc"):
                 days[i]["status"] = "off"
 
     update: dict = {"days": days, "updated_at": now_iso}
@@ -1171,7 +1180,9 @@ async def set_crew_member_plan(member_id: str, request: Request):
                         s = str(s or "").strip().lower()
                         if s == "ab":
                             days[i]["status"] = "ab"
-                        elif s == "off" and days[i].get("status") == "ab":
+                        elif s == "pc" and days[i].get("status") in ("off", "ab", "pc", None) and not _has_numbers(days[i]):
+                            days[i]["status"] = "pc"
+                        elif s == "off" and days[i].get("status") in ("ab", "pc"):
                             days[i]["status"] = "off"
                 update["days"] = days
                 await db.bells_entries.update_one({"id": existing["id"]}, {"$set": update})

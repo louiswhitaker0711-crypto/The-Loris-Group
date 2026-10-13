@@ -1409,10 +1409,11 @@ export default function WeeklyPlannerScreen() {
                 entered, so it can never count as a 0-scoring In-day); only
                 Ab lands on the Bells sheet. For leaders, a NEW Ab becomes a
                 pending request (amber) until the owner approves it. */}
-            <Text style={styles.smallFieldLabel}>Week plan — tap a day to switch In / Not scheduled</Text>
+            <Text style={styles.smallFieldLabel}>Week plan — tap a day to switch In / Not scheduled / In office</Text>
             <View style={styles.sheetDaysRow}>
               {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((l, i) => {
                 const ab = crewDays[i] === 'ab';
+                const office = crewDays[i] === 'pc';
                 const isApproved = approvedAb(i);
                 const isPendingAb = false && isApproved;
                 const frozen = false;
@@ -1422,24 +1423,28 @@ export default function WeeklyPlannerScreen() {
                     disabled={frozen}
                     style={[
                       styles.sheetDayChip,
-                      !ab && styles.sheetDayChipOn,
+                      !ab && !office && styles.sheetDayChipOn,
                       ab && !isPendingAb && styles.sheetDayChipAb,
+                      office && styles.sheetDayChipOffice,
                       isPendingAb && styles.sheetDayChipPending,
                       frozen && { opacity: 0.55 },
                     ]}
+                    // In → Not scheduled → In office → In. A day with sign-ups
+                    // on Bells stays as it is (the server keeps it).
                     onPress={() => setCrewDays((cur) => cur.map((cs, si) =>
-                      si === i ? (cs === 'ab' ? 'off' : 'ab') : cs))}
+                      si === i ? (cs === 'ab' ? 'pc' : cs === 'pc' ? 'off' : 'ab') : cs))}
+                    accessibilityLabel={`${l}: ${ab ? 'not scheduled' : office ? 'in office' : 'in the field'}`}
                   >
-                    <Text style={[styles.sheetDayChipText, { color: ab ? '#475569' : '#fff' }]}>{l}</Text>
-                    <Text style={[styles.sheetDayChipState, { color: ab ? '#475569' : 'rgba(255,255,255,0.9)' }]}>
-                      {ab ? 'OFF' : 'IN'}
+                    <Text style={[styles.sheetDayChipText, { color: ab ? '#475569' : office ? '#0e7490' : '#fff' }]}>{l}</Text>
+                    <Text style={[styles.sheetDayChipState, { color: ab ? '#475569' : office ? '#0e7490' : 'rgba(255,255,255,0.9)' }]}>
+                      {ab ? 'OFF' : office ? 'OFFICE' : 'IN'}
                     </Text>
                   </TouchableOpacity>
                 );
               })}
             </View>
             <Text style={styles.sheetLockNote}>
-              {'"In" is the plan: the Bells day stays blank until sign-ups are entered, so it never counts as a 0. Not scheduled shows grey on Bells and never counts against them. Goals lock Monday 10:30; days can change any time.'}
+              {'"In" is the plan: the Bells day stays blank until sign-ups are entered, so it never counts as a 0. Not scheduled shows grey on Bells and never counts against them. "In office" is for product coaching or office work: never an absence, left out of reliability and scoring, and no field notifications that day. Goals lock Monday 10:30; days can change any time.'}
             </Text>
 
             {/* Reason — required context for the owner's approve/deny call */}
@@ -1818,6 +1823,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   sheetDayChip: { flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: 10, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   sheetDayChipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
   sheetDayChipAb: { backgroundColor: '#d9dee5', borderColor: '#c3cad4' },
+  sheetDayChipOffice: { backgroundColor: '#cffafe', borderColor: '#67e8f9' },
   sheetDayChipText: { fontFamily: fonts.bodySemibold, fontSize: 11, fontWeight: '800', color: colors.textMuted },
   sheetDayChipState: { fontFamily: fonts.mono, fontSize: 8.5, fontWeight: '900', letterSpacing: 0.5, marginTop: 1 },
   sheetLockNote: { fontFamily: fonts.body, fontSize: 10.5, color: colors.textMuted, marginTop: 8, lineHeight: 15 },

@@ -630,7 +630,7 @@ async def _leaders_out_today() -> list[str]:
     away: set[str] = set()
     async for e in db.bells_entries.find({"week_ending": week_ending}, {"user_id": 1, "days": 1}):
         days = e.get("days") or []
-        if d.weekday() < len(days) and (days[d.weekday()] or {}).get("status") in ("ab", "ns", "rt"):
+        if d.weekday() < len(days) and (days[d.weekday()] or {}).get("status") in ("ab", "ns", "rt", "pc"):
             away.add(str(e.get("user_id")))
     return [str(u["_id"]) async for u in db.users.find(
         {"role": "leader", "deleted": {"$ne": True}, "is_active": {"$ne": False}, "is_demo": {"$ne": True}}, {"_id": 1})

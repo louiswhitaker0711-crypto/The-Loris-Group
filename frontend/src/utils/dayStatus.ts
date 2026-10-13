@@ -4,6 +4,8 @@
  *   • ab = Not scheduled — they planned the day off (grey square). Their own
  *     call: nobody approves it, and it never counts against them.
  *   • ns = No show — planned in but didn't go out (black square).
+ *   • pc = In office — product coaching or office work, not in the field.
+ *     Never an absence; left out of reliability and scoring.
  * Codes stay as they are in the data (`ab`, `ns`, …).
  */
 export const DAY_STATUS_LABEL: Record<string, string> = {
@@ -13,7 +15,7 @@ export const DAY_STATUS_LABEL: Record<string, string> = {
   ns: 'No show',
   rt: 'Retrain',
   nc: 'Not counted',
-  pc: 'PC',
+  pc: 'In office',
 };
 
 export const DAY_STATUS_SHORT: Record<string, string> = {
@@ -23,7 +25,7 @@ export const DAY_STATUS_SHORT: Record<string, string> = {
   ns: 'X',
   rt: 'RT',
   nc: 'NC',
-  pc: 'PC',
+  pc: 'IO',
 };
 
 /** The grey and black squares (fill + text), in both themes. */

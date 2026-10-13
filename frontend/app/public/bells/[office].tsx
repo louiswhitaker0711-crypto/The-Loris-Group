@@ -406,7 +406,7 @@ function TableView({ entries }: { entries: Entry[] }) {
     if (d.status === 'ab') return { text: 'NS', color: '#64748b' };
     if (d.status === 'ns') return { text: 'X', color: '#111111' };
     if (d.status === 'nc') return { text: 'nc', color: '#6b7280' };
-    if (d.status === 'pc') return { text: 'pc', color: '#0891b2' };
+    if (d.status === 'pc') return { text: 'io', color: '#0891b2' };
     const tot = (d.over30 || 0) + (d.under30 || 0);
     if (d.status === 'rt') return { text: tot > 0 ? `rt ${tot}` : 'rt', color: '#d97706' };
     return { text: String(tot), color: tot > 0 ? colors.text : '#8ea8c8' };

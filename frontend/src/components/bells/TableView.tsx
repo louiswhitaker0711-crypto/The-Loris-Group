@@ -198,7 +198,7 @@ function cellForDay(d: Day, c: typeof colors, dark: boolean): DayLook {
   const sq = statusSquare(d.status, dark);
   if (sq) return { text: DAY_STATUS_SHORT[d.status], fg: sq.fg, bg: sq.bg };
   if (d.status === 'nc') return { text: 'NC', fg: c.textMuted };
-  if (d.status === 'pc') return { text: 'PC', fg: dark ? '#67e8f9' : '#0e7490' };
+  if (d.status === 'pc') return { text: DAY_STATUS_SHORT.pc, fg: dark ? '#67e8f9' : '#0e7490' };
   const tot = (d.over30 || 0) + (d.under30 || 0);
   if (d.status === 'rt') return { text: tot > 0 ? `RT ${tot}` : 'RT', fg: amber };
   if (tot >= 2) return { text: String(tot), fg: green, bg: dark ? 'rgba(34,197,94,0.20)' : 'rgba(34,197,94,0.18)' };
@@ -654,7 +654,7 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
                       style={[styles.ceStatusChip, cellStatus === s && styles.ceStatusChipActive]}
                       onPress={() => setCellStatus(s)}
                     >
-                      <Text style={[styles.ceStatusChipText, cellStatus === s && { color: colors.onPrimary }]}>{s === 'ab' || s === 'ns' ? DAY_STATUS_LABEL[s] : s.toUpperCase()}</Text>
+                      <Text style={[styles.ceStatusChipText, cellStatus === s && { color: colors.onPrimary }]}>{s === 'ab' || s === 'ns' || s === 'pc' ? DAY_STATUS_LABEL[s] : s.toUpperCase()}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
