@@ -70,3 +70,31 @@ def test_drafts_through_the_day_then_the_leader_confirms_them_black(monkeypatch)
         run(cov.delete_coverage(doc["id"], _Req()))
     who["u"] = {"id": "lead1", "role": "leader", "office_id": "o1"}
     assert run(cov.delete_coverage(doc["id"], _Req()))["deleted"] is True
+
+
+def test_bunny_hops_plan_in_colour_and_only_done_strokes_turn_black(monkeypatch):
+    from mongomock_motor import AsyncMongoMockClient
+    db = AsyncMongoMockClient()["t"]
+    monkeypatch.setattr(cov, "db", db)
+    today = cov._today().isoformat()
+    run = asyncio.run
+    run(db.sectors.insert_one({"office_id": "o1", "date": today, "leader_id": "lead1", "member_ids": ["lead1", "ba1", "ba2"],
+                               "postcode": "LS6 1AB", "hops": [{"colour": "red", "member_ids": ["ba1", "ba2"]}]}))
+    who = {"u": {"id": "lead1", "name": "Sam Example", "role": "trainee", "office_id": "o1"}}   # a BA leading
+
+    async def _user(_r):
+        return dict(who["u"])
+
+    monkeypatch.setattr(cov, "get_current_user", _user)
+    line = [[[53.81, -1.56], [53.82, -1.55]]]
+    plan = run(cov.save_coverage(_Req({"lines": line, "kind": "plan", "colour": "red"})))
+    assert (plan["status"], plan["colour"]) == ("plan", "red")
+    # A BA can't plan; what they draw is done, in their hop's colour whatever they send.
+    who["u"] = {"id": "ba1", "name": "Ayo Example", "role": "trainee", "office_id": "o1"}
+    with pytest.raises(HTTPException):
+        run(cov.save_coverage(_Req({"lines": line, "kind": "plan", "colour": "blue"})))
+    done = run(cov.save_coverage(_Req({"lines": line, "colour": "blue"})))
+    assert (done["status"], done["kind"], done["colour"]) == ("draft", "done", "red")
+    who["u"] = {"id": "lead1", "name": "Sam Example", "role": "trainee", "office_id": "o1"}
+    assert run(cov.confirm_coverage(_Req({"date": today})))["confirmed"] == 1
+    assert run(db.coverage_marks.find_one({"id": plan["id"]}))["status"] == "plan"

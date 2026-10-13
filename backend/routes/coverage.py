@@ -13,6 +13,12 @@ Collection `coverage_marks`, one per save:
      confirmed_by, confirmed_at, note, created_at}
 A mark with no status is a confirmed one from before drafts existed.
 
+Bunny hops: the sector leader gives each pair a colour (HOP_COLOURS) on the
+sector (`sectors.hops`: [{colour, member_ids}]) and draws each hop's area in
+its colour at set-up. Those PLAN strokes have status "plan": they're the
+day's map, never confirmed and never on the Owner's map. What's been done
+is drawn in the hop's colour as drafts, then confirmed black.
+
   GET    /api/coverage?south&west&north&east&days=84   marks in view (Coach/Admin)
   POST   /api/coverage                                  save a draft mark-off
   POST   /api/coverage/confirm {date, leader_id?}       sector leader confirms the day
@@ -34,6 +40,7 @@ from database import db
 router = APIRouter()
 
 KEEP_DAYS = 84
+HOP_COLOURS = ["red", "blue", "green", "purple", "orange"]
 MAX_LINES = 60
 MAX_POINTS = 400
 UK_BOX = (49.5, -8.8, 61.0, 2.2)    # south, west, north, east: a sanity check, not a border
@@ -77,7 +84,7 @@ async def coverage_in_view(request: Request, south: float, west: float, north: f
     user = await require_admin_or_leader(request)
     n = max(1, min(int(days or KEEP_DAYS), KEEP_DAYS))
     since = (_today() - timedelta(days=n)).isoformat()
-    q = {"office_id": user.get("office_id"), "date": {"$gte": since},
+    q = {"office_id": user.get("office_id"), "date": {"$gte": since}, "status": {"$ne": "plan"},
          # boxes that overlap the view
          "bbox.s": {"$lte": north}, "bbox.n": {"$gte": south}, "bbox.w": {"$lte": east}, "bbox.e": {"$gte": west}}
     rows = await db.coverage_marks.find(q, {"_id": 0}).sort("date", -1).to_list(500)
@@ -120,6 +127,16 @@ async def save_coverage(request: Request):
         sec = await sector_of(str(user["id"]), d.isoformat(), user.get("office_id"))
     if role not in ("leader", "admin") and (not sec or d != _today()):
         raise HTTPException(status_code=403, detail="You can mark off your own sector's streets on the day")
+    kind = "plan" if body.get("kind") == "plan" else "done"
+    leads = bool(sec) and (sec.get("leader_id") == str(user["id"]) or _is_admin(user))
+    if kind == "plan" and not leads:
+        raise HTTPException(status_code=403, detail="Only the sector leader plans the areas")
+    colour = str(body.get("colour") or "").lower()
+    if kind == "done" and not leads:
+        # A BA draws in their bunny hop's colour.
+        colour = my_hop_colour(sec, str(user["id"])) or ""
+    if colour not in HOP_COLOURS:
+        colour = ""
     pc = clean_pc(body.get("postcode") or (sec or {}).get("postcode"))
     name = user.get("name") or ""
     doc = {"id": str(uuid.uuid4()), "office_id": user.get("office_id"), "date": d.isoformat(),
@@ -127,11 +144,18 @@ async def save_coverage(request: Request):
            "author_id": str(user["id"]), "author_name": name,
            "leader_id": str(user["id"]), "leader_name": name,
            "postcode": pc, "district": district(pc), "lines": lines, "bbox": _bbox(lines),
-           "status": "draft",
+           "status": "plan" if kind == "plan" else "draft", "kind": kind, "colour": colour,
            "note": " ".join(str(body.get("note") or "").split())[:200],
            "created_at": datetime.now(timezone.utc).isoformat()}
     await db.coverage_marks.insert_one(dict(doc))
     return doc
+
+
+def my_hop_colour(sec: Optional[dict], user_id: str) -> Optional[str]:
+    for h in (sec or {}).get("hops") or []:
+        if user_id in (h.get("member_ids") or []):
+            return h.get("colour")
+    return None
 
 
 @router.post("/coverage/confirm")

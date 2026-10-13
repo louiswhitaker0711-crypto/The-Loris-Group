@@ -707,11 +707,11 @@ async def sector_map(request: Request, date: Optional[str] = None, leader: Optio
     if box:
         # Confirmed streets anywhere in (or crossing) the sector's box.
         pad = 0.002
-        ors.append({"date": {"$gte": since}, "status": {"$ne": "draft"},
+        ors.append({"date": {"$gte": since}, "status": {"$nin": ["draft", "plan"]},
                     "bbox.s": {"$lte": box["n"] + pad}, "bbox.n": {"$gte": box["s"] - pad},
                     "bbox.w": {"$lte": box["e"] + pad}, "bbox.e": {"$gte": box["w"] - pad}})
     elif sec.get("postcode"):
-        ors.append({"date": {"$gte": since}, "status": {"$ne": "draft"}, "district": district_of(sec["postcode"])})
+        ors.append({"date": {"$gte": since}, "status": {"$nin": ["draft", "plan"]}, "district": district_of(sec["postcode"])})
     q["$or"] = ors
     marks = await db.coverage_marks.find(q, {"_id": 0, "office_id": 0}).sort("date", -1).to_list(800)
     today = Date.fromisoformat(today_iso())
@@ -723,7 +723,12 @@ async def sector_map(request: Request, date: Optional[str] = None, leader: Optio
         for k in ("bbox", "author_id", "leader_id", "sector_leader_id"):
             m.pop(k, None)
     members = await _users_by_ids(sec.get("member_ids") or [])
+    names = {p["user_id"]: p["user_name"] for p in members}
     leads = sec["leader_id"] == me
+    from routes.coverage import HOP_COLOURS, my_hop_colour
+    hops = [{"colour": h.get("colour"), "member_ids": h.get("member_ids") or [],
+             "members": [names.get(i, "") for i in h.get("member_ids") or [] if i in names]}
+            for h in sec.get("hops") or [] if h.get("colour") in HOP_COLOURS]
     if shape:
         shape.pop("office", None)
         shape["label"] = KIND_LABEL.get(shape.get("kind"), "")
@@ -731,19 +736,50 @@ async def sector_map(request: Request, date: Optional[str] = None, leader: Optio
         "date": iso,
         "sector": {"leader_id": sec["leader_id"], "leader_name": sec.get("leader_name") or "",
                    "postcode": sec.get("postcode") or "", "goal": sec.get("goal"),
-                   "members": [m["user_name"] for m in members]},
+                   "members": [m["user_name"] for m in members],
+                   "people": [{"user_id": m["user_id"], "name": m["user_name"]} for m in members]},
+        "hops": hops,
+        "colours": HOP_COLOURS,
+        "my_colour": my_hop_colour(sec, me),
+        "leads": leads,
         "shape": shape,
         "marks": marks,
         "can_draw": iso == today_iso(),
         "can_confirm": leads or is_admin,
         "can_share": leads or is_admin,
         "drafts": sum(1 for m in marks if m["status"] == "draft"),
+        "me": me,
     }
 
 
 def district_of(pc: str) -> str:
     from core.areas import district
     return district(pc)
+
+
+@router.put("/sector/hops")
+async def save_hops(request: Request, date: Optional[str] = None):
+    """The sector leader's bunny hops: a colour each and who's in it. Only
+    people in the sector; someone is in one hop at a time."""
+    from routes.coverage import HOP_COLOURS
+    user = await get_current_user(request)
+    iso = _clean_date(date)
+    sec = await _sector_of_leader(str(user["id"]), iso)
+    if not sec:
+        raise HTTPException(status_code=400, detail="Pick who's in your sector first")
+    body = await request.json()
+    members = set(sec.get("member_ids") or [])
+    seen: set = set()
+    hops = []
+    for h in body.get("hops") or []:
+        colour = str((h or {}).get("colour") or "").lower()
+        if colour not in HOP_COLOURS or any(x["colour"] == colour for x in hops):
+            continue
+        ids = [i for i in dict.fromkeys(str(x) for x in (h.get("member_ids") or [])) if i in members and i not in seen]
+        seen.update(ids)
+        hops.append({"colour": colour, "member_ids": ids})
+    await db.sectors.update_one({"leader_id": str(user["id"]), "date": iso}, {"$set": {"hops": hops}})
+    return {"hops": hops}
 
 
 @router.post("/sector/map/share")
@@ -757,13 +793,16 @@ async def share_sector_map(request: Request, date: Optional[str] = None):
     if not sec:
         raise HTTPException(status_code=400, detail="Pick who's in your sector first")
     code = postcode_to_sector(sec.get("postcode") or "")
+    from routes.coverage import my_hop_colour
     sent = 0
     for uid in sec.get("member_ids") or []:
         if uid == str(user["id"]):
             continue
+        colour = my_hop_colour(sec, uid)
+        area = f"Your area: {colour.capitalize()}" if colour else "Your sector map"
         try:
-            await send_push_to_user(uid, f"🗺️ Your sector map{f' · {code}' if code else ''}",
-                                    "Here's today's map. Tap along the streets as you finish them.",
+            await send_push_to_user(uid, f"🗺️ {area}{f' · {code}' if code else ''}",
+                                    (f"Work the {colour} area. " if colour else "") + "Draw over the streets as you finish them.",
                                     {"type": "sector_setup", "url": f"/sector-map?date={iso}"})
             sent += 1
         except Exception as ex:
