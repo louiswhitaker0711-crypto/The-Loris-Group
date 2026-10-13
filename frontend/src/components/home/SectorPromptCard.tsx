@@ -50,17 +50,24 @@ export default function SectorPromptCard() {
   }
 
   const m = data.my_setup;
+  const mapLink = data.in_sector && data.phase ? (
+    <Pressable onPress={() => router.push('/sector-map' as never)} style={s.mapLink} accessibilityRole="button" testID="home-sector-map">
+      <Ionicons name="map-outline" size={16} color={c.primary} />
+      <Text style={s.mapLinkText}>Your sector map</Text>
+    </Pressable>
+  ) : null;
   if (m && data.phase) {
     const bits = [m.goal != null ? `Goal ${m.goal}` : '', m.kpi ? `KPI ${m.kpi}` : '', m.focus ? `Focus: ${m.focus}` : '', m.positive ? `💪 ${m.positive}` : ''].filter(Boolean);
-    if (!bits.length) return null;
+    if (!bits.length) return mapLink;
     return (
       <View style={s.plain} testID="home-my-setup">
         <Text style={s.plainTitle}>🎯 Your set-up today</Text>
         <Text style={s.plainSub}>{bits.join(' · ')}</Text>
+        {mapLink}
       </View>
     );
   }
-  return null;
+  return mapLink;
 }
 
 const styles = (c: any) => StyleSheet.create({
@@ -70,5 +77,7 @@ const styles = (c: any) => StyleSheet.create({
   sub: { fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: c.onPrimary, opacity: 0.9 },
   plain: { padding: 14, borderRadius: 16, borderWidth: 1, borderColor: c.border, backgroundColor: c.background, gap: 4, marginBottom: 12 },
   plainTitle: { fontFamily: fonts.bodyBold, fontSize: 15, color: c.text },
+  mapLink: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingVertical: 6, marginBottom: 6 },
+  mapLinkText: { fontFamily: fonts.bodySemibold, fontSize: 14, color: c.primary },
   plainSub: { fontFamily: fonts.body, fontSize: 13.5, lineHeight: 19, color: c.textMuted },
 });

@@ -31,24 +31,42 @@ class _Req:
         return self._b
 
 
-def test_a_mark_off_is_found_in_view_and_only_its_author_or_an_admin_removes_it(monkeypatch):
+def test_drafts_through_the_day_then_the_leader_confirms_them_black(monkeypatch):
     from mongomock_motor import AsyncMongoMockClient
     db = AsyncMongoMockClient()["t"]
     monkeypatch.setattr(cov, "db", db)
-    who = {"u": {"id": "lead1", "name": "Alex Example", "role": "leader", "office_id": "o1"}}
+    today = cov._today().isoformat()
+    run = asyncio.run
+    run(db.sectors.insert_one({"office_id": "o1", "date": today, "leader_id": "lead1", "member_ids": ["lead1", "ba1"], "postcode": "LS6 1AB"}))
+    who = {"u": {"id": "ba1", "name": "Ayo Example", "role": "trainee", "office_id": "o1"}}
 
     async def _user(_r):
         return dict(who["u"])
 
+    monkeypatch.setattr(cov, "get_current_user", _user)
     monkeypatch.setattr(cov, "require_admin_or_leader", _user)
-    run = asyncio.run
-    doc = run(cov.save_coverage(_Req({"postcode": "ls6 1ab", "lines": [[[53.81, -1.56], [53.82, -1.55]]]})))
-    assert doc["district"] == "LS6" and doc["bbox"] == {"s": 53.81, "w": -1.56, "n": 53.82, "e": -1.55}
+    line = [[[53.81, -1.56], [53.82, -1.55]]]
+    doc = run(cov.save_coverage(_Req({"lines": line})))
+    assert (doc["status"], doc["sector_leader_id"], doc["postcode"], doc["district"]) == ("draft", "lead1", "LS6 1AB", "LS6")
+    assert doc["bbox"] == {"s": 53.81, "w": -1.56, "n": 53.82, "e": -1.55}
+
+    # A BA who isn't in a sector today can't mark off.
+    who["u"] = {"id": "ba9", "role": "trainee", "office_id": "o1"}
+    with pytest.raises(HTTPException):
+        run(cov.save_coverage(_Req({"lines": line})))
+    # Only the sector leader (or an Admin) confirms.
+    who["u"] = {"id": "ba1", "role": "trainee", "office_id": "o1"}
+    with pytest.raises(HTTPException):
+        run(cov.confirm_coverage(_Req({"date": today, "leader_id": "lead1"})))
+    who["u"] = {"id": "lead1", "name": "Sam Example", "role": "leader", "office_id": "o1"}
+    assert run(cov.confirm_coverage(_Req({"date": today})))["confirmed"] == 1
     seen = run(cov.coverage_in_view(_Req(), south=53.80, west=-1.57, north=53.815, east=-1.50))["marks"]
-    assert [m["id"] for m in seen] == [doc["id"]] and seen[0]["mine"] is True
+    assert [m["status"] for m in seen] == ["confirmed"]
     assert run(cov.coverage_in_view(_Req(), south=52.0, west=-2.0, north=52.1, east=-1.9))["marks"] == []
+
+    # Removing: the author, the sector leader or an Admin; not another Coach.
     who["u"] = {"id": "lead2", "role": "leader", "office_id": "o1"}
     with pytest.raises(HTTPException):
         run(cov.delete_coverage(doc["id"], _Req()))
-    who["u"] = {"id": "boss", "role": "admin", "office_id": "o1"}
+    who["u"] = {"id": "lead1", "role": "leader", "office_id": "o1"}
     assert run(cov.delete_coverage(doc["id"], _Req()))["deleted"] is True

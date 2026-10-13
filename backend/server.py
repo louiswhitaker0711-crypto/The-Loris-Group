@@ -75,6 +75,7 @@ from routes.people import router as people_router
 from routes.insights import router as insights_router
 from routes.areas import router as areas_router
 from routes.coverage import router as coverage_router
+from routes.territory import router as territory_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -173,6 +174,7 @@ api_router.include_router(people_router)
 api_router.include_router(insights_router)
 api_router.include_router(areas_router)
 api_router.include_router(coverage_router)
+api_router.include_router(territory_router)
 
 app.include_router(api_router)
 
