@@ -205,6 +205,22 @@ def merge(parts: list[dict]) -> dict:
     return finish({"week_ending": week, "rows": list(rows.values()), "total": total})
 
 
+def merge_week(old_bas: list[dict], old_total: dict, new_bas: list[dict], new_total: dict):
+    """A second upload for a week already saved: each person's new numbers
+    are added to (or replace) their saved ones; anyone not in the new upload
+    is kept as they were."""
+    by = {b["badge"]: {**b, "metrics": dict(b.get("metrics") or {})} for b in old_bas}
+    for b in new_bas:
+        cur = by.get(b["badge"])
+        if cur:
+            cur["metrics"].update(b.get("metrics") or {})
+            cur["user_id"] = b.get("user_id") or cur.get("user_id")
+            cur["label"] = b.get("label") or cur.get("label")
+        else:
+            by[b["badge"]] = b
+    return list(by.values()), {**(old_total or {}), **(new_total or {})}
+
+
 def finish(rep: dict) -> dict:
     """4th week only counts once it's due: a week where everyone (and the
     total) shows 0% hasn't reached the 4th delivery yet, so it's left blank."""

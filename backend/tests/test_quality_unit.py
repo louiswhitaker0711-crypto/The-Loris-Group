@@ -150,3 +150,30 @@ def test_fails_as_a_count():
     agg = aggregate([{"sales": 10, "fail_rate": 9.09}, {"sales": 17, "fail_rate": 5.26}, {"sales": 4, "fail_rate": 0}])
     assert agg["fails"] == 2 and agg["signups"] == 33
     assert "fails" not in aggregate([{"sales": 3}])
+
+
+def test_a_second_upload_adds_to_the_saved_week():
+    from core.quality import merge_week
+    old = [{"badge": "MMC1", "label": "Example A MMC1", "user_id": "u1", "metrics": {"sales": 8, "aov": 11.5}},
+           {"badge": "MMC2", "label": "Example B MMC2", "user_id": None, "metrics": {"sales": 2}}]
+    new = [{"badge": "MMC1", "label": "Example A MMC1", "user_id": None, "metrics": {"the_round": 75.0, "fourth_week": 50.0}}]
+    bas, total = merge_week(old, {"sales": 10}, new, {"the_round": 70.0})
+    by = {b["badge"]: b for b in bas}
+    assert by["MMC1"]["metrics"] == {"sales": 8, "aov": 11.5, "the_round": 75.0, "fourth_week": 50.0}
+    assert by["MMC1"]["user_id"] == "u1"            # an upload without a link keeps the saved one
+    assert by["MMC2"]["metrics"] == {"sales": 2}      # not in the new upload: kept
+    assert total == {"sales": 10, "the_round": 70.0}
+
+
+def test_retrain_alert_for_high_fails_two_weeks_running():
+    from datetime import date
+    from core.quality_alerts import fail_runs, is_current
+    this = [{"user_id": "u1", "metrics": {"sales": 8, "fail_rate": 20.0}},     # 10 sign-ups, 2 fails
+            {"user_id": "u2", "metrics": {"sales": 8, "fail_rate": 25.0}},
+            {"user_id": "u3", "metrics": {"sales": 1, "fail_rate": 50.0}},     # 2 sign-ups: too few
+            {"user_id": None, "metrics": {"sales": 5, "fail_rate": 50.0}}]
+    prev = [{"user_id": "u1", "metrics": {"sales": 4, "fail_rate": 33.33}},
+            {"user_id": "u2", "metrics": {"sales": 9, "fail_rate": 10.0}},
+            {"user_id": "u3", "metrics": {"sales": 1, "fail_rate": 50.0}}]
+    assert [r["user_id"] for r in fail_runs(this, prev)] == ["u1"]
+    assert is_current("2026-10-11", date(2026, 10, 13)) and not is_current("2026-09-06", date(2026, 10, 13))
