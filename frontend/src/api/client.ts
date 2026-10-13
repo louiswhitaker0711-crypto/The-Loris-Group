@@ -1159,6 +1159,7 @@ export const apiService = {
   getPendingChecks: () => api.get<{ checks: any[] }>('/cod/checks'),
   setCodTests: (userId: string, moduleIds: string[]) => api.post('/cod/test-requests', { user_id: userId, module_ids: moduleIds }),
   getMyCodTests: () => api.get<{ requests: any[] }>('/cod/test-requests/mine'),
+  getCoachSuggestions: () => api.get<{ through: string; suggestions: any[] }>('/coach/suggestions'),
   getCodTestsFor: (userId: string) => api.get<{ requests: any[] }>('/cod/test-requests', { params: { user_id: userId } }),
   deleteCodTest: (id: string) => api.delete(`/cod/test-requests/${id}`),
   codVettingList: () => api.get<{ modules: any[] }>('/cod/vetting'),
