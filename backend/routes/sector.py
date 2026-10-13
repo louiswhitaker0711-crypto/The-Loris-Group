@@ -748,6 +748,7 @@ async def sector_map(request: Request, date: Optional[str] = None, leader: Optio
         "can_draw": iso == today_iso() and (leads or is_admin or me in (sec.get("member_ids") or [])),
         "can_confirm": leads or is_admin,
         "can_share": leads,
+        "shared": bool(sec.get("map_shared_at")),
         "drafts": sum(1 for m in marks if m["status"] == "draft"),
         "requests": sum(1 for m in marks if m["status"] == "requested"),
         "me": me,
@@ -796,6 +797,10 @@ async def share_sector_map(request: Request, date: Optional[str] = None):
         raise HTTPException(status_code=400, detail="Pick who's in your sector first")
     code = postcode_to_sector(sec.get("postcode") or "")
     from routes.coverage import my_hop_colour
+    # Once it's sent the map is set: it opens in "move" for everyone and
+    # BAs only draw by pressing a button (Mark done / Request more streets).
+    await db.sectors.update_one({"leader_id": sec["leader_id"], "date": iso},
+                                {"$set": {"map_shared_at": datetime.now(timezone.utc).isoformat()}})
     sent = 0
     for uid in sec.get("member_ids") or []:
         if uid == str(user["id"]):

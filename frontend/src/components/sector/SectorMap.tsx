@@ -29,7 +29,7 @@ import { HOP_COLOURS, hopHex, hopLabel } from '../../utils/hopColours';
 
 const FREE_MAP_TOOLS = 'https://www.freemaptools.com/uk-postcode-map.htm';
 const MAX_POINTS = 380;
-type Kind = 'plan' | 'done' | 'request';
+type Kind = 'plan' | 'done' | 'request' | 'move';
 // Line weights: planned areas a soft, fairly thin band; done lines thin.
 const PLAN_STYLE = { weight: 7, opacity: 0.45 };
 const DONE_WEIGHT = 3.5;
@@ -72,12 +72,25 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
     finally { setLoading(false); }
   }, [date, leaderId]);
   useEffect(() => { load(); }, [load]);
+  // Once the map's been sent it's set: one finger moves the map for
+  // everyone, and nobody draws until they press a button (a BA: Mark done or
+  // Request more streets; the leader: Plan areas or Mark done). Before it's
+  // sent, the leader opens straight into planning.
+  const chosen = useRef(false);
   useEffect(() => {
+    if (!data) return;
     // A BA draws in their hop's colour.
-    if (data && !data.leads && data.my_colour) setColour(data.my_colour);
-    // A BA can't plan: they start on marking done.
-    if (data && !data.leads) setKind((k) => (k === 'plan' ? 'done' : k));
-  }, [data]);
+    if (!data.leads && data.my_colour) setColour(data.my_colour);
+    if (!chosen.current) {
+      chosen.current = true;
+      const leads = !!data.can_confirm;
+      setKind(leads && !data.shared ? (endOfDay ? 'done' : 'plan') : 'move');
+    } else if (!data.can_confirm) {
+      setKind((k) => (k === 'plan' ? 'move' : k));
+    }
+  }, [data, endOfDay]);
+  const pick = (k: Kind) => { chosen.current = true; setKind(k); };
+  const drawing = !!data?.can_draw && kind !== 'move';
 
   const saveStroke = useCallback(async (latlngs: number[][]) => {
     const { kind: k, colour: col, data: d, date: dt, leaderId: lid } = st.current;
@@ -88,7 +101,7 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
     }
     try {
       const r = await apiService.saveCoverage({ date: dt, lines: [pts], leader_id: lid,
-        kind: d?.can_confirm ? (k === 'request' ? 'done' : k) : (k === 'request' ? 'request' : 'done'), colour: col });
+        kind: d?.can_confirm ? (k === 'plan' ? 'plan' : 'done') : (k === 'request' ? 'request' : 'done'), colour: col });
       if (r.data?.id) setUndoStack((u) => [...u, r.data.id]);
       load();
     } catch (e: any) {
@@ -123,7 +136,7 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
       const fingers = new Set<number>();
       const cancelStroke = () => { drawingNow = false; pts = []; liveLayer.current?.clearLayers(); };
       const down = (e: PointerEvent) => {
-        if (!st.current.data?.can_draw) return;
+        if (!st.current.data?.can_draw || st.current.kind === 'move') return;
         fingers.add(e.pointerId);
         if (e.pointerType === 'mouse' && (e.shiftKey || e.button === 1 || e.button === 2)) {
           panFrom = { x: e.clientX, y: e.clientY };
@@ -169,7 +182,7 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
         pts = [];
         setTimeout(() => liveLayer.current?.clearLayers(), 600);
       };
-      const noMenu = (e: Event) => { if (st.current.data?.can_draw) e.preventDefault(); };
+      const noMenu = (e: Event) => { if (st.current.data?.can_draw && st.current.kind !== 'move') e.preventDefault(); };
       el.addEventListener('contextmenu', noMenu);
       el.addEventListener('pointerdown', down, true);
       el.addEventListener('pointermove', move, true);
@@ -194,10 +207,10 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
     const m = map.current;
     const el = box.current as unknown as HTMLElement | null;
     if (!m || !el || !data) return;
-    if (data.can_draw) { m.dragging.disable(); m.doubleClickZoom.disable(); el.style.cursor = 'crosshair'; el.style.touchAction = 'none'; }
+    if (drawing) { m.dragging.disable(); m.doubleClickZoom.disable(); el.style.cursor = 'crosshair'; el.style.touchAction = 'none'; }
     else { m.dragging.enable(); m.doubleClickZoom.enable(); el.style.cursor = ''; el.style.touchAction = ''; }
     m.touchZoom.enable();
-  }, [data, ready]);
+  }, [data, ready, drawing]);
 
   // Outline and lines.
   useEffect(() => {
@@ -294,6 +307,9 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
     try {
       const r = await apiService.shareSectorMap(date);
       toast.success(r.data?.sent ? `Sent to ${r.data.sent}` : 'Nobody else is in the sector yet');
+      // Sent: the map's set, so one finger moves it from now on.
+      setKind('move');
+      load();
     } catch (e: any) { showAlert('Could not send', e?.response?.data?.detail || 'Try again.'); }
     finally { setBusy(null); }
   };
@@ -353,32 +369,37 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
       {!!data?.can_draw && leads && (
         <View style={s.tools}>
           <View style={s.seg}>
-            {([['plan', 'Plan areas'], ['done', 'Mark done']] as const).map(([k, label]) => (
-              <Pressable key={k} onPress={() => setKind(k)} style={[s.segBtn, kind === k && s.segOn]} accessibilityRole="button" accessibilityState={{ selected: kind === k }}>
+            {([['move', 'Move map'], ['plan', 'Plan areas'], ['done', 'Mark done']] as const).map(([k, label]) => (
+              <Pressable key={k} onPress={() => pick(k)} style={[s.segBtn, kind === k && s.segOn]} accessibilityRole="button" accessibilityState={{ selected: kind === k }}>
                 <Text style={[s.segText, kind === k && { color: c.onPrimary }]}>{label}</Text>
               </Pressable>
             ))}
           </View>
-          <View style={s.colours}>
+          {kind !== 'move' && <View style={s.colours}>
             {HOP_COLOURS.map((h) => (
               <Pressable key={h.key} onPress={() => setColour(h.key)} accessibilityLabel={h.label} accessibilityState={{ selected: colour === h.key }}
                 style={[s.swatchBtn, { backgroundColor: h.hex }, colour === h.key && s.swatchOn]} />
             ))}
-          </View>
+          </View>}
         </View>
       )}
       {!!data?.can_draw && !leads && (
         <View style={s.tools}>
           <View style={s.seg}>
-            {([['done', 'Mark done'], ['request', 'Request more streets']] as const).map(([k, label]) => (
-              <Pressable key={k} onPress={() => setKind(k)} style={[s.segBtn, kind === k && s.segOn]} accessibilityRole="button" accessibilityState={{ selected: kind === k }} testID={`map-kind-${k}`}>
+            {([['move', 'Move map'], ['done', 'Mark done'], ['request', 'Request more streets']] as const).map(([k, label]) => (
+              <Pressable key={k} onPress={() => pick(k)} style={[s.segBtn, kind === k && s.segOn]} accessibilityRole="button" accessibilityState={{ selected: kind === k }} testID={`map-kind-${k}`}>
                 <Text style={[s.segText, kind === k && { color: c.onPrimary }]}>{label}</Text>
               </Pressable>
             ))}
           </View>
         </View>
       )}
-      {!!data?.can_draw && (
+      {!!data?.can_draw && kind === 'move' && (
+        <Text style={s.small}>
+          {leads ? 'One finger moves the map. Press Plan areas or Mark done to draw.' : 'One finger moves the map. Press Mark done to mark off your streets, or Request more streets to ask for more.'}
+        </Text>
+      )}
+      {drawing && (
         <Text style={s.small}>
           {leads && kind === 'plan' ? `Draw the ${hopLabel(colour).toLowerCase()} area with one finger. `
             : !leads && kind === 'request' ? 'Draw the extra streets you’d like with one finger: they go to your sector leader to approve. '
@@ -521,7 +542,7 @@ const styles = (c: any) => StyleSheet.create({
   myHop: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 12, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface },
   bigDot: { width: 18, height: 18, borderRadius: 9 },
   tools: { flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap' },
-  seg: { flexDirection: 'row', padding: 3, gap: 2, borderRadius: 10, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface },
+  seg: { flexDirection: 'row', flexWrap: 'wrap', padding: 3, gap: 2, borderRadius: 10, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface },
   segBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8 },
   segOn: { backgroundColor: c.primary },
   segText: { fontFamily: fonts.bodySemibold, fontSize: 13, color: c.text },
