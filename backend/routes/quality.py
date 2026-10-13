@@ -29,9 +29,11 @@ from bson import ObjectId
 from fastapi import APIRouter, HTTPException, Request
 
 from auth import get_current_user, get_subtree_ids, require_admin, sees_whole_office
-from core.quality import (AI_PROMPT, LABELS, MEASURES, TARGETS, VIEWS, aggregate, clean_metrics,
+from core.quality import (AI_PROMPT, merge_week, LABELS, MEASURES, TARGETS, VIEWS, aggregate, clean_metrics,
                           excel_percent_fix, from_ai, from_tables, merge, month_label, parse_week,
                           pick_weeks, rag, week_label, xlsx_tables)
+from core.app_time import APP_TZ
+from core.quality_alerts import is_current
 from core.rate_limit import take_ai_quota
 from database import db
 from owneriq_sync import ID_LINKED
@@ -149,6 +151,7 @@ async def read_quality(request: Request):
     return {"week_ending": week, "rows": rows, "total": rep.get("total") or {},
             "fourth_week_due": rep.get("fourth_week_due", True), "existing": existing, "people": people,
             "newest_saved": (newest or {}).get("week_ending"),
+            "current": bool(week and is_current(week, datetime.now(APP_TZ).date())),
             "measures": [{"key": k, "label": LABELS[k]} for k, _, _ in MEASURES]}
 
 
@@ -179,14 +182,26 @@ async def import_quality(request: Request):
                                               upsert=True)
     if not bas:
         raise HTTPException(status_code=400, detail="No rows to save")
+    # Adding to a week already saved (e.g. The Round and 4th week from
+    # another page of the report) fills in what's new and keeps the rest.
+    existing = await db.quality_weeks.find_one({"office_id": office_id, "week_ending": week}, {"bas": 1, "total": 1})
+    total = clean_metrics(body.get("total"))
+    if existing:
+        bas, total = merge_week(existing.get("bas") or [], existing.get("total") or {}, bas, total)
     await db.quality_weeks.update_one(
         {"office_id": office_id, "week_ending": week},
-        {"$set": {"office_id": office_id, "week_ending": week, "bas": bas,
-                  "total": clean_metrics(body.get("total")),
+        {"$set": {"office_id": office_id, "week_ending": week, "bas": bas, "total": total,
                   "imported_at": datetime.now(timezone.utc).isoformat(), "imported_by": admin.get("id")}},
         upsert=True)
     sent = await _tell_the_team(bas, week) if body.get("notify") else 0
-    return {"week_ending": week, "rows": len(bas), "linked": sum(1 for b in bas if b["user_id"]), "notified": sent}
+    alerts = []
+    try:
+        from core import quality_alerts
+        alerts = await quality_alerts.run(db, office_id, week, datetime.now(APP_TZ).date())
+    except Exception as ex:  # an alert must never stop a save
+        print(f"[quality] retrain alert check failed: {ex}")
+    return {"week_ending": week, "rows": len(bas), "linked": sum(1 for b in bas if b["user_id"]),
+            "notified": sent, "added_to_saved_week": bool(existing), "retrain_alerts": len(alerts)}
 
 
 def _headline(m: dict) -> str:

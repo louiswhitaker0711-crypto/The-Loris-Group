@@ -272,8 +272,8 @@ function Upload({ onSaved }: { onSaved: (week: string) => void }) {
       const r = await apiService.readQuality({ files: picked.map((p) => ({ filename: p.name, data_b64: p.b64 })) });
       setPreview(r.data);
       setWeekText(r.data.week_ending ? ukDate(r.data.week_ending) : '');
-      // Tell the team for a new latest week; not when back-filling old ones.
-      setNotify(!r.data.newest_saved || !r.data.week_ending || r.data.week_ending > r.data.newest_saved);
+            // Tell the team only for this week's report; never when loading old weeks.
+      setNotify(!!r.data.current);
       setLinks(Object.fromEntries((r.data.rows || []).map((row: any) => [row.badge, row.user_id || null])));
       if (!(r.data.rows || []).length) showAlert('Nothing to read', 'No BA rows found. Try a screenshot that shows the tables with names down the left.');
     } catch (e: any) {
@@ -329,7 +329,7 @@ function Upload({ onSaved }: { onSaved: (week: string) => void }) {
     try {
       const rows = (preview.rows || []).map((r: any) => ({ label: r.label, badge: r.badge, metrics: r.metrics, user_id: links[r.badge] || null }));
       const r = await apiService.importQuality({ week_ending: iso, rows, total: preview.total || {}, notify });
-      toast.success(`Saved ${r.data.rows} BAs for WE ${ukDate(iso)}${r.data.notified ? ` · ${r.data.notified} told` : ''}`);
+      toast.success(`${r.data.added_to_saved_week ? 'Added to' : 'Saved'} WE ${ukDate(iso)}${r.data.notified ? ` · ${r.data.notified} told` : ''}${r.data.retrain_alerts ? ` · ${r.data.retrain_alerts} retrain alert${r.data.retrain_alerts === 1 ? '' : 's'}` : ''}`);
       setPreview(null);
       qc.invalidateQueries({ queryKey: ['quality'] });
       qc.invalidateQueries({ queryKey: ['coach-suggestions'] });
@@ -368,7 +368,7 @@ function Upload({ onSaved }: { onSaved: (week: string) => void }) {
         </>
       ) : (
         <>
-          <Text style={s.muted}>Check the numbers and who each row is, then save.{preview.existing ? ' This replaces the week already saved.' : ''}</Text>
+          <Text style={s.muted}>Check the numbers and who each row is, then save.{preview.existing ? ' This week is already saved: these numbers are added to it, and anything not in this upload stays as it was.' : ''}</Text>
           <View style={s.weekRow}>
             <Text style={s.label}>Week ending</Text>
             <TextInput value={weekText} onChangeText={setWeekText} placeholder="DD/MM/YYYY" placeholderTextColor={c.textMuted}
@@ -409,7 +409,7 @@ function Upload({ onSaved }: { onSaved: (week: string) => void }) {
             <Ionicons name={notify ? 'checkbox' : 'square-outline'} size={20} color={notify ? c.primary : c.textMuted} />
             <Text style={s.label}>Tell everyone on it "Quality report added"</Text>
           </Pressable>
-          {!notify && <Text style={s.note}>Off for older weeks, so back-filling doesn't flood phones.</Text>}
+          {!notify && <Text style={s.note}>Off for older weeks, so loading old reports doesn't send anything.</Text>}
           <View style={s.actions}>
             <Pressable onPress={() => setPreview(null)} style={[s.btn, s.btnGhost]} accessibilityRole="button">
               <Text style={[s.btnText, { color: c.text }]}>Cancel</Text>
