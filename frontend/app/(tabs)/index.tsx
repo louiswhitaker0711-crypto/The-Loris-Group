@@ -13,7 +13,7 @@
  * new-hires, schedule, trainee/my-progress) — max three light queries per
  * role, so it stays fast on the small server.
  */
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Image,
   Modal, TextInput, KeyboardAvoidingView, Platform,
@@ -39,6 +39,7 @@ import LiveOpsCard from '../../src/components/home/LiveOpsCard';
 import SectorSetupsCard from '../../src/components/home/SectorSetupsCard';
 import HomeAreaMap from '../../src/components/home/HomeAreaMap';
 import MyDayCard from '../../src/components/home/today/MyDayCard';
+import { inFieldHours } from '../../src/utils/fieldTime';
 import MyWeekCard from '../../src/components/home/today/MyWeekCard';
 import WaitingOnYouCard from '../../src/components/home/today/WaitingOnYouCard';
 import NewStartTodayHero from '../../src/components/home/today/NewStartTodayHero';
@@ -198,6 +199,12 @@ export default function HomeScreen() {
   const { scrollY, onScroll } = useParallaxScroll();
   const { user } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
+  // Field hours (UK time) decide what Home leads with; re-checked each minute.
+  const [inField, setInField] = useState(() => inFieldHours());
+  useEffect(() => {
+    const t = setInterval(() => setInField(inFieldHours()), 60_000);
+    return () => clearInterval(t);
+  }, []);
   const queryClient = useQueryClient();
   useBadgeWatcher();
 
@@ -1351,27 +1358,45 @@ export default function HomeScreen() {
   const coachName: string | null = (progressQ.data as any)?.hire?.leader && (progressQ.data as any)?.hire?.leader !== 'Unassigned'
     ? (progressQ.data as any).hire.leader : null;
 
-  const todayCoach = (
+  // Home leads with what matters right now. In field hours that's the field:
+  // the map, your live numbers, the week's goal and focus, the sector
+  // set-ups. Out of the field it's planning: the day, Primetime, coaching.
+  const coachField = (
     <>
-      {/* Open the app: the map, then your own day and live numbers. */}
       <HomeAreaMap />
       <MyDayCard />
-      {pSectorPrompt}
       <MyWeekCard hideWhenEmpty={isAdmin} />
       <SectorSetupsCard />
+      {pSectorPrompt}
+      <LiveOpsCard />
+    </>
+  );
+  const coachPlanning = (
+    <>
       {pPlanner}
       {/* What each person needs today, then the Primetime plan it feeds. */}
       <SuggestionsCard />
       <PrimetimeCard />
       <WaitingOnYouCard toGrade={leaderTodayQ.data?.counts?.awaiting || 0} />
       {pNewStarts}
-      <LiveOpsCard />
       {pTimetable}
       {pDailyPlans}
     </>
   );
+  const todayCoach = inField ? coachField : (
+    <>
+      {pSectorPrompt}
+      {coachPlanning}
+      <HomeAreaMap />
+      <MyDayCard />
+      <MyWeekCard hideWhenEmpty={isAdmin} />
+      <SectorSetupsCard />
+      <LiveOpsCard />
+    </>
+  );
   const moreCoach = (
     <>
+      {inField && coachPlanning}
       <FieldIqWeekCard />
       {(isAdmin || isLeader) && <FieldAveragesCard />}
       {pSalesPath}
@@ -1382,23 +1407,38 @@ export default function HomeScreen() {
       {pBulletins}
     </>
   );
-  const todayBA = (
+  const baField = (
     <>
       {/* Their map first: open the app and it's there. */}
       <HomeAreaMap />
       <MyDayCard />
-      {pSectorPrompt}
       <MyWeekCard />
+      <SectorSetupsCard />
+      {pSectorPrompt}
+    </>
+  );
+  const baPlanning = (
+    <>
       {nextPending && <NewStartTodayHero day={nextPending.day_number} target={todayTarget} coach={coachName} />}
       {pStartHere}
       <LearnTodayCard stage={codStage || 1} />
-      <SectorSetupsCard />
       {pPlanner}
       {pTimetable}
     </>
   );
+  const todayBA = inField ? baField : (
+    <>
+      {pSectorPrompt}
+      {baPlanning}
+      <HomeAreaMap />
+      <MyDayCard />
+      <MyWeekCard />
+      <SectorSetupsCard />
+    </>
+  );
   const moreBA = (
     <>
+      {inField && baPlanning}
       {pJourney}
       {pSalesPath}
       <LiveOpsCard />
