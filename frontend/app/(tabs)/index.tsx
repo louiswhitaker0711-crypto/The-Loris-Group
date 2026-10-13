@@ -1424,6 +1424,9 @@ export default function HomeScreen() {
         <View style={styles.headerText}>
           <Text style={styles.greeting}>{greeting} · {dateLine}</Text>
           <Text style={styles.headerName} numberOfLines={1}>{firstName || 'there'}</Text>
+          {!!(user as any)?.is_viewer && (
+            <Text style={styles.greeting}>👁 Read-only: you can look around, but nothing you change is saved</Text>
+          )}
         </View>
         <TouchableOpacity onPress={() => router.push('/(tabs)/profile')} testID="home-avatar" accessibilityLabel="Your profile">
           {user?.profile_image ? (

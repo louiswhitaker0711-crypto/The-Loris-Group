@@ -78,6 +78,7 @@ from routes.coverage import router as coverage_router
 from routes.territory import router as territory_router
 from routes.cod_tests import router as cod_tests_router
 from routes.coach_suggestions import router as coach_suggestions_router
+from routes.viewers import router as viewers_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -179,6 +180,7 @@ api_router.include_router(coverage_router)
 api_router.include_router(territory_router)
 api_router.include_router(cod_tests_router)
 api_router.include_router(coach_suggestions_router)
+api_router.include_router(viewers_router)
 
 app.include_router(api_router)
 
@@ -219,7 +221,7 @@ async def preview_read_only_guard(request: Request, call_next):
 async def demo_write_guard(request: Request, call_next):
     from auth import demo_read_blocked, demo_write_blocked
     if await demo_write_blocked(request):
-        return JSONResponse(status_code=403, content={"detail": "Demo account — this trial doesn't save changes."})
+        return JSONResponse(status_code=403, content={"detail": "Read-only account — you can look, but changes aren't saved."})
     if await demo_read_blocked(request):
         return JSONResponse(status_code=403, content={"detail": "Demo account — bulk export isn't part of the trial."})
     return await call_next(request)
