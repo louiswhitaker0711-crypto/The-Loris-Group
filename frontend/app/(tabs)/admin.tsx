@@ -22,6 +22,7 @@ import { ScrollReveal } from '../../src/components/ui/ScrollFx';
 import { useParallaxScroll } from '../../src/components/ui/Parallax';
 import { LinearGradient } from 'expo-linear-gradient';
 import { DepthCard } from '../../src/components/ui/DepthCard';
+import ViewersCard from '../../src/components/admin/ViewersCard';
 import { SectionHead } from '../../src/components/ui/SectionHead';
 import { SlidingSegments, type SegmentItem } from '../../src/components/ui/SlidingSegments';
 import { GlowButton } from '../../src/components/ui/GlowButton';
@@ -410,6 +411,8 @@ export default function AdminScreen() {
     >
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: tabBarClearance + 20 + kbInset }]} keyboardShouldPersistTaps="handled" onScroll={onScroll} scrollEventThrottle={16}>
         <View style={styles.shell}>
+        {/* The Owner: read-only viewers (e.g. their own coach). */}
+        {isSuperAdmin && tab === 'users' && <ViewersCard />}
         {/* Users | Offices, and (for the Owner) which office: quiet pills, not
             page-wide rails. A plain admin has neither choice, so sees neither. */}
         {(tabItems.length > 1 || showOfficeFilter) && (
