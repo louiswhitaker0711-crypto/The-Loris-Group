@@ -597,6 +597,22 @@ async def sector_board(request: Request, date: Optional[str] = None):
     return {"date": iso, "sectors": out}
 
 
+@router.get("/sector/my-day")
+async def sector_my_day(request: Request):
+    """Home, straight under the map: your set-up for today and your live
+    numbers so far (OwnerIQ, synced through the day; Bells sign-ups win)."""
+    user = await get_current_user(request)
+    now = datetime.now(APP_TZ)
+    iso = now.date().isoformat()
+    uid = str(user["id"])
+    live = (await _prefill([uid], iso)).get(uid) or {}
+    last = await db.owneriq_kpis.find_one({"date": iso, "cg1_user_id": uid}, {"synced_at": 1}, sort=[("synced_at", -1)])
+    return {"date": iso, "synced_at": (last or {}).get("synced_at"), "label": _label(iso), "sunday": now.weekday() == 6,
+            "setup": await my_setup(uid, iso),
+            "live": {k: int(live.get(k) or 0) for k in ("doors", "spoken", "pitched", "closed", "hit")},
+            "has_live": bool(live)}
+
+
 @router.get("/sector/status")
 async def sector_status(request: Request):
     """For the Home card: is it set-up or breakdown time, and what's done."""

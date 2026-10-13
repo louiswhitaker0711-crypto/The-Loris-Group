@@ -6,9 +6,9 @@
   POST /api/quality/import   Admin: save a checked preview for its week.
   GET  /api/quality          a week, 4 weeks, a month, 13 weeks or all time
                              (the running average), with each person's week
-                             by week: a BA sees their own, a Coach themselves
-                             and everyone under them, an Admin (and Coach+)
-                             the whole office.
+                             by week: a BA sees only their own, a Coach
+                             themselves and everyone under them, an Admin
+                             (and Coach+) the whole office.
 
 Stored in `quality_weeks`, one document per (office_id, week_ending). People
 are matched by badge number (users.amplifi_codes, ID badges, OwnerIQ rows,
@@ -264,9 +264,10 @@ async def get_quality(request: Request, view: str = "week", week: Optional[str] 
     uid = str(user.get("id"))
     role = user.get("role")
     whole = sees_whole_office(user)
-    # Coaches see themselves and everyone under them; a BA sees their own
-    # team (worked out from the Bells teams below); Admins and Coach+ the lot.
-    visible = set(await get_subtree_ids(uid)) | {uid} if (role == "leader" and not whole) else None
+    # A BA sees only themselves; a Coach themselves and everyone under them;
+    # Admins and Coach+ the whole office.
+    is_ba = not whole and role != "leader"
+    visible = None if whole else ({uid} if is_ba else set(await get_subtree_ids(uid)) | {uid})
 
     # Each person across the weeks: linked people by id, anyone else by badge.
     people: dict[str, dict] = {}
@@ -313,10 +314,8 @@ async def get_quality(request: Request, view: str = "week", week: Optional[str] 
         r["_chain"] = [t["leader_id"] for t in chain] or ["mini"]
         r["team_key"] = r["_chain"][0]
     if not whole and role != "leader":
-        # A BA: their team (and any team under it), nothing above it.
-        rows = [r for r in rows if my_team in r["_chain"]]
-        for r in rows:
-            r["_chain"] = r["_chain"][:r["_chain"].index(my_team) + 1]
+        # A BA sees their own numbers only: never their team's or anyone else's.
+        rows = [r for r in rows if r["user_id"] == uid]
 
     groups: dict[str, dict] = {}
     parent: dict[str, str] = {}
@@ -349,6 +348,8 @@ async def get_quality(request: Request, view: str = "week", week: Optional[str] 
     if "mini" in groups:
         groups["mini"].update(depth=0, includes=[])
         teams.append(groups["mini"])
+    if is_ba:
+        teams = []
 
     def team_title(g: dict) -> str:
         return "Mini" if g["key"] == "mini" else (g["team_name"] or f"{(g['leader_name'] or '').split(' ')[0]}'s team")
@@ -360,8 +361,8 @@ async def get_quality(request: Request, view: str = "week", week: Optional[str] 
         r.pop("_chain", None)
         r.pop("_key", None)
 
-    # The box under "Your quality": the office for Admins and Coach+, the
-    # Coach's own team, or the BA's team, in the same format.
+    # The box under "Your quality": the office for Admins and Coach+, or the
+    # Coach's own team, in the same format. A BA has none.
     box = None
     if whole:
         box = {"title": "The office", "kind": "office",
@@ -375,10 +376,6 @@ async def get_quality(request: Request, view: str = "week", week: Optional[str] 
         elif team:
             box = {"title": "Your team", "kind": "team",
                    "metrics": _coloured(aggregate([m for r in rows for m in people_now(people, r)])), "prev": {}}
-    else:
-        g = groups.get(my_team)
-        if g:
-            box = {"title": f"Your team · {team_title(g)}", "kind": "team", "metrics": g["metrics"], "prev": g["prev"]}
 
     return {**base, "week_ending": now[0], "month": now[0][:7] if view == "month" else None,
             "label": label, "period_weeks": len(now), "me": me, "team": team, "teams": teams, "box": box,
