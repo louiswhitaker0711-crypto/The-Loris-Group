@@ -866,7 +866,10 @@ async def sector_map(request: Request, date: Optional[str] = None, leader: Optio
         "leads": leads,
         "shape": shape,
         "marks": marks,
-        "can_draw": iso == today_iso() and (leads or is_admin or me in (sec.get("member_ids") or [])),
+        # The day and the day after, for streets forgotten at the breakdown.
+        "can_draw": (Date.fromisoformat(today_iso()) - Date.fromisoformat(iso)).days in (0, 1)
+                    and (leads or is_admin or me in (sec.get("member_ids") or [])),
+        "late": iso != today_iso(),
         "can_confirm": leads or is_admin,
         "can_share": leads,
         "shared": bool(sec.get("map_shared_at")),

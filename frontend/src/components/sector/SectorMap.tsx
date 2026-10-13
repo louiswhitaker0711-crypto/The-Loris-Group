@@ -390,6 +390,9 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
           </View>
         </View>
       )}
+      {!!data?.late && !!data?.can_draw && (
+        <Text style={[s.small, { color: c.text }]}>Yesterday’s map: press Mark done and draw any streets you forgot. They go straight on the worked map in black, no need to save.</Text>
+      )}
       {!!data?.can_draw && kind === 'move' && (
         <Text style={s.small}>
           {leads ? 'One finger moves the map. Press Plan areas or Mark done to draw.' : 'One finger moves the map. Press Mark done to mark off your streets, or Request more streets to ask for more.'}
