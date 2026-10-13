@@ -1,0 +1,107 @@
+// One sector on one day, opened from the Sector tab: its map first, then
+// Set-up, Breakdown and the 6pm reset (today). Your own sector opens them to
+// do; anyone else's (a Coach looking) shows everyone's set-up and breakdown.
+// The map is for the people in the sector and Admins.
+import React, { useMemo } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useQuery } from '@tanstack/react-query';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useColors, fonts } from '../src/theme/ThemeContext';
+import { apiService } from '../src/api/client';
+import { useAuth } from '../src/auth/AuthContext';
+import { todayISO } from '../src/utils/calendarDates';
+import { APP_LOCALE } from '../src/utils/appTime';
+import { SectorMap } from '../src/components/sector/SectorMap';
+
+const first = (n: string) => (n || '').trim().split(' ')[0] || 'Someone';
+
+export default function SectorDayScreen() {
+  const c = useColors();
+  const s = useMemo(() => styles(c), [c]);
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const { user } = useAuth();
+  const params = useLocalSearchParams<{ date?: string; leader?: string }>();
+  const date = params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date) ? params.date : todayISO();
+  const leader = params.leader || '';
+  const q = useQuery({ queryKey: ['sector-board', date], queryFn: () => apiService.getSectorBoard(date).then((r) => r.data) });
+  if (q.isLoading) return <View style={[s.page, s.center]}><ActivityIndicator color={c.primary} /></View>;
+  const sec = (q.data?.sectors || []).find((x: any) => x.leader_id === leader);
+  if (!sec) return <View style={[s.page, s.center]}><Text style={s.muted}>That sector wasn't found.</Text></View>;
+
+  const me = String(user?.id || '');
+  const isAdmin = user?.role === 'admin';
+  const people: any[] = sec.people || [];
+  const mine = sec.leader_id === me || people.some((p) => p.user_id === me);
+  const leads = sec.leader_id === me;
+  const isToday = date === todayISO();
+  const label = new Date(date + 'T12:00:00').toLocaleDateString(APP_LOCALE, { weekday: 'long', day: 'numeric', month: 'long' });
+
+  const actions = [
+    { icon: 'people-circle-outline', title: 'Set-up', to: `/sector?date=${date}`, show: mine },
+    { icon: 'clipboard-outline', title: 'Breakdown', to: `/sector?date=${date}&mode=breakdown`, show: mine },
+    { icon: 'refresh-circle-outline', title: '6pm reset', to: '/field-reset', show: mine && isToday },
+  ].filter((a) => a.show);
+
+  return (
+    <ScrollView style={s.page} contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 40 }]}>
+      <View>
+        <Text style={s.code}>{sec.postcode || 'No postcode'}</Text>
+        <Text style={s.muted}>
+          {label} · {leads ? 'your sector' : `${first(sec.leader_name)}'s sector`}{sec.goal != null ? ` · ${sec.hit} of ${sec.goal}` : ''}
+        </Text>
+        {sec.breakdown_posted_at ? <Text style={s.posted}>✅ Breakdown posted</Text> : null}
+      </View>
+
+      {(mine || isAdmin) && <SectorMap date={date} leaderId={!mine && isAdmin ? sec.leader_id : undefined} height={380} />}
+
+      {actions.length > 0 && (
+        <View style={s.actions}>
+          {actions.map((a) => (
+            <Pressable key={a.title} onPress={() => router.push(a.to as never)} style={s.action} accessibilityRole="button" testID={`sector-day-${a.title}`}>
+              <Ionicons name={a.icon as any} size={20} color={c.primary} />
+              <Text style={s.actionText}>{a.title}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+
+      <View style={s.card}>
+        <Text style={s.h}>{sec.breakdown_posted_at ? 'Breakdowns' : 'Set-ups'}</Text>
+        {people.map((p) => {
+          const su = p.setup;
+          const b = p.breakdown;
+          const bits = sec.breakdown_posted_at && b
+            ? [[b.doors, b.spoken, b.pitched, b.closed].map((v: any) => (v == null ? '-' : v)).join('/'),
+               `${b.hit ?? 0} of ${b.goal ?? '-'}`, b.proud ? `Proud: ${b.proud}` : '', b.change ? `Change: ${b.change}` : ''].filter(Boolean)
+            : su ? [su.goal != null ? `Goal ${su.goal}` : '', su.kpi ? `KPI ${su.kpi}` : '', su.focus ? `Focus: ${su.focus}` : ''].filter(Boolean) : [];
+          return (
+            <View key={p.user_id} style={s.person}>
+              <Text style={[s.name, p.user_id === me && { color: c.primary }]}>{first(p.user_name)}</Text>
+              <Text style={s.line}>{bits.length ? bits.join(' · ') : sec.breakdown_posted_at ? 'No breakdown' : 'No set-up yet'}</Text>
+            </View>
+          );
+        })}
+      </View>
+    </ScrollView>
+  );
+}
+
+const styles = (c: any) => StyleSheet.create({
+  page: { flex: 1, backgroundColor: c.page },
+  center: { alignItems: 'center', justifyContent: 'center' },
+  scroll: { padding: 16, gap: 12, width: '100%', maxWidth: 760, alignSelf: 'center' },
+  code: { fontFamily: fonts.display, fontSize: 30, color: c.text },
+  muted: { fontFamily: fonts.body, fontSize: 13.5, color: c.textMuted },
+  posted: { fontFamily: fonts.bodySemibold, fontSize: 13, color: c.green, marginTop: 2 },
+  actions: { flexDirection: 'row', gap: 8 },
+  action: { flex: 1, alignItems: 'center', gap: 4, paddingVertical: 12, borderRadius: 14, borderWidth: 1.5, borderColor: c.primary, backgroundColor: c.background },
+  actionText: { fontFamily: fonts.bodyBold, fontSize: 13.5, color: c.primary },
+  card: { backgroundColor: c.background, borderRadius: 16, borderWidth: 1, borderColor: c.border, padding: 14, gap: 8 },
+  h: { fontFamily: fonts.bodyBold, fontSize: 15, color: c.text },
+  person: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', paddingTop: 6, borderTopWidth: 1, borderTopColor: c.border },
+  name: { fontFamily: fonts.bodySemibold, fontSize: 13.5, color: c.text, width: 80 },
+  line: { flex: 1, fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: c.textMuted },
+});

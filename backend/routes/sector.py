@@ -622,6 +622,38 @@ async def save_sector_goal(request: Request, date: Optional[str] = None):
     return await _sector_of_leader(str(user["id"]), iso)
 
 
+@router.get("/sector/days")
+async def sector_days(request: Request, days: int = 7):
+    """The Sector tab: sectors grouped by day, newest first (today, yesterday,
+    …). Coaches and Admins see every sector in the office; a BA sees the ones
+    they led or were in."""
+    user = await get_current_user(request)
+    days = max(1, min(int(days or 7), 31))
+    today = Date.fromisoformat(today_iso())
+    since = (today - timedelta(days=days - 1)).isoformat()
+    me = str(user["id"])
+    q: dict = {"office_id": user.get("office_id"), "date": {"$gte": since, "$lte": today.isoformat()}}
+    if (user.get("role") or "").lower() not in ("leader", "admin"):
+        q["$or"] = [{"leader_id": me}, {"member_ids": me}]
+    secs = [x async for x in db.sectors.find(q, {"_id": 0}).sort([("date", -1), ("leader_name", 1)])]
+    ids = list({m for x in secs for m in (x.get("member_ids") or [])} | {x["leader_id"] for x in secs})
+    names = {p["user_id"]: p["user_name"] for p in await _users_by_ids(ids)}
+    out: dict[str, list] = {}
+    for x in secs:
+        iso = x["date"]
+        members = [m for m in (x.get("member_ids") or []) if m in names]
+        live = await _prefill(members, iso) if members else {}
+        out.setdefault(iso, []).append({
+            "leader_id": x["leader_id"], "leader_name": x.get("leader_name") or names.get(x["leader_id"], ""),
+            "postcode": x.get("postcode") or "", "goal": x.get("goal"),
+            "hit": sum(int((live.get(m) or {}).get("hit") or 0) for m in members),
+            "people": [names[m] for m in members], "mine": me == x["leader_id"] or me in members,
+            "leads": me == x["leader_id"], "breakdown_posted_at": x.get("breakdown_posted_at")})
+    return {"days": [{"date": iso, "label": _label(iso), "today": iso == today.isoformat(),
+                      "yesterday": iso == (today - timedelta(days=1)).isoformat(), "sectors": rows}
+                     for iso, rows in out.items()]}
+
+
 @router.post("/sector/breakdown/post")
 async def post_breakdown(request: Request, date: Optional[str] = None):
     """The sector leader posts the breakdown: it's done, and it shows on every

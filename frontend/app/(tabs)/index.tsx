@@ -1398,7 +1398,7 @@ export default function HomeScreen() {
   const coachBreakdown = (
     <>
       {pSectorPrompt}
-      <SectorSetupsCard />
+      <SectorSetupsCard mode="breakdowns" />
       <HomeAreaMap />
       {coachPlanning}
       <MyWeekCard hideWhenEmpty={isAdmin} />
@@ -1450,8 +1450,8 @@ export default function HomeScreen() {
   const baBreakdown = (
     <>
       {pSectorPrompt}
+      <SectorSetupsCard mode="breakdowns" />
       <HomeAreaMap />
-      <SectorSetupsCard />
       {baPlanning}
       <MyWeekCard />
     </>

@@ -44,10 +44,11 @@ export default function SectorScreen() {
   const s = useMemo(() => styles(c), [c]);
   const insets = useSafeAreaInsets();
   const kb = useKeyboardInset();
-  const params = useLocalSearchParams<{ mode?: string; start?: string }>();
+  const params = useLocalSearchParams<{ mode?: string; start?: string; date?: string }>();
   const [mode, setMode] = useState<Mode>(params.mode === 'breakdown' ? 'breakdown' : 'setup');
   const today = todayISO();
-  const [date, setDate] = useState(today);
+  // Opened from a sector on the Sector tab: that day.
+  const [date, setDate] = useState(params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date) ? params.date : today);
   const [open, setOpen] = useState<string | null>(null);
   const q = useQuery({ queryKey: ['sector-day', date], queryFn: () => apiService.getSectorDay(date).then((r) => r.data) });
   const people: Person[] = q.data?.people || [];
