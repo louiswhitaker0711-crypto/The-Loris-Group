@@ -17,6 +17,7 @@ import { teamColor, NO_TEAM_TINT } from '../../../src/utils/teamColors';
 import { APP_LOCALE, formatMoney } from '../../../src/utils/appTime';
 import { APP_NAME } from '../../../src/theme/brand';
 import { SUPER_GREEN_WEEK_MIN, GREEN_WEEK_MIN, AMBER_WEEK_MIN, RED_WEEK_MAX } from '../../../src/utils/weekBands';
+import { dayBandText } from '../../../src/utils/dayBands';
 
 // ─────────────────────────── helpers ───────────────────────────
 function currentWeekEndingISO(): string {
@@ -409,7 +410,9 @@ function TableView({ entries }: { entries: Entry[] }) {
     if (d.status === 'pc') return { text: 'io', color: '#0891b2' };
     const tot = (d.over30 || 0) + (d.under30 || 0);
     if (d.status === 'rt') return { text: tot > 0 ? `rt ${tot}` : 'rt', color: '#d97706' };
-    return { text: String(tot), color: tot > 0 ? colors.text : '#8ea8c8' };
+    if (d.status !== 'in' && tot === 0) return { text: '0', color: '#8ea8c8' };
+    // 0–1 red, 2 amber, 3 light green, 4+ dark green (utils/dayBands).
+    return { text: String(tot), color: dayBandText(tot) };
   };
 
   // ── Group entries by primary_team.leader_id (Excel-sheet style) ──

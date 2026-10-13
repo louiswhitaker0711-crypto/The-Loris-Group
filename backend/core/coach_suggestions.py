@@ -4,8 +4,8 @@ Rules, not guesses, so a Coach can see why each one is there. For one person,
 from their Bells days (sign-ups by tier, The Round) and their OwnerIQ field
 days (doors → spoken → pitched → closed → sign-ups):
 
-  retrain      their last 3 days in averaged under 1 sign-up
-  order value  under 55% Gold over the last 2 weeks (5+ sign-ups)
+  retrain      their last 3 days in averaged under 2 sign-ups (PA under 2)
+  order value  under 90% Gold over the last 2 weeks (5+ sign-ups)
   The Round    under 75% taking The Round over the last 2 weeks (5+ sign-ups)
   funnel       the step furthest below the Owner's Law of Averages over their
                last 5 field days: getting spoken to (intros), getting to the
@@ -23,9 +23,9 @@ from typing import Iterable, Optional
 # The Owner's Law of Averages (core/loa_targets.py): a day is 120 doors, 70
 # spoken to, 25 pitched, 15 closed, 4+ sign-ups.
 LOA = {"doors": 120, "spoken": 70, "pitched": 25, "closed": 15, "sales": 4}
-GOLD_TARGET = 55          # % of sign-ups that are Gold (£10+ repeat order)
+GOLD_TARGET = 90          # % of sign-ups that are Gold (£10+ repeat order): the Owner's 90%+
 ROUND_TARGET = 75         # % taking The Round (the Owner's quality target)
-RETRAIN_PA = 1.0
+RETRAIN_PA = 2.0          # the Owner: under 2 a day in → retrain
 MIN_SIGNUPS_FOR_MIX = 5
 FUNNEL_DAYS = 5
 LOW_DOORS = 100

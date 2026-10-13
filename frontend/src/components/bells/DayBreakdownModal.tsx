@@ -353,7 +353,7 @@ export default function DayBreakdownModal({ dayIdx, entries, weekEnding, onClose
             </View>
             <View style={styles.statCard}>
               <Text style={styles.statLabel}>{`${TIER.over30.short} %`}</Text>
-              <Text style={[styles.statValue, { color: dayTotals.goldPct >= 60 ? colors.primary : colors.text }]}>{dayTotals.goldPct}%</Text>
+              <Text style={[styles.statValue, { color: dayTotals.goldPct >= 90 ? colors.primary : colors.text }]}>{dayTotals.goldPct}%</Text>
             </View>
             <View style={styles.statCard}>
               <Text style={styles.statLabel}>{`${TIER.memberships.short} %`}</Text>
