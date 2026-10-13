@@ -657,18 +657,19 @@ def _section_aware_sort(entries: list, reports_to_map: dict, join_key=None, role
 
 
 def _aggregate_teams_from_enriched(enriched: list, prev_rows_by_key: dict, today_dow: int) -> list:
-    """Group already-enriched entries by primary_team.leader_id and compute
-    per-team stats (member_count, sales, days, P/A, scoring%, vs-last-week).
+    """Group already-enriched entries by team and compute per-team stats
+    (member_count, sales, days, P/A, scoring%, vs-last-week). A team includes
+    the teams under it, so a member counts in their own team and every team
+    above it.
 
     Returns a list sorted by total_sales DESC then team_name ASC. Members with
     no primary_team are omitted.
     """
     groups: dict = {}
-    for e in enriched:
-        pt = e.get("primary_team")
-        if not pt:
-            continue
-        lid = pt.get("leader_id")
+    # A team counts everyone in the teams under it too (e.g. a sub-team led by
+    # one of the Coach's people): each entry adds to every team above it.
+    for e, pt in ((e, pt) for e in enriched for pt in (e.get("teams") or ([e["primary_team"]] if e.get("primary_team") else []))):
+        lid = (pt or {}).get("leader_id")
         if not lid:
             continue
         g = groups.setdefault(lid, {

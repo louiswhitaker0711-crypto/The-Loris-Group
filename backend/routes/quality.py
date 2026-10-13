@@ -283,8 +283,10 @@ async def get_quality(request: Request, view: str = "week", week: Optional[str] 
             team.append(row)
     team.sort(key=lambda r: (-((r["metrics"].get("sales") or {}).get("value") or 0), r["name"].lower()))
 
-    # Group by team, the same teams as the Bells sheet (a named team's Coach
-    # and everyone under them; anyone else is the Mini team).
+    # Group by team, the same teams as the Bells sheet. A team includes the
+    # teams under it (everyone in Next Gen under John's team counts in John's
+    # team too); each person is listed under their nearest team. Anyone with
+    # no team is the Mini team.
     teams = []
     if whole or user.get("role") == "leader":
         from routes.bells import _enrich_entries_with_teams
@@ -292,19 +294,39 @@ async def get_quality(request: Request, view: str = "week", week: Optional[str] 
         entries = [{"user_id": r["user_id"], "office_id": office_id} for r in rows]
         await _enrich_entries_with_teams(entries)
         groups: dict[str, dict] = {}
+        parent: dict[str, str] = {}
+
+        def group(key: str, t: dict) -> dict:
+            return groups.setdefault(key, {"key": key, "team_name": t.get("team_name") or None,
+                                           "leader_name": t.get("leader_name"), "people": 0, "weeks": []})
+
         for r, e in zip(rows, entries):
-            pt = e.get("primary_team") or {}
-            gk = pt.get("leader_id") or "mini"
-            r["team_key"] = gk
-            g = groups.setdefault(gk, {"key": gk, "team_name": pt.get("team_name") or None,
-                                       "leader_name": pt.get("leader_name"), "people": 0, "weeks": []})
-            g["people"] += 1
+            chain = [t for t in (e.get("teams") or []) if t.get("leader_id")]
+            r["team_key"] = chain[0]["leader_id"] if chain else "mini"
+            for i, t in enumerate(chain[:-1]):
+                parent.setdefault(t["leader_id"], chain[i + 1]["leader_id"])
             p = people.get(r["user_id"] or f"badge:{r['badge']}") or {}
-            g["weeks"].extend((p.get("now") or {}).values())
+            for t in (chain or [{"leader_id": "mini"}]):
+                g = group(t["leader_id"], t)
+                g["people"] += 1
+                g["weeks"].extend((p.get("now") or {}).values())
         for g in groups.values():
             g["metrics"] = _coloured(aggregate(g.pop("weeks")))
-            teams.append(g)
-        teams.sort(key=lambda g: (g["key"] == "mini", -((g["metrics"].get("sales") or {}).get("value") or 0)))
+            g["parent_key"] = parent.get(g["key"]) if parent.get(g["key"]) in groups else None
+        sales_of = lambda g: -((g["metrics"].get("sales") or {}).get("value") or 0)
+
+        # Parents first, each followed by the teams under it.
+        def walk(key: str | None, depth: int):
+            kids = sorted((g for g in groups.values() if g["parent_key"] == key and g["key"] != "mini"), key=sales_of)
+            for g in kids:
+                g["depth"] = depth
+                g["includes"] = [c["team_name"] or c["leader_name"] for c in groups.values() if c["parent_key"] == g["key"]]
+                teams.append(g)
+                walk(g["key"], depth + 1)
+        walk(None, 0)
+        if "mini" in groups:
+            groups["mini"].update(depth=0, includes=[])
+            teams.append(groups["mini"])
 
     total = prev_total = total_history = None
     if whole:

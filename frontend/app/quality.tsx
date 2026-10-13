@@ -67,9 +67,9 @@ export default function QualityScreen() {
     rag === 'green' ? { bg: c.greenBg, fg: c.green } : rag === 'amber' ? { bg: c.yellowBg, fg: c.yellow } : rag === 'red' ? { bg: c.redBg, fg: c.red } : { bg: c.surface, fg: c.textMuted };
 
   // One line of the table: a name (or week) and a coloured pill per measure.
-  const line = (key: string, label: string, metrics: Record<string, Cell>, opts: { bold?: boolean; sub?: boolean; team?: boolean; onPress?: () => void; chevron?: boolean; isOpen?: boolean } = {}) => (
+  const line = (key: string, label: string, metrics: Record<string, Cell>, opts: { bold?: boolean; sub?: boolean; team?: boolean; indent?: number; onPress?: () => void; chevron?: boolean; isOpen?: boolean } = {}) => (
     <Pressable key={key} onPress={opts.onPress} disabled={!opts.onPress} style={[s.tr, opts.sub && s.subRow, opts.bold && s.totalRow, opts.team && s.teamRow]}>
-      <View style={[s.nameCol, s.nameWrap]}>
+      <View style={[s.nameCol, s.nameWrap, opts.indent ? { paddingLeft: 12 * opts.indent } : null]}>
         {opts.chevron ? <Ionicons name={opts.isOpen ? 'chevron-down' : 'chevron-forward'} size={13} color={c.textMuted} /> : null}
         <Text style={[opts.sub ? s.subName : s.name, (opts.bold || opts.team) && { fontFamily: fonts.bodyBold }, opts.team && { color: c.primary }]} numberOfLines={1}>{label}</Text>
       </View>
@@ -163,7 +163,7 @@ export default function QualityScreen() {
             <View style={s.card} testID="quality-team">
               <Text style={s.h}>{d.total ? 'The office' : 'Your team'} · {d.label}</Text>
               {multi && <Text style={s.note}>Averages for the period. Tap a name to see their week by week.</Text>}
-              {(d.teams || []).length > 1 && <Text style={s.note}>Each team's line is its average across everyone in it.</Text>}
+              {(d.teams || []).length > 1 && <Text style={s.note}>Each team's line adds up everyone in it, including the teams under it, weighted by their sales.</Text>}
               <ScrollView horizontal showsHorizontalScrollIndicator>
                 <View>
                   {header('BA')}
@@ -184,8 +184,8 @@ export default function QualityScreen() {
                     // Grouped like the Bells sheet: each team's average, then its people.
                     const everyone = [...(d.me ? [d.me] : []), ...(d.team || [])];
                     return teams.map((g) => (
-                      <View key={g.key} style={s.teamBlock}>
-                        {line(`team-${g.key}`, g.key === 'mini' ? MINI_TEAM : (g.team_name || `${(g.leader_name || '').split(' ')[0]}'s team`), g.metrics, { team: true })}
+                      <View key={g.key} style={[s.teamBlock, g.depth ? { marginLeft: 0 } : null]}>
+                        {line(`team-${g.key}`, `${g.key === 'mini' ? MINI_TEAM : (g.team_name || `${(g.leader_name || '').split(' ')[0]}'s team`)}${g.includes?.length ? ` (incl. ${g.includes.join(', ')})` : ''}`, g.metrics, { team: true, indent: g.depth || 0 })}
                         {everyone.filter((r: any) => r.team_key === g.key).map(person)}
                       </View>
                     ));
