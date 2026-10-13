@@ -98,3 +98,35 @@ def test_bunny_hops_plan_in_colour_and_only_done_strokes_turn_black(monkeypatch)
     who["u"] = {"id": "lead1", "name": "Sam Example", "role": "trainee", "office_id": "o1"}
     assert run(cov.confirm_coverage(_Req({"date": today})))["confirmed"] == 1
     assert run(db.coverage_marks.find_one({"id": plan["id"]}))["status"] == "plan"
+
+
+def test_a_ba_requests_more_streets_and_the_leader_approves_or_declines(monkeypatch):
+    from mongomock_motor import AsyncMongoMockClient
+    db = AsyncMongoMockClient()["t"]
+    monkeypatch.setattr(cov, "db", db)
+
+    async def _no_push(*a, **k):
+        return None
+
+    monkeypatch.setattr(cov, "_push", _no_push)
+    today = cov._today().isoformat()
+    run = asyncio.run
+    run(db.sectors.insert_one({"office_id": "o1", "date": today, "leader_id": "lead1", "member_ids": ["lead1", "ba1"],
+                               "hops": [{"colour": "blue", "member_ids": ["ba1"]}]}))
+    who = {"u": {"id": "ba1", "name": "Ayo Example", "role": "trainee", "office_id": "o1"}}
+
+    async def _user(_r):
+        return dict(who["u"])
+
+    monkeypatch.setattr(cov, "get_current_user", _user)
+    line = [[[53.81, -1.56], [53.82, -1.55]]]
+    a = run(cov.save_coverage(_Req({"lines": line, "kind": "request"})))
+    b = run(cov.save_coverage(_Req({"lines": line, "kind": "request"})))
+    assert (a["status"], a["colour"]) == ("requested", "blue")
+    with pytest.raises(HTTPException):
+        run(cov.approve_request(a["id"], _Req()))          # a BA can't approve their own
+    who["u"] = {"id": "lead1", "name": "Sam Example", "role": "trainee", "office_id": "o1"}
+    run(cov.approve_request(a["id"], _Req()))
+    assert run(db.coverage_marks.find_one({"id": a["id"]}))["status"] == "plan"
+    run(cov.decline_request(b["id"], _Req()))
+    assert run(db.coverage_marks.find_one({"id": b["id"]})) is None
