@@ -56,9 +56,20 @@ async def coach_suggestions(request: Request):
         cur["pitched"] += int(r.get("pitches_commenced") or 0)
         cur["closed"] += int(r.get("pitches_closed") or 0)
         cur["sales"] += int(r.get("sales") or 0)
+    # The latest weekly quality report (routes/quality.py), within 3 weeks.
+    quality: dict = {}
+    qweek = ""
+    qdoc = await db.quality_weeks.find_one(
+        {"office_id": me.get("office_id"), "week_ending": {"$gte": (through - timedelta(days=21)).isoformat()}},
+        {"_id": 0, "week_ending": 1, "bas": 1}, sort=[("week_ending", -1)])
+    if qdoc:
+        d = datetime.fromisoformat(qdoc["week_ending"])
+        qweek = f"WE {d.day} {d.strftime('%b')}"
+        quality = {b["user_id"]: b.get("metrics") or {} for b in qdoc.get("bas") or [] if b.get("user_id")}
     out = []
     for uid, name in people.items():
-        for s in suggest(name, bells_days(entries.get(uid, [])), list((field.get(uid) or {}).values()), through):
+        for s in suggest(name, bells_days(entries.get(uid, [])), list((field.get(uid) or {}).values()), through,
+                         quality.get(uid), qweek):
             out.append({**s, "user_id": uid, "name": name})
     out.sort(key=lambda s: (s["priority"], s["name"].lower()))
     return {"through": through.isoformat(), "suggestions": out}
