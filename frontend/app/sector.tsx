@@ -102,9 +102,9 @@ export default function SectorScreen() {
 
       {!!q.data?.can_manage && !!q.data?.sector && mode === 'breakdown' && (
         <View style={s.card}>
-          <Text style={s.h}>🗺️ Mark off today's streets</Text>
-          <Text style={s.muted}>Tap "Mark off streets", then tap along each street the sector did. Tomorrow's set-up shows it in red.</Text>
-          <SectorMap postcode={q.data.sector.postcode || ''} date={date} />
+          <Text style={s.h}>🗺️ Today's map</Text>
+          <Text style={s.muted}>Dashed lines are what the sector marked off today. Add anything missing, remove anything that wasn't done, then confirm: it all turns solid black.</Text>
+          <SectorMap date={date} endOfDay />
         </View>
       )}
 
@@ -161,7 +161,9 @@ function SectorGoal({ date, current, currentPostcode, suggested, onSaved, s, c }
       <TextInput value={postcode} onChangeText={(v) => setPostcode(v.toUpperCase())} autoCapitalize="characters" maxLength={10}
         placeholder="LS6 1AB" placeholderTextColor={c.textMuted} style={[s.input, { width: 160 }]} accessibilityLabel="Postcode" />
       <AreaCheck postcode={postcode} s={s} c={c} />
-      <SectorMap postcode={postcode} date={date} />
+      {currentPostcode
+        ? <SectorMap key={currentPostcode} date={date} />
+        : <Text style={s.muted}>Save the postcode to open the sector map.</Text>}
       <Text style={s.label}>Sector goal</Text>
       <Text style={s.muted}>Sign-ups for the whole sector. You get updates against it through the field.</Text>
       <View style={s.row}>
@@ -191,12 +193,24 @@ function AreaCheck({ postcode, s, c }: { postcode: string; s: any; c: any }) {
     queryKey: ['area-lookup', pc], enabled: pc.replace(/\s+/g, '').length >= 2, retry: false,
     queryFn: () => apiService.lookupArea(pc).then((r) => r.data),
   });
+  const tq = useQuery({
+    queryKey: ['territory-check', pc], enabled: pc.replace(/\s+/g, '').length >= 5, retry: false,
+    queryFn: () => apiService.territoryCheck(pc).then((r) => r.data),
+  });
+  const t0 = tq.data;
+  const terr = !t0?.loaded ? null : t0.found ? (
+    <Text style={[s.muted, t0.kind === 'not_active' && { color: c.red }]}>
+      📍 {t0.code} · {t0.label}{t0.households ? ` · ${Number(t0.households).toLocaleString(APP_LOCALE)} households` : ''}{t0.weeks_since != null ? ` · Acwyre: last worked ${t0.weeks_since} weeks ago` : ''}
+    </Text>
+  ) : <Text style={[s.muted, { color: c.red }]}>📍 {t0.code} isn't on the territory map.</Text>;
   const d = q.data;
-  if (!d?.district) return null;
+  if (!d?.district) return terr;
   const t = d.district_total;
-  if (!t) return <Text style={s.muted}>🌱 New ground: nobody from the office has knocked {d.district} in the last 6 months.</Text>;
+  if (!t) return <>{terr}<Text style={s.muted}>🌱 New ground: nobody from the office has knocked {d.district} in the last 6 months.</Text></>;
   const since = (n: number | null) => (n == null ? '' : n === 0 ? 'today' : n === 1 ? 'yesterday' : `${n} days ago`);
   return (
+    <>
+    {terr}
     <Pressable onPress={() => router.push(`/area?d=${encodeURIComponent(d.district)}` as never)} style={s.hint} accessibilityRole="button">
       <Ionicons name="map-outline" size={15} color={c.primary} />
       <View style={{ flex: 1, gap: 2 }}>
@@ -209,6 +223,7 @@ function AreaCheck({ postcode, s, c }: { postcode: string; s: any; c: any }) {
         <Text style={s.muted}>See the streets and past visits</Text>
       </View>
     </Pressable>
+    </>
   );
 }
 

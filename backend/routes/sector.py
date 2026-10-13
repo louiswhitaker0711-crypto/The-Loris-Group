@@ -618,7 +618,9 @@ async def sector_status(request: Request):
         async for d in db.sector_days.find({"date": iso, "user_id": {"$in": members}}, {"setup": 1, "breakdown": 1}):
             setups += 1 if d.get("setup") else 0
             breakdowns += 1 if d.get("breakdown") else 0
-    return {"date": iso, "phase": phase, "is_leader": is_leader, "has_sector": bool(members),
+    from routes.coverage import sector_of
+    in_sector = bool(await sector_of(str(user["id"]), iso, user.get("office_id")))
+    return {"date": iso, "phase": phase, "is_leader": is_leader, "has_sector": bool(members), "in_sector": in_sector,
             "members": len(members), "setups": setups, "breakdowns": breakdowns,
             "my_setup": await my_setup(str(user["id"]), iso)}
 
@@ -667,3 +669,96 @@ async def sector_breakdown_tick() -> int:
         except Exception as ex:
             logger.warning("sector breakdown push failed for %s: %s", sec.get("leader_id"), ex)
     return sent
+
+
+# ── The sector map: one sector's outline and its marked-off streets ──────────
+
+@router.get("/sector/map")
+async def sector_map(request: Request, date: Optional[str] = None, leader: Optional[str] = None):
+    """The map for the sector the caller is in that day (or, for an Admin or
+    the leader, `leader`'s sector): Acwyre's outline of the sector its
+    postcode is in, streets confirmed in the last 12 weeks (black), and the
+    day's draft mark-offs. Only this one sector: never the territory list."""
+    from routes.coverage import KEEP_DAYS, sector_of
+    from routes.territory import sector_for_postcode
+    from core.territory import KIND_LABEL
+    user = await get_current_user(request)
+    iso = _clean_date(date)
+    me = str(user["id"])
+    is_admin = (user.get("role") or "").lower() == "admin"
+    if leader and (is_admin or leader == me):
+        sec = await db.sectors.find_one({"office_id": user.get("office_id"), "date": iso, "leader_id": str(leader)}, {"_id": 0})
+    else:
+        sec = await sector_of(me, iso, user.get("office_id"))
+    if not sec:
+        return {"date": iso, "sector": None}
+    shape = await sector_for_postcode(user.get("office_id"), sec.get("postcode") or "", with_shape=True)
+    box = (shape or {}).get("bbox")
+    since = (Date.fromisoformat(iso) - timedelta(days=KEEP_DAYS)).isoformat()
+    q: dict = {"office_id": user.get("office_id")}
+    ors: list = [{"date": iso, "sector_leader_id": sec["leader_id"]}]
+    if box:
+        # Confirmed streets anywhere in (or crossing) the sector's box.
+        pad = 0.002
+        ors.append({"date": {"$gte": since}, "status": {"$ne": "draft"},
+                    "bbox.s": {"$lte": box["n"] + pad}, "bbox.n": {"$gte": box["s"] - pad},
+                    "bbox.w": {"$lte": box["e"] + pad}, "bbox.e": {"$gte": box["w"] - pad}})
+    elif sec.get("postcode"):
+        ors.append({"date": {"$gte": since}, "status": {"$ne": "draft"}, "district": district_of(sec["postcode"])})
+    q["$or"] = ors
+    marks = await db.coverage_marks.find(q, {"_id": 0, "office_id": 0}).sort("date", -1).to_list(800)
+    today = Date.fromisoformat(today_iso())
+    for m in marks:
+        m["days_ago"] = (today - Date.fromisoformat(m["date"])).days
+        m["status"] = m.get("status") or "confirmed"
+        author = m.get("author_id") or m.get("leader_id")
+        m["can_delete"] = is_admin or author == me or (m.get("sector_leader_id") == me)
+        for k in ("bbox", "author_id", "leader_id", "sector_leader_id"):
+            m.pop(k, None)
+    members = await _users_by_ids(sec.get("member_ids") or [])
+    leads = sec["leader_id"] == me
+    if shape:
+        shape.pop("office", None)
+        shape["label"] = KIND_LABEL.get(shape.get("kind"), "")
+    return {
+        "date": iso,
+        "sector": {"leader_id": sec["leader_id"], "leader_name": sec.get("leader_name") or "",
+                   "postcode": sec.get("postcode") or "", "goal": sec.get("goal"),
+                   "members": [m["user_name"] for m in members]},
+        "shape": shape,
+        "marks": marks,
+        "can_draw": iso == today_iso(),
+        "can_confirm": leads or is_admin,
+        "can_share": leads or is_admin,
+        "drafts": sum(1 for m in marks if m["status"] == "draft"),
+    }
+
+
+def district_of(pc: str) -> str:
+    from core.areas import district
+    return district(pc)
+
+
+@router.post("/sector/map/share")
+async def share_sector_map(request: Request, date: Optional[str] = None):
+    """Send the sector map to everyone the leader added to the sector."""
+    from core.push import send_push_to_user
+    from core.territory import postcode_to_sector
+    user = await get_current_user(request)
+    iso = _clean_date(date)
+    sec = await _sector_of_leader(str(user["id"]), iso)
+    if not sec:
+        raise HTTPException(status_code=400, detail="Pick who's in your sector first")
+    code = postcode_to_sector(sec.get("postcode") or "")
+    sent = 0
+    for uid in sec.get("member_ids") or []:
+        if uid == str(user["id"]):
+            continue
+        try:
+            await send_push_to_user(uid, f"🗺️ Your sector map{f' · {code}' if code else ''}",
+                                    "Here's today's map. Tap along the streets as you finish them.",
+                                    {"type": "sector_setup", "url": f"/sector-map?date={iso}"})
+            sent += 1
+        except Exception as ex:
+            logger.warning("sector map push failed for %s: %s", uid, ex)
+    return {"sent": sent}

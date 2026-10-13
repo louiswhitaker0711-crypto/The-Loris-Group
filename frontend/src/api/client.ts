@@ -1006,8 +1006,15 @@ export const apiService = {
   getAreaDistrict: (name: string, days?: number) => api.get(`/areas/district/${encodeURIComponent(name)}`, { params: { days } }),
   lookupArea: (postcode: string) => api.get('/areas/lookup', { params: { postcode } }),
   getCoverage: (b: { south: number; west: number; north: number; east: number }) => api.get('/coverage', { params: b }),
-  saveCoverage: (body: { date: string; postcode: string; lines: number[][][]; note?: string }) => api.post('/coverage', body),
+  saveCoverage: (body: { date: string; postcode?: string; lines: number[][][]; note?: string; leader_id?: string }) => api.post('/coverage', body),
   deleteCoverage: (id: string) => api.delete(`/coverage/${id}`),
+  confirmCoverage: (date: string, leaderId?: string) => api.post('/coverage/confirm', { date, leader_id: leaderId }),
+  getSectorMap: (date: string, leader?: string) => api.get('/sector/map', { params: { date, leader } }),
+  shareSectorMap: (date: string) => api.post('/sector/map/share', {}, { params: { date } }),
+  territoryUpload: (body: { filename: string; data_b64: string; save: boolean }) => api.post('/territory/upload', body),
+  getTerritory: () => api.get('/territory'),
+  getTerritoryMap: () => api.get('/territory/map'),
+  territoryCheck: (postcode: string) => api.get('/territory/check', { params: { postcode } }),
   // Bells: paste the WhatsApp report
   parseBellsWhatsapp: (text: string, officeId?: string) => api.post('/bells/parse-whatsapp', { text, office_id: officeId }),
   applyBellsBulk: (body: { date: string; office_id: string; reps: Array<{ user_id: string | null; user_name: string; raw_name?: string; over30: number; under30: number; memberships: number }> }) =>

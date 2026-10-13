@@ -36,6 +36,8 @@ const ROUTE_TITLES: Record<string, [string, IconName]> = {
   sectors: ['Sectors', 'grid-outline'],
   areas: ['Area history', 'map-outline'],
   area: ['Area', 'location-outline'],
+  'sector-map': ['Sector map', 'map-outline'],
+  territory: ['Territory', 'earth-outline'],
   'bells-paste': ['Paste from WhatsApp', 'clipboard-outline'],
   module: ['Module', 'book-outline'],
   leadership: ['My Progress', 'footsteps-outline'],

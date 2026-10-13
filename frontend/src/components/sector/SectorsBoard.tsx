@@ -78,10 +78,18 @@ export function SectorsBoard({ bottomPad = 24 }: { bottomPad?: number }) {
       )}
 
       {canRun && (
-        <Pressable onPress={() => router.push('/areas' as never)} style={[s.ghost, { alignSelf: 'flex-start' }]} accessibilityRole="button" testID="board-areas">
-          <Ionicons name="map-outline" size={15} color={c.primary} />
-          <Text style={s.ghostText}>Area history</Text>
-        </Pressable>
+        <View style={s.row}>
+          <Pressable onPress={() => router.push('/areas' as never)} style={s.ghost} accessibilityRole="button" testID="board-areas">
+            <Ionicons name="map-outline" size={15} color={c.primary} />
+            <Text style={s.ghostText}>Area history</Text>
+          </Pressable>
+          {user?.role === 'admin' && (
+            <Pressable onPress={() => router.push('/territory' as never)} style={s.ghost} accessibilityRole="button" testID="board-territory">
+              <Ionicons name="earth-outline" size={15} color={c.primary} />
+              <Text style={s.ghostText}>Territory</Text>
+            </Pressable>
+          )}
+        </View>
       )}
 
       {q.isLoading ? <ActivityIndicator color={c.primary} style={{ marginTop: 24 }} /> : sectors.length === 0 ? (
