@@ -127,8 +127,10 @@ async def save_coverage(request: Request):
                                          "leader_id": str(body["leader_id"])}, {"_id": 0})
     if not sec:
         sec = await sector_of(str(user["id"]), d.isoformat(), user.get("office_id"))
-    if role not in ("leader", "admin") and (not sec or d != _today()):
-        raise HTTPException(status_code=403, detail="You can mark off your own sector's streets on the day")
+    # A BA can mark off their sector on the day and the day after (forgotten
+    # streets); Coaches and Admins for the last fortnight.
+    if role not in ("leader", "admin") and (not sec or (_today() - d).days > 1):
+        raise HTTPException(status_code=403, detail="You can mark off your own sector's streets on the day or the day after")
     kind = body.get("kind") if body.get("kind") in ("plan", "request") else "done"
     leads = bool(sec) and (sec.get("leader_id") == str(user["id"]) or _is_admin(user))
     if kind == "plan" and not leads:
@@ -146,7 +148,10 @@ async def save_coverage(request: Request):
            "author_id": str(user["id"]), "author_name": name,
            "leader_id": str(user["id"]), "leader_name": name,
            "postcode": pc, "district": district(pc), "lines": lines, "bbox": _bbox(lines),
-           "status": {"plan": "plan", "request": "requested"}.get(kind, "draft"), "kind": kind, "colour": colour,
+           # Done lines added after the day (forgotten streets) go straight on
+           # the worked map: the day's map has been saved already.
+           "status": {"plan": "plan", "request": "requested"}.get(kind, "draft" if d >= _today() else "confirmed"),
+           "kind": kind, "colour": colour,
            "note": " ".join(str(body.get("note") or "").split())[:200],
            "created_at": datetime.now(timezone.utc).isoformat()}
     await db.coverage_marks.insert_one(dict(doc))

@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors, fonts } from '../src/theme/ThemeContext';
 import { apiService } from '../src/api/client';
 import { APP_LOCALE } from '../src/utils/appTime';
+import { addDays, todayISO } from '../src/utils/calendarDates';
 
 type Tile = { icon: any; title: string; sub: string; to: string; testID: string; strong?: boolean };
 
@@ -20,6 +21,9 @@ export default function MySectorScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const q = useQuery({ queryKey: ['sector-status'], queryFn: () => apiService.getSectorStatus().then((r) => r.data) });
+  // Yesterday's sector map stays open for a day, for streets forgotten at the breakdown.
+  const yesterday = addDays(todayISO(), -1);
+  const yq = useQuery({ queryKey: ['sector-map-yesterday', yesterday], queryFn: () => apiService.getSectorMap(yesterday).then((r) => r.data), retry: false });
   useFocusEffect(React.useCallback(() => { q.refetch(); }, [])); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (q.isLoading) return <View style={[s.page, s.center]}><ActivityIndicator color={c.primary} /></View>;
@@ -44,6 +48,13 @@ export default function MySectorScreen() {
   return (
     <ScrollView style={s.page} contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 40 }]}>
       <Text style={s.date}>{today}</Text>
+
+      {!!yq.data?.sector && !!yq.data?.can_draw && (
+        <Pressable onPress={() => router.push(`/sector-map?date=${yesterday}` as never)} style={s.card} accessibilityRole="button" testID="ms-yesterday-map">
+          <Text style={s.h}>🗺️ Yesterday’s map{yq.data.sector.postcode ? ` · ${yq.data.sector.postcode}` : ''}</Text>
+          <Text style={s.muted}>Forgot to mark off a street? Add it until the end of today: it goes straight on the worked map.</Text>
+        </Pressable>
+      )}
 
       {sec ? (
         <View style={s.hero}>

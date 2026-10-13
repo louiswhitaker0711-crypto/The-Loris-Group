@@ -957,8 +957,8 @@ async def _startup_work():
             _field_reset_push,
             "cron",
             day_of_week="mon-fri",
-            hour=18,
-            minute=0,
+            hour="18-19",
+            minute="*/10",   # 18:00, then a reminder every 10 minutes until it's done
             id="field_reset_6pm",
             replace_existing=True,
         )

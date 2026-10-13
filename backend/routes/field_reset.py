@@ -1,7 +1,8 @@
 """The 6pm reset (the Owner's idea, Oct 2026).
 
 At 18:00 UK time, Monday to Friday, everyone out in the field gets a push:
-reset for the last stretch. They answer three things in the app — how many
+reset for the last stretch. Anyone who hasn't done it gets a reminder every
+10 minutes until they do (last one 19:50). They answer three things in the app — how many
 more sign-ups they're going for, the number (KPI) they're focusing on, and a
 general focus for the rest of the field — and can share it straight to the
 team's WhatsApp group. Coaches and the Owner see their people's resets for
@@ -140,14 +141,15 @@ async def team_resets(request: Request, date: Optional[str] = None):
             "whatsapp_text": team_whatsapp_text(rows, date_label(d)) if rows else None}
 
 
-async def reset_push_tick() -> int:
-    """18:00 UK, Monday to Friday: push everyone out in the field today. People
-    marked not scheduled / no show / retrain / in office for today on Bells are skipped."""
-    from core.push import send_push_to_user
-    now = datetime.now(APP_TZ)
-    if now.weekday() > 4:  # Saturday's field ends at 17:00
-        return 0
-    d = now.date()
+REMIND_UNTIL = (19, 50)   # last reminder before the field ends at 20:00
+
+
+async def out_today(d) -> set[str]:
+    """Who's out in the field today: Coaches and BAs not marked away on Bells,
+    plus anyone (Admins and the Owner included) with real signs of being out:
+    a set-up, a sector, or doors on Field IQ today. Those signs beat Bells,
+    so going out when you weren't scheduled still counts."""
+    iso = d.isoformat()
     week_ending = (d + timedelta(days=6 - d.weekday())).isoformat()
     idx = d.weekday()
     away: set[str] = set()
@@ -155,16 +157,53 @@ async def reset_push_tick() -> int:
         days = e.get("days") or []
         if idx < len(days) and (days[idx] or {}).get("status") in ("ab", "ns", "rt", "pc"):
             away.add(str(e.get("user_id")))
-    sent = 0
+    out: set[str] = set()
     async for u in db.users.find({"role": {"$in": ["trainee", "leader"]}, "deleted": {"$ne": True},
                                   "is_active": {"$ne": False}, "is_demo": {"$ne": True}}, {"_id": 1}):
-        uid = str(u["_id"])
-        if uid in away:
+        if str(u["_id"]) not in away:
+            out.add(str(u["_id"]))
+    async for x in db.sector_days.find({"date": iso, "setup": {"$ne": None}}, {"user_id": 1}):
+        out.add(str(x["user_id"]))
+    async for sec in db.sectors.find({"date": iso}, {"leader_id": 1, "member_ids": 1}):
+        out.add(str(sec.get("leader_id")))
+        out.update(str(m) for m in sec.get("member_ids") or [])
+    async for r in db.owneriq_kpis.find({"date": iso, "cg1_user_id": {"$nin": [None, ""]}, "test_mode": {"$ne": True},
+                                        "cg1_matched_by": {"$ne": "name"}}, {"cg1_user_id": 1, "doors_knocked": 1}):
+        if int(r.get("doors_knocked") or 0) > 0:
+            out.add(str(r["cg1_user_id"]))
+    out.discard("None")
+    return out
+
+
+async def reset_push_tick() -> int:
+    """From 18:00 UK, Monday to Friday, every 10 minutes until 19:50: push
+    everyone out in the field today who hasn't done their reset yet. The
+    first is the 6pm reset; after that it's a reminder until they do it."""
+    from bson import ObjectId
+    from core.push import send_push_to_user
+    now = datetime.now(APP_TZ)
+    if now.weekday() > 4:  # Saturday's field ends at 17:00
+        return 0
+    if (now.hour, now.minute) < (18, 0) or (now.hour, now.minute) > REMIND_UNTIL:
+        return 0
+    d = now.date()
+    targets = await out_today(d)
+    done = {r["user_id"] async for r in db.field_resets.find({"date": d.isoformat()}, {"user_id": 1})}
+    first = now.hour == 18 and now.minute < 10
+    sent = 0
+    for uid in targets - done:
+        try:
+            u = await db.users.find_one({"_id": ObjectId(uid)}, {"deleted": 1, "is_active": 1, "is_demo": 1})
+        except Exception:
+            u = None
+        if not u or u.get("deleted") or u.get("is_active") is False or u.get("is_demo"):
             continue
         try:
             await send_push_to_user(
-                uid, "🔄 6pm reset",
-                "How many more are you going for, and what's your focus? Set it and share it with the team.",
+                uid,
+                "🔄 6pm reset" if first else "🔄 Your reset's still to do",
+                "How many more are you going for, and what's your focus? Set it and share it with the team."
+                if first else "Take a minute: how many more, your number and your focus. This keeps coming until it's done.",
                 {"type": "field_reset", "url": "/field-reset"},
             )
             sent += 1
