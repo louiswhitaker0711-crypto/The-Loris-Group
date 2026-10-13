@@ -37,6 +37,7 @@ import FieldAveragesCard from '../../src/components/home/FieldAveragesCard';
 import FieldIqWeekCard from '../../src/components/home/FieldIqWeekCard';
 import LiveOpsCard from '../../src/components/home/LiveOpsCard';
 import SectorSetupsCard from '../../src/components/home/SectorSetupsCard';
+import HomeAreaMap from '../../src/components/home/HomeAreaMap';
 import MyWeekCard from '../../src/components/home/today/MyWeekCard';
 import WaitingOnYouCard from '../../src/components/home/today/WaitingOnYouCard';
 import NewStartTodayHero from '../../src/components/home/today/NewStartTodayHero';
@@ -1351,6 +1352,7 @@ export default function HomeScreen() {
 
   const todayCoach = (
     <>
+      <HomeAreaMap />
       {pSectorPrompt}
       <MyWeekCard hideWhenEmpty={isAdmin} />
       {pPlanner}
@@ -1379,6 +1381,8 @@ export default function HomeScreen() {
   );
   const todayBA = (
     <>
+      {/* Their map first: open the app and it's there. */}
+      <HomeAreaMap />
       {pSectorPrompt}
       {nextPending && <NewStartTodayHero day={nextPending.day_number} target={todayTarget} coach={coachName} />}
       {pStartHere}
