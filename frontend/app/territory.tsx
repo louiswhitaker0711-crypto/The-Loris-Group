@@ -45,26 +45,65 @@ export default function TerritoryScreen() {
   const [busy, setBusy] = useState<string | null>(null);
   const overview = useQuery({ queryKey: ['territory'], enabled: isAdmin, queryFn: () => apiService.getTerritory().then((r) => r.data) });
 
-  const pick = async () => {
+  // One file in, however it arrived (picked, dropped or pasted): read it and
+  // show what's in it before anything is saved.
+  const readFile = async (name: string, blob: Blob) => {
     try {
-      const res = await DocumentPicker.getDocumentAsync({ type: ['application/zip', 'application/x-zip-compressed', 'text/html', '*/*'], copyToCacheDirectory: true, multiple: false });
-      if (res.canceled) return;
-      const f = res.assets[0];
-      const blob = await (await fetch(f.uri)).blob();
+      setBusy('read');
       const b64 = await new Promise<string>((resolve) => {
         const r = new FileReader();
         r.onloadend = () => resolve(String(r.result || '').split(',')[1] || '');
         r.readAsDataURL(blob);
       });
-      setPicked({ name: f.name, b64 });
-      setBusy('read');
-      const r = await apiService.territoryUpload({ filename: f.name, data_b64: b64, save: false });
+      setPicked({ name, b64 });
+      const r = await apiService.territoryUpload({ filename: name, data_b64: b64, save: false });
       setPreview(r.data.summary);
     } catch (e: any) {
       setPicked(null); setPreview(null);
       showAlert('Could not read that file', e?.response?.data?.detail || e?.message || 'Try again.');
     } finally { setBusy(null); }
   };
+  const pick = async () => {
+    const res = await DocumentPicker.getDocumentAsync({ type: ['application/zip', 'application/x-zip-compressed', 'text/html', '*/*'], copyToCacheDirectory: true, multiple: false });
+    if (res.canceled) return;
+    const f = res.assets[0];
+    await readFile(f.name, await (await fetch(f.uri)).blob());
+  };
+  const readRef = useRef(readFile);
+  readRef.current = readFile;
+
+  // Drop the zip on the box, or copy it and paste anywhere on the page.
+  const drop = useRef<View>(null);
+  const [over, setOver] = useState(false);
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !isAdmin) return;
+    const el = drop.current as unknown as HTMLElement | null;
+    const take = (files?: FileList | null) => {
+      const f = files && files[0];
+      if (f) readRef.current(f.name || 'territory.zip', f);
+      return !!f;
+    };
+    const onOver = (e: DragEvent) => { e.preventDefault(); setOver(true); };
+    const onLeave = () => setOver(false);
+    const onDrop = (e: DragEvent) => { e.preventDefault(); setOver(false); take(e.dataTransfer?.files); };
+    const onPaste = (e: ClipboardEvent) => { if (take(e.clipboardData?.files)) e.preventDefault(); };
+    // Dropping anywhere else on the page shouldn't open the file in the browser.
+    const stopPage = (e: DragEvent) => e.preventDefault();
+    el?.addEventListener('dragover', onOver);
+    el?.addEventListener('dragleave', onLeave);
+    el?.addEventListener('drop', onDrop);
+    window.addEventListener('dragover', stopPage);
+    window.addEventListener('drop', stopPage);
+    document.addEventListener('paste', onPaste);
+    return () => {
+      el?.removeEventListener('dragover', onOver);
+      el?.removeEventListener('dragleave', onLeave);
+      el?.removeEventListener('drop', onDrop);
+      window.removeEventListener('dragover', stopPage);
+      window.removeEventListener('drop', stopPage);
+      document.removeEventListener('paste', onPaste);
+    };
+  }, [isAdmin]);
 
   const save = async () => {
     if (!picked) return;
@@ -93,10 +132,14 @@ export default function TerritoryScreen() {
           The zip they send: the quarterly one with fresh sectors, or the weekly one with the sales pins. Whatever's in it
           replaces what's here. Only Admins see the full territory; sector leaders and BAs only ever see their own sector.
         </Text>
-        <Pressable onPress={pick} disabled={!!busy} style={s.btn} accessibilityRole="button" testID="territory-pick">
-          {busy === 'read' ? <ActivityIndicator size="small" color={c.onPrimary} /> : <Ionicons name="cloud-upload-outline" size={16} color={c.onPrimary} />}
-          <Text style={s.btnText}>{picked ? 'Choose a different file' : 'Choose the zip'}</Text>
-        </Pressable>
+        <View ref={drop} style={[s.drop, over && { borderColor: c.primary, backgroundColor: c.surface }]} testID="territory-drop">
+          <Ionicons name="cloud-upload-outline" size={28} color={over ? c.primary : c.textMuted} />
+          <Text style={s.line}>{over ? 'Drop it' : 'Drag the zip here, or copy it and paste (Ctrl/⌘ V)'}</Text>
+          <Pressable onPress={pick} disabled={!!busy} style={s.btn} accessibilityRole="button" testID="territory-pick">
+            {busy === 'read' ? <ActivityIndicator size="small" color={c.onPrimary} /> : <Ionicons name="folder-open-outline" size={16} color={c.onPrimary} />}
+            <Text style={s.btnText}>{picked ? 'Choose a different file' : 'Or choose the file'}</Text>
+          </Pressable>
+        </View>
         {!!preview && (
           <View style={s.preview}>
             <Text style={s.line}>{picked?.name}</Text>
@@ -265,6 +308,7 @@ const styles = (c: any) => StyleSheet.create({
   line: { fontFamily: fonts.bodySemibold, fontSize: 14, color: c.text },
   muted: { fontFamily: fonts.body, fontSize: 13.5, lineHeight: 19, color: c.textMuted },
   small: { fontFamily: fonts.body, fontSize: 12, color: c.textMuted },
+  drop: { alignItems: 'center', gap: 10, paddingVertical: 22, paddingHorizontal: 14, borderRadius: 14, borderWidth: 2, borderStyle: 'dashed', borderColor: c.border },
   preview: { borderTopWidth: 1, borderTopColor: c.border, paddingTop: 10, gap: 8 },
   btn: { flexDirection: 'row', alignItems: 'center', gap: 7, alignSelf: 'flex-start', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: c.primary },
   btnText: { fontFamily: fonts.bodyBold, fontSize: 14, color: c.onPrimary },

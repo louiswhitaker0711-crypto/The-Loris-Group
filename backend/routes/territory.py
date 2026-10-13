@@ -110,7 +110,7 @@ async def territory_map(request: Request, days: Optional[int] = None):
     n = max(1, min(int(days or MARKS_DAYS), 366))
     since = (datetime.now(APP_TZ).date() - timedelta(days=n)).isoformat()
     marks = await db.coverage_marks.find(
-        {"office_id": office_id, "date": {"$gte": since}, "status": {"$ne": "draft"}},
+        {"office_id": office_id, "date": {"$gte": since}, "status": {"$nin": ["draft", "plan"]}},
         {"_id": 0, "lines": 1, "date": 1, "postcode": 1, "leader_name": 1}).to_list(5000)
     return {"sectors": sectors, "zones": zones, "dots": pins.get("dots") or [], "offices": pins.get("offices") or [],
             "pins_updated_at": pins.get("updated_at"), "worked": marks, "labels": KIND_LABEL}
