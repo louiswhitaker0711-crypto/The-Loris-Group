@@ -87,7 +87,7 @@ export default function SectorScreen() {
           : 'Doors / spoken / pitched / closed and sign-ups come in from OwnerIQ and Bells. Add what they’re proud of and what they’ll change.'}
       </Text>
 
-      {!!q.data?.can_manage && (
+      {(!!q.data?.can_manage || params.start === '1') && (
         <SectorPicker key={date + String(q.data?.sector?.member_ids?.length || 0)} date={date}
           current={q.data?.sector?.member_ids || null}
           startOpen={params.start === '1' || (!q.isLoading && !q.data?.sector && mode === 'setup')}

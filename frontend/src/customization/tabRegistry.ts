@@ -53,6 +53,14 @@ export const TAB_REGISTRY: TabItem[] = [
     defaultVisibleByRole: { trainee: true, leader: true, admin: true },
   },
   {
+    // Everyone's day in their sector: set-up, the sector map, breakdown and
+    // the 6pm reset; whoever leads the sector (Coach or BA) manages it here.
+    id: 'my-sector', label: 'Sector', longLabel: 'Sector — set-up, map and breakdown for today',
+    icon: 'people-circle-outline', kind: 'route', target: '/my-sector',
+    visibleFor: ['trainee', 'leader', 'admin'],
+    defaultVisibleByRole: { trainee: true, leader: true, admin: true },
+  },
+  {
     // One surface for the whole Cycle of Development: trainees see their
     // journey + Stage 2, leaders/admins the full Stage 1→SL hub. "My
     // Progress" and "COD" were two names for the same thing — now it's one.

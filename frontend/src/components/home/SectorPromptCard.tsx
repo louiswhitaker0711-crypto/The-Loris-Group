@@ -24,10 +24,10 @@ export default function SectorPromptCard() {
 
   let icon: any = null, title = '', sub = '', url = '';
   if (data.is_leader && data.phase === 'setup') {
-    if (!data.has_sector) {
+    if (!data.has_sector && data.is_coach) {
       icon = 'rocket'; title = 'Start your sector set-up';
       sub = "Tick who's in, add the postcode and sector goal, then each person's set-up."; url = '/sector?start=1';
-    } else if (data.setups < data.members) {
+    } else if (data.has_sector && data.setups < data.members) {
       icon = 'create'; title = `Finish set-up · ${data.setups}/${data.members}`;
       sub = 'A few people still need their goal, KPI and focus.'; url = '/sector';
     }

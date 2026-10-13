@@ -138,3 +138,22 @@ def test_a_person_is_in_one_sector_a_day_and_the_board_shows_both(monkeypatch):
     board = run(sec.sector_board(None, date="2026-10-13"))
     names = {s_["leader_name"]: [p["user_name"] for p in s_["people"]] for s_ in board["sectors"]}
     assert names == {"Lead A": ["Lead A", "Example One", "Example Two"], "Lead B": ["Lead B"]}
+
+
+def test_a_ba_can_lead_a_sector_and_manage_its_people(monkeypatch):
+    from bson import ObjectId
+    ba_lead, ba1, other = (ObjectId() for _ in range(3))
+    me = {"id": str(ba_lead), "role": "trainee", "office_id": "o1", "name": "Lead Example"}
+    db, run = _setup_db(monkeypatch, me)
+    run(db.users.insert_many([
+        {"_id": ba_lead, "name": "Lead Example", "role": "trainee", "office_id": "o1"},
+        {"_id": ba1, "name": "Example One", "role": "trainee", "office_id": "o1"},
+        {"_id": other, "name": "Example Two", "role": "trainee", "office_id": "o1"},
+    ]))
+    # Before leading a sector a BA only works with themselves.
+    assert not run(sec._can_edit(me, str(ba1), "2026-10-13"))
+    run(sec.save_my_sector(_Req({"member_ids": [str(ba_lead), str(ba1)]}), date="2026-10-13"))
+    assert run(sec._can_edit(me, str(ba1), "2026-10-13"))
+    assert not run(sec._can_edit(me, str(other), "2026-10-13"))      # not in the sector
+    people = [p["user_name"] for p in run(sec._people(me, "2026-10-13"))]
+    assert people == ["Lead Example", "Example One"]
