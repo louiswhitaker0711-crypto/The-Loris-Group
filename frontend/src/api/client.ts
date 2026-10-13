@@ -1005,6 +1005,9 @@ export const apiService = {
   getAreas: (days?: number) => api.get('/areas', { params: { days } }),
   getAreaDistrict: (name: string, days?: number) => api.get(`/areas/district/${encodeURIComponent(name)}`, { params: { days } }),
   lookupArea: (postcode: string) => api.get('/areas/lookup', { params: { postcode } }),
+  getCoverage: (b: { south: number; west: number; north: number; east: number }) => api.get('/coverage', { params: b }),
+  saveCoverage: (body: { date: string; postcode: string; lines: number[][][]; note?: string }) => api.post('/coverage', body),
+  deleteCoverage: (id: string) => api.delete(`/coverage/${id}`),
   // Bells: paste the WhatsApp report
   parseBellsWhatsapp: (text: string, officeId?: string) => api.post('/bells/parse-whatsapp', { text, office_id: officeId }),
   applyBellsBulk: (body: { date: string; office_id: string; reps: Array<{ user_id: string | null; user_name: string; raw_name?: string; over30: number; under30: number; memberships: number }> }) =>

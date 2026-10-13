@@ -17,6 +17,7 @@ import { todayISO } from '../src/utils/calendarDates';
 import { APP_LOCALE } from '../src/utils/appTime';
 import { openInWhatsApp, copyText } from '../src/utils/whatsapp';
 import { SectorPicker } from '../src/components/sector/SectorPicker';
+import { SectorMap } from '../src/components/sector/SectorMap';
 
 type Setup = { goal: number | null; kpi_metric: string | null; kpi_target: number | null; focus: string; positive?: string };
 type Breakdown = { doors: number | null; spoken: number | null; pitched: number | null; closed: number | null;
@@ -99,6 +100,14 @@ export default function SectorScreen() {
           suggested={people.reduce((a, p) => a + (p.setup?.goal || 0), 0)} onSaved={() => q.refetch()} s={s} c={c} />
       )}
 
+      {!!q.data?.can_manage && !!q.data?.sector && mode === 'breakdown' && (
+        <View style={s.card}>
+          <Text style={s.h}>🗺️ Mark off today's streets</Text>
+          <Text style={s.muted}>Tap "Mark off streets", then tap along each street the sector did. Tomorrow's set-up shows it in red.</Text>
+          <SectorMap postcode={q.data.sector.postcode || ''} date={date} />
+        </View>
+      )}
+
       {q.isLoading ? <ActivityIndicator color={c.primary} /> : people.map((p) => (
         mode === 'setup'
           ? <SetupCard key={p.user_id + date} p={p} date={date} opts={opts} open={open === p.user_id}
@@ -152,6 +161,7 @@ function SectorGoal({ date, current, currentPostcode, suggested, onSaved, s, c }
       <TextInput value={postcode} onChangeText={(v) => setPostcode(v.toUpperCase())} autoCapitalize="characters" maxLength={10}
         placeholder="LS6 1AB" placeholderTextColor={c.textMuted} style={[s.input, { width: 160 }]} accessibilityLabel="Postcode" />
       <AreaCheck postcode={postcode} s={s} c={c} />
+      <SectorMap postcode={postcode} date={date} />
       <Text style={s.label}>Sector goal</Text>
       <Text style={s.muted}>Sign-ups for the whole sector. You get updates against it through the field.</Text>
       <View style={s.row}>
