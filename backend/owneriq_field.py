@@ -28,7 +28,7 @@ import os
 from datetime import datetime, timedelta, timezone
 
 from core.app_time import APP_TZ
-from core.field_days import summarise_ba_day
+from core.field_days import FIELD_DAY_VERSION, summarise_ba_day
 from database import db
 
 logger = logging.getLogger(__name__)
@@ -65,7 +65,10 @@ async def _pins_for(date_iso: str, cache: dict) -> dict[str, str]:
 async def build_field_days(limit: int = BUILD_BATCH) -> int:
     """Summarise saved door logs that have no record yet, or whose log was
     saved again since (today's is, through the day). Returns how many."""
-    built = {d["_id"]: d.get("src_fetched_at") async for d in db.owneriq_field_days.find({}, {"src_fetched_at": 1})}
+    # A record built by an older version is built again (the oldest logs
+    # first get picked up as the batch works back through the days).
+    built = {d["_id"]: (d.get("src_fetched_at") if d.get("empty") or (d.get("v") or 1) >= FIELD_DAY_VERSION else None)
+             async for d in db.owneriq_field_days.find({}, {"src_fetched_at": 1, "v": 1, "empty": 1})}
     todo = []
     async for doc in db.owneriq_live_cache.find({"kind": "ba"}, {"date": 1, "ref_id": 1, "fetched_at": 1}).sort("date", -1):
         key = f"{doc.get('ref_id')}:{doc.get('date')}"

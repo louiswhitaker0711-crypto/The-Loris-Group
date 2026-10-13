@@ -1002,6 +1002,9 @@ export const apiService = {
   saveSectorGoal: (date: string, goal: number | null, postcode = '') => api.put('/sector/goal', { goal, postcode }, { params: { date } }),
   getSectorBoard: (date: string) => api.get('/sector/board', { params: { date } }),
   getSectorStatus: () => api.get('/sector/status'),
+  getAreas: (days?: number) => api.get('/areas', { params: { days } }),
+  getAreaDistrict: (name: string, days?: number) => api.get(`/areas/district/${encodeURIComponent(name)}`, { params: { days } }),
+  lookupArea: (postcode: string) => api.get('/areas/lookup', { params: { postcode } }),
   // Bells: paste the WhatsApp report
   parseBellsWhatsapp: (text: string, officeId?: string) => api.post('/bells/parse-whatsapp', { text, office_id: officeId }),
   applyBellsBulk: (body: { date: string; office_id: string; reps: Array<{ user_id: string | null; user_name: string; raw_name?: string; over30: number; under30: number; memberships: number }> }) =>

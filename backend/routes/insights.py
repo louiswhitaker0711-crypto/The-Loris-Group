@@ -144,7 +144,7 @@ async def field_insights(request: Request, from_date: Optional[str] = None, to_d
             m["mc_pin"] = {"$in": [str(pin), None]}
         return m
 
-    proj = {"_id": 0, "laps": 0, "src_fetched_at": 0, "built_at": 0}
+    proj = {"_id": 0, "laps": 0, "areas": 0, "src_fetched_at": 0, "built_at": 0}
     days = await db.owneriq_field_days.find(match(start, end), proj).to_list(20000)
     pattern_from = (date.fromisoformat(end) - timedelta(weeks=PATTERN_WEEKS)).isoformat()
     pattern_days = await db.owneriq_field_days.find(match(pattern_from, end), {**proj, "hours": 0}).to_list(40000)

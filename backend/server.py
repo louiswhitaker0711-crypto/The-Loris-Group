@@ -73,6 +73,7 @@ from routes.sales_path import router as sales_path_router
 from routes.quality import router as quality_router
 from routes.people import router as people_router
 from routes.insights import router as insights_router
+from routes.areas import router as areas_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -169,6 +170,7 @@ api_router.include_router(sales_path_router)
 api_router.include_router(quality_router)
 api_router.include_router(people_router)
 api_router.include_router(insights_router)
+api_router.include_router(areas_router)
 
 app.include_router(api_router)
 

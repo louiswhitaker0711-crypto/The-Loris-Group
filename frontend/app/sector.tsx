@@ -6,7 +6,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors, fonts } from '../src/theme/ThemeContext';
 import { apiService } from '../src/api/client';
@@ -151,6 +151,7 @@ function SectorGoal({ date, current, currentPostcode, suggested, onSaved, s, c }
       <Text style={s.label}>Postcode</Text>
       <TextInput value={postcode} onChangeText={(v) => setPostcode(v.toUpperCase())} autoCapitalize="characters" maxLength={10}
         placeholder="LS6 1AB" placeholderTextColor={c.textMuted} style={[s.input, { width: 160 }]} accessibilityLabel="Postcode" />
+      <AreaCheck postcode={postcode} s={s} c={c} />
       <Text style={s.label}>Sector goal</Text>
       <Text style={s.muted}>Sign-ups for the whole sector. You get updates against it through the field.</Text>
       <View style={s.row}>
@@ -167,6 +168,37 @@ function SectorGoal({ date, current, currentPostcode, suggested, onSaved, s, c }
         </Pressable>
       </View>
     </View>
+  );
+}
+
+// What the office's door logs say about the postcode being typed: when it
+// was last worked and how it went, or that it's new ground.
+function AreaCheck({ postcode, s, c }: { postcode: string; s: any; c: any }) {
+  const router = useRouter();
+  const [pc, setPc] = useState(postcode.trim());
+  useEffect(() => { const t = setTimeout(() => setPc(postcode.trim()), 500); return () => clearTimeout(t); }, [postcode]);
+  const q = useQuery({
+    queryKey: ['area-lookup', pc], enabled: pc.replace(/\s+/g, '').length >= 2, retry: false,
+    queryFn: () => apiService.lookupArea(pc).then((r) => r.data),
+  });
+  const d = q.data;
+  if (!d?.district) return null;
+  const t = d.district_total;
+  if (!t) return <Text style={s.muted}>🌱 New ground: nobody from the office has knocked {d.district} in the last 6 months.</Text>;
+  const since = (n: number | null) => (n == null ? '' : n === 0 ? 'today' : n === 1 ? 'yesterday' : `${n} days ago`);
+  return (
+    <Pressable onPress={() => router.push(`/area?d=${encodeURIComponent(d.district)}` as never)} style={s.hint} accessibilityRole="button">
+      <Ionicons name="map-outline" size={15} color={c.primary} />
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={s.ghostText}>
+          {d.district} last worked {since(t.days_since)} · {t.per_100 ?? '–'} sign-ups per 100 doors · PA {t.pa ?? '–'}
+        </Text>
+        {!!d.sector && (
+          <Text style={s.muted}>{d.sector.key}: {since(d.sector.days_since)} · {d.sector.doors} doors · {d.sector.sales} sign-ups</Text>
+        )}
+        <Text style={s.muted}>See the streets and past visits</Text>
+      </View>
+    </Pressable>
   );
 }
 
