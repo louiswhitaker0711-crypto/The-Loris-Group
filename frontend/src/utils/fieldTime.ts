@@ -17,3 +17,12 @@ export function inFieldHours(at: Date = new Date()): boolean {
   if (day === 6) return mins >= 10 * 60 && mins < 17 * 60;
   return mins >= 13 * 60 + 30 && mins < 20 * 60;
 }
+
+/** Breakdown time: from the end of the field for two hours (weekdays
+ * 20:00–22:00, Saturday 17:00–19:00). Home leads with the breakdown then. */
+export function inBreakdownHours(at: Date = new Date()): boolean {
+  const { day, mins } = ukNow(at);
+  if (day === 0) return false;
+  const end = day === 6 ? 17 * 60 : 20 * 60;
+  return mins >= end && mins < end + 120;
+}

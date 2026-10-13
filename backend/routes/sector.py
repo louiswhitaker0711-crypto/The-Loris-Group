@@ -622,6 +622,21 @@ async def save_sector_goal(request: Request, date: Optional[str] = None):
     return await _sector_of_leader(str(user["id"]), iso)
 
 
+@router.post("/sector/breakdown/post")
+async def post_breakdown(request: Request, date: Optional[str] = None):
+    """The sector leader posts the breakdown: it's done, and it shows on every
+    Coach's Home with the set-ups (Today's sectors)."""
+    user = await get_current_user(request)
+    iso = _clean_date(date)
+    sec = await _sector_of_leader(str(user["id"]), iso)
+    if not sec:
+        raise HTTPException(status_code=403, detail="Only the sector leader posts the breakdown")
+    at = datetime.now(timezone.utc).isoformat()
+    await db.sectors.update_one({"leader_id": sec["leader_id"], "date": iso},
+                                {"$set": {"breakdown_posted_at": at, "breakdown_posted_by": user.get("name") or ""}})
+    return {"ok": True, "posted_at": at}
+
+
 @router.get("/sector/board")
 async def sector_board(request: Request, date: Optional[str] = None):
     """Every sector in the office on a day, with each person's set-up and
@@ -649,6 +664,7 @@ async def sector_board(request: Request, date: Optional[str] = None):
         out.append({"leader_id": sec["leader_id"], "leader_name": sec.get("leader_name"), "people": rows,
                     "goal": sg if sg is not None else people_goal, "sector_goal": sg, "people_goal": people_goal, "hit": hit,
                     "postcode": sec.get("postcode") or "", "stats": sector_stats(rows, sg),
+                    "breakdown_posted_at": sec.get("breakdown_posted_at"),
                     "whatsapp": {"setup": setup_text(rows, iso, sg, sec.get("postcode") or ""),
                                  "breakdown": breakdown_text(rows, iso, sg, sec.get("postcode") or "")}})
     return {"date": iso, "sectors": out}
@@ -747,7 +763,10 @@ async def sector_status(request: Request):
         names = [p["user_name"] for p in await _users_by_ids(mine.get("member_ids") or [])]
         sector_info = {"leader_name": mine.get("leader_name") or "", "postcode": mine.get("postcode") or "",
                        "goal": mine.get("goal"), "leads": mine.get("leader_id") == str(user["id"]), "members": names}
+    mine_day = await db.sector_days.find_one({"date": iso, "user_id": str(user["id"])}, {"breakdown": 1})
     return {"date": iso, "phase": phase, "is_leader": is_leader, "is_coach": is_coach, "has_sector": bool(members),
+            "breakdown_posted_at": (sec or {}).get("breakdown_posted_at"),
+            "my_breakdown_done": bool((mine_day or {}).get("breakdown")),
             "in_sector": in_sector, "sector": sector_info,
             "members": len(members), "setups": setups, "breakdowns": breakdowns,
             "my_setup": await my_setup(str(user["id"]), iso)}
