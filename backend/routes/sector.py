@@ -386,20 +386,20 @@ def nudge_text(setup: dict, now: dict, slot: str) -> tuple[str, str]:
     """(title, body) for one person at one point in the day."""
     goal = setup.get("goal")
     hit = int(now.get("hit") or 0)
+    # Just the three things from the set-up: the goal, the KPI and the focus,
+    # each with where you're on (written out, never "1/4", which reads as a date).
     parts = []
     if goal is not None:
-        parts.append(f"{hit}/{goal} sign-ups")
+        parts.append(f"Goal {goal}, on {hit}")
     m, t = setup.get("kpi_metric"), setup.get("kpi_target")
     if m and t is not None and _KPI_FIELD.get(m):
-        parts.append(f"{int(now.get(_KPI_FIELD[m]) or 0)}/{t} {KPI_METRICS[m]}")
+        parts.append(f"KPI {t} {KPI_METRICS[m]}, on {int(now.get(_KPI_FIELD[m]) or 0)}")
     elif m:
         parts.append(f"KPI: {kpi_text(setup)}")
     if setup.get("focus"):
         parts.append(f"Focus: {setup['focus']}")
-    if setup.get("positive"):
-        parts.append(f"💪 {setup['positive']}")
     if goal is not None and hit >= goal and goal > 0:
-        return "🔥 Goal hit", f"{hit}/{goal} — go for one more. " + " · ".join(parts[1:])
+        return "🔥 Goal hit", f"On {hit} of {goal}: go for one more. " + " · ".join(parts[1:])
     title = {"early": "🎯 Check in", "mid": "📊 Halfway check", "late": "⏱️ Last stretch"}[slot]
     if slot == "late" and goal is not None:
         title = f"⏱️ {max(0, goal - hit)} more to hit your goal"
@@ -449,7 +449,7 @@ async def sector_leader_nudges(slot: str, iso: str) -> int:
 
 
 # The check-ins go out only straight after the app pulls fresh numbers from
-# OwnerIQ (every 20 minutes), so they're never a stale read: after each pull
+# OwnerIQ (every 10 minutes), so they're never a stale read: after each pull
 # that worked in field hours, the latest slot that's due and not yet sent
 # today goes out. Each slot goes out once a day (`field_nudge_runs`).
 

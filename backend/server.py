@@ -653,7 +653,7 @@ async def _startup_work():
         from apscheduler.schedulers.asyncio import AsyncIOScheduler
         scheduler = AsyncIOScheduler(timezone=APP_TZ)
 
-        # ── OwnerIQ DataByte sync (every 20 minutes, all day) ────────────
+        # ── OwnerIQ DataByte sync (every 10 minutes, all day) ────────────
         # Pulls our office's Field IQ KPIs (doors, spoken-to, pitches, sales,
         # points) from OwnerIQ and upserts them into `owneriq_kpis` for the
         # in-app DataByte mirror. Idempotent; re-pulls yesterday+today each
@@ -690,9 +690,9 @@ async def _startup_work():
             except Exception as ex:
                 logger.error(f"OwnerIQ two-way sync failed: {ex}")
 
-        # Every 20 minutes: My day, Live KPIs and the check-ins are never
-        # more than 20 minutes behind OwnerIQ.
-        scheduler.add_job(_owneriq_job, "interval", minutes=20, id="owneriq_sync_tick", replace_existing=True,
+        # Every 10 minutes: My day, Field KPIs and the check-ins are never
+        # more than 10 minutes behind OwnerIQ.
+        scheduler.add_job(_owneriq_job, "interval", minutes=10, id="owneriq_sync_tick", replace_existing=True,
                           max_instances=1, coalesce=True)
 
         # ── OwnerIQ reconcile (daily 04:30 UK time) ──────────────────────────
