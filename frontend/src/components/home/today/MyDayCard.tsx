@@ -64,6 +64,22 @@ export default function MyDayCard() {
           );
         })}
       </View>
+      {(() => {
+        // What one sale takes: your doors per sign-up today, else the Law of
+        // Averages (120 doors for 4 = 30 a sale).
+        const doors = Number(live.doors || 0);
+        const perSale = hit > 0 && doors > 0 ? Math.round(doors / hit) : 30;
+        const left = Math.max(0, goal - hit);
+        return (
+          <Text style={s.line}>
+            <Text style={s.bold}>1 sale ≈ {perSale} doors</Text>{hit > 0 && doors > 0 ? ' today' : ' (Law of Averages)'}
+            {left > 0 ? ` · ${left} more for your goal ≈ ${left * perSale} doors` : ' · goal hit 🎉'}
+          </Text>
+        );
+      })()}
+      {d.week_focus?.length > 0 && (
+        <Text style={s.line} numberOfLines={2}><Text style={s.bold}>This week’s focus:</Text> {d.week_focus.join(' · ')}</Text>
+      )}
       <Text style={s.small}>
         {d.has_live ? `Field IQ${synced ? `, updated ${synced}` : ''}. It syncs through the day, so it can be up to an hour behind.` : 'Your numbers show here once Field IQ has today’s doors (it syncs through the day).'}
       </Text>
@@ -87,4 +103,5 @@ const styles = (c: any) => StyleSheet.create({
   statLabel: { fontFamily: fonts.body, fontSize: 10.5, color: c.textMuted },
   statTarget: { fontFamily: fonts.body, fontSize: 10, color: c.textMuted },
   small: { fontFamily: fonts.body, fontSize: 11.5, color: c.textMuted },
+  line: { fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: c.text },
 });

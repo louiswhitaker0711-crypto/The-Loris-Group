@@ -607,7 +607,19 @@ async def sector_my_day(request: Request):
     uid = str(user["id"])
     live = (await _prefill([uid], iso)).get(uid) or {}
     last = await db.owneriq_kpis.find_one({"date": iso, "cg1_user_id": uid}, {"synced_at": 1}, sort=[("synced_at", -1)])
-    return {"date": iso, "synced_at": (last or {}).get("synced_at"), "label": _label(iso), "sunday": now.weekday() == 6,
+    # This week's focus: what they wrote last week for this week, else this
+    # week's scoring focus (Weekly Planner).
+    d = now.date()
+    week_end = (d + timedelta(days=6 - d.weekday())).isoformat()
+    last_week = (d + timedelta(days=-1 - d.weekday())).isoformat()
+    focus: list[str] = []
+    prev_plan = await db.weekly_planners.find_one({"user_id": uid, "week_ending": last_week}, {"focus_next_week": 1})
+    focus = [str(x).strip() for x in ((prev_plan or {}).get("focus_next_week") or []) if str(x).strip()][:3]
+    if not focus:
+        plan = await db.weekly_planners.find_one({"user_id": uid, "week_ending": week_end}, {"personal": 1})
+        f = str(((plan or {}).get("personal") or {}).get("scoring_focus") or "").strip()
+        focus = [f] if f else []
+    return {"date": iso, "synced_at": (last or {}).get("synced_at"), "week_focus": focus, "label": _label(iso), "sunday": now.weekday() == 6,
             "setup": await my_setup(uid, iso),
             "live": {k: int(live.get(k) or 0) for k in ("doors", "spoken", "pitched", "closed", "hit")},
             "has_live": bool(live)}
