@@ -26,7 +26,9 @@ Credentials come from env (never hard-coded):
   OWNERIQ_EMAIL, OWNERIQ_PASSWORD, and optionally OWNERIQ_API_BASE.
 Which marketing companies (offices) to sync: see owneriq_config.py.
 """
+import asyncio
 import os
+import time
 import logging
 import re
 from datetime import datetime, timedelta, timezone
@@ -89,6 +91,30 @@ async def _login(client: httpx.AsyncClient) -> str:
     if not token:
         raise OwnerIQError("login succeeded but auth_token was empty")
     return token
+
+
+# Live Operations and the Hub screens read OwnerIQ when someone opens them.
+# Signing in afresh each time would mean a login per screen view, so those
+# reads share one sign-in for up to LOGIN_REUSE_SECONDS. (The scheduled sync,
+# the Performance Hub sync and writes switch the session's active company, so
+# they sign in on their own, once per run.)
+LOGIN_REUSE_SECONDS = 30 * 60
+_shared_login: dict = {"token": None, "at": 0.0}
+_shared_lock = asyncio.Lock()
+
+
+async def _login_cached(client: httpx.AsyncClient) -> str:
+    async with _shared_lock:
+        now = time.monotonic()
+        if _shared_login["token"] and now - _shared_login["at"] < LOGIN_REUSE_SECONDS:
+            return _shared_login["token"]
+        token = await _login(client)
+        _shared_login.update(token=token, at=now)
+        return token
+
+
+def _forget_shared_login() -> None:
+    _shared_login.update(token=None, at=0.0)
 
 
 async def _select_company(client: httpx.AsyncClient, token: str, pin: str) -> None:

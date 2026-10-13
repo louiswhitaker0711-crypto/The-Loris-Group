@@ -26,7 +26,7 @@ import httpx
 from core.app_time import APP_TZ
 from database import db
 from owneriq_live import _company_ids, _headers
-from owneriq_sync import ID_LINKED, OWNERIQ_API_BASE, OwnerIQError, _login, is_oid
+from owneriq_sync import ID_LINKED, OWNERIQ_API_BASE, OwnerIQError, _forget_shared_login, _login_cached, is_oid
 
 logger = logging.getLogger(__name__)
 
@@ -77,10 +77,12 @@ def _fresh(doc: dict, week_start: str) -> bool:
 
 async def _fetch(kind: str, ref: str, week_start: str) -> dict:
     async with httpx.AsyncClient(timeout=45.0) as client:
-        token = await _login(client)
+        token = await _login_cached(client)
         r = await client.get(f"{OWNERIQ_API_BASE}{_path(kind, ref)}",
                              params={"week_start_on": week_start}, headers=_headers(token))
         if r.status_code != 200:
+            if r.status_code == 401:
+                _forget_shared_login()
             raise OwnerIQError(f"GET {_path(kind, ref)} failed: HTTP {r.status_code} {r.text[:160]}")
         return r.json()
 
@@ -122,7 +124,7 @@ async def company_id() -> str | None:
     if has_login():
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
-                ids = await _company_ids(client, await _login(client))
+                ids = await _company_ids(client, await _login_cached(client))
                 mc = ids[0] if ids else None
         except Exception as ex:
             logger.warning("OwnerIQ hub: company lookup failed: %s", ex)

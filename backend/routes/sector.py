@@ -449,7 +449,7 @@ async def sector_leader_nudges(slot: str, iso: str) -> int:
 
 
 # The check-ins go out only straight after the app pulls fresh numbers from
-# OwnerIQ (every 10 minutes), so they're never a stale read: after each pull
+# OwnerIQ (hourly), so they're never a stale read: after each pull
 # that worked in field hours, the latest slot that's due and not yet sent
 # today goes out. Each slot goes out once a day (`field_nudge_runs`).
 
