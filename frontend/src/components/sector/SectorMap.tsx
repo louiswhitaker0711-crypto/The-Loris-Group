@@ -29,7 +29,7 @@ import { HOP_COLOURS, hopHex, hopLabel } from '../../utils/hopColours';
 
 const FREE_MAP_TOOLS = 'https://www.freemaptools.com/uk-postcode-map.htm';
 const MAX_POINTS = 380;
-type Kind = 'plan' | 'done';
+type Kind = 'plan' | 'done' | 'request';
 // Line weights: planned areas a soft, fairly thin band; done lines thin.
 const PLAN_STYLE = { weight: 7, opacity: 0.45 };
 const DONE_WEIGHT = 3.5;
@@ -75,6 +75,8 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
   useEffect(() => {
     // A BA draws in their hop's colour.
     if (data && !data.leads && data.my_colour) setColour(data.my_colour);
+    // A BA can't plan: they start on marking done.
+    if (data && !data.leads) setKind((k) => (k === 'plan' ? 'done' : k));
   }, [data]);
 
   const saveStroke = useCallback(async (latlngs: number[][]) => {
@@ -86,7 +88,7 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
     }
     try {
       const r = await apiService.saveCoverage({ date: dt, lines: [pts], leader_id: lid,
-        kind: d?.can_confirm ? k : 'done', colour: col });
+        kind: d?.can_confirm ? (k === 'request' ? 'done' : k) : (k === 'request' ? 'request' : 'done'), colour: col });
       if (r.data?.id) setUndoStack((u) => [...u, r.data.id]);
       load();
     } catch (e: any) {
@@ -137,9 +139,12 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
         pts = [[ll.lat, ll.lng]];
         const { kind: k, colour: col, data: d } = st.current;
         const planning = d?.can_confirm && k === 'plan';
+        const asking = !d?.can_confirm && k === 'request';
         live = L.polyline(pts, planning
           ? { color: hopHex(col), ...PLAN_STYLE, lineCap: 'round', lineJoin: 'round', interactive: false }
-          : { color: hopHex(col, c.primary), weight: DONE_WEIGHT, opacity: 0.95, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(liveLayer.current);
+          : asking
+            ? { color: hopHex(col, c.primary), weight: 5, opacity: 0.9, dashArray: '8 8', lineCap: 'round', lineJoin: 'round', interactive: false }
+            : { color: hopHex(col, c.primary), weight: DONE_WEIGHT, opacity: 0.95, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(liveLayer.current);
       };
       const move = (e: PointerEvent) => {
         if (panFrom) {
@@ -222,13 +227,16 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
       placed.current = true;
     }
     // Planned areas underneath, then today's done lines, then confirmed black on top.
-    const order = (mk: any) => (mk.status === 'plan' ? 0 : mk.status === 'draft' ? 1 : 2);
+    const order = (mk: any) => (mk.status === 'plan' ? 0 : mk.status === 'requested' ? 1 : mk.status === 'draft' ? 2 : 3);
     const marks = (data.marks || []).slice().sort((a: any, b: any) => order(a) - order(b));
     for (const mk of marks) {
       const when = new Date(mk.date + 'T12:00:00').toLocaleDateString(APP_LOCALE, { weekday: 'short', day: 'numeric', month: 'short' });
       const who = esc(mk.author_name || mk.leader_name || 'Someone');
       let style: any; let title: string;
-      if (mk.status === 'plan') {
+      if (mk.status === 'requested') {
+        style = { color: hopHex(mk.colour, c.primary), weight: 5, opacity: 0.9, dashArray: '8 8', lineCap: 'round', lineJoin: 'round' };
+        title = `More streets asked for${mk.colour ? ` · ${esc(hopLabel(mk.colour))}` : ''} (waiting for the sector leader)`;
+      } else if (mk.status === 'plan') {
         style = { color: hopHex(mk.colour), ...PLAN_STYLE, lineCap: 'round', lineJoin: 'round' };
         title = `${esc(hopLabel(mk.colour) || 'Planned')} area`;
       } else if (mk.status === 'draft') {
@@ -264,6 +272,15 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
       () => showAlert('Location', 'Allow location for the app to show where you are.'),
       { enableHighAccuracy: true, timeout: 10000 },
     );
+  };
+  const answer = async (id: string, what: 'approve' | 'decline') => {
+    setBusy(`${what}:${id}`);
+    try {
+      await (what === 'approve' ? apiService.approveStreets(id) : apiService.declineStreets(id));
+      toast.success(what === 'approve' ? 'Added to their area' : 'Declined');
+      load();
+    } catch (e: any) { showAlert('Could not do that', e?.response?.data?.detail || 'Try again.'); }
+    finally { setBusy(null); }
   };
   const undo = async () => {
     const id = undoStack[undoStack.length - 1];
@@ -350,11 +367,42 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
           </View>
         </View>
       )}
+      {!!data?.can_draw && !leads && (
+        <View style={s.tools}>
+          <View style={s.seg}>
+            {([['done', 'Mark done'], ['request', 'Request more streets']] as const).map(([k, label]) => (
+              <Pressable key={k} onPress={() => setKind(k)} style={[s.segBtn, kind === k && s.segOn]} accessibilityRole="button" accessibilityState={{ selected: kind === k }} testID={`map-kind-${k}`}>
+                <Text style={[s.segText, kind === k && { color: c.onPrimary }]}>{label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      )}
       {!!data?.can_draw && (
         <Text style={s.small}>
-          {leads && kind === 'plan' ? `Draw the ${hopLabel(colour).toLowerCase()} area with one finger. ` : 'Draw over the streets you’ve done with one finger. '}
+          {leads && kind === 'plan' ? `Draw the ${hopLabel(colour).toLowerCase()} area with one finger. `
+            : !leads && kind === 'request' ? 'Draw the extra streets you’d like with one finger: they go to your sector leader to approve. '
+            : 'Draw over the streets you’ve done with one finger. '}
           Two fingers move and zoom. Tap a line to remove it.
         </Text>
+      )}
+      {leads && (data?.requests || 0) > 0 && (
+        <View style={s.requests}>
+          <Text style={s.line}>📍 More streets asked for</Text>
+          {(data.marks || []).filter((mk: any) => mk.status === 'requested').map((mk: any) => (
+            <View key={mk.id} style={s.reqRow}>
+              <View style={[s.dotSm, { backgroundColor: hopHex(mk.colour, c.primary) }]} />
+              <Pressable style={{ flex: 1 }} onPress={() => { const L = (window as any).L; if (L && map.current) map.current.fitBounds(L.latLngBounds((mk.lines || []).flat()), { padding: [30, 30], maxZoom: 18 }); }}>
+                <Text style={s.reqName}>{(mk.author_name || 'Someone').split(' ')[0]}{mk.colour ? ` · ${hopLabel(mk.colour)}` : ''}</Text>
+                <Text style={s.small}>Tap to see it on the map</Text>
+              </Pressable>
+              <Pressable onPress={() => answer(mk.id, 'decline')} disabled={!!busy} style={s.ghost} accessibilityRole="button"><Text style={s.ghostText}>Decline</Text></Pressable>
+              <Pressable onPress={() => answer(mk.id, 'approve')} disabled={!!busy} style={s.btn} accessibilityRole="button" testID={`req-approve-${mk.id}`}>
+                <Text style={s.btnText}>Approve</Text>
+              </Pressable>
+            </View>
+          ))}
+        </View>
       )}
 
       <View style={[s.mapBox, { height }]}>
@@ -496,6 +544,9 @@ const styles = (c: any) => StyleSheet.create({
   person: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, borderWidth: 1.5, borderColor: c.border, backgroundColor: c.background },
   personText: { fontFamily: fonts.bodySemibold, fontSize: 13.5, color: c.text },
   dotSm: { width: 10, height: 10, borderRadius: 5 },
+  requests: { gap: 6, padding: 12, borderRadius: 12, borderWidth: 1.5, borderColor: c.primary, backgroundColor: c.surface },
+  reqRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 6, borderTopWidth: 1, borderTopColor: c.border },
+  reqName: { fontFamily: fonts.bodySemibold, fontSize: 14, color: c.text },
   btn: { flexDirection: 'row', alignItems: 'center', gap: 7, alignSelf: 'flex-start', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: c.primary },
   btnText: { fontFamily: fonts.bodyBold, fontSize: 14, color: c.onPrimary },
   btnDark: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: '#000' },

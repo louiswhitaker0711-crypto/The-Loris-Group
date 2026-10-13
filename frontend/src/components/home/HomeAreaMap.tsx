@@ -51,10 +51,12 @@ export default function HomeAreaMap() {
       if (d?.shape?.geometry) {
         L.geoJSON(d.shape.geometry, { interactive: false, style: { color: c.primary, weight: 1.5, fillOpacity: 0.04 } }).addTo(m);
       }
-      const order = (mk: any) => (mk.status === 'plan' ? 0 : mk.status === 'draft' ? 1 : 2);
+      const order = (mk: any) => (mk.status === 'plan' ? 0 : mk.status === 'requested' ? 1 : mk.status === 'draft' ? 2 : 3);
       for (const mk of marks.slice().sort((a, b) => order(a) - order(b))) {
         const style = mk.status === 'plan'
           ? { color: hopHex(mk.colour), weight: 7, opacity: mine && mk.colour !== mine ? 0.15 : 0.55 }
+          : mk.status === 'requested'
+            ? { color: hopHex(mk.colour, c.primary), weight: 4, opacity: 0.8, dashArray: '8 8' }
           : mk.status === 'draft'
             ? { color: hopHex(mk.colour, c.primary), weight: 3.5, opacity: 0.95 }
             : { color: '#000', weight: 4, opacity: mk.days_ago > 28 ? 0.35 : 0.85 };

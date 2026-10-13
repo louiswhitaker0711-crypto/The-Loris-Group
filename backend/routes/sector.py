@@ -708,11 +708,11 @@ async def sector_map(request: Request, date: Optional[str] = None, leader: Optio
     if box:
         # Confirmed streets anywhere in (or crossing) the sector's box.
         pad = 0.002
-        ors.append({"date": {"$gte": since}, "status": {"$nin": ["draft", "plan"]},
+        ors.append({"date": {"$gte": since}, "status": {"$nin": ["draft", "plan", "requested"]},
                     "bbox.s": {"$lte": box["n"] + pad}, "bbox.n": {"$gte": box["s"] - pad},
                     "bbox.w": {"$lte": box["e"] + pad}, "bbox.e": {"$gte": box["w"] - pad}})
     elif sec.get("postcode"):
-        ors.append({"date": {"$gte": since}, "status": {"$nin": ["draft", "plan"]}, "district": district_of(sec["postcode"])})
+        ors.append({"date": {"$gte": since}, "status": {"$nin": ["draft", "plan", "requested"]}, "district": district_of(sec["postcode"])})
     q["$or"] = ors
     marks = await db.coverage_marks.find(q, {"_id": 0, "office_id": 0}).sort("date", -1).to_list(800)
     today = Date.fromisoformat(today_iso())
@@ -749,6 +749,7 @@ async def sector_map(request: Request, date: Optional[str] = None, leader: Optio
         "can_confirm": leads or is_admin,
         "can_share": leads,
         "drafts": sum(1 for m in marks if m["status"] == "draft"),
+        "requests": sum(1 for m in marks if m["status"] == "requested"),
         "me": me,
     }
 

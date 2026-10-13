@@ -22,6 +22,8 @@ is drawn in the hop's colour as drafts, then confirmed black.
   GET    /api/coverage?south&west&north&east&days=84   marks in view (Coach/Admin)
   POST   /api/coverage                                  save a draft mark-off
   POST   /api/coverage/confirm {date, leader_id?}       sector leader confirms the day
+  POST   /api/coverage/{id}/approve | /decline           sector leader answers a BA's request
+                                                        for more streets (kind "request")
   DELETE /api/coverage/{id}                             author, sector leader or Admin
 """
 from __future__ import annotations
@@ -84,7 +86,7 @@ async def coverage_in_view(request: Request, south: float, west: float, north: f
     user = await require_admin_or_leader(request)
     n = max(1, min(int(days or KEEP_DAYS), KEEP_DAYS))
     since = (_today() - timedelta(days=n)).isoformat()
-    q = {"office_id": user.get("office_id"), "date": {"$gte": since}, "status": {"$ne": "plan"},
+    q = {"office_id": user.get("office_id"), "date": {"$gte": since}, "status": {"$nin": ["plan", "requested"]},
          # boxes that overlap the view
          "bbox.s": {"$lte": north}, "bbox.n": {"$gte": south}, "bbox.w": {"$lte": east}, "bbox.e": {"$gte": west}}
     rows = await db.coverage_marks.find(q, {"_id": 0}).sort("date", -1).to_list(500)
@@ -127,12 +129,12 @@ async def save_coverage(request: Request):
         sec = await sector_of(str(user["id"]), d.isoformat(), user.get("office_id"))
     if role not in ("leader", "admin") and (not sec or d != _today()):
         raise HTTPException(status_code=403, detail="You can mark off your own sector's streets on the day")
-    kind = "plan" if body.get("kind") == "plan" else "done"
+    kind = body.get("kind") if body.get("kind") in ("plan", "request") else "done"
     leads = bool(sec) and (sec.get("leader_id") == str(user["id"]) or _is_admin(user))
     if kind == "plan" and not leads:
         raise HTTPException(status_code=403, detail="Only the sector leader plans the areas")
     colour = str(body.get("colour") or "").lower()
-    if kind == "done" and not leads:
+    if kind in ("done", "request") and not leads:
         # A BA draws in their bunny hop's colour.
         colour = my_hop_colour(sec, str(user["id"])) or ""
     if colour not in HOP_COLOURS:
@@ -144,11 +146,56 @@ async def save_coverage(request: Request):
            "author_id": str(user["id"]), "author_name": name,
            "leader_id": str(user["id"]), "leader_name": name,
            "postcode": pc, "district": district(pc), "lines": lines, "bbox": _bbox(lines),
-           "status": "plan" if kind == "plan" else "draft", "kind": kind, "colour": colour,
+           "status": {"plan": "plan", "request": "requested"}.get(kind, "draft"), "kind": kind, "colour": colour,
            "note": " ".join(str(body.get("note") or "").split())[:200],
            "created_at": datetime.now(timezone.utc).isoformat()}
     await db.coverage_marks.insert_one(dict(doc))
+    if kind == "request" and sec and sec.get("leader_id") and sec["leader_id"] != str(user["id"]):
+        await _push(sec["leader_id"], f"📍 {(name or 'Someone').split(' ')[0]} wants more streets",
+                    "Open the sector map to approve or decline.", f"/sector-map?date={d.isoformat()}")
     return doc
+
+
+async def _push(user_id: str, title: str, body: str, url: str) -> None:
+    try:
+        from core.push import send_push_to_user
+        await send_push_to_user(user_id, title, body, {"type": "sector_setup", "url": url})
+    except Exception:
+        pass
+
+
+async def _request_for_leader(user: dict, mark_id: str) -> dict:
+    m = await db.coverage_marks.find_one({"id": mark_id, "status": "requested"}, {"_id": 0})
+    if not m or m.get("office_id") != user.get("office_id"):
+        raise HTTPException(status_code=404, detail="That request has already been dealt with")
+    if m.get("sector_leader_id") != str(user["id"]) and not _is_admin(user):
+        raise HTTPException(status_code=403, detail="Only the sector leader approves more streets")
+    return m
+
+
+@router.post("/coverage/{mark_id}/approve")
+async def approve_request(mark_id: str, request: Request):
+    """The sector leader says yes: the streets join that BA's area (a plan
+    line in their colour)."""
+    user = await get_current_user(request)
+    m = await _request_for_leader(user, mark_id)
+    await db.coverage_marks.update_one({"id": mark_id}, {"$set": {
+        "status": "plan", "kind": "plan", "approved_by": user.get("name") or "",
+        "approved_at": datetime.now(timezone.utc).isoformat()}})
+    if m.get("author_id"):
+        await _push(m["author_id"], "✅ More streets approved", "They're on your map now.", f"/sector-map?date={m['date']}")
+    return {"ok": True}
+
+
+@router.post("/coverage/{mark_id}/decline")
+async def decline_request(mark_id: str, request: Request):
+    user = await get_current_user(request)
+    m = await _request_for_leader(user, mark_id)
+    await db.coverage_marks.delete_one({"id": mark_id})
+    if m.get("author_id"):
+        await _push(m["author_id"], "Extra streets not this time", "Stick with your area for now: ask your sector leader if you need more.",
+                    f"/sector-map?date={m['date']}")
+    return {"ok": True}
 
 
 def my_hop_colour(sec: Optional[dict], user_id: str) -> Optional[str]:
