@@ -754,17 +754,30 @@ async def sector_status(request: Request):
 
 
 async def _leaders_out_today() -> list[str]:
+    """Coaches out today (not marked away on Bells), and Admins who coach in
+    the field too: an Admin counts when Bells has them in today."""
     now = datetime.now(APP_TZ)
     d = now.date()
     week_ending = (d + timedelta(days=6 - d.weekday())).isoformat()
     away: set[str] = set()
+    in_today: set[str] = set()
     async for e in db.bells_entries.find({"week_ending": week_ending}, {"user_id": 1, "days": 1}):
         days = e.get("days") or []
-        if d.weekday() < len(days) and (days[d.weekday()] or {}).get("status") in ("ab", "ns", "rt", "pc"):
+        st = (days[d.weekday()] or {}).get("status") if d.weekday() < len(days) else None
+        if st in ("ab", "ns", "rt", "pc"):
             away.add(str(e.get("user_id")))
-    return [str(u["_id"]) async for u in db.users.find(
-        {"role": "leader", "deleted": {"$ne": True}, "is_active": {"$ne": False}, "is_demo": {"$ne": True}}, {"_id": 1})
-        if str(u["_id"]) not in away]
+        elif st == "in":
+            in_today.add(str(e.get("user_id")))
+    out = []
+    async for u in db.users.find({"role": {"$in": ["leader", "admin"]}, "deleted": {"$ne": True},
+                                  "is_active": {"$ne": False}, "is_demo": {"$ne": True}}, {"_id": 1, "role": 1}):
+        uid = str(u["_id"])
+        if uid in away:
+            continue
+        if u.get("role") == "admin" and uid not in in_today:
+            continue
+        out.append(uid)
+    return out
 
 
 async def sector_start_tick() -> int:
