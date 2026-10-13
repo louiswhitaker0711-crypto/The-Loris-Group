@@ -1,5 +1,5 @@
 // "My week" on Home: this week's sign-ups against the traffic light (and
-// your weekly goal when you've set one), from your own Bells row; under it
+// your weekly goal when you've set one), from your own Bells row (tap for your numbers, Field KPIs); under it
 // the latest quality report (QualityStrip).
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
@@ -29,7 +29,7 @@ export default function MyWeekCard({ hideWhenEmpty = false }: { hideWhenEmpty?: 
   const pa = w?.days_worked ? (n / w.days_worked).toFixed(1) : null;
   return (
     <View style={s.card}>
-    <Pressable onPress={() => router.push('/(tabs)/pay' as never)} style={{ gap: 6 }} accessibilityRole="button" testID="home-my-week">
+    <Pressable onPress={() => router.push('/field-kpis' as never)} style={{ gap: 6 }} accessibilityRole="button" testID="home-my-week">
       <View style={s.head}>
         <Text style={s.title}>My week</Text>
         <Text style={[s.band, { color: tone, borderColor: tone }]}>{WEEK_BAND_LABELS[band].name}</Text>

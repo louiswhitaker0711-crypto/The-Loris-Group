@@ -653,7 +653,7 @@ async def _startup_work():
         from apscheduler.schedulers.asyncio import AsyncIOScheduler
         scheduler = AsyncIOScheduler(timezone=APP_TZ)
 
-        # ── OwnerIQ DataByte sync (hourly, all day) ─────────────────────
+        # ── OwnerIQ DataByte sync (every 20 minutes, all day) ────────────
         # Pulls our office's Field IQ KPIs (doors, spoken-to, pitches, sales,
         # points) from OwnerIQ and upserts them into `owneriq_kpis` for the
         # in-app DataByte mirror. Idempotent; re-pulls yesterday+today each
@@ -671,10 +671,11 @@ async def _startup_work():
             except Exception as ex:
                 logger.error(f"OwnerIQ performance tick failed: {ex}")
             # Then, in field hours, the set-up check-ins: sent now, on the
-            # numbers just pulled, rather than at a fixed time on old ones.
+            # numbers just pulled, and only when this pull worked, so a
+            # check-in is never built on old numbers.
             try:
                 from routes.sector import field_nudge_after_sync
-                n = await field_nudge_after_sync()
+                n = await field_nudge_after_sync(require_fresh=True)
                 if n:
                     logger.info(f"field_nudge after sync: {n} sent")
             except Exception as ex:
@@ -689,7 +690,10 @@ async def _startup_work():
             except Exception as ex:
                 logger.error(f"OwnerIQ two-way sync failed: {ex}")
 
-        scheduler.add_job(_owneriq_job, "interval", hours=1, id="owneriq_sync_tick", replace_existing=True)
+        # Every 20 minutes: My day, Live KPIs and the check-ins are never
+        # more than 20 minutes behind OwnerIQ.
+        scheduler.add_job(_owneriq_job, "interval", minutes=20, id="owneriq_sync_tick", replace_existing=True,
+                          max_instances=1, coalesce=True)
 
         # ── OwnerIQ reconcile (daily 04:30 UK time) ──────────────────────────
         # Keeps OwnerIQ aligned to CG1 (parent/active/leader-stage) for every
@@ -910,24 +914,9 @@ async def _startup_work():
                 logger.error(f"6pm reset push failed: {ex}")
 
         # ── Through the field day: set-up check-ins, then the breakdown ask ──
-        # The check-ins normally go out straight after an OwnerIQ sync (see
-        # _owneriq_job). These are the safety net: FALLBACK_MINUTES after each
-        # slot, only if no sync has sent it yet.
-        def _nudge_job(slot):
-            async def _run():
-                try:
-                    from routes.sector import field_nudge_fallback
-                    logger.info(f"field_nudge fallback {slot}: {await field_nudge_fallback(slot)} sent")
-                except Exception as ex:
-                    logger.error(f"field nudge failed: {ex}")
-            return _run
-
-        from routes.sector import WEEKDAY_SLOTS, SATURDAY_SLOTS, FALLBACK_MINUTES
-        for _days, _slots in (("mon-fri", WEEKDAY_SLOTS), ("sat", SATURDAY_SLOTS)):
-            for _h, _m, _slot in _slots:
-                _at = _h * 60 + _m + FALLBACK_MINUTES
-                scheduler.add_job(_nudge_job(_slot), "cron", day_of_week=_days, hour=_at // 60, minute=_at % 60,
-                                  id=f"field_nudge_{_days}_{_h:02d}{_m:02d}", replace_existing=True)
+        # The set-up check-ins go out only straight after an OwnerIQ pull that
+        # worked (see _owneriq_job), never on a timer, so they always match
+        # the numbers at that moment. No pull, no check-in.
 
         async def _sector_start():
             try:

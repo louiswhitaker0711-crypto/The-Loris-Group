@@ -448,12 +448,10 @@ async def sector_leader_nudges(slot: str, iso: str) -> int:
     return sent
 
 
-# The check-ins go out straight after the app pulls fresh numbers from
-# OwnerIQ (hourly), so they're never a stale read: after each sync in field
-# hours, the latest slot that's due and not yet sent today goes out. If a
-# sync doesn't happen (OwnerIQ down), a fallback sends it FALLBACK_MINUTES
-# after the slot time. Each slot goes out once a day (`field_nudge_runs`).
-FALLBACK_MINUTES = 50
+# The check-ins go out only straight after the app pulls fresh numbers from
+# OwnerIQ (every 20 minutes), so they're never a stale read: after each pull
+# that worked in field hours, the latest slot that's due and not yet sent
+# today goes out. Each slot goes out once a day (`field_nudge_runs`).
 
 
 def _slots_for(day: int):
@@ -476,18 +474,23 @@ async def _claim_slot(iso: str, slot: str) -> bool:
     return bool(getattr(r, "upserted_id", None))
 
 
-async def field_nudge_after_sync(now: Optional[datetime] = None) -> int:
-    """Called right after each OwnerIQ sync."""
+FRESH_SECONDS = 300   # the pull must have just finished
+
+
+async def field_nudge_after_sync(now: Optional[datetime] = None, require_fresh: bool = False) -> int:
+    """Called right after each OwnerIQ sync. With require_fresh, nothing goes
+    out unless that pull worked in the last few minutes."""
     now = now or datetime.now(APP_TZ)
+    if require_fresh:
+        st = await db.owneriq_sync_state.find_one({"_id": "last"}, {"ok": 1, "synced_at": 1}) or {}
+        try:
+            at = datetime.fromisoformat(str(st.get("synced_at")).replace("Z", "+00:00"))
+        except ValueError:
+            return 0
+        if not st.get("ok") or (datetime.now(timezone.utc) - at).total_seconds() > FRESH_SECONDS:
+            return 0
     slot = due_slot(now)
     if not slot or not await _claim_slot(now.date().isoformat(), slot):
-        return 0
-    return await field_nudge_tick(slot)
-
-
-async def field_nudge_fallback(slot: str) -> int:
-    """The slot's safety net, when no sync has sent it."""
-    if not await _claim_slot(today_iso(), slot):
         return 0
     return await field_nudge_tick(slot)
 
