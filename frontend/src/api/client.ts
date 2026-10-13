@@ -606,7 +606,7 @@ export interface OfficeWeeklyReview {
   missing_plans: Array<{ user_id: string; name: string; steps_done: number; steps_total: number }>;
 }
 
-export type PrimetimeMode = 'learning' | 'teaching' | 'watching';
+export type PrimetimeMode = 'learning' | 'teaching' | 'watching' | 'free';
 
 export interface PrimetimeEntry {
   id: string;
@@ -697,6 +697,8 @@ export interface PrimetimeHome {
   // you're personally accountable for, and `is_self` renders as "You".
   my_unplanned: Array<{ user_id: string; name: string; is_self: boolean; is_direct: boolean }>;
   my_unplanned_total: number;
+  /** Free to work with: any Coach can put them into something. */
+  free?: Array<{ user_id: string; name: string; note: string }>;
 }
 
 // API Functions
@@ -967,6 +969,10 @@ export const apiService = {
     session_id: string; subject_user_id: string;
     mode?: 'learning' | 'watching'; office?: string;
   }) => api.post<{ ok: boolean; entry: PrimetimeEntry }>('/primetime/session/join', body),
+  // Primetime at the sector breakdown: tomorrow's plan for you and your sector.
+  getSectorPrimetime: (date: string) => api.get('/primetime/sector', { params: { date } }),
+  saveSectorPrimetime: (body: { date: string; user_id: string; mode: PrimetimeMode | null; topic?: string; session_id?: string }) =>
+    api.put('/primetime/sector', body),
   clearPrimetimeEntry: (params: {
     week_ending: string; day_index: number; subject_user_id: string; office?: string;
   }) => api.delete<{ ok: boolean; deleted: number }>('/primetime/entry', { params }),

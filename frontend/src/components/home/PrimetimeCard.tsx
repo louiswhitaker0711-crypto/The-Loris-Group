@@ -19,10 +19,12 @@
  * Leaders and admins only. Data: GET /primetime/home (own office only).
  */
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { showAlert } from '../../utils/showAlert';
+import { toast } from '../../utils/toast';
 import { LinearGradient } from 'expo-linear-gradient';
 import { apiService } from '../../api/client';
 import { useColors, fonts, GRADIENT } from '../../theme/ThemeContext';
@@ -134,6 +136,10 @@ export default function PrimetimeCard() {
               </View>
             )}
 
+            {(d.free || []).length > 0 && (
+              <FreeToWorkWith d={d} sessions={sessions} styles={styles} colors={colors} />
+            )}
+
             {unplanned.length > 0 && (
               <View style={styles.nudge}>
                 {/* The one element the pass had missed: a flat pale-yellow
@@ -168,7 +174,76 @@ export default function PrimetimeCard() {
   );
 }
 
+// People who said "free to work with" at the breakdown: any Coach can put
+// them into a session that's running, or give them a topic of their own.
+function FreeToWorkWith({ d, sessions, styles, colors }: any) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState<string | null>(null);
+  const [topic, setTopic] = useState('');
+  const [busy, setBusy] = useState(false);
+  const done = (name: string) => {
+    toast.success(`${name.split(' ')[0]} is sorted for Primetime`);
+    setOpen(null); setTopic('');
+    qc.invalidateQueries({ queryKey: ['primetime-home'] });
+  };
+  const fail = (e: any) => showAlert('Could not do that', e?.response?.data?.detail || 'Try again.');
+  const join = async (p: any, sid: string) => {
+    setBusy(true);
+    try { await apiService.joinPrimetimeSession({ session_id: sid, subject_user_id: p.user_id, mode: 'learning' }); done(p.name); }
+    catch (e) { fail(e); } finally { setBusy(false); }
+  };
+  const own = async (p: any) => {
+    if (!topic.trim()) return showAlert('Topic', 'Type what they should work on.');
+    setBusy(true);
+    try {
+      await apiService.savePrimetimeEntry({ week_ending: d.week_ending, day_index: d.day_index, subject_user_id: p.user_id, mode: 'learning', topic: topic.trim() });
+      done(p.name);
+    } catch (e) { fail(e); } finally { setBusy(false); }
+  };
+  return (
+    <View style={styles.freeBox}>
+      <Text style={styles.freeTitle}>🙋 Free to work with</Text>
+      {d.free.map((p: any) => (
+        <View key={p.user_id} style={{ gap: 6 }}>
+          <View style={styles.freeRow}>
+            <Text style={styles.freeName} numberOfLines={1}>{p.name}{p.note ? ` · ${p.note}` : ''}</Text>
+            <TouchableOpacity onPress={() => { setOpen(open === p.user_id ? null : p.user_id); setTopic(''); }} style={styles.assignBtn}>
+              <Text style={styles.assignTxt}>{open === p.user_id ? 'Close' : 'Assign'}</Text>
+            </TouchableOpacity>
+          </View>
+          {open === p.user_id && (
+            <View style={{ gap: 6 }}>
+              {sessions.map((x: any) => (
+                <TouchableOpacity key={x.session_id} disabled={busy} onPress={() => join(p, x.session_id)} style={styles.sessionBtn}>
+                  <Ionicons name="megaphone-outline" size={13} color={colors.primary} />
+                  <Text style={styles.sessionTxt} numberOfLines={1}>{x.topic || 'Session'} · {x.host_name}</Text>
+                </TouchableOpacity>
+              ))}
+              <View style={styles.freeRow}>
+                <TextInput value={topic} onChangeText={setTopic} placeholder="Or a topic, e.g. Order value"
+                  placeholderTextColor={colors.textMuted} style={styles.freeInput} />
+                <TouchableOpacity disabled={busy} onPress={() => own(p)} style={styles.assignBtn}>
+                  {busy ? <ActivityIndicator size="small" color={colors.primary} /> : <Text style={styles.assignTxt}>Set</Text>}
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </View>
+      ))}
+    </View>
+  );
+}
+
 const createStyles = (c: any) => StyleSheet.create({
+  freeBox: { marginTop: 10, gap: 8, backgroundColor: c.surface, borderWidth: 1, borderColor: c.border, borderRadius: 14, padding: 12 },
+  freeTitle: { fontFamily: fonts.bodySemibold, fontSize: 13, color: c.text },
+  freeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  freeName: { flex: 1, fontFamily: fonts.body, fontSize: 13, color: c.text },
+  assignBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: c.primary },
+  assignTxt: { fontFamily: fonts.bodySemibold, fontSize: 12.5, color: c.primary },
+  sessionBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 10, backgroundColor: c.background, borderWidth: 1, borderColor: c.border },
+  sessionTxt: { flex: 1, fontFamily: fonts.body, fontSize: 12.5, color: c.text },
+  freeInput: { flex: 1, borderWidth: 1, borderColor: c.border, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7, fontFamily: fonts.body, fontSize: 16, color: c.text, backgroundColor: c.background },
   wrap: { marginBottom: 14 },
   card: { borderRadius: 16, padding: 14 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
