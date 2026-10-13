@@ -152,7 +152,7 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
           ? { color: hopHex(col), ...PLAN_STYLE, lineCap: 'round', lineJoin: 'round', interactive: false }
           : asking
             ? { color: hopHex(col, c.primary), weight: 5, opacity: 0.9, dashArray: '8 8', lineCap: 'round', lineJoin: 'round', interactive: false }
-            : { color: hopHex(col, c.primary), weight: DONE_WEIGHT, opacity: 0.95, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(liveLayer.current);
+            : { color: '#000', weight: DONE_WEIGHT, opacity: 0.95, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(liveLayer.current);
       };
       const move = (e: PointerEvent) => {
         if (panFrom) {
@@ -248,8 +248,9 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
         style = { color: hopHex(mk.colour), ...PLAN_STYLE, lineCap: 'round', lineJoin: 'round' };
         title = `${esc(hopLabel(mk.colour) || 'Planned')} area`;
       } else if (mk.status === 'draft') {
-        style = { color: hopHex(mk.colour, c.primary), weight: DONE_WEIGHT, opacity: 0.95, lineCap: 'round', lineJoin: 'round' };
-        title = `Done today${mk.colour ? ` · ${esc(hopLabel(mk.colour))}` : ''} (not confirmed yet)`;
+        // Marked done: black, over the top of the coloured plan.
+        style = { color: '#000', weight: DONE_WEIGHT, opacity: 0.95, lineCap: 'round', lineJoin: 'round' };
+        title = `Done today${mk.colour ? ` · ${esc(hopLabel(mk.colour))}` : ''} (not saved yet)`;
       } else {
         style = { color: '#000', weight: WORKED_WEIGHT, opacity: mk.days_ago > 28 ? 0.35 : 0.85, lineCap: 'round', lineJoin: 'round' };
         title = `Worked ${esc(when)}`;
@@ -313,14 +314,14 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
       setBusy('confirm');
       try {
         const r = await apiService.confirmCoverage(date, leaderId);
-        toast.success(r.data?.confirmed ? `${r.data.confirmed} marked off in black` : 'Nothing new to confirm');
+        toast.success(r.data?.confirmed ? `Saved: ${r.data.confirmed} black line${r.data.confirmed === 1 ? '' : 's'} on the map` : 'Draw over the streets in black first (Mark done)');
         load();
       } catch (e: any) { showAlert('Could not confirm', e?.response?.data?.detail || 'Try again.'); }
       finally { setBusy(null); }
     };
-    showAlert('Confirm the map?', "Everything drawn as done today turns solid black and goes on the Owner's territory map. Rub out anything that wasn't done first.", [
+    showAlert('Save the map?', "Everything drawn in black is saved as worked and goes on the Owner's territory map, and the coloured planned areas come off. Rub out anything that wasn't done first.", [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Confirm', onPress: go },
+      { text: 'Save', onPress: go },
     ]);
   };
 
@@ -370,7 +371,7 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
               </Pressable>
             ))}
           </View>
-          {kind !== 'move' && <View style={s.colours}>
+          {kind === 'plan' && <View style={s.colours}>
             {HOP_COLOURS.map((h) => (
               <Pressable key={h.key} onPress={() => setColour(h.key)} accessibilityLabel={h.label} accessibilityState={{ selected: colour === h.key }}
                 style={[s.swatchBtn, { backgroundColor: h.hex }, colour === h.key && s.swatchOn]} />
@@ -398,7 +399,7 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
         <Text style={s.small}>
           {leads && kind === 'plan' ? `Draw the ${hopLabel(colour).toLowerCase()} area with one finger. `
             : !leads && kind === 'request' ? 'Draw the extra streets you’d like with one finger: they go to your sector leader to approve. '
-            : 'Draw over the streets you’ve done with one finger. '}
+            : 'Draw over the streets you’ve done in black with one finger, on top of the coloured area. '}
           Two fingers move and zoom. Tap a line to remove it.
         </Text>
       )}
@@ -443,7 +444,7 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
             <Text style={s.small}>{hopLabel(h.colour)}{h.members.length ? `: ${h.members.map((n: string) => n.split(' ')[0]).join(' & ')}` : ''}</Text>
           </View>
         ))}
-        <View style={s.key}><View style={[s.swatch, { backgroundColor: '#000' }]} /><Text style={s.small}>Worked (confirmed)</Text></View>
+        <View style={s.key}><View style={[s.swatch, { backgroundColor: '#000' }]} /><Text style={s.small}>Done / worked</Text></View>
       </View>
 
       {leads && (hopsOpen || (!hops.length && !endOfDay)) && (
@@ -466,7 +467,7 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
         {leads && (endOfDay || drafts > 0) && (
           <Pressable onPress={confirm} disabled={!!busy} style={endOfDay ? s.btnDark : s.ghost} accessibilityRole="button" testID="map-confirm">
             {busy === 'confirm' ? <ActivityIndicator size="small" color="#fff" /> : <Ionicons name="checkmark-done" size={15} color={endOfDay ? '#fff' : c.primary} />}
-            <Text style={endOfDay ? s.btnDarkText : s.ghostText}>Confirm{drafts ? ` (${drafts})` : ''} and mark black</Text>
+            <Text style={endOfDay ? s.btnDarkText : s.ghostText}>Save the map{drafts ? ` (${drafts} black line${drafts === 1 ? '' : 's'})` : ''}</Text>
           </Pressable>
         )}
         {leads && (

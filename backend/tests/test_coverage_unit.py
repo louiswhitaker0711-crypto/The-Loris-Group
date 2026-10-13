@@ -97,7 +97,9 @@ def test_bunny_hops_plan_in_colour_and_only_done_strokes_turn_black(monkeypatch)
     assert (done["status"], done["kind"], done["colour"]) == ("draft", "done", "red")
     who["u"] = {"id": "lead1", "name": "Sam Example", "role": "trainee", "office_id": "o1"}
     assert run(cov.confirm_coverage(_Req({"date": today})))["confirmed"] == 1
-    assert run(db.coverage_marks.find_one({"id": plan["id"]}))["status"] == "plan"
+    # Saved: the black lines stay, the planned area comes off.
+    assert run(db.coverage_marks.find_one({"id": plan["id"]})) is None
+    assert run(db.coverage_marks.find_one({"id": done["id"]}))["status"] == "confirmed"
 
 
 def test_a_ba_requests_more_streets_and_the_leader_approves_or_declines(monkeypatch):
