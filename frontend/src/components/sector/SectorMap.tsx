@@ -101,7 +101,7 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
     }
     try {
       const r = await apiService.saveCoverage({ date: dt, lines: [pts], leader_id: lid,
-        kind: d?.can_confirm ? (k === 'request' ? 'done' : k) : (k === 'request' ? 'request' : 'done'), colour: col });
+        kind: d?.can_confirm ? (k === 'plan' ? 'plan' : 'done') : (k === 'request' ? 'request' : 'done'), colour: col });
       if (r.data?.id) setUndoStack((u) => [...u, r.data.id]);
       load();
     } catch (e: any) {
