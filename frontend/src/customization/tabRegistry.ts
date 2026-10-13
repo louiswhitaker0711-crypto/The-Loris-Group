@@ -145,6 +145,14 @@ export const TAB_REGISTRY: TabItem[] = [
     defaultVisibleByRole: { trainee: false, leader: true, admin: true },
   },
   {
+    // Acwyre's territory, the big map, sector maps and area history in one
+    // place. Admins only (the sector leaders and BAs get their own sector).
+    id: 'territory', label: 'Territory', longLabel: 'Territory — sectors, worked streets and sales',
+    icon: 'earth-outline', kind: 'route', target: '/territory',
+    visibleFor: ['admin'],
+    defaultVisibleByRole: { trainee: false, leader: false, admin: true },
+  },
+  {
     id: 'notifications', label: 'Inbox', longLabel: 'Inbox — Notification History',
     icon: 'mail-outline', kind: 'route', target: '/notifications',
     visibleFor: ['trainee', 'leader', 'admin'],
