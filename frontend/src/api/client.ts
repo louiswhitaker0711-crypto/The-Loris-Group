@@ -1157,6 +1157,10 @@ export const apiService = {
   setIKnowIt: (moduleId: string, know: boolean) =>
     api.post<any>(`/module-progress/${moduleId}/know`, { know }),
   getPendingChecks: () => api.get<{ checks: any[] }>('/cod/checks'),
+  setCodTests: (userId: string, moduleIds: string[]) => api.post('/cod/test-requests', { user_id: userId, module_ids: moduleIds }),
+  getMyCodTests: () => api.get<{ requests: any[] }>('/cod/test-requests/mine'),
+  getCodTestsFor: (userId: string) => api.get<{ requests: any[] }>('/cod/test-requests', { params: { user_id: userId } }),
+  deleteCodTest: (id: string) => api.delete(`/cod/test-requests/${id}`),
   codVettingList: () => api.get<{ modules: any[] }>('/cod/vetting'),
   codVetModule: (body: { stage: number; topic: string; updates?: any; vetted?: boolean }) =>
     api.put('/cod/vetting', body),

@@ -1705,6 +1705,7 @@ async def my_bells_summary(request: Request, week: Optional[str] = None, months:
             "sign_ups": t["total_sales"],
             "days_worked": t["days_worked"],
             "earnings": t["earnings"],
+            "weekly_goal": (this_week or {}).get("weekly_goal"),
         },
         "months": [buckets[k] for k in keys],
         "fees": fees,

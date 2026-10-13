@@ -38,6 +38,7 @@ const ROUTE_TITLES: Record<string, [string, IconName]> = {
   area: ['Area', 'location-outline'],
   'sector-map': ['Sector map', 'map-outline'],
   'my-sector': ['Sector', 'people-circle-outline'],
+  'cod-signoff': ['Sign off COD', 'checkmark-done-outline'],
   territory: ['Territory', 'earth-outline'],
   'bells-paste': ['Paste from WhatsApp', 'clipboard-outline'],
   module: ['Module', 'book-outline'],
