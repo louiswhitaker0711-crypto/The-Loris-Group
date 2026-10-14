@@ -29,7 +29,7 @@ import { HOP_COLOURS, hopHex, hopLabel } from '../../utils/hopColours';
 
 const FREE_MAP_TOOLS = 'https://www.freemaptools.com/uk-postcode-map.htm';
 const MAX_POINTS = 380;
-type Kind = 'plan' | 'done' | 'request' | 'move';
+type Kind = 'plan' | 'done' | 'request' | 'move' | 'edit';
 // Line weights: planned areas a soft, fairly thin band; done lines thin.
 const PLAN_STYLE = { weight: 7, opacity: 0.45 };
 const DONE_WEIGHT = 3.5;
@@ -50,6 +50,7 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
   const shapeLayer = useRef<any>(null);
   const marksLayer = useRef<any>(null);
   const liveLayer = useRef<any>(null);
+  const pendingLayer = useRef<any>(null);
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
   const [data, setData] = useState<any>(null);
@@ -60,9 +61,13 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
   const [busy, setBusy] = useState<string | null>(null);
   const placed = useRef(false);
   const [undoStack, setUndoStack] = useState<string[]>([]);
+  // A request for more streets (a BA) or a sector leader's redraw of one is
+  // drawn here first, then sent as one: nothing is saved line by line.
+  const [pending, setPending] = useState<number[][][]>([]);
+  const [editing, setEditing] = useState<any>(null);   // the request being redrawn
   // The pointer handlers read the latest state through refs.
-  const st = useRef({ kind, colour, data, date, leaderId });
-  st.current = { kind, colour, data, date, leaderId };
+  const st = useRef({ kind, colour, data, date, leaderId, editColour: '' });
+  st.current = { kind, colour, data, date, leaderId, editColour: editing?.colour || '' };
 
   const load = useCallback(async () => {
     try {
@@ -84,7 +89,12 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
     if (!chosen.current) { chosen.current = true; setKind('move'); }
     else if (!data.can_confirm) setKind((k) => (k === 'plan' ? 'move' : k));
   }, [data]);
-  const pick = (k: Kind) => { chosen.current = true; setKind(k); };
+  const pick = (k: Kind) => {
+    chosen.current = true;
+    // Leaving a redraw drops it (nothing was sent).
+    if (k !== 'edit') setEditing((e: any) => { if (e) setPending([]); return null; });
+    setKind(k);
+  };
   const drawing = !!data?.can_draw && kind !== 'move';
 
   const saveStroke = useCallback(async (latlngs: number[][]) => {
@@ -93,6 +103,10 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
     if (pts.length > MAX_POINTS) {
       const step = Math.ceil(pts.length / MAX_POINTS);
       pts = pts.filter((_, i) => i % step === 0 || i === latlngs.length - 1);
+    }
+    if (k === 'edit' || (!d?.can_confirm && k === 'request')) {
+      setPending((p) => [...p, pts]);
+      return;
     }
     try {
       const r = await apiService.saveCoverage({ date: dt, lines: [pts], leader_id: lid,
@@ -118,6 +132,7 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
       shapeLayer.current = L.layerGroup().addTo(m);
       marksLayer.current = L.layerGroup().addTo(m);
       liveLayer.current = L.layerGroup().addTo(m);
+      pendingLayer.current = L.layerGroup().addTo(m);
       map.current = m;
 
       // One finger (or a mouse drag) draws; a second finger cancels the line
@@ -148,7 +163,9 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
         const { kind: k, colour: col, data: d } = st.current;
         const planning = d?.can_confirm && k === 'plan';
         const asking = !d?.can_confirm && k === 'request';
-        live = L.polyline(pts, planning
+        live = L.polyline(pts, k === 'edit'
+          ? { color: hopHex(st.current.editColour, c.primary), ...PLAN_STYLE, opacity: 0.8, lineCap: 'round', lineJoin: 'round', interactive: false }
+          : planning
           ? { color: hopHex(col), ...PLAN_STYLE, lineCap: 'round', lineJoin: 'round', interactive: false }
           : asking
             ? { color: hopHex(col, c.primary), weight: 5, opacity: 0.9, dashArray: '8 8', lineCap: 'round', lineJoin: 'round', interactive: false }
@@ -247,6 +264,9 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
         const plan = mk.status === 'plan';
         style = { color: '#6b7280', weight: plan ? 7 : 3.5, opacity: plan ? 0.25 : 0.6, dashArray: plan ? undefined : '2 6', lineCap: 'round', lineJoin: 'round' };
         title = `${esc((mk.other_leader || 'Another').split(' ')[0])}’s sector · ${plan ? 'their planned area' : 'done today'}`;
+      } else if (mk.status === 'requested' && editing?.id === mk.id) {
+        style = { color: '#6b7280', weight: 5, opacity: 0.55, dashArray: '8 8', lineCap: 'round', lineJoin: 'round' };
+        title = 'What they asked for (you’re redrawing it)';
       } else if (mk.status === 'requested') {
         style = { color: hopHex(mk.colour, c.primary), weight: 5, opacity: 0.9, dashArray: '8 8', lineCap: 'round', lineJoin: 'round' };
         title = `More streets asked for${mk.colour ? ` · ${esc(hopLabel(mk.colour))}` : ''} (waiting for the sector leader)`;
@@ -278,7 +298,47 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
         });
       }
     }
-  }, [data, ready, c.primary, c.red, load]);
+  }, [data, ready, c.primary, c.red, load, editing]);
+
+  // What's drawn but not sent yet.
+  useEffect(() => {
+    const L = (window as any).L;
+    if (!ready || !L || !pendingLayer.current) return;
+    pendingLayer.current.clearLayers();
+    const col = editing ? hopHex(editing.colour, c.primary) : hopHex(colour, c.primary);
+    for (const line of pending) {
+      L.polyline(line, editing
+        ? { color: col, ...PLAN_STYLE, opacity: 0.8, lineCap: 'round', lineJoin: 'round', interactive: false }
+        : { color: col, weight: 5, opacity: 0.9, dashArray: '8 8', lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(pendingLayer.current);
+    }
+  }, [pending, ready, editing, colour, c.primary]);
+
+  const sendRequest = async () => {
+    if (!pending.length) return;
+    setBusy('request');
+    try {
+      await apiService.saveCoverage({ date, lines: pending, leader_id: leaderId, kind: 'request', colour });
+      toast.success('Sent to your sector leader');
+      setPending([]); setKind('move'); load();
+    } catch (e: any) { showAlert('Could not send', e?.response?.data?.detail || 'Try again.'); }
+    finally { setBusy(null); }
+  };
+  const startEdit = (mk: any) => {
+    setPending([]); setEditing(mk); chosen.current = true; setKind('edit');
+    const L = (window as any).L;
+    if (L && map.current && (mk.lines || []).length) map.current.fitBounds(L.latLngBounds((mk.lines || []).flat()), { padding: [30, 30], maxZoom: 18 });
+  };
+  const stopEdit = () => { setEditing(null); setPending([]); setKind('move'); };
+  const sendEdit = async () => {
+    if (!editing || !pending.length) return;
+    setBusy('edit');
+    try {
+      await apiService.replaceStreets(editing.id, pending);
+      toast.success('Updated map sent to their bunny hop');
+      stopEdit(); load();
+    } catch (e: any) { showAlert('Could not send', e?.response?.data?.detail || 'Try again.'); }
+    finally { setBusy(null); }
+  };
 
   const locate = () => {
     if (!navigator.geolocation) return;
@@ -292,12 +352,13 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
     setBusy(`${what}:${id}`);
     try {
       await (what === 'approve' ? apiService.approveStreets(id) : apiService.declineStreets(id));
-      toast.success(what === 'approve' ? 'Added to their area' : 'Declined');
+      toast.success(what === 'approve' ? 'Approved: sent to their bunny hop' : 'Declined');
       load();
     } catch (e: any) { showAlert('Could not do that', e?.response?.data?.detail || 'Try again.'); }
     finally { setBusy(null); }
   };
   const undo = async () => {
+    if (pending.length) { setPending((p) => p.slice(0, -1)); return; }
     const id = undoStack[undoStack.length - 1];
     if (!id) return;
     setUndoStack((u) => u.slice(0, -1));
@@ -407,7 +468,8 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
       {drawing && (
         <Text style={s.small}>
           {leads && kind === 'plan' ? `Draw the ${hopLabel(colour).toLowerCase()} area with one finger. `
-            : !leads && kind === 'request' ? 'Draw the extra streets you’d like with one finger: they go to your sector leader to approve. '
+            : !leads && kind === 'request' ? 'Draw the extra streets you’d like with one finger, then press Send request: it goes to your sector leader as one request. '
+            : kind === 'edit' ? `Draw the streets you want them to have, in their colour. What they asked for shows in grey. Then press Send updated map. `
             : 'Draw over the streets you’ve done in black with one finger, on top of the coloured area. '}
           Two fingers move and zoom. Tap a line to remove it.
         </Text>
@@ -423,11 +485,31 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
                 <Text style={s.small}>Tap to see it on the map</Text>
               </Pressable>
               <Pressable onPress={() => answer(mk.id, 'decline')} disabled={!!busy} style={s.ghost} accessibilityRole="button"><Text style={s.ghostText}>Decline</Text></Pressable>
+              <Pressable onPress={() => startEdit(mk)} disabled={!!busy} style={s.ghost} accessibilityRole="button" testID={`req-edit-${mk.id}`}><Text style={s.ghostText}>Edit</Text></Pressable>
               <Pressable onPress={() => answer(mk.id, 'approve')} disabled={!!busy} style={s.btn} accessibilityRole="button" testID={`req-approve-${mk.id}`}>
                 <Text style={s.btnText}>Approve</Text>
               </Pressable>
             </View>
           ))}
+        </View>
+      )}
+
+      {!leads && kind === 'request' && (
+        <View style={s.row}>
+          <Pressable onPress={sendRequest} disabled={!pending.length || !!busy} style={[s.btn, !pending.length && { opacity: 0.5 }]} accessibilityRole="button" testID="map-send-request">
+            <Text style={s.btnText}>{busy === 'request' ? 'Sending…' : `Send request${pending.length ? ` (${pending.length} line${pending.length === 1 ? '' : 's'})` : ''}`}</Text>
+          </Pressable>
+          {pending.length > 0 && (
+            <Pressable onPress={() => setPending([])} style={s.ghost} accessibilityRole="button"><Text style={s.ghostText}>Clear</Text></Pressable>
+          )}
+        </View>
+      )}
+      {leads && !!editing && (
+        <View style={s.row}>
+          <Pressable onPress={sendEdit} disabled={!pending.length || !!busy} style={[s.btn, !pending.length && { opacity: 0.5 }]} accessibilityRole="button" testID="map-send-edit">
+            <Text style={s.btnText}>{busy === 'edit' ? 'Sending…' : `Send updated map to ${(editing.author_name || 'them').split(' ')[0]}`}</Text>
+          </Pressable>
+          <Pressable onPress={stopEdit} style={s.ghost} accessibilityRole="button"><Text style={s.ghostText}>Cancel</Text></Pressable>
         </View>
       )}
 
@@ -438,7 +520,7 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
         <Pressable onPress={locate} style={s.locate} accessibilityLabel="Show where I am" hitSlop={6}>
           <Ionicons name="locate" size={18} color={c.text} />
         </Pressable>
-        {undoStack.length > 0 && (
+        {(undoStack.length > 0 || pending.length > 0) && (
           <Pressable onPress={undo} style={s.undo} accessibilityRole="button" accessibilityLabel="Undo the last line" testID="map-undo">
             <Ionicons name="arrow-undo" size={16} color={c.text} />
             <Text style={s.undoText}>Undo</Text>

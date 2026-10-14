@@ -1027,6 +1027,7 @@ export const apiService = {
   deleteCoverage: (id: string) => api.delete(`/coverage/${id}`),
   approveStreets: (id: string) => api.post(`/coverage/${id}/approve`, {}),
   declineStreets: (id: string) => api.post(`/coverage/${id}/decline`, {}),
+  replaceStreets: (id: string, lines: number[][][]) => api.post(`/coverage/${id}/replace`, { lines }),
   confirmCoverage: (date: string, leaderId?: string) => api.post('/coverage/confirm', { date, leader_id: leaderId }),
   getSectorMap: (date: string, leader?: string) => api.get('/sector/map', { params: { date, leader } }),
   shareSectorMap: (date: string) => api.post('/sector/map/share', {}, { params: { date } }),
