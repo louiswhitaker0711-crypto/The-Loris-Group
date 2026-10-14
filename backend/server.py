@@ -662,7 +662,10 @@ async def _startup_work():
     # by default), matching the day-boundary the rest of the backend uses.
     try:
         from apscheduler.schedulers.asyncio import AsyncIOScheduler
-        scheduler = AsyncIOScheduler(timezone=APP_TZ)
+        # A job whose moment comes while the server is busy (an OwnerIQ pull,
+        # start-up work) still runs, up to 5 minutes late, instead of being
+        # skipped (APScheduler's default grace is 1 second).
+        scheduler = AsyncIOScheduler(timezone=APP_TZ, job_defaults={"misfire_grace_time": 300, "coalesce": True})
 
         # ── OwnerIQ DataByte sync (hourly, all day) ─────────────────────
         # Pulls our office's Field IQ KPIs (doors, spoken-to, pitches, sales,

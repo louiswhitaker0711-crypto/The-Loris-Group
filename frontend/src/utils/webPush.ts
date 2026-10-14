@@ -113,6 +113,29 @@ export async function enableWebPush(): Promise<{ ok: boolean; reason?: string }>
   }
 }
 
+/** On each app open: if notifications are allowed on this device, make sure
+ * the server still has this device's subscription (it drops ones a push
+ * service reports dead, and a browser can quietly replace one). No prompt:
+ * does nothing unless permission was already given. */
+export async function resyncWebPush(): Promise<void> {
+  if (!canUseWebPush() || Notification.permission !== 'granted') return;
+  try {
+    const reg = await navigator.serviceWorker.getRegistration('/');
+    if (!reg) return;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      const { data } = await api.get('/push/vapid-key');
+      if (!data?.publicKey) return;
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(data.publicKey) as unknown as BufferSource,
+      });
+    }
+    const json: any = sub.toJSON();
+    await api.post('/push/web-subscribe', { endpoint: json.endpoint, keys: json.keys, expirationTime: json.expirationTime ?? null });
+  } catch { /* best-effort */ }
+}
+
 /** Turn off web push on this device. */
 export async function disableWebPush(): Promise<void> {
   if (!isWeb() || !('serviceWorker' in navigator)) return;
