@@ -242,6 +242,7 @@ function RootNavigator() {
       <Stack.Screen name="my-sector" options={{ headerShown: true, title: 'Sector', headerLeft: () => null, headerBackVisible: false, animation: 'none', ...MASTHEAD_COMPACT }} />
       <Stack.Screen name="sector-day" options={{ headerShown: true, title: 'Sector', ...MASTHEAD_COMPACT }} />
       <Stack.Screen name="sector-map" options={{ headerShown: true, title: 'Sector map', ...MASTHEAD_COMPACT }} />
+      <Stack.Screen name="sector-plan" options={{ headerShown: true, title: 'Plan sectors', ...MASTHEAD_COMPACT }} />
       <Stack.Screen name="territory" options={{ headerShown: true, title: 'Territory', headerLeft: () => null, headerBackVisible: false, animation: 'none', ...MASTHEAD_COMPACT }} />
       <Stack.Screen name="quality" options={{ headerShown: true, title: 'Quality', headerLeft: () => null, headerBackVisible: false, animation: 'none', ...MASTHEAD_COMPACT }} />
       <Stack.Screen name="live-sector" options={{ headerShown: true, title: 'Sector', headerBackTitle: 'Back', ...MASTHEAD_COMPACT }} />

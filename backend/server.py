@@ -39,6 +39,7 @@ from routes.bells import router as bells_router
 from routes.bells_parser import router as bells_parser_router
 from routes.field_reset import router as field_reset_router
 from routes.sector import router as sector_router
+from routes.sector_plan import router as sector_plan_router
 from routes.public_html import router as public_html_router
 from routes.roster_share import router as roster_share_router
 from routes.schedule import router as schedule_router
@@ -143,6 +144,7 @@ api_router.include_router(bells_router)
 api_router.include_router(bells_parser_router)
 api_router.include_router(field_reset_router)
 api_router.include_router(sector_router)
+api_router.include_router(sector_plan_router)
 api_router.include_router(schedule_router)
 api_router.include_router(agenda_router)
 api_router.include_router(monthly_planners_router)
@@ -939,6 +941,35 @@ async def _startup_work():
         # No breakdown on a Saturday (the Owner's office doesn't do one).
         scheduler.add_job(_sector_breakdown, "cron", day_of_week="mon-fri", hour=20, minute=5,
                           id="sector_breakdown_weekday", replace_existing=True)
+
+        # ── Morning sector planning (routes/sector_plan.py) ──────────────────
+        # Confirmed sectors go out at 10:30 (Saturday 09:30); checked every 5
+        # minutes until field start so a restart at 10:30 can't lose them.
+        # Nothing confirmed by 10:45 (Saturday 09:45) reminds the Owner.
+        async def _plan_send():
+            try:
+                from routes.sector_plan import send_tick
+                n = await send_tick()
+                if n:
+                    logger.info(f"sector plan: {n} told")
+            except Exception as ex:
+                logger.error(f"sector plan send failed: {ex}")
+
+        async def _plan_remind():
+            try:
+                from routes.sector_plan import remind_tick
+                logger.info(f"sector plan reminder: {await remind_tick()} sent")
+            except Exception as ex:
+                logger.error(f"sector plan reminder failed: {ex}")
+
+        scheduler.add_job(_plan_send, "cron", day_of_week="mon-fri", hour="10-13", minute="*/5",
+                          id="sector_plan_send_weekday", replace_existing=True)
+        scheduler.add_job(_plan_send, "cron", day_of_week="sat", hour="9", minute="30-55/5",
+                          id="sector_plan_send_sat", replace_existing=True)
+        scheduler.add_job(_plan_remind, "cron", day_of_week="mon-fri", hour=10, minute=45,
+                          id="sector_plan_remind_weekday", replace_existing=True)
+        scheduler.add_job(_plan_remind, "cron", day_of_week="sat", hour=9, minute=45,
+                          id="sector_plan_remind_sat", replace_existing=True)
 
         async def _breakdown_prompt():
             try:

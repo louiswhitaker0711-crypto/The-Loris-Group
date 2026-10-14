@@ -3,7 +3,7 @@
 // do; anyone else's (a Coach looking) shows everyone's set-up and breakdown.
 // The map is for the people in the sector and Admins.
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { showAlert } from '../src/utils/showAlert';
@@ -30,6 +30,21 @@ export default function SectorDayScreen() {
   const leader = params.leader || '';
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ['sector-board', date], queryFn: () => apiService.getSectorBoard(date).then((r) => r.data) });
+  // The Owner (or the day's sector planner) can move today's sector to a new postcode.
+  const st = useQuery({ queryKey: ['sector-status'], queryFn: () => apiService.getSectorStatus().then((r) => r.data), retry: false });
+  const [pcEdit, setPcEdit] = React.useState<string | null>(null);
+  const [pcBusy, setPcBusy] = React.useState(false);
+  const savePostcode = async () => {
+    if (pcEdit == null) return;
+    setPcBusy(true);
+    try {
+      await apiService.changeSectorPostcode(date, leader, pcEdit);
+      toast.success('Postcode changed');
+      setPcEdit(null);
+      ['sector-days', 'sector-board', 'sector-status', 'sector-plan', 'home-area-map', 'my-day'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+    } catch (e: any) { showAlert('Could not change it', e?.response?.data?.detail || 'Try again.'); }
+    setPcBusy(false);
+  };
   // Delete a sector that isn't finished (a test, or started by mistake).
   const del = () => showAlert('Delete this sector?', 'The sector, everyone’s set-ups and breakdowns for it and anything drawn on its map that day are deleted. This can’t be undone.', [
     { text: 'Cancel', style: 'cancel' },
@@ -83,6 +98,23 @@ export default function SectorDayScreen() {
           {label} · {leads ? 'your sector' : `${first(sec.leader_name)}'s sector`}{sec.goal != null ? ` · ${sec.hit} of ${sec.goal}` : ''}
         </Text>
         {sec.breakdown_posted_at ? <Text style={s.posted}>✅ Breakdown posted</Text> : null}
+        {isToday && !!st.data?.can_plan && (pcEdit == null ? (
+          <Pressable onPress={() => setPcEdit(sec.postcode || '')} style={s.pcBtn} accessibilityRole="button" testID="sector-change-postcode">
+            <Ionicons name="location-outline" size={15} color={c.primary} />
+            <Text style={s.pcBtnText}>Change postcode</Text>
+          </Pressable>
+        ) : (
+          <View style={s.pcRow}>
+            <TextInput value={pcEdit} onChangeText={setPcEdit} autoCapitalize="characters" autoFocus placeholder="e.g. LS6 2"
+              placeholderTextColor={c.textMuted} style={s.pcInput} testID="sector-postcode-input" />
+            <Pressable onPress={savePostcode} disabled={pcBusy} style={s.pcSave} accessibilityRole="button" testID="sector-postcode-save">
+              <Text style={s.pcSaveText}>{pcBusy ? 'Saving…' : 'Save'}</Text>
+            </Pressable>
+            <Pressable onPress={() => setPcEdit(null)} style={s.pcCancel} accessibilityRole="button">
+              <Text style={s.pcBtnText}>Cancel</Text>
+            </Pressable>
+          </View>
+        ))}
       </View>
 
       {(mine || isAdmin) && <SectorMap date={date} leaderId={!mine && isAdmin ? sec.leader_id : undefined} height={380} />}
@@ -128,6 +160,13 @@ const styles = (c: any) => StyleSheet.create({
   code: { fontFamily: fonts.display, fontSize: 30, color: c.text },
   muted: { fontFamily: fonts.body, fontSize: 13.5, color: c.textMuted },
   posted: { fontFamily: fonts.bodySemibold, fontSize: 13, color: c.green, marginTop: 2 },
+  pcBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start', paddingVertical: 6, marginTop: 4 },
+  pcBtnText: { fontFamily: fonts.bodySemibold, fontSize: 14, color: c.primary },
+  pcRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
+  pcInput: { flex: 1, borderWidth: 1, borderColor: c.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, fontFamily: fonts.body, fontSize: 15, color: c.text, backgroundColor: c.background },
+  pcSave: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, backgroundColor: c.primary },
+  pcSaveText: { fontFamily: fonts.bodyBold, fontSize: 14, color: c.onPrimary },
+  pcCancel: { paddingHorizontal: 6, paddingVertical: 10 },
   actions: { flexDirection: 'row', gap: 8 },
   action: { flex: 1, alignItems: 'center', gap: 4, paddingVertical: 12, borderRadius: 14, borderWidth: 1.5, borderColor: c.primary, backgroundColor: c.background },
   actionText: { fontFamily: fonts.bodyBold, fontSize: 13.5, color: c.primary },
