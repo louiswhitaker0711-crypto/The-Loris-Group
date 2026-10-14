@@ -46,7 +46,8 @@ def _now() -> datetime:
 
 
 def has_login() -> bool:
-    return bool(os.getenv("OWNERIQ_EMAIL") and os.getenv("OWNERIQ_PASSWORD"))
+    from owneriq_sync import owneriq_on
+    return owneriq_on()
 
 
 async def _pins_for(date_iso: str, cache: dict) -> dict[str, str]:

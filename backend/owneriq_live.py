@@ -269,7 +269,8 @@ async def resettle_day(iso_date: str) -> dict:
 
 async def resettle_yesterday_tick() -> None:
     """Nightly scheduler entrypoint — re-settle the day that just ended."""
-    if not os.getenv("OWNERIQ_EMAIL") or not os.getenv("OWNERIQ_PASSWORD"):
+    from owneriq_sync import owneriq_on
+    if not owneriq_on():
         logger.info("OwnerIQ resettle skipped: creds not set")
         return
     yday = (datetime.now(APP_TZ).date() - timedelta(days=1)).isoformat()

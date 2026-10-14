@@ -288,8 +288,10 @@ async def reconcile(dry_run: bool = True, actor: str | None = None) -> dict:
       • stage ≥ 3  → CG1 leaders/admins
     dry_run=True is READ-ONLY (returns the planned diff). Real writes still need
     OWNERIQ_WRITES_ENABLED."""
-    from owneriq_sync import _select_company, _build_rep_resolvers, company_pins
+    from owneriq_sync import _select_company, _build_rep_resolvers, company_pins, owneriq_on
     from owneriq_config import root_user_ids
+    if not owneriq_on():
+        return {"skipped": "OwnerIQ is switched off"}
     async with httpx.AsyncClient(timeout=60.0) as client:
         tok = await _login(client)
         H = {"accept": "application/vnd.api+json", "x-requested-with": "XMLHttpRequest",

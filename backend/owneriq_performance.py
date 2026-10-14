@@ -382,7 +382,8 @@ async def sync_performance(weeks: int = 2, bells_weeks: int = 1) -> dict:
 
 
 async def scheduler_tick() -> None:
-    if not os.getenv("OWNERIQ_EMAIL") or not os.getenv("OWNERIQ_PASSWORD"):
+    from owneriq_sync import owneriq_on
+    if not owneriq_on():
         return
     try:
         res = await sync_performance()
