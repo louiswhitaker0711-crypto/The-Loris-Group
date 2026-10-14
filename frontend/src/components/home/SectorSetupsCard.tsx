@@ -55,28 +55,46 @@ export default function SectorSetupsCard({ mode = 'setups' }: { mode?: 'setups' 
         <Text style={s.muted}>{isCoach ? 'No sectors set up yet today.' : 'You’re not in a sector yet today.'}</Text>
       ) : sectors.map((sec) => {
         const people: any[] = sec.people || [];
+        const showBreakdown = !!(sec.breakdown_posted_at || breakdowns);
         return (
           <View key={sec.leader_id} style={s.sector}>
-            <Text style={s.secName} numberOfLines={1}>
-              {first(sec.leader_name)}'s sector{sec.postcode ? ` · ${sec.postcode}` : ''}
-              <Text style={s.secMeta}>{sec.goal ? `  ·  goal ${sec.goal}${sec.breakdown_posted_at ? `, hit ${sec.hit}` : ''}` : ''}</Text>
-            </Text>
+            <View style={s.secHead}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.code}>{sec.postcode || 'No postcode'}</Text>
+                <Text style={s.secMeta}>{sec.leader_id === me ? 'Your sector' : `${first(sec.leader_name)}'s sector`} · {people.length} {people.length === 1 ? 'person' : 'people'}</Text>
+              </View>
+              {sec.goal != null && (
+                <View style={s.goalPill}>
+                  <Text style={s.goalNum}>{sec.breakdown_posted_at ? `${sec.hit ?? 0}/${sec.goal}` : sec.goal}</Text>
+                  <Text style={s.goalLbl}>{sec.breakdown_posted_at ? 'hit' : 'goal'}</Text>
+                </View>
+              )}
+            </View>
             {sec.breakdown_posted_at ? <Text style={s.posted}>✅ Breakdown posted</Text>
               : breakdowns ? <Text style={s.waiting}>{people.filter((p) => p.breakdown).length} of {people.length} breakdowns in · not posted yet</Text> : null}
             {people.map((p) => {
               const su = p.setup;
               const b = p.breakdown;
+              const mine = p.user_id === me;
               // Once the breakdown's posted (or on the Breakdowns card), show it;
               // until then, the set-up.
-              const bits = (sec.breakdown_posted_at || breakdowns) && b
-                ? [[b.doors, b.spoken, b.pitched, b.closed].map((v: any) => (v == null ? '-' : v)).join('/'),
-                   b.goal != null || b.hit != null ? `${b.hit ?? 0} of ${b.goal ?? '-'}` : '',
-                   b.proud ? `Proud: ${b.proud}` : '', b.change ? `Change: ${b.change}` : ''].filter(Boolean)
-                : su ? [su.goal != null ? `Goal ${su.goal}` : '', su.kpi ? `KPI ${su.kpi}` : '', su.focus ? `Focus: ${su.focus}` : ''].filter(Boolean) : [];
+              const pills: string[] = showBreakdown
+                ? (b ? [b.goal != null || b.hit != null ? `${b.hit ?? 0} of ${b.goal ?? '-'}` : '',
+                    [b.doors, b.spoken, b.pitched, b.closed].some((v: any) => v != null)
+                      ? [b.doors, b.spoken, b.pitched, b.closed].map((v: any) => (v == null ? '-' : v)).join('/') : ''].filter(Boolean) : [])
+                : (su ? [su.goal != null ? `🎯 ${su.goal}` : '', su.kpi ? `📊 ${su.kpi}` : ''].filter(Boolean) : []);
+              const sub = showBreakdown
+                ? (b ? [b.proud ? `Proud: ${b.proud}` : '', b.change ? `Change: ${b.change}` : ''].filter(Boolean).join(' · ') : 'No breakdown yet')
+                : (su ? (su.focus || '') : 'No set-up yet');
               return (
-                <View key={p.user_id} style={s.person}>
-                  <Text style={[s.name, p.user_id === me && { color: c.primary }]}>{first(p.user_name)}</Text>
-                  <Text style={s.line} numberOfLines={3}>{bits.length ? bits.join(' · ') : (sec.breakdown_posted_at || breakdowns) ? 'No breakdown yet' : 'No set-up yet'}</Text>
+                <View key={p.user_id} style={[s.person, mine && s.personMine]}>
+                  <View style={s.personTop}>
+                    <Text style={[s.name, mine && { color: c.primary }]} numberOfLines={1}>{first(p.user_name)}</Text>
+                    <View style={s.pills}>
+                      {pills.map((t) => <View key={t} style={s.pill}><Text style={s.pillText}>{t}</Text></View>)}
+                    </View>
+                  </View>
+                  {!!sub && <Text style={[s.focus, (!su && !showBreakdown) || (showBreakdown && !b) ? s.missing : null]}>{sub}</Text>}
                 </View>
               );
             })}
@@ -101,15 +119,25 @@ const styles = (c: any) => StyleSheet.create({
   link: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   linkText: { fontFamily: fonts.bodySemibold, fontSize: 13.5, color: c.primary },
   muted: { fontFamily: fonts.body, fontSize: 13.5, color: c.textMuted },
-  sector: { gap: 4, paddingTop: 8, borderTopWidth: 1, borderTopColor: c.border },
-  secName: { fontFamily: fonts.bodyBold, fontSize: 14.5, color: c.text },
+  sector: { gap: 6, paddingTop: 10, borderTopWidth: 1, borderTopColor: c.border },
+  secHead: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 2 },
+  code: { fontFamily: fonts.bodyBold, fontSize: 18, color: c.text },
+  secMeta: { fontFamily: fonts.body, fontSize: 13, color: c.textMuted },
+  goalPill: { alignItems: 'center', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, backgroundColor: c.primary + '14' },
+  goalNum: { fontFamily: fonts.bodyBold, fontSize: 17, color: c.primary },
+  goalLbl: { fontFamily: fonts.body, fontSize: 11, color: c.textMuted },
   titleBig: { fontSize: 21 },
   waiting: { fontFamily: fonts.body, fontSize: 12.5, color: c.yellow },
   posted: { fontFamily: fonts.bodySemibold, fontSize: 12.5, color: c.green },
-  secMeta: { fontFamily: fonts.body, fontSize: 13, color: c.textMuted },
-  person: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
-  name: { fontFamily: fonts.bodySemibold, fontSize: 13.5, color: c.text, width: 72 },
-  line: { flex: 1, fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: c.textMuted },
+  person: { gap: 3, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 12, backgroundColor: c.surface },
+  personMine: { borderWidth: 1, borderColor: c.primary + '55' },
+  personTop: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  name: { fontFamily: fonts.bodyBold, fontSize: 14.5, color: c.text, flexShrink: 1 },
+  pills: { flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginLeft: 'auto' },
+  pill: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, borderWidth: 1, borderColor: c.border, backgroundColor: c.background },
+  pillText: { fontFamily: fonts.bodySemibold, fontSize: 12.5, color: c.text },
+  focus: { fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: c.textMuted },
+  missing: { fontStyle: 'italic' },
   btn: { flexDirection: 'row', alignItems: 'center', gap: 7, alignSelf: 'flex-start', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: c.primary },
   btnText: { fontFamily: fonts.bodyBold, fontSize: 14, color: c.onPrimary },
 });
