@@ -101,6 +101,15 @@ async def _scoped_rows(caller: dict, from_date: str, to_date: str, own_office: b
     ).to_list(length=20000)
 
 
+
+@router.get("/owneriq/switch")
+async def owneriq_switch(request: Request):
+    """Whether OwnerIQ is in use (OWNERIQ_ENABLED): screens that only work
+    with it hide while it's off."""
+    await get_current_user(request)
+    from owneriq_sync import owneriq_on
+    return {"on": owneriq_on()}
+
 @router.get("/owneriq/companies")
 async def owneriq_companies(request: Request):
     """The OwnerIQ marketing companies (offices) this deployment knows about,

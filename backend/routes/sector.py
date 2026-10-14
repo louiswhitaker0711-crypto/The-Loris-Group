@@ -90,11 +90,19 @@ def clean_setup(body: dict) -> dict:
 
 
 def clean_breakdown(body: dict) -> dict:
-    return {"doors": _int(body.get("doors")), "spoken": _int(body.get("spoken")),
-            "pitched": _int(body.get("pitched")), "closed": _int(body.get("closed")),
-            "note": _text(body.get("note")), "goal": _int(body.get("goal"), 0, 30),
-            "hit": _int(body.get("hit"), 0, 30), "proud": _text(body.get("proud")),
-            "change": _text(body.get("change"))}
+    out = {"doors": _int(body.get("doors")), "spoken": _int(body.get("spoken")),
+           "pitched": _int(body.get("pitched")), "closed": _int(body.get("closed")),
+           "note": _text(body.get("note")), "goal": _int(body.get("goal"), 0, 30),
+           "hit": _int(body.get("hit"), 0, 30), "proud": _text(body.get("proud")),
+           "change": _text(body.get("change")),
+           # Silver / Gold / took The Round, from Field IQ (sign-ups = Silver + Gold).
+           "silver": _int(body.get("silver"), 0, 30), "gold": _int(body.get("gold"), 0, 30),
+           "round": _int(body.get("round"), 0, 30)}
+    if out["silver"] is not None or out["gold"] is not None:
+        out["hit"] = (out["silver"] or 0) + (out["gold"] or 0)
+        if out["round"] is not None:
+            out["round"] = min(out["round"], out["hit"])
+    return out
 
 
 def kpi_text(setup: dict) -> str:
@@ -267,7 +275,9 @@ async def _prefill(user_ids: list[str], iso: str) -> dict:
         days = e.get("days") or []
         day = days[d.weekday()] if d.weekday() < len(days) else None
         if day and ((day.get("over30") or 0) + (day.get("under30") or 0)) > 0:
-            out.setdefault(str(e["user_id"]), {})["hit"] = (day.get("over30") or 0) + (day.get("under30") or 0)
+            cur = out.setdefault(str(e["user_id"]), {})
+            cur["hit"] = (day.get("over30") or 0) + (day.get("under30") or 0)
+            cur.update(silver=day.get("under30") or 0, gold=day.get("over30") or 0, round=day.get("memberships") or 0)
     return out
 
 
@@ -323,7 +333,8 @@ async def save_sector_day(user_id: str, request: Request, date: Optional[str] = 
         upd["breakdown"] = {**clean_breakdown(body.get("breakdown") or {}), "by_id": str(user["id"]), "at": now}
     if not upd:
         raise HTTPException(status_code=400, detail="Nothing to save")
-    target = await db.users.find_one({"_id": ObjectId(user_id)}, {"name": 1, "office_id": 1}) if ObjectId.is_valid(user_id) else None
+    target = await db.users.find_one({"_id": ObjectId(user_id)}, {"name": 1, "office_id": 1, "role": 1, "badge_number": 1}) \
+        if ObjectId.is_valid(user_id) else None
     if not target:
         raise HTTPException(status_code=404, detail="Person not found")
     await db.sector_days.update_one(
@@ -331,6 +342,13 @@ async def save_sector_day(user_id: str, request: Request, date: Optional[str] = 
         {"$set": {**upd, "office_id": target.get("office_id"), "user_name": target.get("name") or "", "updated_at": now},
          "$setOnInsert": {"created_at": now}},
         upsert=True)
+    if "breakdown" in upd:
+        # OwnerIQ switched off: the breakdown is the day's numbers and fills Bells.
+        try:
+            from core.breakdown_numbers import apply_breakdown
+            await apply_breakdown(target, iso, upd["breakdown"])
+        except Exception as ex:
+            logger.warning("breakdown numbers for %s failed: %s", user_id, ex)
     return await db.sector_days.find_one({"user_id": user_id, "date": iso}, {"_id": 0})
 
 
