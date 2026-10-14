@@ -143,7 +143,7 @@ async def probe(client: httpx.AsyncClient, token: str, base: str | None = None) 
             r = await client.get(f"{base}{path}", headers=_headers(token))
         except Exception:
             return None
-        if r.status_code == 200 or r.status_code in (401, 403):
+        if r.status_code == 200 or r.status_code == 401:
             return r.status_code
     return r.status_code
 
@@ -278,8 +278,8 @@ async def reconnect(client: httpx.AsyncClient, pasted: str) -> dict:
     resolved = await resolve_api_base(client, email) if email else None
     check_base = resolved or base
     code = await probe(client, token, check_base)
-    if code in (401, 403):
-        raise ValueError(f"OwnerIQ refused that token ({code}). Sign in again on owner-iq.ai and copy a fresh one.")
+    if code == 401:
+        raise ValueError("OwnerIQ didn't recognise that token (401). Sign in again on owner-iq.ai and copy a fresh one.")
     now = _now_iso()
     rec = {"token": token, "source": "browser", "minted_at": now, "state": CONNECTED,
            "reason": None, "alerted_at": None, "retry_not_before": None, "api_base": check_base,
