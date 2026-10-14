@@ -237,9 +237,10 @@ async def owneriq_sync_now(request: Request, body: SyncBody | None = None):
         raise HTTPException(status_code=409, detail=str(ex) or "OwnerIQ needs reconnecting. Open Admin → OwnerIQ.")
     except OwnerIQTransient as ex:
         raise HTTPException(status_code=503, detail=str(ex) or "OwnerIQ is busy; try again shortly.")
-    except OwnerIQError:
+    except OwnerIQError as ex:
         logger.exception("OwnerIQ manual sync failed")
-        raise HTTPException(status_code=502, detail="OwnerIQ sync failed. The server log has the details.")
+        # Owner-only test button: show the real reason so we can see the status.
+        raise HTTPException(status_code=502, detail=(str(ex)[:300] or "OwnerIQ sync failed."))
     except Exception:
         logger.exception("OwnerIQ manual sync crashed")
         raise HTTPException(status_code=500, detail="Sync error. The server log has the details.")
