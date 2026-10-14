@@ -161,7 +161,9 @@ def test_my_summary_reads_only_my_row_for_this_week(summary_db):
 def test_my_summary_with_no_row_is_zero(summary_db):
     out = _run(bells.my_bells_summary(_Req()))
     assert out["has_entry"] is False
+    days = out["this_week"].pop("days")
     assert out["this_week"] == {"standard": 0, "target": 0, "memberships": 0, "sign_ups": 0, "days_worked": 0, "earnings": 0, "weekly_goal": None}
+    assert len(days) == 6 and all(d == {"status": "off", "silver": 0, "gold": 0, "round": 0} for d in days)
     assert len(out["months"]) == 6
     assert out["fees"] == DEFAULT_FEES
 

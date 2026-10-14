@@ -53,6 +53,7 @@ export default function MyDayCard() {
       ) : (
         <Pressable onPress={() => router.push('/my-sector' as never)}><Text style={s.muted}>No set-up yet today. Tap to do yours.</Text></Pressable>
       )}
+      {d.has_live && <>
       <View style={s.liveRow}>
         <View style={[s.liveBig, { borderColor: dayBandText(hit) }]}>
           <Text style={[s.liveNum, { color: dayBandText(hit) }]}>{hit}</Text>
@@ -65,7 +66,8 @@ export default function MyDayCard() {
           </View>
         ))}
       </View>
-      <Text style={s.small}>{d.has_live ? `Where you're on, as of ${asOf || 'the last pull'} (Field IQ, updated hourly).` : 'Where you’re on shows once Field IQ has today’s doors (it updates hourly).'}</Text>
+      <Text style={s.small}>Where you're on, as of {asOf || 'the last pull'} (Field IQ, updated hourly).</Text>
+      </>}
       {d.week_focus?.length > 0 && (
         <Text style={s.line}><Text style={s.bold}>This week’s focus:</Text> {d.week_focus.join(' · ')}</Text>
       )}
@@ -79,8 +81,9 @@ export default function MyDayCard() {
       </View>
 
       <View style={s.box}>
-        <Text style={s.boxTitle}>{left > 0 ? `Still to go for your goal: ${left} more` : 'Goal hit 🎉 go for one more'}</Text>
-        <Text style={s.big}>{NEED.map(([k, label]) => `${r0(per[k] * Math.max(left, 1))} ${label}`).join(' · ')}</Text>
+        {/* Without live numbers: what today's goal takes; with them, what's still to go. */}
+        <Text style={s.boxTitle}>{!d.has_live ? `Your goal of ${goal} takes` : left > 0 ? `Still to go for your goal: ${left} more` : 'Goal hit 🎉 go for one more'}</Text>
+        <Text style={s.big}>{NEED.map(([k, label]) => `${r0(per[k] * Math.max(d.has_live ? left : goal, 1))} ${label}`).join(' · ')}</Text>
       </View>
 
       {day && (
@@ -90,10 +93,12 @@ export default function MyDayCard() {
       )}
 
       <View style={s.row}>
-        <Pressable onPress={() => router.push('/live-ops' as never)} style={s.btn} accessibilityRole="button" testID="my-day-live">
-          <Ionicons name="radio-outline" size={15} color={c.onPrimary} />
-          <Text style={s.btnText}>Where I'm at now</Text>
-        </Pressable>
+        {d.has_live && (
+          <Pressable onPress={() => router.push('/live-ops' as never)} style={s.btn} accessibilityRole="button" testID="my-day-live">
+            <Ionicons name="radio-outline" size={15} color={c.onPrimary} />
+            <Text style={s.btnText}>Where I'm at now</Text>
+          </Pressable>
+        )}
         <Pressable onPress={() => router.push('/field-kpis' as never)} style={s.ghost} accessibilityRole="button">
           <Ionicons name="speedometer-outline" size={15} color={c.primary} />
           <Text style={s.ghostText}>My numbers</Text>

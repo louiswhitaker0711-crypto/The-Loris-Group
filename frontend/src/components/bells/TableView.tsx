@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, Alert, 
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, runOnJS } from 'react-native-reanimated';
 import { apiService } from '../../api/client';
+import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import { lightColors } from '../../theme/ThemeContext';
@@ -750,7 +751,15 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
 
 // Pulled out so the same body markup serves both the web (sticky) and the
 // native (horizontal-scroll) paths above.
+// Coaches and Admins tap a name to open that person's page.
+function useOpenPerson() {
+  const { user } = useAuth();
+  const can = user?.role === 'leader' || user?.role === 'admin';
+  return (e: Entry) => (can && e.user_id ? () => router.push(`/person/${e.user_id}` as never) : undefined);
+}
+
 function BodyContent({ groups, office, colors, isDark, styles, z, w, totalW, showMc, cellFont, stickyNameCol, stickyTeam, entries, canEditGoal, onEditGoal, onCellPress, onRowPress }: any) {
+  const openPerson = useOpenPerson();
   const rowH = 38 * z;
   const slimH = 26 * z;
   const small = 11 * z;
@@ -803,7 +812,10 @@ function BodyContent({ groups, office, colors, isDark, styles, z, w, totalW, sho
                         {light ? <View style={[styles.lightDot, { backgroundColor: light.color }]} accessibilityLabel={light.label} /> : <View style={styles.lightDot} />}
                         {isLeader && <Ionicons name="star" size={10 * z} color={colors.primary} style={{ marginRight: 4 }} />}
                         {/* The whole name, always: a long one takes a second line. */}
-                        <Text style={[styles.nameText, { fontSize: cellFont, lineHeight: 15.5 * z, fontFamily: isLeader ? fonts.bodyBold : fonts.bodySemibold }]} numberOfLines={2}>{e.user_name}</Text>
+                        <TouchableOpacity onPress={openPerson(e)} disabled={!openPerson(e)} activeOpacity={0.6} style={{ flexShrink: 1 }}
+                          accessibilityRole="link" accessibilityLabel={`Open ${e.user_name}`}>
+                          <Text style={[styles.nameText, { fontSize: cellFont, lineHeight: 15.5 * z, fontFamily: isLeader ? fonts.bodyBold : fonts.bodySemibold }]} numberOfLines={2}>{e.user_name}</Text>
+                        </TouchableOpacity>
                       </View>
                       <View style={[styles.cell, { width: w.coach, height: rowH, alignItems: 'flex-start', paddingHorizontal: 8 * z }]}>
                         <Text style={[styles.softText, { fontSize: 12 * z }]} numberOfLines={1}>{firstName(e.coach_name) || '–'}</Text>
@@ -926,6 +938,7 @@ const isWebSticky = (sticky: any) => !!sticky && sticky.position === 'sticky';
 
 // ── The phone's Bells: the same sections as a list ───────────────────────────
 function PhoneSheet({ groups, office, entries, colors, isDark, styles, showMc, canEditGoal, onEditGoal, onCellPress, onRowPress }: any) {
+  const openPerson = useOpenPerson();
   // A label and seven cells, lined up under the day letters.
   const statRow = (label: string, vals: (string | number)[], strong?: boolean) => (
     <View style={styles.pStatRow}>
@@ -973,12 +986,18 @@ function PhoneSheet({ groups, office, entries, colors, isDark, styles, showMc, c
             return (
               <View key={e.user_id || idx} style={styles.lRow}>
                 <View style={[styles.lTeam, { backgroundColor: tint.border }]} />
-                <TouchableOpacity style={styles.lNameWrap} onPress={() => onRowPress?.(e)} activeOpacity={0.6}
-                  accessibilityLabel={`${e.user_name}: goal ${e.weekly_goal ?? 'not set'}. Tap to change`} testID={`bells-goal-${e.user_id || idx}`}>
+                <View style={styles.lNameWrap}>
                   {light ? <View style={[styles.lightDot, { backgroundColor: light.color, marginRight: 5 }]} /> : null}
-                  <Text style={styles.lName} numberOfLines={1}>{e.user_name}</Text>
-                  {e.weekly_goal != null ? <Text style={styles.lGoal}>/{e.weekly_goal}</Text> : null}
-                </TouchableOpacity>
+                  {/* Name opens their page (Coaches and Admins); the goal opens the goal. */}
+                  <TouchableOpacity onPress={openPerson(e) || (() => onRowPress?.(e))} activeOpacity={0.6} style={{ flexShrink: 1 }}
+                    accessibilityRole="link" accessibilityLabel={`Open ${e.user_name}`}>
+                    <Text style={styles.lName} numberOfLines={1}>{e.user_name}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => onRowPress?.(e)} activeOpacity={0.6} hitSlop={6}
+                    accessibilityLabel={`${e.user_name}: goal ${e.weekly_goal ?? 'not set'}. Tap to change`} testID={`bells-goal-${e.user_id || idx}`}>
+                    <Text style={styles.lGoal}>/{e.weekly_goal ?? '–'}</Text>
+                  </TouchableOpacity>
+                </View>
                 {(e.days || []).slice(0, 7).map((d: Day, i: number) => {
                   const look = cellForDay(d, colors, !!isDark);
                   return (
