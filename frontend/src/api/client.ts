@@ -1513,6 +1513,7 @@ export const apiService = {
   getOwnerIQConnect: () => api.get('/owneriq/connect'),
   connectOwnerIQ: (token: string) => api.post('/owneriq/connect', { token }),
   retryOwnerIQ: () => api.post('/owneriq/connect/retry', {}),
+  testOwnerIQSync: () => api.post('/owneriq/sync', {}),
   getTabPrefs: () =>
     api.get<{ items: Array<{ id: string; visible: boolean }>; updated_at?: string }>(
       '/me/tab-prefs',
