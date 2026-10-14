@@ -199,27 +199,20 @@ async def reset_board(request: Request):
 
 
 async def out_today(d) -> set[str]:
-    """Who's out in the field today: Coaches and BAs not marked away on Bells,
-    anyone (Admins and the Owner included) Bells has in today, plus anyone
-    with real signs of being out:
-    a set-up, a sector, or doors on Field IQ today. Those signs beat Bells,
-    so going out when you weren't scheduled still counts."""
+    """Who's out in the field today: anyone Bells has in today, plus anyone
+    with real signs of being out: a set-up, a sector, or doors today. Those
+    signs beat Bells, so going out when you weren't scheduled still counts.
+    Nobody counts just for being a BA or Coach (people not out today were
+    being told to do a reset)."""
     iso = d.isoformat()
     week_ending = (d + timedelta(days=6 - d.weekday())).isoformat()
     idx = d.weekday()
-    away: set[str] = set()
     out: set[str] = set()
     async for e in db.bells_entries.find({"week_ending": week_ending}, {"user_id": 1, "days": 1}):
         days = e.get("days") or []
         st = (days[idx] or {}).get("status") if idx < len(days) else None
-        if st in ("ab", "ns", "rt", "pc"):
-            away.add(str(e.get("user_id")))
-        elif st == "in":
+        if st == "in":
             out.add(str(e.get("user_id")))   # an Admin who's in the field today too
-    async for u in db.users.find({"role": {"$in": ["trainee", "leader"]}, "deleted": {"$ne": True},
-                                  "is_active": {"$ne": False}, "is_demo": {"$ne": True}}, {"_id": 1}):
-        if str(u["_id"]) not in away:
-            out.add(str(u["_id"]))
     async for x in db.sector_days.find({"date": iso, "setup": {"$ne": None}}, {"user_id": 1}):
         out.add(str(x["user_id"]))
     async for sec in db.sectors.find({"date": iso}, {"leader_id": 1, "member_ids": 1}):

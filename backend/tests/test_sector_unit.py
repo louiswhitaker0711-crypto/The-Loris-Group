@@ -207,3 +207,15 @@ def test_an_unfinished_sector_can_be_deleted(monkeypatch):
     run(db.coverage_marks.insert_one({"office_id": "o1", "date": day, "sector_leader_id": "lead1", "status": "confirmed"}))
     with pytest.raises(HTTPException):
         run(sec.delete_sector(None, date=day))
+
+
+def test_evening_chase_window_and_text():
+    from datetime import datetime
+    assert sec.in_chase_window(datetime(2026, 10, 14, 20, 30)) and sec.in_chase_window(datetime(2026, 10, 14, 22, 0))
+    assert not sec.in_chase_window(datetime(2026, 10, 14, 20, 15))
+    assert sec.in_chase_window(datetime(2026, 10, 17, 17, 30)) and not sec.in_chase_window(datetime(2026, 10, 17, 20, 30))
+    assert not sec.in_chase_window(datetime(2026, 10, 18, 21, 0))     # Sunday
+    assert sec.chase_text(["map", "post", "breakdown"]) == (
+        "🗺️ Mark your map", "Still to do: save your sector's map · post your sector's breakdown · your breakdown.")
+    assert sec.chase_text(["breakdown"])[0] == "📝 Breakdown"
+    assert sec.chase_text([]) == ("", "")
