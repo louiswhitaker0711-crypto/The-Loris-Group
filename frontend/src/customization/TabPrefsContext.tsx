@@ -42,7 +42,13 @@ export function TabPrefsProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => { load(); }, [load]);
 
-  const resolved = useMemo(() => resolveTabPrefs(raw, role), [raw, role]);
+  // Screens that only work with OwnerIQ hide while it's switched off.
+  const [oiqOn, setOiqOn] = useState(false);
+  useEffect(() => {
+    if (!user?.id) return;
+    apiService.getOwnerIQSwitch().then((r) => setOiqOn(!!r.data?.on)).catch(() => setOiqOn(false));
+  }, [user?.id]);
+  const resolved = useMemo(() => resolveTabPrefs(raw, role).filter((r) => oiqOn || !r.item.needsOwnerIQ), [raw, role, oiqOn]);
 
   const save = useCallback(async (items: { id: string; visible: boolean }[]) => {
     setRaw(items);

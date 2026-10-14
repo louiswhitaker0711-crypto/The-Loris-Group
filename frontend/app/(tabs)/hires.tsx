@@ -237,16 +237,22 @@ export default function HiresScreen() {
   }, [hires]);
 
   // Segment items for the sliding view toggle (labels/testIDs unchanged).
+  // The Timeline is built from OwnerIQ's door logs: hidden while it's off.
+  const { data: oiqSwitch } = useQuery({
+    queryKey: ['owneriq-switch'], queryFn: () => apiService.getOwnerIQSwitch().then((r) => r.data), staleTime: 10 * 60 * 1000, retry: false,
+  });
+  const oiqOn = !!oiqSwitch?.on;
+  useEffect(() => { if (!oiqOn && viewMode === 'timeline') setViewMode('performance'); }, [oiqOn, viewMode]);
   const viewSegments = useMemo<PillTab[]>(() => {
     const items: PillTab[] = [
       { key: 'performance', label: 'Performance', testID: 'hires-view-performance' },
-      { key: 'timeline', label: 'Timeline', testID: 'hires-view-timeline' },
+      ...(oiqOn ? [{ key: 'timeline', label: 'Timeline', testID: 'hires-view-timeline' }] : []),
       { key: 'spider', label: 'Spider', testID: 'hires-view-spider' },
       { key: 'bells', label: 'Bells', testID: 'hires-view-bells' },
       { key: 'sectors', label: 'Sectors', testID: 'hires-view-sectors' },
     ];
     return items;
-  }, []);
+  }, [oiqOn]);
 
   // Orientation mass-grader nudge — today's Day-1/Day-2 cohort still ungraded.
   // Backup entry point for the 6 PM push; hides silently on empty/error.

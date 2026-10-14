@@ -347,6 +347,9 @@ async def sync_owneriq(iso_from: str | None = None, iso_to: str | None = None) -
         rows = await _fetch_all_companies(client, token, iso_from, iso_to)
 
     await retire_name_links()
+    # Back on after a spell off: OwnerIQ's numbers replace the breakdown's
+    # stand-in rows for the days just pulled.
+    await db.owneriq_kpis.delete_many({"source": "breakdown", "date": {"$gte": iso_from, "$lte": iso_to}})
     by_badge, by_name = await _build_rep_resolvers()
     # The OwnerIQ account id each user was linked to (owneriq_performance's
     # roster email/badge link) is the most precise key of all.

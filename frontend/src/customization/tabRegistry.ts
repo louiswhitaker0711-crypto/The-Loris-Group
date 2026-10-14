@@ -28,6 +28,8 @@ export type TabItem = {
   /** For kind='tab' this is the screen name; for kind='route' the href. */
   target: string;
   visibleFor: Role[];
+  /** Only shown while OwnerIQ is switched on. */
+  needsOwnerIQ?: boolean;
   /** Whether this item is on by default in the bottom bar (per role). */
   defaultVisibleByRole: Partial<Record<Role, boolean>>;
 };
@@ -158,7 +160,7 @@ export const TAB_REGISTRY: TabItem[] = [
     // get Live Operations pinned without touching their other choices.
     id: 'live-ops', label: 'Live Operations', short: 'Live Ops', longLabel: 'Live Operations — sectors in the field, door by door',
     icon: 'radio-outline', kind: 'route', target: '/live-ops',
-    visibleFor: ['trainee', 'leader', 'admin'],
+    visibleFor: ['trainee', 'leader', 'admin'], needsOwnerIQ: true,
     defaultVisibleByRole: { trainee: false, leader: true, admin: true },
   },
   {

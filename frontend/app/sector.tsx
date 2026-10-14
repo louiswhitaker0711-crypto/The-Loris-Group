@@ -22,9 +22,10 @@ import BreakdownPrimetime from '../src/components/sector/BreakdownPrimetime';
 
 type Setup = { goal: number | null; kpi_metric: string | null; kpi_target: number | null; focus: string; positive?: string };
 type Breakdown = { doors: number | null; spoken: number | null; pitched: number | null; closed: number | null;
-  note: string; goal: number | null; hit: number | null; proud: string; change: string };
+  note: string; goal: number | null; hit: number | null; proud: string; change: string;
+  silver?: number | null; gold?: number | null; round?: number | null };
 type Person = { user_id: string; user_name: string; setup: Setup | null; breakdown: Breakdown | null;
-  prefill: Partial<Record<'doors' | 'spoken' | 'pitched' | 'closed' | 'hit', number>>;
+  prefill: Partial<Record<'doors' | 'spoken' | 'pitched' | 'closed' | 'hit' | 'silver' | 'gold' | 'round', number>>;
   yesterday: { change: string; proud: string; goal: number | null; kpi: { kpi_metric: string; kpi_target: number } | null } };
 type Mode = 'setup' | 'breakdown';
 const errText = (e: any, f: string) => (typeof e?.response?.data?.detail === 'string' ? e.response.data.detail : f);
@@ -383,24 +384,31 @@ function SetupCard({ p, date, opts, open, onToggle, onSaved, s, c }: any) {
 function BreakdownCard({ p, date, opts, open, onToggle, onSaved, s, c }: any) {
   const cur: Partial<Breakdown> = p.breakdown || {};
   const pre = p.prefill || {};
-  const init = (k: 'doors' | 'spoken' | 'pitched' | 'closed' | 'hit') => (cur[k] != null ? String(cur[k]) : pre[k] != null ? String(pre[k]) : '');
-  const [vals, setVals] = useState({ doors: init('doors'), spoken: init('spoken'), pitched: init('pitched'), closed: init('closed'), hit: init('hit') });
+  type K = 'doors' | 'spoken' | 'pitched' | 'closed' | 'hit' | 'silver' | 'gold' | 'round';
+  const init = (k: K) => (cur[k] != null ? String(cur[k]) : pre[k] != null ? String(pre[k]) : '');
+  const fresh = () => ({ doors: init('doors'), spoken: init('spoken'), pitched: init('pitched'), closed: init('closed'), hit: init('hit'),
+    silver: init('silver'), gold: init('gold'), round: init('round') });
+  const [vals, setVals] = useState(fresh);
   const [goal, setGoal] = useState(cur.goal != null ? String(cur.goal) : p.setup?.goal != null ? String(p.setup.goal) : '');
   const [note, setNote] = useState(cur.note || '');
   const [proud, setProud] = useState(cur.proud || '');
   const [change, setChange] = useState(cur.change || '');
   const [busy, setBusy] = useState(false);
-  useEffect(() => { if (!p.breakdown) setVals({ doors: init('doors'), spoken: init('spoken'), pitched: init('pitched'), closed: init('closed'), hit: init('hit') }); }, [p.prefill]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!p.breakdown) setVals(fresh()); }, [p.prefill]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Sign-ups are Silver + Gold once either is typed.
+  const split = vals.silver !== '' || vals.gold !== '';
+  const signups = split ? (num(vals.silver) || 0) + (num(vals.gold) || 0) : num(vals.hit);
 
   const nums = p.breakdown ? [cur.doors, cur.spoken, cur.pitched, cur.closed].map((v) => (v == null ? '-' : v)).join('/') : '';
-  const summary = p.breakdown ? `${nums} · goal ${cur.goal ?? '-'} hit ${cur.hit ?? '-'}` : (pre.doors != null ? `OwnerIQ: ${[pre.doors, pre.spoken, pre.pitched, pre.closed].join('/')} · ${pre.hit ?? 0} sign-ups` : 'Not done');
+  const tiers = p.breakdown && (cur.silver != null || cur.gold != null) ? ` (🥈${cur.silver ?? 0} 🥇${cur.gold ?? 0} ⭕️${cur.round ?? 0})` : '';
+  const summary = p.breakdown ? `${nums} · goal ${cur.goal ?? '-'} hit ${cur.hit ?? '-'}${tiers}` : (pre.doors != null ? `Field IQ: ${[pre.doors, pre.spoken, pre.pitched, pre.closed].join('/')} · ${pre.hit ?? 0} sign-ups` : 'Not done');
 
   const save = async () => {
     setBusy(true);
     try {
       await apiService.saveSectorDay(p.user_id, date, { breakdown: {
         doors: num(vals.doors), spoken: num(vals.spoken), pitched: num(vals.pitched), closed: num(vals.closed),
-        hit: num(vals.hit), goal: num(goal), note, proud, change } });
+        hit: signups, silver: num(vals.silver), gold: num(vals.gold), round: num(vals.round), goal: num(goal), note, proud, change } });
       toast.success('Saved'); onSaved(); onToggle();
     } catch (e) { showAlert('Could not save', errText(e, 'Try again.')); }
     finally { setBusy(false); }
@@ -431,11 +439,17 @@ function BreakdownCard({ p, date, opts, open, onToggle, onSaved, s, c }: any) {
               <Text style={s.tiny}>Goal</Text>
               <TextInput value={goal} onChangeText={setGoal} keyboardType="number-pad" style={[s.input, s.numInput]} />
             </View>
-            <View style={s.numBox}>
-              <Text style={s.tiny}>Hit</Text>
-              <TextInput value={vals.hit} onChangeText={(v) => setVals({ ...vals, hit: v })} keyboardType="number-pad" style={[s.input, s.numInput]} />
-            </View>
+            {([['silver', '🥈 Silver'], ['gold', '🥇 Gold'], ['round', '⭕️ Round']] as const).map(([k, label]) => (
+              <View key={k} style={s.numBox}>
+                <Text style={s.tiny}>{label}</Text>
+                <TextInput value={vals[k]} onChangeText={(v) => setVals({ ...vals, [k]: v })} keyboardType="number-pad" style={[s.input, s.numInput]}
+                  accessibilityLabel={label} testID={`bd-${k}`} />
+              </View>
+            ))}
           </View>
+          <Text style={s.muted}>
+            {split ? `Hit ${signups ?? 0} (Silver + Gold). ` : ''}Copy your numbers from Field IQ: Silver £5–£9.99, Gold £10+, and how many took The Round.
+          </Text>
           <Text style={s.label}>Proud of</Text>
           <Chips items={opts?.proud || []} value={proud} onPick={setProud} s={s} c={c} />
           <TextInput value={proud} onChangeText={setProud} placeholder="Or type it" placeholderTextColor={c.textMuted} style={s.input} />
