@@ -5,7 +5,9 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { showAlert } from '../src/utils/showAlert';
+import { toast } from '../src/utils/toast';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors, fonts } from '../src/theme/ThemeContext';
@@ -26,10 +28,38 @@ export default function SectorDayScreen() {
   const params = useLocalSearchParams<{ date?: string; leader?: string }>();
   const date = params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date) ? params.date : todayISO();
   const leader = params.leader || '';
+  const qc = useQueryClient();
   const q = useQuery({ queryKey: ['sector-board', date], queryFn: () => apiService.getSectorBoard(date).then((r) => r.data) });
+  // Delete a sector that isn't finished (a test, or started by mistake).
+  const del = () => showAlert('Delete this sector?', 'The sector, everyone’s set-ups and breakdowns for it and anything drawn on its map that day are deleted. This can’t be undone.', [
+    { text: 'Cancel', style: 'cancel' },
+    { text: 'Delete', style: 'destructive', onPress: async () => {
+      try {
+        await apiService.deleteSector(date, leader);
+        toast.success('Sector deleted');
+        ['sector-days', 'sector-board', 'sector-status', 'sector-day', 'home-area-map', 'my-day'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+        router.replace('/my-sector' as never);
+      } catch (e: any) { showAlert('Could not delete', e?.response?.data?.detail || 'Try again.'); }
+    } },
+  ]);
+  const delBtn = (
+    <Pressable onPress={del} style={s.del} accessibilityRole="button" testID="sector-delete">
+      <Ionicons name="trash-outline" size={16} color={c.red} />
+      <Text style={s.delText}>Delete this sector</Text>
+    </Pressable>
+  );
   if (q.isLoading) return <View style={[s.page, s.center]}><ActivityIndicator color={c.primary} /></View>;
   const sec = (q.data?.sectors || []).find((x: any) => x.leader_id === leader);
-  if (!sec) return <View style={[s.page, s.center]}><Text style={s.muted}>That sector wasn't found.</Text></View>;
+  if (!sec) {
+    // A sector nobody was added to doesn't show on the board, but can still go.
+    const own = leader === String(user?.id || '') || user?.role === 'admin';
+    return (
+      <View style={[s.page, s.center, { gap: 12 }]}>
+        <Text style={s.muted}>No one’s in this sector yet.</Text>
+        {own && delBtn}
+      </View>
+    );
+  }
 
   const me = String(user?.id || '');
   const isAdmin = user?.role === 'admin';
@@ -85,6 +115,8 @@ export default function SectorDayScreen() {
           );
         })}
       </View>
+
+      {!!sec.can_delete && delBtn}
     </ScrollView>
   );
 }
@@ -99,6 +131,8 @@ const styles = (c: any) => StyleSheet.create({
   actions: { flexDirection: 'row', gap: 8 },
   action: { flex: 1, alignItems: 'center', gap: 4, paddingVertical: 12, borderRadius: 14, borderWidth: 1.5, borderColor: c.primary, backgroundColor: c.background },
   actionText: { fontFamily: fonts.bodyBold, fontSize: 13.5, color: c.primary },
+  del: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 14, borderWidth: 1, borderColor: c.red, alignSelf: 'stretch' },
+  delText: { fontFamily: fonts.bodyBold, fontSize: 14, color: c.red },
   card: { backgroundColor: c.background, borderRadius: 16, borderWidth: 1, borderColor: c.border, padding: 14, gap: 8 },
   h: { fontFamily: fonts.bodyBold, fontSize: 15, color: c.text },
   person: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', paddingTop: 6, borderTopWidth: 1, borderTopColor: c.border },

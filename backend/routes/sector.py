@@ -654,6 +654,45 @@ async def sector_days(request: Request, days: int = 7):
                      for iso, rows in out.items()]}
 
 
+async def _deletable(sec: dict) -> bool:
+    """A sector can be deleted (a test, or started by mistake) until its day is
+    finished: no breakdown posted and nothing saved on the worked map."""
+    if sec.get("breakdown_posted_at"):
+        return False
+    done = await db.coverage_marks.count_documents({
+        "office_id": sec.get("office_id"), "date": sec["date"], "status": "confirmed",
+        "$or": [{"sector_leader_id": sec["leader_id"]}, {"sector_leader_id": None, "author_id": sec["leader_id"]}]})
+    return done == 0
+
+
+@router.delete("/sector")
+async def delete_sector(request: Request, date: Optional[str] = None, leader: Optional[str] = None):
+    """Delete a sector that isn't finished: the sector, its set-ups and
+    breakdowns for that day, and anything drawn on its map that day."""
+    user = await get_current_user(request)
+    iso = _clean_date(date)
+    leader_id = str(leader or user["id"])
+    is_admin = (user.get("role") or "").lower() == "admin"
+    if leader_id != str(user["id"]) and not is_admin:
+        raise HTTPException(status_code=403, detail="Only the sector leader or an Admin can delete a sector")
+    sec = await db.sectors.find_one({"office_id": user.get("office_id"), "date": iso, "leader_id": leader_id}, {"_id": 0})
+    if not sec:
+        raise HTTPException(status_code=404, detail="That sector wasn't found")
+    if not await _deletable(sec):
+        raise HTTPException(status_code=400, detail="This sector's day is finished (map saved or breakdown posted), so it can't be deleted")
+    members = [str(m) for m in sec.get("member_ids") or []] + [leader_id]
+    # A person's set-up goes too, unless they're in another sector that day.
+    others = {str(m) async for x in db.sectors.find({"office_id": sec.get("office_id"), "date": iso, "leader_id": {"$ne": leader_id}},
+                                                    {"leader_id": 1, "member_ids": 1})
+              for m in ([x["leader_id"]] + list(x.get("member_ids") or []))}
+    gone = [m for m in dict.fromkeys(members) if m not in others]
+    await db.sector_days.delete_many({"date": iso, "user_id": {"$in": gone}})
+    await db.coverage_marks.delete_many({"office_id": sec.get("office_id"), "date": iso,
+                                         "$or": [{"sector_leader_id": leader_id}, {"sector_leader_id": None, "author_id": leader_id}]})
+    await db.sectors.delete_one({"office_id": sec.get("office_id"), "date": iso, "leader_id": leader_id})
+    return {"deleted": True}
+
+
 @router.post("/sector/breakdown/post")
 async def post_breakdown(request: Request, date: Optional[str] = None):
     """The sector leader posts the breakdown: it's done, and it shows on every
@@ -697,6 +736,8 @@ async def sector_board(request: Request, date: Optional[str] = None):
                     "goal": sg if sg is not None else people_goal, "sector_goal": sg, "people_goal": people_goal, "hit": hit,
                     "postcode": sec.get("postcode") or "", "stats": sector_stats(rows, sg),
                     "breakdown_posted_at": sec.get("breakdown_posted_at"),
+                    "can_delete": (sec["leader_id"] == str(user["id"]) or (user.get("role") or "").lower() == "admin")
+                                  and await _deletable(sec),
                     "whatsapp": {"setup": setup_text(rows, iso, sg, sec.get("postcode") or ""),
                                  "breakdown": breakdown_text(rows, iso, sg, sec.get("postcode") or "")}})
     return {"date": iso, "sectors": out}

@@ -182,3 +182,28 @@ def test_my_averages_and_what_one_sign_up_takes():
     assert a["per_sale"] == {"doors": 30.0, "spoken": 17.5, "pitched": 6.2, "closed": 3.8} and a["per_sale_source"] == "yours"
     none = averages_from([])
     assert none["per_day"] is None and none["per_sale"]["doors"] == 30 and none["per_sale_source"] == "law_of_averages"
+
+
+def test_an_unfinished_sector_can_be_deleted(monkeypatch):
+    import asyncio
+    from mongomock_motor import AsyncMongoMockClient
+    db = AsyncMongoMockClient()["t"]
+    monkeypatch.setattr(sec, "db", db)
+    run = asyncio.run
+    day = sec.today_iso()
+    run(db.sectors.insert_one({"office_id": "o1", "date": day, "leader_id": "lead1", "member_ids": ["lead1", "ba1"]}))
+    run(db.sector_days.insert_many([{"date": day, "user_id": "lead1", "setup": {"goal": 4}},
+                                    {"date": day, "user_id": "ba1", "setup": {"goal": 3}}]))
+    run(db.coverage_marks.insert_one({"office_id": "o1", "date": day, "sector_leader_id": "lead1", "status": "plan"}))
+
+    async def _user(_r):
+        return {"id": "lead1", "name": "Sam Example", "role": "trainee", "office_id": "o1"}
+    monkeypatch.setattr(sec, "get_current_user", _user)
+    assert run(sec.delete_sector(None, date=day))["deleted"]
+    assert run(db.sectors.count_documents({})) == 0 and run(db.sector_days.count_documents({})) == 0
+    assert run(db.coverage_marks.count_documents({})) == 0
+    # Once the map's saved, it stays.
+    run(db.sectors.insert_one({"office_id": "o1", "date": day, "leader_id": "lead1", "member_ids": ["lead1"]}))
+    run(db.coverage_marks.insert_one({"office_id": "o1", "date": day, "sector_leader_id": "lead1", "status": "confirmed"}))
+    with pytest.raises(HTTPException):
+        run(sec.delete_sector(None, date=day))
