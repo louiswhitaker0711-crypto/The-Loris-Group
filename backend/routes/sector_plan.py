@@ -340,6 +340,55 @@ async def remind_tick() -> int:
     return n
 
 
+def previous_field_day(d) -> str:
+    """The last field day before d: Monday looks back to Saturday."""
+    from datetime import timedelta
+    p = d - timedelta(days=1)
+    if p.weekday() == 6:
+        p -= timedelta(days=1)
+    return p.isoformat()
+
+
+@router.get("/sector/recap")
+async def sector_recap(request: Request, date: Optional[str] = None):
+    """The last field day's sectors, to plan the next from: each sector's
+    postcode, goal and hit, its bunny hops, everyone's numbers and breakdown,
+    and every street marked worked that day (all sectors on one map)."""
+    from datetime import date as Date
+    user = await get_current_user(request)
+    role = (user.get("role") or "").lower()
+    office_id = user.get("office_id")
+    iso = _clean_date(date) if date else previous_field_day(_now_uk().date())
+    if role not in ("leader", "admin") and not await can_plan(user, _now_uk().date().isoformat()):
+        raise HTTPException(status_code=403, detail="Coaches and the sector planner see the recap")
+    names = {p["user_id"]: p["name"] for p in await _office_people(office_id)}
+    days = {d["user_id"]: d async for d in db.sector_days.find({"date": iso, "office_id": office_id}, {"_id": 0})}
+    out = []
+    async for sec in db.sectors.find({"office_id": office_id, "date": iso}, {"_id": 0}).sort("leader_name", 1):
+        hop_of = {m: h.get("colour") for h in sec.get("hops") or [] for m in h.get("member_ids") or []}
+        members = list(dict.fromkeys([sec["leader_id"], *(sec.get("member_ids") or [])]))
+        people = []
+        for m in members:
+            bd = (days.get(m) or {}).get("breakdown") or {}
+            su = (days.get(m) or {}).get("setup") or {}
+            people.append({"user_id": m, "name": names.get(m) or (days.get(m) or {}).get("user_name") or "",
+                           "hop": hop_of.get(m), "goal": bd.get("goal") if bd.get("goal") is not None else su.get("goal"),
+                           "breakdown": {k: bd.get(k) for k in ("doors", "spoken", "pitched", "closed", "hit", "silver",
+                                                                 "gold", "round", "proud", "change", "note")} if bd else None})
+        hit = sum(int((p["breakdown"] or {}).get("hit") or 0) for p in people)
+        out.append({"leader_id": sec["leader_id"], "leader_name": names.get(sec["leader_id"]) or sec.get("leader_name") or "",
+                    "postcode": sec.get("postcode") or "", "goal": sec.get("goal"), "hit": hit,
+                    "breakdown_posted_at": sec.get("breakdown_posted_at"),
+                    "hops": [{"colour": h.get("colour"), "names": [names.get(m, "") for m in h.get("member_ids") or []]}
+                             for h in sec.get("hops") or []],
+                    "people": people})
+    lines = []
+    async for mk in db.coverage_marks.find({"office_id": office_id, "date": iso, "kind": "done"},
+                                           {"_id": 0, "lines": 1, "sector_leader_id": 1}):
+        lines.extend(mk.get("lines") or [])
+    return {"date": iso, "label": _label(iso), "sectors": out, "lines": lines[:2000]}
+
+
 @router.put("/sector/plan/planner")
 async def set_planner(request: Request, date: Optional[str] = None):
     """The Owner hands today's sector planning to someone (or takes it back)."""

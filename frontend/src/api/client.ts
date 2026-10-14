@@ -1014,6 +1014,7 @@ export const apiService = {
   getSectorDays: (days = 7) => api.get('/sector/days', { params: { days } }),
   deleteSector: (date: string, leader: string) => api.delete('/sector', { params: { date, leader } }),
   getSectorStatus: () => api.get('/sector/status'),
+  getSectorRecap: (date?: string) => api.get('/sector/recap', { params: { date } }),
   getSectorPlan: (date?: string) => api.get('/sector/plan', { params: { date } }),
   saveSectorPlan: (date: string, body: { leader_id: string; postcode: string; goal: number | null; member_ids: string[] }) => api.put('/sector/plan/sector', body, { params: { date } }),
   deleteSectorPlan: (date: string, leader: string) => api.delete('/sector/plan/sector', { params: { date, leader } }),

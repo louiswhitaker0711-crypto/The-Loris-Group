@@ -10,6 +10,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors, fonts } from '../src/theme/ThemeContext';
 import { apiService } from '../src/api/client';
+import { useAuth } from '../src/auth/AuthContext';
 
 const first = (n: string) => (n || '').trim().split(' ')[0] || 'Someone';
 
@@ -18,6 +19,7 @@ export default function MySectorScreen() {
   const s = useMemo(() => styles(c), [c]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { user } = useAuth();
   const q = useQuery({ queryKey: ['sector-days'], queryFn: () => apiService.getSectorDays(7).then((r) => r.data) });
   const st = useQuery({ queryKey: ['sector-status'], queryFn: () => apiService.getSectorStatus().then((r) => r.data), retry: false });
   useFocusEffect(React.useCallback(() => { q.refetch(); }, [])); // eslint-disable-line react-hooks/exhaustive-deps
@@ -33,6 +35,12 @@ export default function MySectorScreen() {
         <Pressable onPress={() => router.push('/sector-plan' as never)} style={s.start} accessibilityRole="button" testID="ms-plan">
           <Ionicons name="compass-outline" size={18} color={c.onPrimary} />
           <Text style={s.startText}>Plan today's sectors</Text>
+        </Pressable>
+      )}
+      {(user?.role === 'leader' || user?.role === 'admin' || !!st.data?.can_plan) && (
+        <Pressable onPress={() => router.push('/sector-recap' as never)} style={s.ghostBtn} accessibilityRole="button" testID="ms-recap">
+          <Ionicons name="reader-outline" size={17} color={c.primary} />
+          <Text style={s.ghostText}>Last field day's recap: map, hops and breakdowns</Text>
         </Pressable>
       )}
       {!inOneToday && (
@@ -75,6 +83,8 @@ const styles = (c: any) => StyleSheet.create({
   posted: { fontFamily: fonts.bodySemibold, fontSize: 12.5, color: c.green },
   start: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 14, backgroundColor: c.primary },
   startText: { fontFamily: fonts.bodyBold, fontSize: 15, color: c.onPrimary },
+  ghostBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, paddingHorizontal: 12, borderRadius: 14, borderWidth: 1, borderColor: c.border, backgroundColor: c.background },
+  ghostText: { fontFamily: fonts.bodySemibold, fontSize: 14, color: c.primary },
   tile: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: c.background, borderRadius: 14, borderWidth: 1, borderColor: c.border, paddingVertical: 14, paddingHorizontal: 16 },
   tileMine: { borderColor: c.primary, borderWidth: 1.5 },
   code: { fontFamily: fonts.display, fontSize: 24, color: c.text },
