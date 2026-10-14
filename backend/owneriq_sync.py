@@ -54,7 +54,18 @@ class OwnerIQError(RuntimeError):
     pass
 
 
+def owneriq_on() -> bool:
+    """The tap. OwnerIQ is used only when its sign-in is set AND
+    OWNERIQ_ENABLED is on (true/1/yes/on). Off by default: the sign-in stays
+    on the host, unused, until OWNERIQ_ENABLED=true is added back. Every
+    sign-in goes through _creds(), so off means no request to OwnerIQ at all."""
+    return (bool((os.getenv("OWNERIQ_EMAIL") or "").strip() and os.getenv("OWNERIQ_PASSWORD"))
+            and (os.getenv("OWNERIQ_ENABLED") or "").strip().lower() in ("1", "true", "yes", "on"))
+
+
 def _creds() -> tuple[str, str]:
+    if not owneriq_on() and (os.getenv("OWNERIQ_EMAIL") and os.getenv("OWNERIQ_PASSWORD")):
+        raise OwnerIQError("OwnerIQ is switched off (set OWNERIQ_ENABLED=true to switch it back on)")
     email = (os.getenv("OWNERIQ_EMAIL") or "").strip()
     password = (os.getenv("OWNERIQ_PASSWORD") or "")
     if not email or not password:
@@ -478,8 +489,8 @@ def aggregate_rows(rows: list[dict], exclude_keys: set[str] | None = None, inclu
 
 async def scheduler_tick() -> None:
     """Hourly job entrypoint — swallow errors so the scheduler keeps running."""
-    if not os.getenv("OWNERIQ_EMAIL") or not os.getenv("OWNERIQ_PASSWORD"):
-        logger.info("OwnerIQ sync skipped: OWNERIQ_EMAIL/OWNERIQ_PASSWORD not set")
+    if not owneriq_on():
+        logger.info("OwnerIQ sync skipped: switched off")
         return
     try:
         await sync_owneriq()

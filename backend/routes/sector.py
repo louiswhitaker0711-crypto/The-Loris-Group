@@ -406,6 +406,32 @@ def nudge_text(setup: dict, now: dict, slot: str) -> tuple[str, str]:
     return title, " · ".join(parts)
 
 
+def plain_nudge_text(setup: dict, slot: str) -> tuple[str, str]:
+    """The check-in without live numbers: the goal, the KPI and the focus."""
+    parts = []
+    if setup.get("goal") is not None:
+        parts.append(f"Goal {setup['goal']}")
+    if setup.get("kpi_metric"):
+        parts.append(f"KPI: {kpi_text(setup)}")
+    if setup.get("focus"):
+        parts.append(f"Focus: {setup['focus']}")
+    title = {"early": "🎯 Check in", "mid": "📊 Halfway check", "late": "⏱️ Last stretch"}[slot]
+    return title, " · ".join(parts)
+
+
+async def field_nudge_on_clock(now: Optional[datetime] = None) -> int:
+    """With OwnerIQ switched off, the check-ins go on the clock instead of
+    after a pull."""
+    from owneriq_sync import owneriq_on
+    if owneriq_on():
+        return 0
+    now = now or datetime.now(APP_TZ)
+    slot = due_slot(now)
+    if not slot or not await _claim_slot(now.date().isoformat(), slot):
+        return 0
+    return await field_nudge_tick(slot, numbers=False)
+
+
 def sector_nudge_text(goal: Optional[int], rows: list, slot: str) -> tuple[str, str]:
     """(title, body) for a sector leader: the sector against its goal, and
     who is furthest behind their own goal. rows: {user_name, goal, hit}."""
@@ -499,11 +525,13 @@ async def field_nudge_after_sync(now: Optional[datetime] = None, require_fresh: 
     return await field_nudge_tick(slot)
 
 
-async def field_nudge_tick(slot: str) -> int:
+async def field_nudge_tick(slot: str, numbers: bool = True) -> int:
+    """numbers=False (OwnerIQ switched off): just the goal, KPI and focus,
+    without "on X", which would always read 0."""
     from core.push import send_push_to_user
     iso = today_iso()
     docs = [d async for d in db.sector_days.find({"date": iso, "setup": {"$ne": None}}, {"_id": 0})]
-    live = await _prefill([d["user_id"] for d in docs], iso) if docs else {}
+    live = await _prefill([d["user_id"] for d in docs], iso) if docs and numbers else {}
     # Say how fresh the numbers are, so a lag in Field IQ reads as one.
     last = await db.owneriq_kpis.find_one({"date": iso}, {"synced_at": 1}, sort=[("synced_at", -1)])
     as_of = ""
@@ -517,18 +545,19 @@ async def field_nudge_tick(slot: str) -> int:
         s = d.get("setup") or {}
         if s.get("goal") is None and not s.get("kpi_metric") and not s.get("focus") and not s.get("positive"):
             continue
-        title, body = nudge_text(s, live.get(d["user_id"]) or {}, slot)
-        if as_of:
+        title, body = nudge_text(s, live.get(d["user_id"]) or {}, slot) if numbers else plain_nudge_text(s, slot)
+        if as_of and numbers:
             body = f"{body} (Field IQ at {as_of})"
         try:
             await send_push_to_user(d["user_id"], title, body, {"type": "field_nudge", "url": "/field-reset"})
             sent += 1
         except Exception as ex:
             logger.warning("field nudge failed for %s: %s", d["user_id"], ex)
-    try:
-        sent += await sector_leader_nudges(slot, iso)
-    except Exception as ex:
-        logger.warning("sector leader nudges failed: %s", ex)
+    if numbers:
+        try:
+            sent += await sector_leader_nudges(slot, iso)
+        except Exception as ex:
+            logger.warning("sector leader nudges failed: %s", ex)
     return sent
 
 

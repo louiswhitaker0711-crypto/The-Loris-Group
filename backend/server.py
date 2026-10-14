@@ -1003,6 +1003,20 @@ async def _startup_work():
         scheduler.add_job(_breakdown_prompt, "cron", day_of_week="mon-fri", hour=20, minute=15,
                           id="breakdown_prompt_weekday", replace_existing=True)
 
+        # OwnerIQ switched off: the field check-ins go on the clock (each slot
+        # once a day), without live numbers.
+        async def _checkins_on_clock():
+            try:
+                from routes.sector import field_nudge_on_clock
+                n = await field_nudge_on_clock()
+                if n:
+                    logger.info(f"field check-ins on the clock: {n} sent")
+            except Exception as ex:
+                logger.error(f"field check-ins on the clock failed: {ex}")
+
+        scheduler.add_job(_checkins_on_clock, "cron", day_of_week="mon-sat", hour="12-19", minute="*/5",
+                          id="field_checkins_clock", replace_existing=True)
+
         scheduler.add_job(
             _field_reset_push,
             "cron",

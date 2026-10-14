@@ -53,7 +53,8 @@ def clean_week(week_start: str | None) -> str:
 
 
 def has_login() -> bool:
-    return bool(os.getenv("OWNERIQ_EMAIL") and os.getenv("OWNERIQ_PASSWORD"))
+    from owneriq_sync import owneriq_on
+    return owneriq_on()
 
 
 def _path(kind: str, ref: str) -> str:

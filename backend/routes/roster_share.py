@@ -162,7 +162,8 @@ async def _pull_comparison() -> dict:
 @router.get("/public/roster/{token}/data")
 async def roster_data(token: str, request: Request):
     _check_token(token, request)
-    if not os.getenv("OWNERIQ_EMAIL") or not os.getenv("OWNERIQ_PASSWORD"):
+    from owneriq_sync import owneriq_on
+    if not owneriq_on():
         return JSONResponse(status_code=503, content={"detail": "OwnerIQ credentials are not configured on the server"})
     try:
         return await _pull_comparison()
