@@ -410,6 +410,15 @@ async def _startup_work():
     except Exception:
         logger.exception("content fixes sweep failed (continuing)")
 
+    # The Inbox keeps one-offs only: clear the everyday pushes from it.
+    try:
+        from core.notify import clear_daily_rows
+        n = await clear_daily_rows()
+        if n:
+            logger.info(f"inbox: cleared {n} everyday notifications")
+    except Exception:
+        logger.exception("inbox clean-up failed (continuing)")
+
     # The Owner's Law of Averages (120 / 70 / 25 pitched / 15 / 4+): once per
     # database, over Campaign Knowledge, impacts, the BA Academy and targets.
     try:

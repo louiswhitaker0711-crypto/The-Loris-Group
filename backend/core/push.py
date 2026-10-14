@@ -193,15 +193,16 @@ async def send_push_to_user(user_id: str, title: str, body: str, data: dict = No
     except Exception as e:
         logger.error(f"send_push_to_user (expo) error for {user_id}: {e}")
 
-    # In-app inbox — every push also lands as a `notifications` row so a user
-    # who missed the banner can still catch up. Same channel-choke-point trick
+    # In-app inbox — one-off pushes also land as a `notifications` row so a user
+    # who missed the banner can still catch up (everyday ones don't: core/notify.py). Same channel-choke-point trick
     # as web push: wiring it here covers every existing trigger. Best-effort.
     try:
-        from core.notify import record_notification
-        await record_notification(
-            user_id, title, body, data=data,
-            office_id=(user or {}).get("office_id"),
-        )
+        from core.notify import inbox_worthy, record_notification
+        if inbox_worthy(data):
+            await record_notification(
+                user_id, title, body, data=data,
+                office_id=(user or {}).get("office_id"),
+            )
     except Exception as e:
         logger.error(f"send_push_to_user (inbox) error for {user_id}: {e}")
 
