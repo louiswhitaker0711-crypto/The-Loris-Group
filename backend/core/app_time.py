@@ -31,3 +31,18 @@ def uk_date(value, year: bool = True) -> str:
     if not isinstance(d, _date):
         return str(value) if value is not None else ""
     return f"{d.day} {d.strftime('%b')}" + (f" {d.year}" if year else "")
+
+
+def next_hourly_run(last_iso, now, every=3600, soonest=60):
+    """When an hourly job should next run after a restart: an hour after its
+    last run, or `soonest` seconds from now if that's already passed. None
+    when there's no usable last run (the scheduler then waits a full hour)."""
+    from datetime import datetime as _dt, timedelta as _td
+    try:
+        last = _dt.fromisoformat(str(last_iso).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    if last.tzinfo is None:
+        return None
+    due = last + _td(seconds=every)
+    return max(due, now + _td(seconds=soonest))

@@ -474,7 +474,7 @@ async def _claim_slot(iso: str, slot: str) -> bool:
     return bool(getattr(r, "upserted_id", None))
 
 
-FRESH_SECONDS = 300   # the pull must have just finished
+FRESH_SECONDS = 600   # the pull (stamped when it starts) must have just run
 
 
 async def field_nudge_after_sync(now: Optional[datetime] = None, require_fresh: bool = False) -> int:
@@ -488,9 +488,13 @@ async def field_nudge_after_sync(now: Optional[datetime] = None, require_fresh: 
         except ValueError:
             return 0
         if not st.get("ok") or (datetime.now(timezone.utc) - at).total_seconds() > FRESH_SECONDS:
+            logger.info("field check-in skipped: OwnerIQ pull %s", "failed" if not st.get("ok") else "not fresh")
             return 0
     slot = due_slot(now)
-    if not slot or not await _claim_slot(now.date().isoformat(), slot):
+    if not slot:
+        return 0
+    if not await _claim_slot(now.date().isoformat(), slot):
+        logger.info("field check-in skipped: the %s check-in already went", slot)
         return 0
     return await field_nudge_tick(slot)
 
