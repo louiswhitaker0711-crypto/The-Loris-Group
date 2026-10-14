@@ -33,7 +33,12 @@ export default function LiveOpsCard() {
   const { user } = useAuth();
   const role = (user?.role || '').toLowerCase();
 
+  // OwnerIQ switched off: nothing live to show, just the way to the sectors.
+  const sw = useQuery({ queryKey: ['owneriq-switch'], queryFn: async () => (await api.get('/owneriq/switch')).data,
+    staleTime: 10 * 60 * 1000, retry: false });
+  const live = !!sw.data?.on;
   const q = useQuery({
+    enabled: live,
     queryKey: ['live-ops-home'],
     // own_office=1 → a super-admin's Home tile shows only their own office
     // (e.g. office A); the hub is where they switch offices / see them all.
@@ -50,6 +55,17 @@ export default function LiveOpsCard() {
   // out (it shows an empty state instead of vanishing). Trainees — who only
   // watch their own team — don't need an empty card cluttering Home.
   if (empty && role === 'trainee') return null;
+  if (!sw.isLoading && !live) {
+    if (role === 'trainee') return null;
+    return (
+      <TouchableOpacity activeOpacity={0.85} style={styles.plainBtn} onPress={() => router.push('/my-sector' as any)} accessibilityRole="button" testID="home-view-sectors">
+        <Ionicons name="grid-outline" size={18} color={colors.primary} />
+        <Text style={styles.plainBtnText}>View sectors</Text>
+        <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+      </TouchableOpacity>
+    );
+  }
+  if (sw.isLoading) return null;
 
   return (
     <TouchableOpacity activeOpacity={0.85} style={styles.wrap} onPress={() => router.push('/live-ops' as any)}>
@@ -125,6 +141,9 @@ export default function LiveOpsCard() {
 }
 
 const createStyles = (c: any) => StyleSheet.create({
+  plainBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 16,
+    borderWidth: 1, borderColor: c.border, backgroundColor: c.background, marginBottom: 12 },
+  plainBtnText: { fontFamily: fonts.bodyBold, fontSize: 15, color: c.primary },
   wrap: { marginBottom: 14 },
   card: { borderRadius: 16, padding: 14 },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
