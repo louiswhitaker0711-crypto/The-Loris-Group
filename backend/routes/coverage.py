@@ -22,7 +22,7 @@ is drawn in the hop's colour as drafts, then confirmed black.
   GET    /api/coverage?south&west&north&east&days=84   marks in view (Coach/Admin)
   POST   /api/coverage                                  save a draft mark-off
   POST   /api/coverage/confirm {date, leader_id?}       sector leader confirms the day
-  POST   /api/coverage/{id}/approve | /decline           sector leader answers a BA's request
+  POST   /api/coverage/{id}/approve | /decline | /replace  sector leader answers a BA's request
                                                         for more streets (kind "request")
   DELETE /api/coverage/{id}                             author, sector leader or Admin
 """
@@ -154,10 +154,22 @@ async def save_coverage(request: Request):
            "kind": kind, "colour": colour,
            "note": " ".join(str(body.get("note") or "").split())[:200],
            "created_at": datetime.now(timezone.utc).isoformat()}
-    await db.coverage_marks.insert_one(dict(doc))
+    if kind == "request":
+        # One request per person per day: a second send adds to the waiting one.
+        waiting = await db.coverage_marks.find_one({"office_id": user.get("office_id"), "date": d.isoformat(),
+                                                    "author_id": str(user["id"]), "status": "requested"}, {"_id": 0})
+        if waiting:
+            merged = ((waiting.get("lines") or []) + lines)[:MAX_LINES]
+            await db.coverage_marks.update_one({"id": waiting["id"]}, {"$set": {
+                "lines": merged, "bbox": _bbox(merged), "created_at": doc["created_at"]}})
+            doc = {**waiting, "lines": merged, "bbox": _bbox(merged)}
+        else:
+            await db.coverage_marks.insert_one(dict(doc))
+    else:
+        await db.coverage_marks.insert_one(dict(doc))
     if kind == "request" and sec and sec.get("leader_id") and sec["leader_id"] != str(user["id"]):
         await _push(sec["leader_id"], f"📍 {(name or 'Someone').split(' ')[0]} wants more streets",
-                    "Open the sector map to approve or decline.", f"/sector-map?date={d.isoformat()}")
+                    "Open the sector map to approve, edit or decline.", f"/sector-map?date={d.isoformat()}")
     return doc
 
 
@@ -187,9 +199,37 @@ async def approve_request(mark_id: str, request: Request):
     await db.coverage_marks.update_one({"id": mark_id}, {"$set": {
         "status": "plan", "kind": "plan", "approved_by": user.get("name") or "",
         "approved_at": datetime.now(timezone.utc).isoformat()}})
-    if m.get("author_id"):
-        await _push(m["author_id"], "✅ More streets approved", "They're on your map now.", f"/sector-map?date={m['date']}")
+    await _tell_hop(m, "✅ More streets approved", "They're on your map now.")
     return {"ok": True}
+
+
+@router.post("/coverage/{mark_id}/replace")
+async def replace_request(mark_id: str, request: Request):
+    """The sector leader redraws a request (their lines replace the BA's) and
+    sends the updated map straight to that bunny hop."""
+    user = await get_current_user(request)
+    m = await _request_for_leader(user, mark_id)
+    lines = clean_lines((await request.json()).get("lines"))
+    if not lines:
+        raise HTTPException(status_code=400, detail="Draw the streets first")
+    await db.coverage_marks.update_one({"id": mark_id}, {"$set": {
+        "lines": lines, "bbox": _bbox(lines), "status": "plan", "kind": "plan",
+        "approved_by": user.get("name") or "", "approved_at": datetime.now(timezone.utc).isoformat(), "edited": True}})
+    await _tell_hop(m, "🗺️ Your map's updated", "Your sector leader has drawn your extra streets. Open the map to see them.")
+    return {"ok": True}
+
+
+async def _tell_hop(m: dict, title: str, body: str) -> None:
+    """The person who asked, and the rest of their bunny hop."""
+    ids = [m["author_id"]] if m.get("author_id") else []
+    if m.get("colour") and m.get("sector_leader_id"):
+        sec = await db.sectors.find_one({"office_id": m.get("office_id"), "date": m["date"],
+                                         "leader_id": m["sector_leader_id"]}, {"_id": 0, "hops": 1})
+        for h in (sec or {}).get("hops") or []:
+            if h.get("colour") == m["colour"]:
+                ids += h.get("member_ids") or []
+    for uid in dict.fromkeys(ids):
+        await _push(uid, title, body, f"/sector-map?date={m['date']}")
 
 
 @router.post("/coverage/{mark_id}/decline")
