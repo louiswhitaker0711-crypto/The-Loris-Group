@@ -37,9 +37,9 @@ import { SUPER_GREEN_WEEK_MIN, GREEN_WEEK_MIN, AMBER_WEEK_MIN, RED_WEEK_MAX } fr
 // 0 red; a day off is a dash. Tap a day to edit it, a Goal or B/E to change
 // it, a team's goal to set it.
 //
-// On a phone there is no table to scroll sideways: PhoneSheet shows the same
-// sections as a list, one card per person (name, goal, total, the seven days
-// as tappable pills, and a line of the rest), then the team's totals.
+// Everyone is one list, a line each, most sign-ups first (the strip on the
+// left is their team's colour); the teams follow underneath as totals, then
+// the office. On a phone it's compact so the whole team fits on a page.
 // ─────────────────────────────────────────────────────────────────────
 
 /** The team for people who aren't in a named team yet (the Owner's own). */
@@ -791,43 +791,8 @@ function BodyContent({ groups, office, colors, isDark, styles, z, w, totalW, sho
       {showMc ? num(formatMoney(t.mc), w.money, styles.totalText) : null}
     </View>
   );
-  return (
-    <>
-          {groups.map((g: Group) => {
-            const tint = g.key === '__no_team__' ? NO_TEAM_TINT : teamColor(g.leader_id || g.team_name);
-            // Dark theme: the pastel pill would read as a paper island floating on
-            // the ink sheet, so the band becomes a tinted ink bar and the pale tone
-            // moves to the type (both are 6-digit hex from teamColors — safe to
-            // concat alpha onto; never onto a theme token).
-            const bandBg = isDark ? tint.border + '26' : tint.pill;
-            const bandText = isDark ? tint.pill : tint.text;
-            const t = tally(g.members);
-            // The goal covers the Coach's whole downline, so it is measured
-            // against that when the server sends it.
-            const hit = g.crew_sales ?? g.total_sales;
-            const canGoal = !!canEditGoal?.(g);
-            return (
-              <View key={g.key}>
-                {/* Team band — sticky under the header on web */}
-                <View style={[styles.teamHeader, stickyTeam, { backgroundColor: bandBg, borderLeftColor: tint.border, width: totalW }]}>
-                  <View style={[styles.teamHeaderLeft, isWebSticky(stickyNameCol) && ({ position: 'sticky', left: 10 } as any)]}>
-                    <Text style={[styles.teamHeaderText, { color: bandText, fontSize: 12.5 * z }]} numberOfLines={1}>{g.team_name}</Text>
-                    {g.leader_name ? (
-                      <Text style={[styles.teamHeaderLeader, { color: bandText, fontSize: 11 * z }]} numberOfLines={1}>led by {firstName(g.leader_name)}</Text>
-                    ) : null}
-                    <View style={[styles.bandChip, { borderColor: bandText }]}>
-                      <Text style={[styles.bandChipText, { color: bandText, fontSize: 10.5 * z }]}>
-                        {g.crew_goal != null ? `${hit} / ${g.crew_goal} goal${hit >= g.crew_goal ? ' ✓' : ''}` : `${g.total_sales} sign-up${g.total_sales === 1 ? '' : 's'}`}
-                      </Text>
-                    </View>
-                    <View style={[styles.bandChip, { borderColor: bandText }]}>
-                      <Text style={[styles.bandChipText, { color: bandText, fontSize: 10.5 * z }]}>{pct(g.total_sales, office.total)} of office</Text>
-                    </View>
-                  </View>
-                </View>
-
-                {/* People */}
-                {g.members.map((e: Entry, idx: number) => {
+  // One person's row (the leader star comes from their team).
+  const personRow = (e: Entry, idx: number, g: Group) => {
                   const isLeader = e.user_id === g.leader_id;
                   const light = trafficLight(e);
                   return (
@@ -870,7 +835,53 @@ function BodyContent({ groups, office, colors, isDark, styles, z, w, totalW, sho
                       {showMc ? num(formatMoney(e.mc_fees || 0), w.money, styles.softText) : null}
                     </View>
                   );
-                })}
+                };
+  // Everyone on one list, most sign-ups first; the teams follow, as totals.
+  const everyone = groups.flatMap((g: Group) => g.members.map((e: Entry) => ({ e, g })))
+    .sort((x: any, y: any) => (y.e.total_sales || 0) - (x.e.total_sales || 0) || (x.e.user_name || '').localeCompare(y.e.user_name || ''));
+  return (
+    <>
+          {everyone.length > 0 && (
+            <View style={[styles.teamHeader, stickyTeam, styles.officeBand, { width: totalW }]}>
+              <View style={[styles.teamHeaderLeft, isWebSticky(stickyNameCol) && ({ position: 'sticky', left: 10 } as any)]}>
+                <Text style={[styles.teamHeaderText, { color: colors.onPrimary, fontSize: 12.5 * z }]}>Everyone</Text>
+                <Text style={[styles.teamHeaderLeader, { color: colors.onPrimary, fontSize: 11 * z }]}>most sign-ups first</Text>
+              </View>
+            </View>
+          )}
+          {everyone.map(({ e, g }: any, idx: number) => personRow(e, idx, g))}
+          {groups.map((g: Group) => {
+            const tint = g.key === '__no_team__' ? NO_TEAM_TINT : teamColor(g.leader_id || g.team_name);
+            // Dark theme: the pastel pill would read as a paper island floating on
+            // the ink sheet, so the band becomes a tinted ink bar and the pale tone
+            // moves to the type (both are 6-digit hex from teamColors — safe to
+            // concat alpha onto; never onto a theme token).
+            const bandBg = isDark ? tint.border + '26' : tint.pill;
+            const bandText = isDark ? tint.pill : tint.text;
+            const t = tally(g.members);
+            // The goal covers the Coach's whole downline, so it is measured
+            // against that when the server sends it.
+            const hit = g.crew_sales ?? g.total_sales;
+            const canGoal = !!canEditGoal?.(g);
+            return (
+              <View key={g.key}>
+                {/* Team band — sticky under the header on web */}
+                <View style={[styles.teamHeader, stickyTeam, { backgroundColor: bandBg, borderLeftColor: tint.border, width: totalW }]}>
+                  <View style={[styles.teamHeaderLeft, isWebSticky(stickyNameCol) && ({ position: 'sticky', left: 10 } as any)]}>
+                    <Text style={[styles.teamHeaderText, { color: bandText, fontSize: 12.5 * z }]} numberOfLines={1}>{g.team_name}</Text>
+                    {g.leader_name ? (
+                      <Text style={[styles.teamHeaderLeader, { color: bandText, fontSize: 11 * z }]} numberOfLines={1}>led by {firstName(g.leader_name)}</Text>
+                    ) : null}
+                    <View style={[styles.bandChip, { borderColor: bandText }]}>
+                      <Text style={[styles.bandChipText, { color: bandText, fontSize: 10.5 * z }]}>
+                        {g.crew_goal != null ? `${hit} / ${g.crew_goal} goal${hit >= g.crew_goal ? ' ✓' : ''}` : `${g.total_sales} sign-up${g.total_sales === 1 ? '' : 's'}`}
+                      </Text>
+                    </View>
+                    <View style={[styles.bandChip, { borderColor: bandText }]}>
+                      <Text style={[styles.bandChipText, { color: bandText, fontSize: 10.5 * z }]}>{pct(g.total_sales, office.total)} of office</Text>
+                    </View>
+                  </View>
+                </View>
 
                 {/* The team's Total row, with its goal */}
                 {totalRow('Total', t, (
@@ -943,9 +954,47 @@ function PhoneSheet({ groups, office, entries, colors, isDark, styles, showMc, c
       </Text>
     </View>
   );
+  // Everyone on one list, a line each, most sign-ups first; the teams follow.
+  const everyone = groups.flatMap((g: Group) => g.members.map((e: Entry) => ({ e, g })))
+    .sort((x: any, y: any) => (y.e.total_sales || 0) - (x.e.total_sales || 0) || (x.e.user_name || '').localeCompare(y.e.user_name || ''));
   return (
     <View>
-      <Text style={styles.pHint}>Tap a day to edit it. Tap Goal to change someone's goal.</Text>
+      <Text style={styles.pHint}>Tap a day to edit it. Tap a name for their goal.</Text>
+      {everyone.length > 0 && (
+        <View style={styles.pSection}>
+          <View style={styles.lRow}>
+            <Text style={[styles.lHead, { flex: 1, textAlign: 'left' }]}>Everyone</Text>
+            {DAYS.map((d, i) => <Text key={i} style={[styles.lHead, styles.lDayW]}>{d.charAt(0)}</Text>)}
+            <Text style={[styles.lHead, styles.lTotW]}>Tot</Text>
+          </View>
+          {everyone.map(({ e, g }: any, idx: number) => {
+            const tint = g.key === '__no_team__' ? NO_TEAM_TINT : teamColor(g.leader_id || g.team_name);
+            const light = trafficLight(e);
+            return (
+              <View key={e.user_id || idx} style={styles.lRow}>
+                <View style={[styles.lTeam, { backgroundColor: tint.border }]} />
+                <TouchableOpacity style={styles.lNameWrap} onPress={() => onRowPress?.(e)} activeOpacity={0.6}
+                  accessibilityLabel={`${e.user_name}: goal ${e.weekly_goal ?? 'not set'}. Tap to change`} testID={`bells-goal-${e.user_id || idx}`}>
+                  {light ? <View style={[styles.lightDot, { backgroundColor: light.color, marginRight: 5 }]} /> : null}
+                  <Text style={styles.lName} numberOfLines={1}>{e.user_name}</Text>
+                  {e.weekly_goal != null ? <Text style={styles.lGoal}>/{e.weekly_goal}</Text> : null}
+                </TouchableOpacity>
+                {(e.days || []).slice(0, 7).map((d: Day, i: number) => {
+                  const look = cellForDay(d, colors, !!isDark);
+                  return (
+                    <TouchableOpacity key={i} style={[styles.lDay, styles.lDayW, look.bg ? { backgroundColor: look.bg } : null]} onPress={() => onCellPress?.(e, i)} activeOpacity={0.6}
+                      accessibilityLabel={`${e.user_name}, ${DAYS_LONG[i]}: ${look.text}. Tap to edit`}>
+                      <Text style={[styles.lDayText, { color: look.fg }]}>{look.text}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+                <Text style={[styles.lTot, styles.lTotW]}>{e.total_sales}</Text>
+              </View>
+            );
+          })}
+        </View>
+      )}
+      {groups.length > 0 && <Text style={styles.lTeamsHead}>Teams</Text>}
       {groups.map((g: Group) => {
         const tint = g.key === '__no_team__' ? NO_TEAM_TINT : teamColor(g.leader_id || g.team_name);
         const bandBg = isDark ? tint.border + '26' : tint.pill;
@@ -969,43 +1018,6 @@ function PhoneSheet({ groups, office, entries, colors, isDark, styles, showMc, c
                 <Text style={[styles.bandChipText, { color: bandText, fontSize: 11 }]}>{pct(g.total_sales, office.total)}</Text>
               </View>
             </View>
-
-            {g.members.map((e: Entry, idx: number) => {
-              const isLeader = e.user_id === g.leader_id;
-              const light = trafficLight(e);
-              return (
-                <View key={e.user_id || idx} style={styles.pCard}>
-                  <View style={styles.pHead}>
-                    {light ? <View style={[styles.lightDot, { backgroundColor: light.color }]} accessibilityLabel={light.label} /> : null}
-                    {isLeader && <Ionicons name="star" size={11} color={colors.primary} style={{ marginRight: 4 }} />}
-                    <Text style={[styles.pName, { fontFamily: isLeader ? fonts.bodyBold : fonts.bodySemibold }]} numberOfLines={2}>{e.user_name}</Text>
-                    <TouchableOpacity onPress={() => onRowPress?.(e)} style={styles.pGoal} hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                      accessibilityLabel={`${e.user_name}'s goal: ${e.weekly_goal ?? 'not set'}. Tap to change`} testID={`bells-goal-${e.user_id || idx}`}>
-                      <Text style={styles.pGoalText}>{e.weekly_goal != null ? `Goal ${e.weekly_goal}` : 'Set goal'}</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.pTot}>{e.total_sales}</Text>
-                  </View>
-                  <View style={styles.pPills}>
-                    {(e.days || []).slice(0, 7).map((d: Day, i: number) => {
-                      const look = cellForDay(d, colors, !!isDark);
-                      return (
-                        <TouchableOpacity key={i} style={[styles.pPill, look.bg ? { backgroundColor: look.bg, borderColor: 'transparent' } : null]} onPress={() => onCellPress?.(e, i)} activeOpacity={0.6}
-                          accessibilityLabel={`${DAYS_LONG[i]}: ${look.text}. Tap to edit`}>
-                          <Text style={styles.pPillDay}>{DAYS[i].charAt(0)}</Text>
-                          <Text style={[styles.pPillNum, { color: look.fg }]}>{look.text}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                  <Text style={styles.pMeta} numberOfLines={2}>
-                    {[e.coach_name ? `Coach ${firstName(e.coach_name)}` : null, e.stage_label ? `Stage ${e.stage_label}` : null,
-                      e.last_week_total != null ? `LW ${e.last_week_total}` : null, e.break_even != null ? `B/E ${e.break_even}` : null,
-                      `P/A ${e.piece_average.toFixed(1)}`, `BA fees ${formatMoney(e.earnings || 0)}`,
-                      showMc ? `MC ${formatMoney(e.mc_fees || 0)}` : null].filter(Boolean).join('  ·  ')}
-                  </Text>
-                </View>
-              );
-            })}
 
             {summary('Team total', t, (
               <TouchableOpacity disabled={!canGoal} onPress={() => onEditGoal?.(g)} style={styles.pGoal} hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
@@ -1102,6 +1114,18 @@ const createStyles = (colors: any) => StyleSheet.create({
   pHint: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, marginBottom: 8, marginLeft: 2 },
   pSection: { marginBottom: 14, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, overflow: 'hidden' },
   pBand: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44, paddingHorizontal: 12, paddingVertical: 7, borderLeftWidth: 4, borderLeftColor: 'transparent' },
+  lRow: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 6, paddingVertical: 2, borderTopWidth: 1, borderTopColor: colors.border, minHeight: 30 },
+  lHead: { fontFamily: fonts.bodyBold, fontSize: 10.5, color: colors.textMuted, textAlign: 'center' },
+  lTeam: { width: 3, alignSelf: 'stretch', borderRadius: 2, marginRight: 3 },
+  lNameWrap: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', paddingVertical: 4 },
+  lName: { flexShrink: 1, fontFamily: fonts.bodySemibold, fontSize: 12.5, color: colors.text },
+  lGoal: { fontFamily: fonts.body, fontSize: 11, color: colors.textMuted, marginLeft: 2 },
+  lDayW: { width: 25 },
+  lTotW: { width: 28 },
+  lDay: { height: 24, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
+  lDayText: { fontFamily: fonts.bodyBold, fontSize: 11.5 },
+  lTot: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.text, textAlign: 'center' },
+  lTeamsHead: { fontFamily: fonts.bodyBold, fontSize: 12, letterSpacing: 0.6, textTransform: 'uppercase', color: colors.textMuted, marginTop: 14, marginBottom: 4, paddingHorizontal: 4 },
   pCard: { paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1, borderTopColor: colors.border },
   pHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   pName: { flex: 1, fontSize: 14.5, color: colors.text },
