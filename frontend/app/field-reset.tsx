@@ -52,6 +52,7 @@ export default function FieldResetScreen() {
       const r = await apiService.saveMyFieldReset({ more_signups: more, kpi, focus });
       setText(r.data.whatsapp_text);
       qc.invalidateQueries({ queryKey: ['field-reset-team'] });
+      qc.invalidateQueries({ queryKey: ['reset-board'] });
       toast.success('Reset saved');
       return r.data.whatsapp_text as string;
     } catch (e) { showAlert('Could not save', errText(e, 'Try again.')); return null; }
