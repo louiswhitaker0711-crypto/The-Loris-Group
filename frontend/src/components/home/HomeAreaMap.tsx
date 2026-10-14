@@ -32,6 +32,7 @@ export default function HomeAreaMap() {
 
   const box = useRef<View>(null);
   const map = useRef<any>(null);
+  const roRef = useRef<ResizeObserver | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
@@ -41,12 +42,13 @@ export default function HomeAreaMap() {
       const el = box.current as unknown as HTMLElement | null;
       if (dead || !el) return;
       if (map.current) { map.current.remove(); map.current = null; }
+      roRef.current?.disconnect();
       const m = L.map(el, { zoomControl: false, attributionControl: true, dragging: false, touchZoom: false,
         scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false });
       // Place the map on their area FIRST: Leaflet can't draw lines on a map
       // that doesn't know where it's looking yet.
       const pts = plans.flatMap((p) => p.lines || []).flat();
-      m.fitBounds(L.latLngBounds(pts), { padding: [18, 18], maxZoom: 18 });
+      m.fitBounds(L.latLngBounds(pts), { padding: [18, 18], maxZoom: 17 });
       L.tileLayer(OSM_TILES, { maxZoom: 19, attribution: OSM_ATTRIBUTION }).addTo(m);
       if (d?.shape?.geometry) {
         L.geoJSON(d.shape.geometry, { interactive: false, style: { color: c.primary, weight: 1.5, fillOpacity: 0.04 } }).addTo(m);
@@ -66,12 +68,29 @@ export default function HomeAreaMap() {
       }
       map.current = m;
       setFailed(false);
-      // Once the card has its final size, zoom to their streets again.
-      setTimeout(() => { m.invalidateSize(); m.fitBounds(L.latLngBounds(pts), { padding: [18, 18], maxZoom: 18 }); }, 250);
+      // Home lays out after the map is made (cards above it load in), so the
+      // map can start at the wrong size and draw one grey tile. Whenever the
+      // card's size changes, re-measure and zoom back to their streets.
+      const refit = () => {
+        if (!map.current || map.current !== m) return;
+        m.invalidateSize();
+        m.fitBounds(L.latLngBounds(pts), { padding: [18, 18], maxZoom: 17 });
+      };
+      [150, 600, 1500].forEach((t) => setTimeout(refit, t));
+      if (typeof ResizeObserver !== 'undefined') {
+        let last = '';
+        const ro = new ResizeObserver(() => {
+          const r = el.getBoundingClientRect();
+          const key = `${Math.round(r.width)}x${Math.round(r.height)}`;
+          if (key !== last && r.width > 0) { last = key; refit(); }
+        });
+        ro.observe(el);
+        roRef.current = ro;
+      }
     }).catch(() => setFailed(true));
     return () => { dead = true; };
   }, [show, q.dataUpdatedAt]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => () => { if (map.current) { map.current.remove(); map.current = null; } }, []);
+  useEffect(() => () => { roRef.current?.disconnect(); if (map.current) { map.current.remove(); map.current = null; } }, []);
 
   if (!show) return null;
   const done = marks.filter((m) => !m.other && m.status === 'draft' && (!mine || m.colour === mine)).length;
