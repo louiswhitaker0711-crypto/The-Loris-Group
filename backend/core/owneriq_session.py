@@ -280,8 +280,11 @@ async def retry_password() -> dict:
 
 
 async def mark_ok() -> None:
-    """A call succeeded: note it (keeps last_ok_at fresh)."""
-    await _write({"last_ok_at": _now_iso()})
+    """A call succeeded: note it (keeps last_ok_at fresh). Best-effort."""
+    try:
+        await _write({"last_ok_at": _now_iso()})
+    except Exception:
+        pass
 
 
 async def alert_tick() -> int:
