@@ -13,6 +13,8 @@ import { dayBandText } from '../../../utils/dayBands';
 import { APP_LOCALE, APP_TZ } from '../../../utils/appTime';
 
 const STEPS = [['doors', 'doors'], ['spoken', 'spoken'], ['pitched', 'pitched'], ['closed', 'closes']] as const;
+// What a sign-up (or the goal) takes: no doors, since the team works the doors in laps.
+const NEED = STEPS.filter(([k]) => k !== 'doors');
 const r0 = (n: number) => Math.round(n);
 
 export default function MyDayCard() {
@@ -71,14 +73,14 @@ export default function MyDayCard() {
       <View style={s.box}>
         <Text style={s.boxTitle}>One sign-up takes you</Text>
         <Text style={s.big}>
-          {STEPS.map(([k, label]) => `${r0(per[k])} ${label}`).join(' · ')}
+          {NEED.map(([k, label]) => `${r0(per[k])} ${label}`).join(' · ')}
         </Text>
         <Text style={s.small}>{av.per_sale_source === 'yours' ? `From your last ${av.days} field days.` : 'Law of Averages, until you have sign-ups on Field IQ.'}</Text>
       </View>
 
       <View style={s.box}>
         <Text style={s.boxTitle}>{left > 0 ? `Still to go for your goal: ${left} more` : 'Goal hit 🎉 go for one more'}</Text>
-        <Text style={s.big}>{STEPS.map(([k, label]) => `${r0(per[k] * Math.max(left, 1))} ${label}`).join(' · ')}</Text>
+        <Text style={s.big}>{NEED.map(([k, label]) => `${r0(per[k] * Math.max(left, 1))} ${label}`).join(' · ')}</Text>
       </View>
 
       {day && (
