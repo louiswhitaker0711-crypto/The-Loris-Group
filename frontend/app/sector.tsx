@@ -89,7 +89,14 @@ export default function SectorScreen() {
           : 'Doors / spoken / pitched / closed and sign-ups come in from OwnerIQ and Bells. Add what they’re proud of and what they’ll change.'}
       </Text>
 
-      {(!!q.data?.can_manage || params.start === '1') && (
+      {!!q.data?.sector?.planned_by && mode === 'setup' && (
+        <View style={s.card}>
+          <Text style={s.h}>🧭 Planned this morning</Text>
+          <Text style={s.muted}>{q.data.sector.planned_by.split(' ')[0]} planned your sector{q.data.sector.postcode ? ` in ${q.data.sector.postcode}` : ''}. You can set the sector goal; ask the sector planner to change the postcode or who's in it.</Text>
+        </View>
+      )}
+
+      {(!!q.data?.can_manage || params.start === '1') && !q.data?.sector?.planned_by && (
         <SectorPicker key={date + String(q.data?.sector?.member_ids?.length || 0)} date={date}
           current={q.data?.sector?.member_ids || null}
           startOpen={params.start === '1' || (!q.isLoading && !q.data?.sector && mode === 'setup')}
@@ -98,7 +105,7 @@ export default function SectorScreen() {
 
       {!!q.data?.can_manage && !!q.data?.sector && mode === 'setup' && (
         <SectorGoal key={date + String(q.data.sector.goal ?? '') + (q.data.sector.postcode || '')} date={date}
-          current={q.data.sector.goal ?? null} currentPostcode={q.data.sector.postcode || ''}
+          current={q.data.sector.goal ?? null} currentPostcode={q.data.sector.postcode || ''} planned={!!q.data.sector.planned_by}
           suggested={people.reduce((a, p) => a + (p.setup?.goal || 0), 0)} onSaved={() => q.refetch()} s={s} c={c} />
       )}
 
@@ -184,7 +191,7 @@ function PostBreakdown({ date, postedAt, missing, onPosted, s, c }: { date: stri
   );
 }
 
-function SectorGoal({ date, current, currentPostcode, suggested, onSaved, s, c }: { date: string; current: number | null; currentPostcode: string; suggested: number; onSaved: () => void; s: any; c: any }) {
+function SectorGoal({ date, current, currentPostcode, planned, suggested, onSaved, s, c }: { date: string; current: number | null; currentPostcode: string; planned?: boolean; suggested: number; onSaved: () => void; s: any; c: any }) {
   const [goal, setGoal] = useState(current != null ? String(current) : '');
   const [postcode, setPostcode] = useState(currentPostcode);
   const [busy, setBusy] = useState(false);
@@ -200,9 +207,11 @@ function SectorGoal({ date, current, currentPostcode, suggested, onSaved, s, c }
     <View style={s.card}>
       <Text style={s.h}>📍 Your sector today</Text>
       <Text style={s.label}>Postcode</Text>
-      <TextInput value={postcode} onChangeText={(v) => setPostcode(v.toUpperCase())} autoCapitalize="characters" maxLength={10}
-        placeholder="LS6 1AB" placeholderTextColor={c.textMuted} style={[s.input, { width: 160 }]} accessibilityLabel="Postcode" />
-      <AreaCheck postcode={postcode} s={s} c={c} />
+      {planned
+        ? <Text style={s.h}>{currentPostcode || 'No postcode yet'}</Text>
+        : <TextInput value={postcode} onChangeText={(v) => setPostcode(v.toUpperCase())} autoCapitalize="characters" maxLength={10}
+            placeholder="LS6 1AB" placeholderTextColor={c.textMuted} style={[s.input, { width: 160 }]} accessibilityLabel="Postcode" />}
+      {!planned && <AreaCheck postcode={postcode} s={s} c={c} />}
       {currentPostcode
         ? <SectorMap key={currentPostcode} date={date} />
         : <Text style={s.muted}>Save the postcode to open the sector map.</Text>}

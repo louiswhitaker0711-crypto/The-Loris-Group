@@ -19,6 +19,7 @@ export default function MySectorScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const q = useQuery({ queryKey: ['sector-days'], queryFn: () => apiService.getSectorDays(7).then((r) => r.data) });
+  const st = useQuery({ queryKey: ['sector-status'], queryFn: () => apiService.getSectorStatus().then((r) => r.data), retry: false });
   useFocusEffect(React.useCallback(() => { q.refetch(); }, [])); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (q.isLoading) return <View style={[s.page, s.center]}><ActivityIndicator color={c.primary} /></View>;
@@ -28,6 +29,12 @@ export default function MySectorScreen() {
 
   return (
     <ScrollView style={s.page} contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 40 }]}>
+      {!!st.data?.can_plan && (
+        <Pressable onPress={() => router.push('/sector-plan' as never)} style={s.start} accessibilityRole="button" testID="ms-plan">
+          <Ionicons name="compass-outline" size={18} color={c.onPrimary} />
+          <Text style={s.startText}>Plan today's sectors</Text>
+        </Pressable>
+      )}
       {!inOneToday && (
         <Pressable onPress={() => router.push('/sector?start=1' as never)} style={s.start} accessibilityRole="button" testID="ms-start">
           <Ionicons name="rocket-outline" size={18} color={c.onPrimary} />

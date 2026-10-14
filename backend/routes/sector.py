@@ -596,6 +596,9 @@ async def save_my_sector(request: Request, date: Optional[str] = None):
     members = [i for i in dict.fromkeys(wanted) if i in valid]
     if not members:
         raise HTTPException(status_code=400, detail="Nobody from your office in that list")
+    planned = await _sector_of_leader(str(user["id"]), iso)
+    if planned and planned.get("planned_by"):
+        raise HTTPException(status_code=403, detail="Your sector was planned this morning: ask the sector planner to change who's in it")
     await db.sectors.update_many({"office_id": user.get("office_id"), "date": iso, "leader_id": {"$ne": str(user["id"])}},
                                  {"$pull": {"member_ids": {"$in": members}}})
     now = datetime.now(timezone.utc).isoformat()
@@ -617,8 +620,9 @@ async def save_sector_goal(request: Request, date: Optional[str] = None):
     body = await request.json()
     raw = body.get("goal")
     goal = None if raw in (None, "") else _int(raw, 0, 200)
-    await db.sectors.update_one({"leader_id": str(user["id"]), "date": iso},
-                                {"$set": {"goal": goal, "postcode": clean_postcode(body.get("postcode"))}})
+    # A sector planned in the morning keeps its postcode: its leader sets the goal.
+    upd = {"goal": goal} if sec.get("planned_by") else {"goal": goal, "postcode": clean_postcode(body.get("postcode"))}
+    await db.sectors.update_one({"leader_id": str(user["id"]), "date": iso}, {"$set": upd})
     return await _sector_of_leader(str(user["id"]), iso)
 
 
@@ -837,8 +841,18 @@ async def sector_status(request: Request):
         sector_info = {"leader_name": mine.get("leader_name") or "", "postcode": mine.get("postcode") or "",
                        "goal": mine.get("goal"), "leads": mine.get("leader_id") == str(user["id"]), "members": names}
     mine_day = await db.sector_days.find_one({"date": iso, "user_id": str(user["id"])}, {"breakdown": 1})
+    # Planning the day's sectors: from 09:30 (Saturday 08:30) until the field.
+    from routes.sector_plan import can_plan
+    plan_win = (8 * 60 + 30, 10 * 60) if sat else (9 * 60 + 30, 13 * 60 + 30)
+    planning = not sun and plan_win[0] <= mins < plan_win[1] and await can_plan(user, iso)
+    plan_doc = await db.sector_plan_sends.find_one({"office_id": user.get("office_id"), "date": iso}, {"_id": 0}) or {}
+    plan_sent = bool(plan_doc.get("at"))
+    plan_confirmed = bool(plan_doc.get("confirmed_at"))
+    plan_count = await db.sectors.count_documents({"office_id": user.get("office_id"), "date": iso})
     return {"date": iso, "phase": phase, "is_leader": is_leader, "is_coach": is_coach, "has_sector": bool(members),
             "breakdown_posted_at": (sec or {}).get("breakdown_posted_at"),
+            "planning": planning, "plan_sent": plan_sent, "plan_confirmed": plan_confirmed, "plan_sectors": plan_count,
+            "can_plan": await can_plan(user, iso),
             "my_breakdown_done": bool((mine_day or {}).get("breakdown")),
             "in_sector": in_sector, "sector": sector_info,
             "members": len(members), "setups": setups, "breakdowns": breakdowns,
@@ -874,6 +888,18 @@ async def sector_start_tick() -> int:
     """Field start: every Coach out today is asked to start their sector set-up."""
     from core.push import send_push_to_user
     sent = 0
+    # Sectors planned in the morning: their leaders are asked for the set-ups.
+    async for sec in db.sectors.find({"date": today_iso()}, {"leader_id": 1, "member_ids": 1, "postcode": 1}):
+        members = sec.get("member_ids") or []
+        done = await db.sector_days.count_documents({"date": today_iso(), "user_id": {"$in": members}, "setup": {"$ne": None}})
+        if members and done < len(members):
+            try:
+                await send_push_to_user(sec["leader_id"], f"🎯 Your sector: do the set-ups{' · ' + sec['postcode'] if sec.get('postcode') else ''}",
+                                        "Everyone's goal, KPI and focus, and your map.",
+                                        {"type": "sector_setup", "url": "/sector"})
+                sent += 1
+            except Exception as ex:
+                logger.warning("sector set-up push failed for %s: %s", sec.get("leader_id"), ex)
     for uid in await _leaders_out_today():
         if await _sector_of_leader(uid, today_iso()):
             continue

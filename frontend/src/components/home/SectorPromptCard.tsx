@@ -2,6 +2,7 @@
 // set-up" (or how far through it they are); at the end of the day, "Do your
 // sector's breakdown", then "Post your sector's breakdown", then that it's
 // posted. A BA sees their set-up, and at the end of the day their breakdown.
+// In the morning the sector planner sees "Plan today's sectors".
 // Hidden outside those windows. (GET /sector/status)
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
@@ -24,7 +25,22 @@ export default function SectorPromptCard() {
   if (!data) return null;
 
   let icon: any = null, title = '', sub = '', url = '';
-  if (data.is_leader && data.phase === 'setup') {
+  if (data.planning) {
+    const sat = new Date(`${data.date}T12:00:00Z`).getUTCDay() === 6;
+    const n = data.plan_sectors || 0;
+    icon = 'compass';
+    if (data.plan_sent) {
+      title = `Today's sectors are out · ${n} planned`;
+      sub = 'Tap to change a postcode or move people before the field.';
+    } else if (data.plan_confirmed) {
+      title = `Sectors confirmed · going out at ${sat ? '09:30' : '10:30'}`;
+      sub = 'You can still change them until then.';
+    } else {
+      title = n ? `Plan today's sectors · ${n} planned` : "Plan today's sectors";
+      sub = 'Pick each leader, the postcode and who goes with them, then confirm.';
+    }
+    url = '/sector-plan';
+  } else if (data.is_leader && data.phase === 'setup') {
     if (!data.has_sector && data.is_coach) {
       icon = 'rocket'; title = 'Start your sector set-up';
       sub = "Tick who's in, add the postcode and sector goal, then each person's set-up."; url = '/sector?start=1';
