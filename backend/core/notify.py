@@ -15,6 +15,36 @@ from database import db
 
 logger = logging.getLogger(__name__)
 
+# The Inbox is for one-offs that matter to one person (announcements, team
+# changes, achievements, quality reports, retrain alerts, absence requests).
+# The everyday pushes still reach the phone but don't land in the Inbox.
+DAILY_TYPES = frozenset({
+    "sector_setup",          # set-up, breakdown and sector planning asks
+    "field_nudge",           # field check-ins
+    "field_reset",           # the 6pm reset
+    "primetime_nudge",
+    "weekly_planner_nudge",
+    "schedule",              # timetable reminders
+    "grading_reminder",
+    "orientation_grading",
+    "weekly_bulletins",
+})
+
+
+def inbox_worthy(data: dict = None) -> bool:
+    return ((data or {}).get("type") or "general") not in DAILY_TYPES
+
+
+async def clear_daily_rows() -> int:
+    """Remove the everyday pushes already sitting in Inboxes. Idempotent."""
+    try:
+        r = await db.notifications.delete_many({"type": {"$in": sorted(DAILY_TYPES)}})
+        return int(getattr(r, "deleted_count", 0) or 0)
+    except Exception as e:
+        logger.warning(f"clear_daily_rows failed: {e}")
+        return 0
+
+
 # Per-user cap: after each insert, READ rows beyond the newest READ_CAP are
 # pruned. Unread rows are never pruned — the unread badge must stay honest.
 READ_CAP = 200

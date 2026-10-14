@@ -316,3 +316,20 @@ def test_put_prefs_rejects_unknown_single_key_and_empty_body(monkeypatch):
         asyncio.run(notifications.put_notification_prefs(body, _request(method="PUT")))
     assert exc.value.status_code == 400
     assert coll.updates == []
+
+
+def test_everyday_pushes_reach_the_phone_but_not_the_inbox(monkeypatch):
+    users = _Users({"_id": ObjectId(_UID), "expo_push_token": "ExponentPushToken[x]", "office_id": "office-a"})
+    expo, inbox, web = _wire_push(monkeypatch, users)
+    for t in ("field_nudge", "field_reset", "sector_setup", "schedule"):
+        asyncio.run(push.send_push_to_user(_UID, "T", "B", {"type": t}))
+    assert len(expo) == 4 and len(web) == 4 and inbox == []
+    asyncio.run(push.send_push_to_user(_UID, "T", "B", {"type": "quality"}))
+    assert len(inbox) == 1
+
+
+def test_one_offs_stay_in_the_inbox():
+    from core.notify import inbox_worthy
+    for t in ("broadcast", "badge_earned", "promotion", "quality", "zero_days", "absence_request", None):
+        assert inbox_worthy({"type": t} if t else None)
+    assert not inbox_worthy({"type": "field_nudge"})
