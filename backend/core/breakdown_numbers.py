@@ -64,7 +64,7 @@ def bells_day_writable(day: dict, ours: dict | None, owneriq_val) -> bool:
 
 async def apply_breakdown(user: dict, iso: str, bd: dict) -> None:
     from owneriq_sync import owneriq_on
-    if owneriq_on():
+    if await owneriq_on():
         return
     from owneriq_config import office_pin
     pin = await office_pin(user.get("office_id"), db)

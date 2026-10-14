@@ -22,6 +22,7 @@ import httpx
 
 from database import db
 from owneriq_sync import _login, OWNERIQ_API_BASE as B, _UA, OwnerIQError, ID_LINKED, is_oid
+from owneriq_sync import _client  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -139,7 +140,7 @@ async def perform(cg1_user_id: str | None, action: str, target_stage: int | None
         return {"ok": False, "error": _WRITES_OFF}
     if owneriq_user_id is not None and not clean_oid(owneriq_user_id):
         return {"ok": False, "error": "owneriq_user_id must be a numeric OwnerIQ id."}
-    async with httpx.AsyncClient(timeout=45.0) as client:
+    async with _client(timeout=45.0) as client:
         tok = await _login(client)
         oid = clean_oid(owneriq_user_id) or (await resolve_owneriq_user_id(cg1_user_id, client, tok) if cg1_user_id else None)
         oid = clean_oid(oid)
@@ -230,7 +231,7 @@ async def reparent(cg1_user_id: str, leader_cg1_user_id: str, dry_run: bool = Fa
     """Move a rep under a leader in the OwnerIQ family tree (sets parent_id)."""
     if not dry_run and not writes_enabled():
         return {"ok": False, "error": _WRITES_OFF}
-    async with httpx.AsyncClient(timeout=45.0) as client:
+    async with _client(timeout=45.0) as client:
         tok = await _login(client)
         oid = clean_oid(await resolve_owneriq_user_id(cg1_user_id, client, tok))
         poid = clean_oid(await resolve_owneriq_user_id(leader_cg1_user_id, client, tok))
@@ -290,9 +291,9 @@ async def reconcile(dry_run: bool = True, actor: str | None = None) -> dict:
     OWNERIQ_WRITES_ENABLED."""
     from owneriq_sync import _select_company, _build_rep_resolvers, company_pins, owneriq_on
     from owneriq_config import root_user_ids
-    if not owneriq_on():
+    if not await owneriq_on():
         return {"skipped": "OwnerIQ is switched off"}
-    async with httpx.AsyncClient(timeout=60.0) as client:
+    async with _client(timeout=60.0) as client:
         tok = await _login(client)
         H = {"accept": "application/vnd.api+json", "x-requested-with": "XMLHttpRequest",
              "origin": "https://owner-iq.ai", "user-agent": _UA, "authorization": f"Bearer {tok}"}
@@ -519,7 +520,7 @@ async def delete_team(team_id: str, dry_run: bool = False, actor: str | None = N
     team_id = clean_oid(team_id)
     if not team_id:
         return {"ok": False, "error": "team id must be a numeric OwnerIQ id."}
-    async with httpx.AsyncClient(timeout=45.0) as client:
+    async with _client(timeout=45.0) as client:
         tok = await _login(client)
         result = {"ok": True, "team_id": team_id, "dry_run": dry_run}
         if not dry_run:
@@ -569,7 +570,7 @@ async def create_team(leader_cg1_user_id: str, team_name: str, dry_run: bool = F
     """Create a team in OwnerIQ led by this leader (POST /v3/owner/teams)."""
     if not dry_run and not writes_enabled():
         return {"ok": False, "error": _WRITES_OFF}
-    async with httpx.AsyncClient(timeout=45.0) as client:
+    async with _client(timeout=45.0) as client:
         tok = await _login(client)
         leader_oid = await resolve_owneriq_user_id(leader_cg1_user_id, client, tok)
         mc_id = await _leader_mc_id(leader_cg1_user_id)
@@ -610,7 +611,7 @@ async def rename_team(team_id: str, team_name: str, dry_run: bool = False,
     team_id = clean_oid(team_id)
     if not team_id:
         return {"ok": False, "error": "team id must be a numeric OwnerIQ id."}
-    async with httpx.AsyncClient(timeout=45.0) as client:
+    async with _client(timeout=45.0) as client:
         tok = await _login(client)
         result = {"ok": True, "team_id": team_id, "name": team_name, "dry_run": dry_run}
         if not dry_run:

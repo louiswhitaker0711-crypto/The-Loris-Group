@@ -27,6 +27,7 @@ from core.app_time import APP_TZ
 from database import db
 from owneriq_live import _company_ids, _headers
 from owneriq_sync import ID_LINKED, OWNERIQ_API_BASE, OwnerIQError, _forget_shared_login, _login_cached, is_oid
+from owneriq_sync import _client  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -52,9 +53,9 @@ def clean_week(week_start: str | None) -> str:
     return monday_of(d).isoformat()
 
 
-def has_login() -> bool:
+async def has_login() -> bool:
     from owneriq_sync import owneriq_on
-    return owneriq_on()
+    return await owneriq_on()
 
 
 def _path(kind: str, ref: str) -> str:
@@ -77,7 +78,7 @@ def _fresh(doc: dict, week_start: str) -> bool:
 
 
 async def _fetch(kind: str, ref: str, week_start: str) -> dict:
-    async with httpx.AsyncClient(timeout=45.0) as client:
+    async with _client(timeout=45.0) as client:
         token = await _login_cached(client)
         r = await client.get(f"{OWNERIQ_API_BASE}{_path(kind, ref)}",
                              params={"week_start_on": week_start}, headers=_headers(token))
@@ -103,7 +104,7 @@ async def get_view(kind: str, ref: str, week_start: str, force: bool = False) ->
     doc = await db.owneriq_hub.find_one({"_id": key})
     if doc and not force and _fresh(doc, week_start):
         return {**doc["payload"], "fetched_at": doc["fetched_at"].isoformat(), "stale": False}
-    if has_login():
+    if await has_login():
         try:
             payload = await _fetch(kind, ref, week_start)
             await store(kind, ref, week_start, payload)
@@ -122,9 +123,9 @@ async def company_id() -> str | None:
     if state and state.get("mc_id"):
         return str(state["mc_id"])
     mc = None
-    if has_login():
+    if await has_login():
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with _client(timeout=30.0) as client:
                 ids = await _company_ids(client, await _login_cached(client))
                 mc = ids[0] if ids else None
         except Exception as ex:

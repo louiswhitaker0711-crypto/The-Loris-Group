@@ -35,6 +35,7 @@ from core.app_time import APP_TZ
 from database import db
 from owneriq_live import _company_ids, _headers
 from owneriq_sync import ID_LINKED, OWNERIQ_API_BASE, OwnerIQError, _api_headers, _login, _select_company, company_pins
+from owneriq_sync import _client  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -342,7 +343,7 @@ async def sync_performance(weeks: int = 2, bells_weeks: int = 1) -> dict:
     today = datetime.now(APP_TZ).date()
     this_monday = monday_of(today)
     out: dict = {"weeks": []}
-    async with httpx.AsyncClient(timeout=60.0) as client:
+    async with _client(timeout=60.0) as client:
         token = await _login(client)
         link = await link_users(client, token)
         out["linked_users"] = len(link)
@@ -383,7 +384,7 @@ async def sync_performance(weeks: int = 2, bells_weeks: int = 1) -> dict:
 
 async def scheduler_tick() -> None:
     from owneriq_sync import owneriq_on
-    if not owneriq_on():
+    if not await owneriq_on():
         return
     try:
         res = await sync_performance()

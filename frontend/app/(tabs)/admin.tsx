@@ -397,6 +397,7 @@ export default function AdminScreen() {
     usesExternalBadgeMaker
       ? { key: 'badges', icon: 'ribbon-outline', title: 'Badges', sub: 'Opens your badge maker in a new tab', testID: 'admin-badges', onPress: openBadgeMaker }
       : { key: 'badges', icon: 'ribbon-outline', title: 'Badges', sub: 'Make, edit and print ID badges', testID: 'admin-badges', onPress: () => router.push('/badges' as any) },
+    ...(isSuperAdmin ? [{ key: 'owneriq', icon: 'flash-outline' as const, title: 'OwnerIQ', sub: 'Reconnect the OwnerIQ data feed', onPress: () => router.push('/owneriq-connect' as any) }] : []),
     ...(isSuperAdmin ? [{ key: 'restore', icon: 'library-outline' as const, title: 'Restore Manual + Modules', sub: 'Put back anything missing', onPress: restoreBundle }] : []),
   ];
 

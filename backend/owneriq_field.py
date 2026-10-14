@@ -45,9 +45,9 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def has_login() -> bool:
+async def has_login() -> bool:
     from owneriq_sync import owneriq_on
-    return owneriq_on()
+    return await owneriq_on()
 
 
 async def _pins_for(date_iso: str, cache: dict) -> dict[str, str]:
@@ -112,7 +112,7 @@ async def _harvest(date_iso: str) -> dict:
 async def tick() -> dict:
     """One pass: fetch what's due (today, else one missing past day), then build."""
     out: dict = {"fetched": None, "built": 0}
-    if has_login():
+    if await has_login():
         now_uk = datetime.now(APP_TZ)
         today = now_uk.date()
         state = await db.owneriq_sync_state.find_one({"_id": _STATE_ID}) or {}

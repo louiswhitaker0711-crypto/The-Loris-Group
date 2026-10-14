@@ -22,6 +22,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import httpx
+from owneriq_sync import _client  # noqa: E402
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
@@ -92,7 +93,7 @@ async def _pull_comparison() -> dict:
     offices = []
     hdrs_extra = {"accept": "application/vnd.api+json", "x-requested-with": "XMLHttpRequest",
                   "origin": "https://owner-iq.ai", "user-agent": _UA}
-    async with httpx.AsyncClient(timeout=60.0) as client:
+    async with _client(timeout=60.0) as client:
         tok = await _login(client)
         H = {**hdrs_extra, "authorization": f"Bearer {tok}"}
         pins = await company_pins(client, tok)
@@ -163,7 +164,7 @@ async def _pull_comparison() -> dict:
 async def roster_data(token: str, request: Request):
     _check_token(token, request)
     from owneriq_sync import owneriq_on
-    if not owneriq_on():
+    if not await owneriq_on():
         return JSONResponse(status_code=503, content={"detail": "OwnerIQ credentials are not configured on the server"})
     try:
         return await _pull_comparison()

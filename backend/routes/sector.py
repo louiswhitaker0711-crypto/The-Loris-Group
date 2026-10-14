@@ -441,7 +441,7 @@ async def field_nudge_on_clock(now: Optional[datetime] = None) -> int:
     """With OwnerIQ switched off, the check-ins go on the clock instead of
     after a pull."""
     from owneriq_sync import owneriq_on
-    if owneriq_on():
+    if await owneriq_on():
         return 0
     now = now or datetime.now(APP_TZ)
     slot = due_slot(now)
@@ -938,9 +938,10 @@ async def sector_my_day(request: Request):
     # last pull before it was turned off — My day just shows the set-up and
     # what the goal takes).
     from owneriq_sync import owneriq_on
-    live = (await _prefill([uid], iso)).get(uid) or {} if owneriq_on() else {}
+    oiq_on = await owneriq_on()
+    live = (await _prefill([uid], iso)).get(uid) or {} if oiq_on else {}
     last = await db.owneriq_kpis.find_one({"date": iso, "cg1_user_id": uid, "source": {"$ne": "breakdown"}},
-                                          {"synced_at": 1}, sort=[("synced_at", -1)]) if owneriq_on() else None
+                                          {"synced_at": 1}, sort=[("synced_at", -1)]) if oiq_on else None
     # This week's focus: what they wrote last week for this week, else this
     # week's scoring focus (Weekly Planner).
     d = now.date()

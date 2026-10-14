@@ -204,7 +204,9 @@ def test_the_tick_refreshes_today_and_fills_in_the_past_a_day_at_a_time(monkeypa
 
     monkeypatch.setattr(owneriq_field, "db", db)
     monkeypatch.setattr(owneriq_field, "datetime", Clock)
-    monkeypatch.setattr(owneriq_field, "has_login", lambda: True)
+    async def _yes():
+        return True
+    monkeypatch.setattr(owneriq_field, "has_login", _yes)
     monkeypatch.setattr(owneriq_field, "_harvest", harvest)
 
     # Before the field day: the past, newest first. Yesterday is the nightly re-settle's.
@@ -225,5 +227,7 @@ def test_the_tick_refreshes_today_and_fills_in_the_past_a_day_at_a_time(monkeypa
     assert _run(owneriq_field.tick())["fetched"]["date"] == "2026-10-08"
     assert walked == ["2026-10-06", "2026-10-05", "2026-10-03", "2026-10-08", "2026-10-02", "2026-10-08"]
     # Without a login (a local run) nothing is fetched.
-    monkeypatch.setattr(owneriq_field, "has_login", lambda: False)
+    async def _no():
+        return False
+    monkeypatch.setattr(owneriq_field, "has_login", _no)
     assert _run(owneriq_field.tick())["fetched"] is None
