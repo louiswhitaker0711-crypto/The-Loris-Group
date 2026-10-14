@@ -34,6 +34,16 @@ export default function SectorDayScreen() {
   const st = useQuery({ queryKey: ['sector-status'], queryFn: () => apiService.getSectorStatus().then((r) => r.data), retry: false });
   const [pcEdit, setPcEdit] = React.useState<string | null>(null);
   const [pcBusy, setPcBusy] = React.useState(false);
+  const [asking, setAsking] = React.useState<string | null>(null);
+  const askMark = async (uid: string) => {
+    setAsking(uid);
+    try {
+      await apiService.askToMarkOff(date, uid);
+      toast.success('Asked: they’ll be reminded until it’s done');
+      qc.invalidateQueries({ queryKey: ['sector-board'] });
+    } catch (e: any) { showAlert('Could not ask', e?.response?.data?.detail || 'Try again.'); }
+    setAsking(null);
+  };
   const savePostcode = async () => {
     if (pcEdit == null) return;
     setPcBusy(true);
@@ -143,6 +153,14 @@ export default function SectorDayScreen() {
             <View key={p.user_id} style={s.person}>
               <Text style={[s.name, p.user_id === me && { color: c.primary }]}>{first(p.user_name)}</Text>
               <Text style={s.line}>{bits.length ? bits.join(' · ') : sec.breakdown_posted_at ? 'No breakdown' : 'No set-up yet'}</Text>
+              {leads && isToday && !sec.map_saved_at && p.user_id !== me && (
+                (sec.mark_requests || []).includes(p.user_id)
+                  ? <Text style={s.asked}>🗺️ Asked to mark off</Text>
+                  : <Pressable onPress={() => askMark(p.user_id)} disabled={asking === p.user_id} style={s.askBtn} accessibilityRole="button" testID={`ask-mark-${p.user_id}`}>
+                      <Ionicons name="map-outline" size={14} color={c.primary} />
+                      <Text style={s.askText}>{asking === p.user_id ? 'Asking…' : 'Ask to mark their streets off'}</Text>
+                    </Pressable>
+              )}
             </View>
           );
         })}
@@ -160,6 +178,9 @@ const styles = (c: any) => StyleSheet.create({
   code: { fontFamily: fonts.display, fontSize: 30, color: c.text },
   muted: { fontFamily: fonts.body, fontSize: 13.5, color: c.textMuted },
   posted: { fontFamily: fonts.bodySemibold, fontSize: 13, color: c.green, marginTop: 2 },
+  asked: { fontFamily: fonts.bodySemibold, fontSize: 12.5, color: c.green, marginTop: 2 },
+  askBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start', paddingVertical: 4, marginTop: 2 },
+  askText: { fontFamily: fonts.bodySemibold, fontSize: 13, color: c.primary },
   pcBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start', paddingVertical: 6, marginTop: 4 },
   pcBtnText: { fontFamily: fonts.bodySemibold, fontSize: 14, color: c.primary },
   pcRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
@@ -174,7 +195,7 @@ const styles = (c: any) => StyleSheet.create({
   delText: { fontFamily: fonts.bodyBold, fontSize: 14, color: c.red },
   card: { backgroundColor: c.background, borderRadius: 16, borderWidth: 1, borderColor: c.border, padding: 14, gap: 8 },
   h: { fontFamily: fonts.bodyBold, fontSize: 15, color: c.text },
-  person: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', paddingTop: 6, borderTopWidth: 1, borderTopColor: c.border },
+  person: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap', paddingTop: 6, borderTopWidth: 1, borderTopColor: c.border },
   name: { fontFamily: fonts.bodySemibold, fontSize: 13.5, color: c.text, width: 80 },
   line: { flex: 1, fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: c.textMuted },
 });

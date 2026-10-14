@@ -579,6 +579,98 @@ async def field_nudge_tick(slot: str, numbers: bool = True) -> int:
     return sent
 
 
+# ── After the field: chase the map and the breakdown until they're done ─────
+# Weekdays every 15 minutes from 20:30 to 22:00; Saturday (no breakdown) map
+# only, 17:30 to 19:00. The sector leader until the map's saved and the
+# breakdown's posted; each person until their own breakdown's in; a BA the
+# leader asked to mark their streets off until they've drawn some (or the
+# leader's saved the map).
+CHASE = {"weekday": ((20, 30), (22, 0)), "sat": ((17, 30), (19, 0))}
+
+
+def in_chase_window(now: datetime) -> bool:
+    if now.weekday() == 6:
+        return False
+    lo, hi = CHASE["sat" if now.weekday() == 5 else "weekday"]
+    return lo <= (now.hour, now.minute) <= hi
+
+
+def chase_text(todo: list[str]) -> tuple[str, str]:
+    """todo: any of 'map', 'post', 'breakdown', 'mark'."""
+    words = {"map": "save your sector's map", "post": "post your sector's breakdown",
+             "breakdown": "your breakdown", "mark": "mark your streets off on the map"}
+    items = [words[t] for t in todo if t in words]
+    if not items:
+        return "", ""
+    title = "🗺️ Mark your map" if todo[0] in ("map", "mark") else "📝 Breakdown"
+    return title, "Still to do: " + " · ".join(items) + "."
+
+
+async def evening_chase_tick(now: Optional[datetime] = None) -> int:
+    from core.push import send_push_to_user
+    now = now or datetime.now(APP_TZ)
+    if not in_chase_window(now):
+        return 0
+    iso = now.date().isoformat()
+    sat = now.weekday() == 5
+    todo: dict[str, list[str]] = {}
+    async for sec in db.sectors.find({"date": iso}, {"_id": 0}):
+        leader = sec["leader_id"]
+        members = list(dict.fromkeys([leader, *(sec.get("member_ids") or [])]))
+        saved = bool(sec.get("map_saved_at")) or bool(await db.coverage_marks.find_one(
+            {"date": iso, "status": "confirmed", "sector_leader_id": leader}, {"_id": 1}))
+        if not saved:
+            todo.setdefault(leader, []).append("map")
+        if not sat and not sec.get("breakdown_posted_at"):
+            todo.setdefault(leader, []).append("post")
+        if not saved:
+            for uid in sec.get("mark_requests") or []:
+                if uid == leader:
+                    continue
+                drew = await db.coverage_marks.find_one({"date": iso, "author_id": uid, "kind": "done"}, {"_id": 1})
+                if not drew:
+                    todo.setdefault(uid, []).append("mark")
+        if not sat:
+            done = {d["user_id"] async for d in db.sector_days.find(
+                {"date": iso, "user_id": {"$in": members},
+                 "breakdown.proud": {"$nin": ["", None]}, "breakdown.change": {"$nin": ["", None]}}, {"user_id": 1})}
+            for uid in members:
+                if uid not in done:
+                    todo.setdefault(uid, []).append("breakdown")
+    sent = 0
+    for uid, items in todo.items():
+        title, body = chase_text(items)
+        if not title:
+            continue
+        url = "/sector?mode=breakdown" if items[0] in ("breakdown", "post") else f"/sector-map?date={iso}"
+        try:
+            await send_push_to_user(uid, title, body, {"type": "field_nudge", "url": url})
+            sent += 1
+        except Exception as ex:
+            logger.warning("evening chase failed for %s: %s", uid, ex)
+    return sent
+
+
+@router.post("/sector/mark-request")
+async def request_mark_off(request: Request, date: Optional[str] = None):
+    """The sector leader asks someone in their sector to mark their streets
+    off on the map: they're told now and chased until they have."""
+    user = await get_current_user(request)
+    iso = _clean_date(date)
+    uid = str((await request.json()).get("user_id") or "")
+    sec = await _sector_of_leader(str(user["id"]), iso)
+    if not sec and (user.get("role") or "").lower() == "admin":
+        sec = await db.sectors.find_one({"date": iso, "office_id": user.get("office_id"), "member_ids": uid}, {"_id": 0})
+    if not sec or uid not in (sec.get("member_ids") or []):
+        raise HTTPException(status_code=403, detail="Only the sector leader can ask someone in their sector")
+    await db.sectors.update_one({"leader_id": sec["leader_id"], "date": iso}, {"$addToSet": {"mark_requests": uid}})
+    from core.push import send_push_to_user
+    await send_push_to_user(uid, f"🗺️ {_first(user.get('name') or '')} asks you to mark your streets off",
+                            "Open today's map, press Mark done and draw over the streets you worked.",
+                            {"type": "field_nudge", "url": f"/sector-map?date={iso}"})
+    return {"ok": True}
+
+
 async def breakdown_prompt_tick() -> int:
     """After the field (20:15 weekdays, 17:15 Saturday): ask everyone who had
     a set-up or was out today to fill in what they're proud of and what
@@ -791,6 +883,7 @@ async def sector_board(request: Request, date: Optional[str] = None):
                     "goal": sg if sg is not None else people_goal, "sector_goal": sg, "people_goal": people_goal, "hit": hit,
                     "postcode": sec.get("postcode") or "", "stats": sector_stats(rows, sg),
                     "breakdown_posted_at": sec.get("breakdown_posted_at"),
+                    "map_saved_at": sec.get("map_saved_at"), "mark_requests": sec.get("mark_requests") or [],
                     "can_delete": (sec["leader_id"] == str(user["id"]) or (user.get("role") or "").lower() == "admin")
                                   and await _deletable(sec),
                     "whatsapp": {"setup": setup_text(rows, iso, sg, sec.get("postcode") or ""),

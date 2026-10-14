@@ -40,7 +40,10 @@ def test_out_today_includes_anyone_with_signs_of_being_out(monkeypatch):
     run(db.sector_days.insert_one({"user_id": str(owner), "date": d.isoformat(), "setup": {"goal": 4}}))
     run(db.owneriq_kpis.insert_one({"cg1_user_id": str(ba_off_but_out), "date": d.isoformat(), "doors_knocked": 12}))
     out = run(fr.out_today(d))
-    assert out == {str(owner), str(ba_in), str(ba_off_but_out), str(coach)}
+    # Nobody counts just for being a BA or Coach: ba_in and coach have no sign of being out.
+    assert out == {str(owner), str(ba_off_but_out)}
+    run(db.bells_entries.insert_one({"user_id": str(ba_in), "week_ending": "2026-10-18", "days": days("in")}))
+    assert str(ba_in) in run(fr.out_today(d))
     # An Admin who's in on Bells today counts without a set-up.
     admin2 = ObjectId()
     run(db.users.insert_one({"_id": admin2, "role": "admin", "name": "Admin Example"}))

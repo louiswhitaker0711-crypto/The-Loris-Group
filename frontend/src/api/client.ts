@@ -1007,6 +1007,7 @@ export const apiService = {
   getSectorRoster: (date: string) => api.get('/sector/roster', { params: { date } }),
   saveMySector: (date: string, memberIds: string[]) => api.put('/sector/sectors', { member_ids: memberIds }, { params: { date } }),
   saveSectorGoal: (date: string, goal: number | null, postcode = '') => api.put('/sector/goal', { goal, postcode }, { params: { date } }),
+  askToMarkOff: (date: string, userId: string) => api.post('/sector/mark-request', { user_id: userId }, { params: { date } }),
   postBreakdown: (date: string) => api.post('/sector/breakdown/post', null, { params: { date } }),
   getSectorBoard: (date: string) => api.get('/sector/board', { params: { date } }),
   getSectorDays: (days = 7) => api.get('/sector/days', { params: { days } }),

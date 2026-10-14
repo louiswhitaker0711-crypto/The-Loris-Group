@@ -1003,6 +1003,20 @@ async def _startup_work():
         scheduler.add_job(_breakdown_prompt, "cron", day_of_week="mon-fri", hour=20, minute=15,
                           id="breakdown_prompt_weekday", replace_existing=True)
 
+        # After the field, every 15 minutes: the map and the breakdown until
+        # they're done (weekdays 20:30–22:00, Saturday map only 17:30–19:00).
+        async def _evening_chase():
+            try:
+                from routes.sector import evening_chase_tick
+                n = await evening_chase_tick()
+                if n:
+                    logger.info(f"evening chase: {n} sent")
+            except Exception as ex:
+                logger.error(f"evening chase failed: {ex}")
+
+        scheduler.add_job(_evening_chase, "cron", day_of_week="mon-sat", hour="17-22", minute="0,15,30,45",
+                          id="evening_chase", replace_existing=True)
+
         # OwnerIQ switched off: the field check-ins go on the clock (each slot
         # once a day), without live numbers.
         async def _checkins_on_clock():

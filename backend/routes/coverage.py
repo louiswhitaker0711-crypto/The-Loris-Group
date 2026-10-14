@@ -272,6 +272,8 @@ async def confirm_coverage(request: Request):
     # requests still waiting) come off once something's been confirmed.
     cleared = 0
     if r.modified_count:
+        await db.sectors.update_one({"office_id": user.get("office_id"), "date": iso, "leader_id": leader},
+                                    {"$set": {"map_saved_at": datetime.now(timezone.utc).isoformat()}})
         d = await db.coverage_marks.delete_many({**{k: v for k, v in q.items() if k != "status"},
                                                  "status": {"$in": ["plan", "requested"]}})
         cleared = d.deleted_count
