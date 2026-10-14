@@ -30,6 +30,7 @@ import httpx
 
 from database import db
 from owneriq_sync import OWNERIQ_API_BASE, _UA, _forget_shared_login, _login_cached, OwnerIQError
+from owneriq_sync import _client  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -97,21 +98,21 @@ async def fetch_live_top(client: httpx.AsyncClient, token: str, iso_date: str) -
 
 async def fetch_live_operations(iso_date: str) -> dict:
     """Top-level Live Operations for a day: KPIs + every sector out in the field."""
-    async with httpx.AsyncClient(timeout=45.0) as client:
+    async with _client(timeout=45.0) as client:
         token = await _login_cached(client)
         return await fetch_live_top(client, token, iso_date)
 
 
 async def fetch_sector(sector_id, iso_date: str) -> dict:
     """One team's live detail: hero totals + per-BA rows for the day."""
-    async with httpx.AsyncClient(timeout=45.0) as client:
+    async with _client(timeout=45.0) as client:
         token = await _login_cached(client)
         return await _get(client, token, f"/v3/owner/live_operations/sectors/{sector_id}", iso_date)
 
 
 async def fetch_ba(ba_id, iso_date: str) -> dict:
     """One BA's live detail: hero totals + door-by-door laps for the day."""
-    async with httpx.AsyncClient(timeout=45.0) as client:
+    async with _client(timeout=45.0) as client:
         token = await _login_cached(client)
         return await _get(client, token, f"/v3/owner/live_operations/bas/{ba_id}", iso_date)
 
@@ -211,7 +212,7 @@ async def compile_funnel(sector_ids: list, iso_date: str, force: bool = False) -
         else:
             missing.append(sid)
     if missing:
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with _client(timeout=60.0) as client:
             token = await _login_cached(client)
             for sid in missing:
                 try:
@@ -237,7 +238,7 @@ async def resettle_day(iso_date: str) -> dict:
     entries nobody opened during the day) under one login and rewrites each as
     the settled copy. Idempotent."""
     counts = {"sectors": 0, "bas": 0}
-    async with httpx.AsyncClient(timeout=90.0) as client:
+    async with _client(timeout=90.0) as client:
         token = await _login_cached(client)
         top = await fetch_live_top(client, token, iso_date)
         await _cache_write(f"live:all:{iso_date}", "live", "all", iso_date, top)
@@ -270,7 +271,7 @@ async def resettle_day(iso_date: str) -> dict:
 async def resettle_yesterday_tick() -> None:
     """Nightly scheduler entrypoint — re-settle the day that just ended."""
     from owneriq_sync import owneriq_on
-    if not owneriq_on():
+    if not await owneriq_on():
         logger.info("OwnerIQ resettle skipped: creds not set")
         return
     yday = (datetime.now(APP_TZ).date() - timedelta(days=1)).isoformat()

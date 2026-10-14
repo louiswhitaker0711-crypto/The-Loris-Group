@@ -39,7 +39,7 @@ from database import db
 
 logger = logging.getLogger(__name__)
 
-OWNERIQ_API_BASE = (os.getenv("OWNERIQ_API_BASE") or "https://us.owner-iq.ai").rstrip("/")
+OWNERIQ_API_BASE = (os.getenv("OWNERIQ_API_BASE") or "https://uk.owner-iq.ai").rstrip("/")
 # An owner login can manage several marketing companies (offices). Data is
 # scoped to ONE active company at a time (server-side session state), switched
 # by a side-effect GET /v2/marketing_companies?mc_pin=<pin>. We sync each pin
@@ -54,54 +54,15 @@ class OwnerIQError(RuntimeError):
     pass
 
 
-def owneriq_on() -> bool:
-    """The tap. OwnerIQ is used only when its sign-in is set AND
-    OWNERIQ_ENABLED is on (true/1/yes/on). Off by default: the sign-in stays
-    on the host, unused, until OWNERIQ_ENABLED=true is added back. Every
-    sign-in goes through _creds(), so off means no request to OwnerIQ at all."""
-    return (bool((os.getenv("OWNERIQ_EMAIL") or "").strip() and os.getenv("OWNERIQ_PASSWORD"))
-            and (os.getenv("OWNERIQ_ENABLED") or "").strip().lower() in ("1", "true", "yes", "on"))
-
-
-def _creds() -> tuple[str, str]:
-    if not owneriq_on() and (os.getenv("OWNERIQ_EMAIL") and os.getenv("OWNERIQ_PASSWORD")):
-        raise OwnerIQError("OwnerIQ is switched off (set OWNERIQ_ENABLED=true to switch it back on)")
-    email = (os.getenv("OWNERIQ_EMAIL") or "").strip()
-    password = (os.getenv("OWNERIQ_PASSWORD") or "")
-    if not email or not password:
-        raise OwnerIQError(
-            "OWNERIQ_EMAIL / OWNERIQ_PASSWORD not configured in environment"
-        )
-    return email, password
-
-
 def _to_api_date(iso_date: str) -> str:
     """'2026-07-14' → '14/07/2026' (the format OwnerIQ's between_dates expects)."""
     return datetime.strptime(iso_date, "%Y-%m-%d").strftime("%d/%m/%Y")
 
 
 async def _login(client: httpx.AsyncClient) -> str:
-    email, password = _creds()
-    r = await client.post(
-        f"{OWNERIQ_API_BASE}/v3/owner/sessions",
-        json={"session": {"email": email, "password": password}},
-        headers={
-            "accept": "*/*",
-            "content-type": "application/json",
-            "origin": "https://owner-iq.ai",
-            "referer": "https://owner-iq.ai/",
-            "user-agent": _UA,
-        },
-    )
-    if r.status_code != 200:
-        raise OwnerIQError(f"login failed: HTTP {r.status_code} {r.text[:200]}")
-    try:
-        token = r.json()["data"]["attributes"]["auth_token"]
-    except Exception as ex:
-        raise OwnerIQError(f"login response missing auth_token: {ex}")
-    if not token:
-        raise OwnerIQError("login succeeded but auth_token was empty")
-    return token
+    """The one token source (the session store). Signs in with the password
+    only when MFA isn't on the account and nothing is saved."""
+    return await get_token(client)
 
 
 # Live Operations and the Hub screens read OwnerIQ when someone opens them.
@@ -109,19 +70,41 @@ async def _login(client: httpx.AsyncClient) -> str:
 # reads share one sign-in for up to LOGIN_REUSE_SECONDS. (The scheduled sync,
 # the Performance Hub sync and writes switch the session's active company, so
 # they sign in on their own, once per run.)
+from core.owneriq_session import (  # noqa: E402
+    get_token, available, mark_ok, on_unauthorized as _on_unauth,
+    OwnerIQNeedsReconnect, OwnerIQTransient,
+)
+
+
+async def _on_response(resp):
+    """Clear the saved token when a call carrying it is refused (401)."""
+    if resp.status_code == 401:
+        auth = resp.request.headers.get("authorization") or ""
+        if auth.lower().startswith("bearer "):
+            try:
+                await _on_unauth(auth[7:].strip())
+            except Exception:
+                pass
+
+
+def _client(timeout: float = 45.0, **kw) -> httpx.AsyncClient:
+    """An httpx client that reports 401s to the session store."""
+    return httpx.AsyncClient(timeout=timeout, event_hooks={"response": [_on_response]}, **kw)
+
+
+async def owneriq_on() -> bool:
+    """Is OwnerIQ usable right now? (A saved browser token, or a password while
+    MFA isn't on the account.) False once a reconnect is needed."""
+    return await available()
+
+
 LOGIN_REUSE_SECONDS = 30 * 60
 _shared_login: dict = {"token": None, "at": 0.0}
 _shared_lock = asyncio.Lock()
 
 
 async def _login_cached(client: httpx.AsyncClient) -> str:
-    async with _shared_lock:
-        now = time.monotonic()
-        if _shared_login["token"] and now - _shared_login["at"] < LOGIN_REUSE_SECONDS:
-            return _shared_login["token"]
-        token = await _login(client)
-        _shared_login.update(token=token, at=now)
-        return token
+    return await get_token(client)
 
 
 def _forget_shared_login() -> None:
@@ -342,7 +325,7 @@ async def sync_owneriq(iso_from: str | None = None, iso_to: str | None = None) -
     iso_from = iso_from or (today - timedelta(days=1)).isoformat()
 
     synced_at = datetime.now(timezone.utc).isoformat()
-    async with httpx.AsyncClient(timeout=45.0) as client:
+    async with _client(timeout=45.0) as client:
         token = await _login(client)
         rows = await _fetch_all_companies(client, token, iso_from, iso_to)
 
@@ -393,6 +376,7 @@ async def sync_owneriq(iso_from: str | None = None, iso_to: str | None = None) -
     await db.owneriq_sync_state.update_one(
         {"_id": "last"}, {"$set": summary}, upsert=True
     )
+    await mark_ok()
     logger.info(
         "OwnerIQ sync %s→%s: %d rows, %d matched, %d unmatched",
         iso_from, iso_to, len(rows), matched, len(rows) - matched,
@@ -492,7 +476,7 @@ def aggregate_rows(rows: list[dict], exclude_keys: set[str] | None = None, inclu
 
 async def scheduler_tick() -> None:
     """Hourly job entrypoint — swallow errors so the scheduler keeps running."""
-    if not owneriq_on():
+    if not await owneriq_on():
         logger.info("OwnerIQ sync skipped: switched off")
         return
     try:

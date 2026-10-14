@@ -51,6 +51,7 @@ import { dayTargetChips } from '../../src/utils/dayTargets';
 import PrimetimeCard from '../../src/components/home/PrimetimeCard';
 import SectorPromptCard from '../../src/components/home/SectorPromptCard';
 import ResetBoardCard from '../../src/components/home/ResetBoardCard';
+import OwnerIQBanner from '../../src/components/home/OwnerIQBanner';
 import { Stagger } from '../../src/components/ui/Reveal';
 import { StreakFlame } from '../../src/components/ui/StreakFlame';
 import { useParallaxScroll } from '../../src/components/ui/Parallax';
@@ -514,6 +515,8 @@ export default function HomeScreen() {
   // Home, piece by piece: today first, the rest under "More".
   const pSectorPrompt = (
     <>
+      {/* Owner only: OwnerIQ needs reconnecting. */}
+      <OwnerIQBanner />
       {/* ── Sector set-up / breakdown prompt during field time ── */}
       <SectorPromptCard />
 

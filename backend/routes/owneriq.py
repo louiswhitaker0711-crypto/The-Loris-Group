@@ -26,6 +26,7 @@ from pydantic import BaseModel
 from auth import require_admin, require_super_admin, get_current_user, get_subtree_ids, sees_whole_office
 from database import db
 from owneriq_sync import sync_owneriq, aggregate_rows, OwnerIQError, _build_rep_resolvers, _norm_name, ID_LINKED, is_oid
+from owneriq_sync import _client  # noqa: E402
 from owneriq_live import (
     get_live_operations, get_sector, get_ba, compile_funnel,
     sector_pin, sector_office_name, today_iso,
@@ -102,13 +103,48 @@ async def _scoped_rows(caller: dict, from_date: str, to_date: str, own_office: b
 
 
 
+@router.get("/owneriq/connect")
+async def owneriq_connect_status(request: Request):
+    """The Reconnect screen's state (never the token). Owner only."""
+    await require_super_admin(request)
+    from core.owneriq_session import status
+    return await status()
+
+
+class _PasteBody(BaseModel):
+    token: str
+
+
+@router.post("/owneriq/connect")
+async def owneriq_connect(request: Request, body: _PasteBody):
+    """The Owner pastes a session token (bare, 'Bearer …', or the whole
+    auth-storage value). Verify and save it. Owner only."""
+    await require_super_admin(request)
+    from core.owneriq_session import reconnect
+    from owneriq_sync import _client
+    try:
+        async with _client(timeout=30.0) as client:
+            return await reconnect(client, body.token)
+    except ValueError as ex:
+        raise HTTPException(status_code=400, detail=str(ex))
+
+
+@router.post("/owneriq/connect/retry")
+async def owneriq_connect_retry(request: Request):
+    """False alarm: clear the stopped state and let one password sign-in run
+    (only works while MFA isn't on the account). Owner only."""
+    await require_super_admin(request)
+    from core.owneriq_session import retry_password
+    return await retry_password()
+
+
 @router.get("/owneriq/switch")
 async def owneriq_switch(request: Request):
-    """Whether OwnerIQ is in use (OWNERIQ_ENABLED): screens that only work
+    """Whether OwnerIQ is in use (a working session). Screens that only work
     with it hide while it's off."""
     await get_current_user(request)
     from owneriq_sync import owneriq_on
-    return {"on": owneriq_on()}
+    return {"on": await owneriq_on()}
 
 @router.get("/owneriq/companies")
 async def owneriq_companies(request: Request):
@@ -194,8 +230,13 @@ async def owneriq_sync_now(request: Request, body: SyncBody | None = None):
     if rng is None:
         return {"ok": True, "rows_synced": 0, "note": "That range is in the future; nothing to pull yet."}
     _take_manual_sync_slot()
+    from core.owneriq_session import OwnerIQNeedsReconnect, OwnerIQTransient
     try:
         return await sync_owneriq(*rng)
+    except OwnerIQNeedsReconnect as ex:
+        raise HTTPException(status_code=409, detail=str(ex) or "OwnerIQ needs reconnecting. Open Admin → OwnerIQ.")
+    except OwnerIQTransient as ex:
+        raise HTTPException(status_code=503, detail=str(ex) or "OwnerIQ is busy; try again shortly.")
     except OwnerIQError:
         logger.exception("OwnerIQ manual sync failed")
         raise HTTPException(status_code=502, detail="OwnerIQ sync failed. The server log has the details.")
@@ -875,7 +916,7 @@ async def _owneriq_roster_for(pin: Optional[str]) -> list[dict]:
     import httpx
     from owneriq_import import parse_roster
     from owneriq_sync import _login, _select_company, _api_headers, OWNERIQ_API_BASE
-    async with httpx.AsyncClient(timeout=60.0) as client:
+    async with _client(timeout=60.0) as client:
         token = await _login(client)
         if pin:
             await _select_company(client, token, pin)

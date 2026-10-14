@@ -1510,6 +1510,9 @@ export const apiService = {
 
   // ── Per-user UI prefs (custom bottom tab bar) ───────────────────────
   getOwnerIQSwitch: () => api.get('/owneriq/switch'),
+  getOwnerIQConnect: () => api.get('/owneriq/connect'),
+  connectOwnerIQ: (token: string) => api.post('/owneriq/connect', { token }),
+  retryOwnerIQ: () => api.post('/owneriq/connect/retry', {}),
   getTabPrefs: () =>
     api.get<{ items: Array<{ id: string; visible: boolean }>; updated_at?: string }>(
       '/me/tab-prefs',

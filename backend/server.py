@@ -1017,6 +1017,18 @@ async def _startup_work():
         scheduler.add_job(_evening_chase, "cron", day_of_week="mon-sat", hour="17-22", minute="0,15,30,45",
                           id="evening_chase", replace_existing=True)
 
+        # OwnerIQ needs reconnecting: tell the Owner once (email + Hub banner),
+        # held between 22:00 and 07:00. Owner only.
+        async def _owneriq_alert():
+            try:
+                from core.owneriq_session import alert_tick
+                await alert_tick()
+            except Exception as ex:
+                logger.error(f"OwnerIQ alert failed: {ex}")
+
+        scheduler.add_job(_owneriq_alert, "interval", minutes=15, id="owneriq_alert_tick",
+                          replace_existing=True, max_instances=1, coalesce=True)
+
         # OwnerIQ switched off: the field check-ins go on the clock (each slot
         # once a day), without live numbers.
         async def _checkins_on_clock():
