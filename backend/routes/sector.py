@@ -817,7 +817,7 @@ async def sector_status(request: Request):
     sat = now.weekday() == 5
     sun = now.weekday() == 6
     start_win = (9 * 60 + 30, 12 * 60) if sat else (13 * 60, 16 * 60)
-    end_win = (16 * 60 + 30, 19 * 60) if sat else (19 * 60 + 30, 22 * 60)
+    end_win = (0, 0) if sat else (19 * 60 + 30, 22 * 60)   # no breakdown on a Saturday
     phase = None if sun else "setup" if start_win[0] <= mins < start_win[1] else "breakdown" if end_win[0] <= mins < end_win[1] else None
     is_coach = (user.get("role") or "").lower() in ("leader", "admin")
     sec = await _sector_of_leader(str(user["id"]), iso)
@@ -846,8 +846,8 @@ async def sector_status(request: Request):
 
 
 async def _leaders_out_today() -> list[str]:
-    """Coaches out today (not marked away on Bells), and Admins who coach in
-    the field too: an Admin counts when Bells has them in today."""
+    """Coaches and Admins out today: anyone not marked away on Bells (an
+    Admin coaches in the field too)."""
     now = datetime.now(APP_TZ)
     d = now.date()
     week_ending = (d + timedelta(days=6 - d.weekday())).isoformat()
@@ -865,8 +865,6 @@ async def _leaders_out_today() -> list[str]:
                                   "is_active": {"$ne": False}, "is_demo": {"$ne": True}}, {"_id": 1, "role": 1}):
         uid = str(u["_id"])
         if uid in away:
-            continue
-        if u.get("role") == "admin" and uid not in in_today:
             continue
         out.append(uid)
     return out

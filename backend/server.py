@@ -936,10 +936,9 @@ async def _startup_work():
                           id="sector_start_weekday", replace_existing=True)
         scheduler.add_job(_sector_start, "cron", day_of_week="sat", hour=10, minute=0,
                           id="sector_start_sat", replace_existing=True)
+        # No breakdown on a Saturday (the Owner's office doesn't do one).
         scheduler.add_job(_sector_breakdown, "cron", day_of_week="mon-fri", hour=20, minute=5,
                           id="sector_breakdown_weekday", replace_existing=True)
-        scheduler.add_job(_sector_breakdown, "cron", day_of_week="sat", hour=17, minute=5,
-                          id="sector_breakdown_sat", replace_existing=True)
 
         async def _breakdown_prompt():
             try:
@@ -950,8 +949,6 @@ async def _startup_work():
 
         scheduler.add_job(_breakdown_prompt, "cron", day_of_week="mon-fri", hour=20, minute=15,
                           id="breakdown_prompt_weekday", replace_existing=True)
-        scheduler.add_job(_breakdown_prompt, "cron", day_of_week="sat", hour=17, minute=15,
-                          id="breakdown_prompt_sat", replace_existing=True)
 
         scheduler.add_job(
             _field_reset_push,
