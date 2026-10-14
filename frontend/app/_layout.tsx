@@ -123,6 +123,13 @@ function RootNavigator() {
     }
   }, [user, realUser?.must_change_password, loading, segments]);
 
+  // Keep this device's notification subscription registered with the server.
+  React.useEffect(() => {
+    if (Platform.OS !== 'web' || !user || !realUser || String(user.id) !== String(realUser.id)) return;
+    const { resyncWebPush } = require('../src/utils/webPush');
+    resyncWebPush();
+  }, [user?.id, realUser?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Handle notification taps — route user to the appropriate screen
   React.useEffect(() => {
     if (Platform.OS === 'web') return;
