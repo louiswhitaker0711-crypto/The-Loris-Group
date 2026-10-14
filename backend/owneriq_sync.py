@@ -87,9 +87,18 @@ async def _on_response(resp):
                 pass
 
 
+# OwnerIQ's UK/EU edge (nginx) returns 403 to requests that don't look like its
+# own web app. These two headers are what the app sends; without them the edge
+# blocks us before the token is even checked. (Owner IQ web app 1.6.0.)
+OIQ_CLIENT_HEADERS = {"x-client-app": "owneriq", "x-client-app-version": "1.6.0"}
+
+
 def _client(timeout: float = 45.0, **kw) -> httpx.AsyncClient:
-    """An httpx client that reports 401s to the session store."""
-    return httpx.AsyncClient(timeout=timeout, event_hooks={"response": [_on_response]}, **kw)
+    """An httpx client that sends OwnerIQ's app headers on every request and
+    reports 401s to the session store."""
+    headers = {**OIQ_CLIENT_HEADERS, **(kw.pop("headers", None) or {})}
+    return httpx.AsyncClient(timeout=timeout, headers=headers,
+                             event_hooks={"response": [_on_response]}, **kw)
 
 
 async def owneriq_on() -> bool:
