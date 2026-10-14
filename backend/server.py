@@ -674,6 +674,16 @@ async def _startup_work():
                 await owneriq_scheduler_tick()
             except Exception as ex:
                 logger.error(f"OwnerIQ scheduler tick failed: {ex}")
+            # Straight after the KPI pull (before the slower Performance Hub
+            # pull), in field hours, the set-up check-ins: sent on the numbers
+            # just pulled, and only when this pull worked, so a check-in is
+            # never built on old numbers.
+            try:
+                from routes.sector import field_nudge_after_sync
+                n = await field_nudge_after_sync(require_fresh=True)
+                logger.info(f"field_nudge after sync: {n} sent")
+            except Exception as ex:
+                logger.error(f"field nudge after sync failed: {ex}")
             # Then the Performance Hub (targets, attendance, teams) and the
             # Bells fill for this week, from the KPI rows just pulled.
             try:
@@ -681,16 +691,6 @@ async def _startup_work():
                 await performance_tick()
             except Exception as ex:
                 logger.error(f"OwnerIQ performance tick failed: {ex}")
-            # Then, in field hours, the set-up check-ins: sent now, on the
-            # numbers just pulled, and only when this pull worked, so a
-            # check-in is never built on old numbers.
-            try:
-                from routes.sector import field_nudge_after_sync
-                n = await field_nudge_after_sync(require_fresh=True)
-                if n:
-                    logger.info(f"field_nudge after sync: {n} sent")
-            except Exception as ex:
-                logger.error(f"field nudge after sync failed: {ex}")
             # Then the two-way people sync: changes made in OwnerIQ come into the
             # app, the app's changes go to OwnerIQ (writes only when enabled).
             try:
@@ -703,8 +703,18 @@ async def _startup_work():
 
         # Hourly: one sign-in an hour, so OwnerIQ sees nothing unusual. The
         # field check-ins go out straight after each run, on its numbers.
+        # A deploy restarts the clock, so carry on from the last pull: the next
+        # one is an hour after it (or in a minute, if that's already passed),
+        # not an hour after the restart. No extra sign-ins.
+        _next_pull = None
+        try:
+            from core.app_time import next_hourly_run
+            _last = await db.owneriq_sync_state.find_one({"_id": "last"}, {"synced_at": 1})
+            _next_pull = next_hourly_run((_last or {}).get("synced_at"), datetime.now(timezone.utc))
+        except Exception as ex:
+            logger.warning(f"OwnerIQ next pull time: {ex}")
         scheduler.add_job(_owneriq_job, "interval", hours=1, id="owneriq_sync_tick", replace_existing=True,
-                          max_instances=1, coalesce=True)
+                          max_instances=1, coalesce=True, **({"next_run_time": _next_pull} if _next_pull else {}))
 
         # ── OwnerIQ reconcile (daily 04:30 UK time) ──────────────────────────
         # Keeps OwnerIQ aligned to CG1 (parent/active/leader-stage) for every
