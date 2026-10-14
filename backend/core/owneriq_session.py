@@ -72,7 +72,10 @@ def _blank_token_like(body: str) -> str:
 
 
 async def _read() -> dict:
-    return await db.owneriq_session.find_one({"_id": "session"}) or {}
+    try:
+        return await db.owneriq_session.find_one({"_id": "session"}) or {}
+    except Exception:
+        return {}
 
 
 async def _write(fields: dict) -> None:
