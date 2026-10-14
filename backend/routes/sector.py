@@ -934,8 +934,13 @@ async def sector_my_day(request: Request):
     now = datetime.now(APP_TZ)
     iso = now.date().isoformat()
     uid = str(user["id"])
-    live = (await _prefill([uid], iso)).get(uid) or {}
-    last = await db.owneriq_kpis.find_one({"date": iso, "cg1_user_id": uid}, {"synced_at": 1}, sort=[("synced_at", -1)])
+    # OwnerIQ switched off: no live numbers (any still in the database are the
+    # last pull before it was turned off — My day just shows the set-up and
+    # what the goal takes).
+    from owneriq_sync import owneriq_on
+    live = (await _prefill([uid], iso)).get(uid) or {} if owneriq_on() else {}
+    last = await db.owneriq_kpis.find_one({"date": iso, "cg1_user_id": uid, "source": {"$ne": "breakdown"}},
+                                          {"synced_at": 1}, sort=[("synced_at", -1)]) if owneriq_on() else None
     # This week's focus: what they wrote last week for this week, else this
     # week's scoring focus (Weekly Planner).
     d = now.date()
