@@ -217,7 +217,7 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
     // Open on YOUR area: a BA in a bunny hop lands zoomed in on the streets
     // drawn in their colour; otherwise on the sector.
     if (!placed.current && data.my_colour) {
-      const mine = (data.marks || []).filter((mk: any) => mk.status === 'plan' && mk.colour === data.my_colour)
+      const mine = (data.marks || []).filter((mk: any) => !mk.other && mk.status === 'plan' && mk.colour === data.my_colour)
         .flatMap((mk: any) => mk.lines || []).flat();
       if (mine.length) {
         map.current.fitBounds(L.latLngBounds(mine), { padding: [24, 24], maxZoom: 18 });
@@ -235,13 +235,19 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
       placed.current = true;
     }
     // Planned areas underneath, then today's done lines, then confirmed black on top.
-    const order = (mk: any) => (mk.status === 'plan' ? 0 : mk.status === 'requested' ? 1 : mk.status === 'draft' ? 2 : 3);
+    // Another sector's plan and today's lines lie faint underneath everything.
+    const order = (mk: any) => (mk.other ? -1 : mk.status === 'plan' ? 0 : mk.status === 'requested' ? 1 : mk.status === 'draft' ? 2 : 3);
     const marks = (data.marks || []).slice().sort((a: any, b: any) => order(a) - order(b));
     for (const mk of marks) {
       const when = new Date(mk.date + 'T12:00:00').toLocaleDateString(APP_LOCALE, { weekday: 'short', day: 'numeric', month: 'short' });
       const who = esc(mk.author_name || mk.leader_name || 'Someone');
       let style: any; let title: string;
-      if (mk.status === 'requested') {
+      if (mk.other) {
+        // Another sector in this area today: view only.
+        const plan = mk.status === 'plan';
+        style = { color: '#6b7280', weight: plan ? 7 : 3.5, opacity: plan ? 0.25 : 0.6, dashArray: plan ? undefined : '2 6', lineCap: 'round', lineJoin: 'round' };
+        title = `${esc((mk.other_leader || 'Another').split(' ')[0])}’s sector · ${plan ? 'their planned area' : 'done today'}`;
+      } else if (mk.status === 'requested') {
         style = { color: hopHex(mk.colour, c.primary), weight: 5, opacity: 0.9, dashArray: '8 8', lineCap: 'round', lineJoin: 'round' };
         title = `More streets asked for${mk.colour ? ` · ${esc(hopLabel(mk.colour))}` : ''} (waiting for the sector leader)`;
       } else if (mk.status === 'plan') {
@@ -448,6 +454,9 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
           </View>
         ))}
         <View style={s.key}><View style={[s.swatch, { backgroundColor: '#000' }]} /><Text style={s.small}>Done / worked</Text></View>
+        {(data?.others || []).length > 0 && (
+          <View style={s.key}><View style={[s.swatch, { backgroundColor: '#6b7280', opacity: 0.4, height: 6 }]} /><Text style={s.small}>Also here today: {data.others.map((n: string) => `${n.split(' ')[0]}’s sector`).join(', ')}</Text></View>
+        )}
       </View>
 
       {leads && (hopsOpen || (!hops.length && !endOfDay)) && (

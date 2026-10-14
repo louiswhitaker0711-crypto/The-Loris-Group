@@ -939,14 +939,30 @@ async def sector_map(request: Request, date: Optional[str] = None, leader: Optio
                     "bbox.w": {"$lte": box["e"] + pad}, "bbox.e": {"$gte": box["w"] - pad}})
     elif sec.get("postcode"):
         ors.append({"date": {"$gte": since}, "status": {"$nin": ["draft", "plan", "requested"]}, "district": district_of(sec["postcode"])})
+    # Other sectors working the same area that day: their plan and what
+    # they've marked done so far, shown faintly and view-only.
+    if box:
+        ors.append({"date": iso, "sector_leader_id": {"$nin": [sec["leader_id"], None]}, "status": {"$in": ["plan", "draft"]},
+                    "bbox.s": {"$lte": box["n"]}, "bbox.n": {"$gte": box["s"]},
+                    "bbox.w": {"$lte": box["e"]}, "bbox.e": {"$gte": box["w"]}})
+    elif sec.get("postcode"):
+        ors.append({"date": iso, "sector_leader_id": {"$nin": [sec["leader_id"], None]}, "status": {"$in": ["plan", "draft"]},
+                    "district": district_of(sec["postcode"])})
     q["$or"] = ors
     marks = await db.coverage_marks.find(q, {"_id": 0, "office_id": 0}).sort("date", -1).to_list(800)
     today = Date.fromisoformat(today_iso())
+    other_ids = {m["sector_leader_id"] for m in marks if m.get("sector_leader_id") and m["sector_leader_id"] != sec["leader_id"]
+                 and m.get("status") in ("plan", "draft")}
+    other_names = {p["user_id"]: p["user_name"] for p in await _users_by_ids(list(other_ids))} if other_ids else {}
     for m in marks:
         m["days_ago"] = (today - Date.fromisoformat(m["date"])).days
         m["status"] = m.get("status") or "confirmed"
+        other = m.get("sector_leader_id") not in (None, sec["leader_id"]) and m["status"] in ("plan", "draft")
+        if other:
+            m["other"] = True
+            m["other_leader"] = other_names.get(m.get("sector_leader_id"), "")
         author = m.get("author_id") or m.get("leader_id")
-        m["can_delete"] = is_admin or author == me or (m.get("sector_leader_id") == me)
+        m["can_delete"] = not other and (is_admin or author == me or (m.get("sector_leader_id") == me))
         for k in ("bbox", "author_id", "leader_id", "sector_leader_id"):
             m.pop(k, None)
     members = await _users_by_ids(sec.get("member_ids") or [])
@@ -978,8 +994,9 @@ async def sector_map(request: Request, date: Optional[str] = None, leader: Optio
         "can_confirm": leads or is_admin,
         "can_share": leads,
         "shared": bool(sec.get("map_shared_at")),
-        "drafts": sum(1 for m in marks if m["status"] == "draft"),
+        "drafts": sum(1 for m in marks if m["status"] == "draft" and not m.get("other")),
         "requests": sum(1 for m in marks if m["status"] == "requested"),
+        "others": sorted({m["other_leader"] for m in marks if m.get("other") and m.get("other_leader")}),
         "me": me,
     }
 

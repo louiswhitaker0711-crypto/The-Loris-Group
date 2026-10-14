@@ -27,7 +27,7 @@ export default function HomeAreaMap() {
   const d = q.data;
   const marks: any[] = d?.marks || [];
   const mine: string | null = d?.my_colour || null;
-  const plans = marks.filter((m) => m.status === 'plan' && (!mine || m.colour === mine));
+  const plans = marks.filter((m) => !m.other && m.status === 'plan' && (!mine || m.colour === mine));
   const show = Platform.OS === 'web' && !!d?.sector && plans.length > 0;
 
   const box = useRef<View>(null);
@@ -51,9 +51,11 @@ export default function HomeAreaMap() {
       if (d?.shape?.geometry) {
         L.geoJSON(d.shape.geometry, { interactive: false, style: { color: c.primary, weight: 1.5, fillOpacity: 0.04 } }).addTo(m);
       }
-      const order = (mk: any) => (mk.status === 'plan' ? 0 : mk.status === 'requested' ? 1 : mk.status === 'draft' ? 2 : 3);
+      const order = (mk: any) => (mk.other ? -1 : mk.status === 'plan' ? 0 : mk.status === 'requested' ? 1 : mk.status === 'draft' ? 2 : 3);
       for (const mk of marks.slice().sort((a, b) => order(a) - order(b))) {
-        const style = mk.status === 'plan'
+        const style = mk.other
+          ? { color: '#6b7280', weight: mk.status === 'plan' ? 7 : 3.5, opacity: mk.status === 'plan' ? 0.2 : 0.55 }
+          : mk.status === 'plan'
           ? { color: hopHex(mk.colour), weight: 7, opacity: mine && mk.colour !== mine ? 0.15 : 0.55 }
           : mk.status === 'requested'
             ? { color: hopHex(mk.colour, c.primary), weight: 4, opacity: 0.8, dashArray: '8 8' }
@@ -72,7 +74,7 @@ export default function HomeAreaMap() {
   useEffect(() => () => { if (map.current) { map.current.remove(); map.current = null; } }, []);
 
   if (!show) return null;
-  const done = marks.filter((m) => m.status === 'draft' && (!mine || m.colour === mine)).length;
+  const done = marks.filter((m) => !m.other && m.status === 'draft' && (!mine || m.colour === mine)).length;
   return (
     <Pressable onPress={() => router.push('/sector-map' as never)} style={s.card} accessibilityRole="button"
       accessibilityLabel="Your area today, open the map" testID="home-area-map">
