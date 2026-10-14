@@ -133,14 +133,23 @@ def _headers(token: str | None = None) -> dict:
     return h
 
 
-async def verify(client: httpx.AsyncClient, token: str, base: str | None = None) -> bool:
-    """A cheap authenticated GET: 200 means the token works."""
+async def probe(client: httpx.AsyncClient, token: str, base: str | None = None) -> int | None:
+    """A cheap authenticated GET. Returns the HTTP status (None on a network
+    error). 200 means good; 401/403 means OwnerIQ refused the token; anything
+    else (e.g. the UK server moved the endpoint) is inconclusive."""
     base = base or api_base(await _read())
-    try:
-        r = await client.get(f"{base}/v3/owner/marketing_companies/light_index", headers=_headers(token))
-        return r.status_code == 200
-    except Exception:
-        return False
+    for path in ("/v3/owner/marketing_companies/light_index", "/v3/owner/marketing_companies"):
+        try:
+            r = await client.get(f"{base}{path}", headers=_headers(token))
+        except Exception:
+            return None
+        if r.status_code == 200 or r.status_code in (401, 403):
+            return r.status_code
+    return r.status_code
+
+
+async def verify(client: httpx.AsyncClient, token: str, base: str | None = None) -> bool:
+    return (await probe(client, token, base)) == 200
 
 
 async def _password_sign_in(client: httpx.AsyncClient) -> str:
@@ -268,11 +277,16 @@ async def reconnect(client: httpx.AsyncClient, pasted: str) -> dict:
     base = api_base(await _read())
     resolved = await resolve_api_base(client, email) if email else None
     check_base = resolved or base
-    if not await verify(client, token, check_base):
-        raise ValueError("OwnerIQ didn't accept that token. Sign in again on owner-iq.ai and copy a fresh one.")
-    await _write({"token": token, "source": "browser", "minted_at": _now_iso(), "state": CONNECTED,
-                  "reason": None, "last_ok_at": _now_iso(), "alerted_at": None, "retry_not_before": None,
-                  "api_base": check_base})
+    code = await probe(client, token, check_base)
+    if code in (401, 403):
+        raise ValueError(f"OwnerIQ refused that token ({code}). Sign in again on owner-iq.ai and copy a fresh one.")
+    now = _now_iso()
+    rec = {"token": token, "source": "browser", "minted_at": now, "state": CONNECTED,
+           "reason": None, "alerted_at": None, "retry_not_before": None, "api_base": check_base,
+           "last_status": code}
+    if code == 200:
+        rec["last_ok_at"] = now
+    await _write(rec)
     return await status()
 
 

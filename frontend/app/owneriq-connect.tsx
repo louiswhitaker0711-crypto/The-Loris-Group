@@ -53,6 +53,18 @@ export default function OwnerIQConnectScreen() {
     } catch (e: any) { showAlert('Could not connect', e?.response?.data?.detail || 'Try again with a fresh session.'); }
     setBusy(null);
   };
+  const test = async () => {
+    setBusy('test');
+    try {
+      const r = await apiService.testOwnerIQSync();
+      const n = r.data?.rows_synced ?? 0;
+      toast.success(n ? `Working — pulled ${n} rows` : 'Connected, nothing new to pull right now');
+      ['owneriq-connect', 'owneriq-switch', 'owneriq-banner'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+    } catch (e: any) {
+      showAlert('Test failed', e?.response?.data?.detail || 'OwnerIQ didn’t answer. Try a fresh session.');
+    }
+    setBusy(null);
+  };
   const retry = async () => {
     setBusy('retry');
     try { await apiService.retryOwnerIQ(); toast.success('Trying again'); qc.invalidateQueries({ queryKey: ['owneriq-connect'] }); }
@@ -99,6 +111,12 @@ export default function OwnerIQConnectScreen() {
         </Pressable>
       </View>
 
+      {(d.state === 'connected' || d.has_token) && (
+        <Pressable onPress={test} disabled={busy === 'test'} style={s.testBtn} accessibilityRole="button" testID="owneriq-test-btn">
+          {busy === 'test' ? <ActivityIndicator size="small" color={c.primary} /> : <Ionicons name="pulse-outline" size={16} color={c.primary} />}
+          <Text style={s.testText}>{busy === 'test' ? 'Testing…' : 'Test the connection now'}</Text>
+        </Pressable>
+      )}
       <Pressable onPress={retry} disabled={busy === 'retry'} style={s.ghost} accessibilityRole="button">
         <Text style={s.ghostText}>{busy === 'retry' ? 'Trying…' : 'Try a password sign-in (if the alert was a false alarm)'}</Text>
       </Pressable>
@@ -128,6 +146,8 @@ const styles = (c: any) => StyleSheet.create({
   input: { borderWidth: 1, borderColor: c.border, borderRadius: 10, padding: 12, minHeight: 72, fontFamily: fonts.body, fontSize: 14, color: c.text, backgroundColor: c.surface, textAlignVertical: 'top' },
   btn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: 12, backgroundColor: c.primary },
   btnText: { fontFamily: fonts.bodyBold, fontSize: 15, color: c.onPrimary },
+  testBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: c.primary },
+  testText: { fontFamily: fonts.bodyBold, fontSize: 14.5, color: c.primary },
   ghost: { alignItems: 'center', paddingVertical: 10 },
   ghostText: { fontFamily: fonts.bodySemibold, fontSize: 13.5, color: c.primary, textAlign: 'center' },
   muted: { fontFamily: fonts.body, fontSize: 13.5, lineHeight: 19, color: c.textMuted },
