@@ -37,3 +37,16 @@ def test_team_message_adds_up_and_uses_first_names():
     assert "Going for 3 more as a team" in text
     assert "• Another: going for 1 more · focus on Doors · last lap" in text
     assert "• Example: going for 2 more · focus on Closed" in text
+
+
+def test_reminder_names_who_has_done_it():
+    from datetime import datetime
+    from routes.field_reset import done_names_text, in_reset_window, reminder_text
+    assert done_names_text(["Sam Example"]) == "Sam"
+    assert done_names_text(["Sam A", "Ayo B", "Jo C"]) == "Sam, Ayo and Jo"
+    assert done_names_text(["Sam A", "Ayo B", "Jo C", "Lee D", "Max E"]) == "Sam, Ayo and 3 others"
+    assert reminder_text(["Sam A"])[0] == "🔄 Sam has done their 6pm reset"
+    assert reminder_text(["Sam A", "Ayo B"])[0] == "🔄 Sam and Ayo have done their 6pm reset"
+    assert reminder_text([])[0] == "🔄 Your reset's still to do"
+    assert in_reset_window(datetime(2026, 10, 14, 18, 0)) and not in_reset_window(datetime(2026, 10, 14, 20, 0))
+    assert not in_reset_window(datetime(2026, 10, 17, 18, 30))   # Saturday

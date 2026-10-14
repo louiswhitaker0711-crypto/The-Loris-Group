@@ -144,6 +144,60 @@ async def team_resets(request: Request, date: Optional[str] = None):
 REMIND_UNTIL = (19, 50)   # last reminder before the field ends at 20:00
 
 
+def in_reset_window(now: datetime) -> bool:
+    """Monday to Friday, 18:00 until the field ends at 20:00."""
+    return now.weekday() <= 4 and (18, 0) <= (now.hour, now.minute) < (20, 0)
+
+
+def done_names_text(names: list[str]) -> str:
+    """'Sam', 'Sam and Ayo', 'Sam, Ayo and Jo', 'Sam, Ayo and 3 others'."""
+    names = [first_name(n) for n in names]
+    if not names:
+        return ""
+    if len(names) == 1:
+        return names[0]
+    if len(names) <= 3:
+        return ", ".join(names[:-1]) + " and " + names[-1]
+    return f"{names[0]}, {names[1]} and {len(names) - 2} others"
+
+
+def reminder_text(done_names: list[str]) -> tuple[str, str]:
+    """The reminder after the first push, naming who's already done it."""
+    who = done_names_text(done_names)
+    if not who:
+        return ("🔄 Your reset's still to do",
+                "Take a minute: how many more, your number and your focus. This keeps coming until it's done.")
+    did = "has" if len(done_names) == 1 else "have"
+    return (f"🔄 {who} {did} done their 6pm reset", "Do yours: how many more, your number and your focus.")
+
+
+@router.get("/field-reset/board")
+async def reset_board(request: Request):
+    """For Home from 18:00: everyone in the office who's done their reset
+    and what they're going for, and who's still to do it."""
+    from bson import ObjectId
+    user = await get_current_user(request)
+    now = datetime.now(APP_TZ)
+    d = now.date()
+    office = user.get("office_id")
+    rows = [r async for r in db.field_resets.find({"date": d.isoformat(), "office_id": office}, {"_id": 0})]
+    rows.sort(key=lambda r: r.get("updated_at") or "")
+    done_ids = {r["user_id"] for r in rows}
+    todo = []
+    if in_reset_window(now):
+        ids = [ObjectId(i) for i in await out_today(d) - done_ids if ObjectId.is_valid(i)]
+        async for u in db.users.find({"_id": {"$in": ids}, "office_id": office, "deleted": {"$ne": True},
+                                      "is_active": {"$ne": False}, "is_demo": {"$ne": True}}, {"name": 1}):
+            todo.append({"user_id": str(u["_id"]), "name": u.get("name") or ""})
+        todo.sort(key=lambda x: x["name"].lower())
+    return {"date": d.isoformat(), "window": in_reset_window(now),
+            "mine_done": str(user["id"]) in done_ids,
+            "total_more": sum(int(r.get("more_signups") or 0) for r in rows),
+            "done": [{"user_id": r["user_id"], "name": r.get("user_name") or "", "more": int(r.get("more_signups") or 0),
+                      "kpi": r.get("kpi") or "", "focus": r.get("focus") or ""} for r in rows],
+            "todo": todo}
+
+
 async def out_today(d) -> set[str]:
     """Who's out in the field today: Coaches and BAs not marked away on Bells,
     anyone (Admins and the Owner included) Bells has in today, plus anyone
@@ -192,24 +246,26 @@ async def reset_push_tick() -> int:
         return 0
     d = now.date()
     targets = await out_today(d)
-    done = {r["user_id"] async for r in db.field_resets.find({"date": d.isoformat()}, {"user_id": 1})}
+    done_rows = [r async for r in db.field_resets.find({"date": d.isoformat()}, {"user_id": 1, "user_name": 1, "office_id": 1, "updated_at": 1})]
+    done_rows.sort(key=lambda r: r.get("updated_at") or "")
+    done = {r["user_id"] for r in done_rows}
     first = now.hour == 18 and now.minute < 10
     sent = 0
     for uid in targets - done:
         try:
-            u = await db.users.find_one({"_id": ObjectId(uid)}, {"deleted": 1, "is_active": 1, "is_demo": 1})
+            u = await db.users.find_one({"_id": ObjectId(uid)}, {"deleted": 1, "is_active": 1, "is_demo": 1, "office_id": 1})
         except Exception:
             u = None
         if not u or u.get("deleted") or u.get("is_active") is False or u.get("is_demo"):
             continue
+        if first:
+            title, body = ("🔄 6pm reset",
+                           "How many more are you going for, and what's your focus? Set it and share it with the team.")
+        else:
+            title, body = reminder_text([r.get("user_name") or "" for r in done_rows
+                                         if r.get("office_id") == u.get("office_id")])
         try:
-            await send_push_to_user(
-                uid,
-                "🔄 6pm reset" if first else "🔄 Your reset's still to do",
-                "How many more are you going for, and what's your focus? Set it and share it with the team."
-                if first else "Take a minute: how many more, your number and your focus. This keeps coming until it's done.",
-                {"type": "field_reset", "url": "/field-reset"},
-            )
+            await send_push_to_user(uid, title, body, {"type": "field_reset", "url": "/field-reset"})
             sent += 1
         except Exception as ex:
             logger.warning("6pm reset push failed for %s: %s", uid, ex)

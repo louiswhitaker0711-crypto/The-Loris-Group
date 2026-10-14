@@ -50,6 +50,7 @@ import SuggestionsCard from '../../src/components/home/today/SuggestionsCard';
 import { dayTargetChips } from '../../src/utils/dayTargets';
 import PrimetimeCard from '../../src/components/home/PrimetimeCard';
 import SectorPromptCard from '../../src/components/home/SectorPromptCard';
+import ResetBoardCard from '../../src/components/home/ResetBoardCard';
 import { Stagger } from '../../src/components/ui/Reveal';
 import { StreakFlame } from '../../src/components/ui/StreakFlame';
 import { useParallaxScroll } from '../../src/components/ui/Parallax';
@@ -1373,6 +1374,7 @@ export default function HomeScreen() {
   // set-ups. Out of the field it's planning: the day, Primetime, coaching.
   const coachField = (
     <>
+      <ResetBoardCard />
       <HomeAreaMap />
       <MyDayCard />
       <MyWeekCard hideWhenEmpty={isAdmin} />
@@ -1430,7 +1432,8 @@ export default function HomeScreen() {
   );
   const baField = (
     <>
-      {/* Their map first: open the app and it's there. */}
+      {/* From 18:00 the 6pm reset, then their map. */}
+      <ResetBoardCard />
       <HomeAreaMap />
       <MyDayCard />
       <MyWeekCard />
