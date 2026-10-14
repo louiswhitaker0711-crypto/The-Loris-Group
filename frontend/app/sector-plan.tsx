@@ -18,6 +18,7 @@ import { APP_LOCALE, APP_TZ } from '../src/utils/appTime';
 import { showAlert } from '../src/utils/showAlert';
 import { toast } from '../src/utils/toast';
 import { useKeyboardInset } from '../src/hooks/useKeyboardInset';
+import SectorRecap from '../src/components/sector/SectorRecap';
 
 type Person = { user_id: string; name: string; role: string; sector_leader_id?: string | null };
 type Sector = { leader_id: string; leader_name: string; postcode: string; goal: number | null; member_ids: string[]; can_delete: boolean };
@@ -98,6 +99,8 @@ export default function SectorPlanScreen() {
 
   return (
     <ScrollView style={s.page} contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + kb + 60 }]} keyboardShouldPersistTaps="handled">
+      {/* Break down the last field day's sectors first, then build today's. */}
+      <SectorRecap collapsible />
       <View>
         <Text style={s.title}>Today’s sectors</Text>
         <Text style={s.muted}>{d.label} · {sent ? `sent at ${when(d.sent_at)}` : confirmed ? `confirmed, going out at ${d.send_at}` : `not confirmed yet · goes out at ${d.send_at} once confirmed`}</Text>

@@ -34,3 +34,9 @@ def test_times_weekday_and_saturday():
     assert _slot(REMIND_AT, wed) == (10, 45) and _slot(REMIND_AT, sat) == (9, 45)
     assert _slot(FIELD_START, wed) == (13, 30) and _slot(FIELD_START, sat) == (10, 0)
     assert _past(datetime(2026, 10, 14, 10, 30), (10, 30)) and not _past(datetime(2026, 10, 14, 10, 29), (10, 30))
+
+
+def test_recap_is_the_last_field_day():
+    from routes.sector_plan import previous_field_day
+    assert previous_field_day(date(2026, 10, 15)) == "2026-10-14"   # Thursday → Wednesday
+    assert previous_field_day(date(2026, 10, 19)) == "2026-10-17"   # Monday → Saturday
