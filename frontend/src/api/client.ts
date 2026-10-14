@@ -1009,6 +1009,7 @@ export const apiService = {
   postBreakdown: (date: string) => api.post('/sector/breakdown/post', null, { params: { date } }),
   getSectorBoard: (date: string) => api.get('/sector/board', { params: { date } }),
   getSectorDays: (days = 7) => api.get('/sector/days', { params: { days } }),
+  deleteSector: (date: string, leader: string) => api.delete('/sector', { params: { date, leader } }),
   getSectorStatus: () => api.get('/sector/status'),
   getMyDay: () => api.get('/sector/my-day'),
   getAreas: (days?: number) => api.get('/areas', { params: { days } }),
