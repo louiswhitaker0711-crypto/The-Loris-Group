@@ -49,6 +49,13 @@ export const TAB_REGISTRY: TabItem[] = [
     defaultVisibleByRole: { leader: true, admin: true },
   },
   {
+    // Everyone you coach in one list: tap a name for their page.
+    id: 'bas', label: 'BAs', longLabel: 'BAs — everyone you coach, tap for their page',
+    icon: 'people-outline', kind: 'route', target: '/bas',
+    visibleFor: ['leader', 'admin'],
+    defaultVisibleByRole: { trainee: false, leader: true, admin: true },
+  },
+  {
     id: 'schedule', label: 'Schedule', longLabel: 'Schedule',
     icon: 'calendar-outline', kind: 'tab', target: 'schedule',
     visibleFor: ['trainee', 'leader', 'admin'],

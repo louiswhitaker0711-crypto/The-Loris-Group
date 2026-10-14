@@ -157,6 +157,47 @@ async def _badges(person: dict, uid: str) -> list[dict]:
              "created_by_name": b.get("created_by_name")} for b in rows]
 
 
+@router.get("/people")
+async def list_people(request: Request):
+    """Everyone the caller coaches, for the BAs tab: Admins and Coach+ the
+    whole office, a Coach their own team. Grouped by team on screen: a
+    person's team is the nearest Coach above them (or themselves) with a
+    team name."""
+    from core.brand import role_label
+    user = await require_admin_or_leader(request)
+    office = user.get("office_id")
+    q: dict = {"office_id": office, "deleted": {"$ne": True}, "is_active": {"$ne": False}, "is_demo": {"$ne": True},
+               "role": {"$in": ["trainee", "leader", "admin"]}}
+    everyone = {str(u["_id"]): u async for u in db.users.find(
+        {k: v for k, v in q.items() if k != "role"}, {"name": 1, "role": 1, "reports_to": 1, "team_name": 1, "badge_number": 1})}
+    if sees_whole_office(user):
+        ids = [i for i, u in everyone.items() if u.get("role") in ("trainee", "leader", "admin")]
+    else:
+        sub = {str(x) for x in await get_subtree_ids(str(user["id"]))}
+        ids = [i for i in everyone if i in sub]
+
+    def team_of(uid: str) -> str:
+        seen = set()
+        cur = uid
+        while cur and cur not in seen:
+            seen.add(cur)
+            u = everyone.get(cur) or {}
+            if u.get("role") in ("leader", "admin") and (u.get("team_name") or "").strip():
+                return u["team_name"].strip()
+            cur = str(u.get("reports_to") or "")
+        return ""
+
+    out = []
+    for i in ids:
+        u = everyone[i]
+        coach = everyone.get(str(u.get("reports_to") or "")) or {}
+        out.append({"user_id": i, "name": u.get("name") or "", "role": u.get("role"),
+                    "role_label": role_label(u.get("role")), "team": team_of(i),
+                    "coach": coach.get("name") or "", "badge_number": u.get("badge_number") or ""})
+    out.sort(key=lambda r: (r["team"] == "", r["team"].lower(), r["name"].lower()))
+    return {"people": out}
+
+
 @router.get("/people/{user_id}/breakdown")
 async def person_breakdown(user_id: str, request: Request):
     viewer = await require_admin_or_leader(request)

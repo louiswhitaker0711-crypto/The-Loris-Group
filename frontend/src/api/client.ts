@@ -997,6 +997,7 @@ export const apiService = {
   // The 6pm reset
   getMyFieldReset: () => api.get('/field-reset/today'),
   saveMyFieldReset: (body: { more_signups: number; kpi: string; focus: string }) => api.put('/field-reset/today', body),
+  listPeople: () => api.get('/people'),
   getResetBoard: () => api.get('/field-reset/board'),
   getTeamFieldResets: (date?: string) => api.get('/field-reset/team', { params: date ? { date } : {} }),
   // Sector set-up and breakdown

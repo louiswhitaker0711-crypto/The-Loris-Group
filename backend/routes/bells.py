@@ -1707,6 +1707,11 @@ async def my_bells_summary(request: Request, week: Optional[str] = None, months:
             "days_worked": t["days_worked"],
             "earnings": t["earnings"],
             "weekly_goal": (this_week or {}).get("weekly_goal"),
+            # Monday to Saturday for Home's "My week": in/off and sign-ups.
+            "days": [{"status": (d or {}).get("status") or "off",
+                      "silver": int(_safe_num((d or {}).get("under30"))), "gold": int(_safe_num((d or {}).get("over30"))),
+                      "round": int(_safe_num((d or {}).get("memberships")))}
+                     for d in ((this_week or {}).get("days") or [{}] * 7)[:6]],
         },
         "months": [buckets[k] for k in keys],
         "fees": fees,
