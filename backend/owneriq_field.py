@@ -50,6 +50,14 @@ async def has_login() -> bool:
     return await owneriq_on()
 
 
+async def _server_can_fetch() -> bool:
+    """The server may harvest from OwnerIQ only when it has a usable login AND
+    the browser relay isn't the one feeding us (its IP is blocked at the edge).
+    Either way `build_field_days` still runs on whatever logs are stored."""
+    from core.owneriq_session import relay_active
+    return (await has_login()) and not (await relay_active())
+
+
 async def _pins_for(date_iso: str, cache: dict) -> dict[str, str]:
     """{OwnerIQ user id: company pin} for a day, from its saved sector details."""
     if date_iso not in cache:
@@ -112,7 +120,7 @@ async def _harvest(date_iso: str) -> dict:
 async def tick() -> dict:
     """One pass: fetch what's due (today, else one missing past day), then build."""
     out: dict = {"fetched": None, "built": 0}
-    if await has_login():
+    if await _server_can_fetch():
         now_uk = datetime.now(APP_TZ)
         today = now_uk.date()
         state = await db.owneriq_sync_state.find_one({"_id": _STATE_ID}) or {}

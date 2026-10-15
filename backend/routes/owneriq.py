@@ -146,6 +146,88 @@ async def owneriq_connect_retry(request: Request):
     return await retry_password()
 
 
+# ── Browser relay ────────────────────────────────────────────────────────────
+# The UK/EU edge blocks server-to-server calls to the owner API, so the Owner's
+# own logged-in browser fetches the data (its real-browser request is allowed)
+# and POSTs it here. These endpoints take the RAW OwnerIQ payloads and feed them
+# into exactly the stores the server sync would (owneriq_kpis, owneriq_live_cache),
+# so every screen fills in with no change to the read paths. Authorised by a
+# shared secret in the body (OWNERIQ_RELAY_SECRET) — not a logged-in session,
+# because the post comes cross-origin from the owner-iq.ai tab. See
+# docs/owneriq-browser-relay.user.js.
+import os as _os
+import json as _json
+import secrets as _secrets
+
+
+def _relay_secret() -> str:
+    return (_os.getenv("OWNERIQ_RELAY_SECRET") or "").strip()
+
+
+async def _relay_body(request: Request) -> dict:
+    """Parse + authorise a relay POST. The body is text/plain JSON (a 'simple'
+    cross-origin request, so the browser sends it with no CORS preflight)."""
+    secret = _relay_secret()
+    if len(secret) < 16:
+        raise HTTPException(status_code=503, detail="Relay is not configured (set OWNERIQ_RELAY_SECRET).")
+    try:
+        data = _json.loads((await request.body()) or b"{}")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Bad JSON body.")
+    supplied = str((data or {}).get("secret") or "")
+    if not supplied or not _secrets.compare_digest(supplied.encode(), secret.encode()):
+        raise HTTPException(status_code=403, detail="Bad relay secret.")
+    return data
+
+
+@router.post("/owneriq/relay/kpis")
+async def owneriq_relay_kpis(request: Request):
+    """Browser relay: raw door_interaction_kpis page payloads → owneriq_kpis.
+    Body: {secret, from, to, payloads:[<raw JSON:API page>, ...]}."""
+    data = await _relay_body(request)
+    from owneriq_sync import _parse_kpi_payload, ingest_kpi_rows
+    from core.owneriq_session import mark_relay_ingest
+    iso_from = str(data.get("from") or "")[:10]
+    iso_to = str(data.get("to") or "")[:10] or iso_from
+    iso_from = iso_from or iso_to
+    if not iso_from:
+        raise HTTPException(status_code=400, detail="Missing from/to dates.")
+    seen: dict[str, dict] = {}
+    for payload in (data.get("payloads") or []):
+        for row in _parse_kpi_payload(payload or {}):
+            seen[row["owneriq_id"]] = row
+    rows = list(seen.values())
+    summary = await ingest_kpi_rows(rows, iso_from, iso_to, source="browser_relay")
+    await mark_relay_ingest({"kpis_rows": len(rows), "kpis_range": [iso_from, iso_to]})
+    return {"ok": True, **summary}
+
+
+@router.post("/owneriq/relay/live")
+async def owneriq_relay_live(request: Request):
+    """Browser relay: a raw Live Operations walk → owneriq_live_cache.
+    Body: {secret, date, top, sectors:{id:payload}, bas:{id:payload}}."""
+    data = await _relay_body(request)
+    from owneriq_live import store_live_from_relay
+    from core.owneriq_session import mark_relay_ingest
+    iso_date = str(data.get("date") or "")[:10]
+    if not iso_date:
+        raise HTTPException(status_code=400, detail="Missing date.")
+    counts = await store_live_from_relay(
+        iso_date, data.get("top"), data.get("sectors") or {}, data.get("bas") or {})
+    await mark_relay_ingest({"live_date": iso_date, "live_counts": counts})
+    return {"ok": True, "date": iso_date, **counts}
+
+
+@router.get("/owneriq/relay/status")
+async def owneriq_relay_status(request: Request):
+    """Is the browser relay feeding the app, and when did it last post? Admin."""
+    await require_admin(request)
+    from core.owneriq_session import relay_active, status as sess_status
+    st = await sess_status()
+    return {"active": await relay_active(), "configured": len(_relay_secret()) >= 16,
+            "relay": st.get("relay"), "last_sync": st.get("last_ok_at")}
+
+
 @router.get("/owneriq/switch")
 async def owneriq_switch(request: Request):
     """Whether OwnerIQ is in use (a working session). Screens that only work
@@ -233,6 +315,12 @@ async def owneriq_sync_now(request: Request, body: SyncBody | None = None):
     office-wide collection, so it is admin-only, capped at SYNC_MAX_DAYS and
     rate limited to one run per SYNC_COOLDOWN_SECONDS."""
     await require_admin(request)
+    from core.owneriq_session import relay_active
+    if await relay_active():
+        # The browser relay feeds the data automatically; a server pull would
+        # just hit the blocked edge. No-op with a friendly note.
+        return {"ok": True, "rows_synced": 0,
+                "note": "OwnerIQ is syncing automatically from the browser relay — no manual pull needed."}
     body = body or SyncBody()
     rng = _resolve_sync_range(body.from_date, body.to_date)
     if rng is None:

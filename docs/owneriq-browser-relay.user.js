@@ -1,0 +1,166 @@
+// ==UserScript==
+// @name         OwnerIQ → The Loris Group relay
+// @namespace    the-loris-group
+// @version      1.0
+// @description  Runs in the Owner's own logged-in OwnerIQ tab. Every few minutes it reads the office's own data (the same data the dashboard shows) and posts it to the app, which stores it exactly as the server sync would. Used because the UK edge blocks server-to-server calls; the Owner's real browser is allowed.
+// @match        https://owner-iq.ai/*
+// @run-at       document-idle
+// @grant        none
+// ==/UserScript==
+//
+// HOW TO USE (two ways)
+//
+//  A) Quick / console:   open owner-iq.ai, sign in, press F12 → Console,
+//     paste this whole file, press Enter. It syncs now and every 15 min while
+//     the tab stays open and you stay logged in.
+//
+//  B) Always-on / Tampermonkey: install the Tampermonkey extension, add this as
+//     a new userscript, and fill in the two CONFIG lines below. It then runs
+//     automatically whenever an owner-iq.ai tab is open.
+//
+//  Fill these two in before using:
+(function () {
+  "use strict";
+
+  // ─── CONFIG ────────────────────────────────────────────────────────────
+  const APP_URL = "https://the-loris-group-production.up.railway.app"; // the app
+  const RELAY_SECRET = "PASTE_OWNERIQ_RELAY_SECRET_HERE";              // = Railway OWNERIQ_RELAY_SECRET
+  const OIQ = "https://uk.owner-iq.ai";    // OwnerIQ API host for this account
+  const EVERY_MIN = 15;                    // how often to sync
+  // ───────────────────────────────────────────────────────────────────────
+
+  const log = (...a) => console.log("%c[OIQ relay]", "color:#0a7", ...a);
+  const warn = (...a) => console.warn("[OIQ relay]", ...a);
+
+  function token() {
+    try {
+      const raw = sessionStorage.getItem("auth-storage");
+      const j = raw ? JSON.parse(raw) : null;
+      return (j && j.state && j.state.token) || (j && j.token) || null;
+    } catch (e) { return null; }
+  }
+
+  function iso(d) { return d.toISOString().slice(0, 10); }
+  function ddmmyyyy(d) {
+    const p = (n) => String(n).padStart(2, "0");
+    return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
+  }
+
+  // GET from OwnerIQ using the current session (real browser request → allowed).
+  async function oiq(path, params) {
+    const tok = token();
+    if (!tok) throw new Error("not-logged-in");
+    const url = new URL(OIQ + path);
+    (params || []).forEach(([k, v]) => url.searchParams.append(k, v));
+    const r = await fetch(url.toString(), {
+      method: "GET",
+      headers: {
+        "accept": "application/vnd.api+json, application/json, text/plain, */*",
+        "x-requested-with": "XMLHttpRequest",
+        "x-client-app": "owneriq",
+        "x-client-app-version": "1.6.0",
+        "authorization": "Bearer " + tok,
+      },
+    });
+    if (r.status === 401) throw new Error("session-expired");
+    if (!r.ok) throw new Error(`${path} HTTP ${r.status}`);
+    return r.json();
+  }
+
+  // Fire-and-forget POST to the app. text/plain = a "simple" cross-origin
+  // request, so the browser sends it with no CORS preflight; no-cors means we
+  // don't read the (irrelevant) response. The app authorises by the secret.
+  async function toApp(path, obj) {
+    obj.secret = RELAY_SECRET;
+    await fetch(APP_URL + path, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain;charset=UTF-8" },
+      body: JSON.stringify(obj),
+    });
+  }
+
+  async function companyPins() {
+    const j = await oiq("/v2/marketing_companies");
+    return (j.data || []).map((c) => c.attributes && c.attributes.pin)
+      .filter((p) => p != null).map(String);
+  }
+
+  async function companyIds() {
+    const j = await oiq("/v3/owner/marketing_companies/light_index");
+    return (j.data || []).map((c) => c.id).filter((x) => x != null).map(String);
+  }
+
+  // Walk 1 — KPIs for yesterday + today, every office, every page.
+  async function syncKpis() {
+    const today = new Date();
+    const yday = new Date(today.getTime() - 864e5);
+    const between = `${ddmmyyyy(yday)},${ddmmyyyy(today)}`;
+    const pins = await companyPins();
+    const payloads = [];
+    const walkDefault = pins.length === 0 ? [null] : pins;
+    for (const pin of walkDefault) {
+      if (pin) await oiq("/v2/marketing_companies", [["mc_pin", pin]]); // select office
+      let page = 1;
+      for (;;) {
+        const j = await oiq("/v2/door_interaction_kpis", [
+          ["between_dates", between], ["page", page], ["per_page", 100],
+          ["include", "user"], ["sortColumn", ""], ["sortDirection", ""],
+        ]);
+        payloads.push(j);
+        const total = (j.meta && j.meta.total_pages) || 1;
+        if (page >= total) break;
+        page += 1;
+      }
+    }
+    await toApp("/api/owneriq/relay/kpis", { from: iso(yday), to: iso(today), payloads });
+    const rows = payloads.reduce((n, p) => n + ((p.data || []).length), 0);
+    log(`KPIs: posted ${rows} rows across ${walkDefault.length} office(s)`);
+  }
+
+  // Walk 2 — today's Live Operations tree (top → each sector → each BA).
+  async function syncLive() {
+    const date = iso(new Date());
+    const ids = await companyIds();
+    const extra = ids.map((i) => ["marketing_company_id[]", i]);
+    const top = await oiq("/v3/owner/live_operations", [["date", date], ...extra]);
+    const sectors = {}, bas = {};
+    for (const s of (top.sectors || [])) {
+      if (s.id == null) continue;
+      const sd = await oiq(`/v3/owner/live_operations/sectors/${s.id}`, [["date", date]]);
+      sectors[s.id] = sd;
+      for (const m of (sd.members || [])) {
+        if (m.id == null) continue;
+        bas[m.id] = await oiq(`/v3/owner/live_operations/bas/${m.id}`, [["date", date]]);
+      }
+    }
+    await toApp("/api/owneriq/relay/live", { date, top, sectors, bas });
+    log(`Live: posted top + ${Object.keys(sectors).length} sectors + ${Object.keys(bas).length} BAs`);
+  }
+
+  let running = false;
+  async function run() {
+    if (running) return;
+    running = true;
+    try {
+      if (!token()) { warn("Not logged in to OwnerIQ — open owner-iq.ai and sign in."); return; }
+      await syncKpis();
+      await syncLive();
+      log("sync complete", new Date().toLocaleTimeString());
+    } catch (e) {
+      if (e.message === "session-expired") warn("OwnerIQ session expired — sign in again at owner-iq.ai.");
+      else if (e.message === "not-logged-in") warn("Not logged in to OwnerIQ.");
+      else warn("sync failed:", e.message);
+    } finally {
+      running = false;
+    }
+  }
+
+  if (RELAY_SECRET.includes("PASTE_")) {
+    warn("Set RELAY_SECRET (and check APP_URL) at the top of the script first.");
+    return;
+  }
+  log(`starting — syncing now and every ${EVERY_MIN} min while this tab is open`);
+  run();
+  setInterval(run, EVERY_MIN * 60 * 1000);
+})();

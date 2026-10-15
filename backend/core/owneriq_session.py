@@ -45,6 +45,12 @@ _UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome
 _DEFAULT_BASE = (os.getenv("OWNERIQ_API_BASE") or "https://uk.owner-iq.ai").rstrip("/")
 _PASSWORD_LOOP_SECONDS = 600      # a password token refused this fast → MFA, not a fluke
 _TRANSIENT_BACKOFF_SECONDS = 300  # 5xx / 429 / network: wait before the next try
+# Browser relay: the Owner's own logged-in browser posts the data the server
+# can't reach (the UK edge blocks server-to-server calls). While a relay has
+# posted within this window, OwnerIQ counts as "connected" and the server's own
+# OwnerIQ pulls stand down — the browser is the only thing that talks to OwnerIQ.
+RELAY_TTL_S = int((os.getenv("OWNERIQ_RELAY_TTL_MIN") or "40")) * 60
+RELAY = "relay"
 _lock = asyncio.Lock()
 
 
@@ -83,6 +89,33 @@ async def _write(fields: dict) -> None:
     await db.owneriq_session.update_one({"_id": "session"}, {"$set": fields}, upsert=True)
 
 
+async def mark_relay_ingest(meta: dict | None = None) -> None:
+    """The browser relay just posted data. Stamp the time (and a little meta for
+    the status screen) so the app counts OwnerIQ as live and the server's own
+    pulls stand down. Best-effort; never raises into the ingest path."""
+    try:
+        await _write({"relay_at": _now_iso(), "relay_meta": (meta or {})})
+    except Exception:
+        pass
+
+
+def _relay_is_fresh(doc: dict) -> bool:
+    at = doc.get("relay_at")
+    if not at:
+        return False
+    try:
+        return (_now() - datetime.fromisoformat(at)).total_seconds() < RELAY_TTL_S
+    except ValueError:
+        return False
+
+
+async def relay_active(doc: dict | None = None) -> bool:
+    """True while the Owner's browser relay has posted recently. When it is, the
+    server must NOT try to reach OwnerIQ itself (its IP is blocked at the edge);
+    it serves what the relay has stored."""
+    return _relay_is_fresh(doc if doc is not None else await _read())
+
+
 def api_base(doc: dict | None = None) -> str:
     """Account's API host: OWNERIQ_API_BASE env wins, else the one we resolved
     at reconnect, else the UK default."""
@@ -99,6 +132,8 @@ async def available() -> bool:
     """Is OwnerIQ usable right now? False once it needs a reconnect, or when
     there's neither a saved token nor a password to sign in with."""
     doc = await _read()
+    if _relay_is_fresh(doc):
+        return True
     if doc.get("state") in (NEEDS_RECONNECT, OFF):
         return False
     if doc.get("token"):
@@ -111,6 +146,23 @@ async def status() -> dict:
     """For the Reconnect screen. Never includes the token."""
     doc = await _read()
     email, password = _creds()
+    if _relay_is_fresh(doc):
+        # The browser relay is feeding the app; show it as connected so the
+        # OwnerIQ screens stay on, and surface the last ingest for the Owner.
+        return {
+            "state": CONNECTED,
+            "source": "browser_relay",
+            "reason": None,
+            "minted_at": doc.get("relay_at"),
+            "last_ok_at": doc.get("relay_at"),
+            "last_sign_in_at": doc.get("last_sign_in_at"),
+            "last_status": 200,
+            "has_token": False,
+            "has_password": bool(password),
+            "email": email or None,
+            "api_base": api_base(doc),
+            "relay": {"active": True, "at": doc.get("relay_at"), **(doc.get("relay_meta") or {})},
+        }
     return {
         "state": doc.get("state") or (SIGNED_OUT if (doc.get("token") or password) else "off"),
         "source": doc.get("source"),
@@ -123,6 +175,7 @@ async def status() -> dict:
         "has_password": bool(password),
         "email": email or None,
         "api_base": api_base(doc),
+        "relay": {"active": False, "at": doc.get("relay_at")},
     }
 
 
@@ -198,6 +251,10 @@ def _raise_reconnect(reason: str):
 async def get_token(client: httpx.AsyncClient) -> str:
     """The one token source. Every OwnerIQ call uses this."""
     doc = await _read()
+    if _relay_is_fresh(doc):
+        # The browser relay is live: the server must not reach OwnerIQ itself
+        # (its IP is blocked at the edge). Callers serve the relay's stored data.
+        raise OwnerIQNeedsReconnect("OwnerIQ is served by the browser relay; the server does not call out.")
     state = doc.get("state")
     if state == OFF:
         raise OwnerIQNeedsReconnect("OwnerIQ is switched off.")
