@@ -43,6 +43,10 @@ export default function SectorPlanScreen() {
 
   const d = q.data;
   const people: Person[] = d?.people || [];
+  // Prefer people marked In on Bells today; if nobody's marked In yet, show
+  // everyone so you're never stuck (and existing members always stay visible).
+  const anyIn = people.some((p) => p.in_today);
+  const canPlace = (p: Person) => anyIn ? !!p.in_today : true;
   const nameOf = (id: string) => people.find((p) => p.user_id === id)?.name || '';
   const sectors: Sector[] = d?.sectors || [];
   const refresh = (data?: any) => {
@@ -182,7 +186,7 @@ export default function SectorPlanScreen() {
           <Text style={s.h}>{sectors.some((x) => x.leader_id === draft.leader_id) ? 'Edit sector' : 'New sector'}</Text>
           <Text style={s.label}>Sector leader</Text>
           <View style={s.chips}>
-            {people.filter((p) => (p.in_today || p.user_id === draft.leader_id) && (!where(p.user_id) || where(p.user_id) === draft.leader_id || p.user_id === draft.leader_id)).map((p) => (
+            {people.filter((p) => (canPlace(p) || p.user_id === draft.leader_id) && (!where(p.user_id) || where(p.user_id) === draft.leader_id || p.user_id === draft.leader_id)).map((p) => (
               <Pressable key={p.user_id} onPress={() => setDraft({ ...draft, leader_id: p.user_id, member_ids: draft.member_ids.filter((m) => m !== p.user_id) })}
                 style={[s.chip, draft.leader_id === p.user_id && s.chipOn]} disabled={sent && sectors.some((x) => x.leader_id === draft.leader_id)}>
                 <Text style={[s.chipText, draft.leader_id === p.user_id && { color: c.onPrimary }]}>{p.name}</Text>
@@ -204,7 +208,7 @@ export default function SectorPlanScreen() {
           </View>
           <Text style={s.label}>Who’s in it{locked ? ' (fixed now the field’s started)' : ''}</Text>
           <View style={s.chips}>
-            {people.filter((p) => p.user_id !== draft.leader_id && p.in_today).map((p) => {
+            {people.filter((p) => p.user_id !== draft.leader_id && (canPlace(p) || draft.member_ids.includes(p.user_id))).map((p) => {
               const on = draft.member_ids.includes(p.user_id);
               const elsewhere = where(p.user_id) && where(p.user_id) !== draft.leader_id;
               return (
@@ -218,7 +222,7 @@ export default function SectorPlanScreen() {
               );
             })}
           </View>
-          <Text style={s.small}>Someone already in another sector moves to this one when you tick them.</Text>
+          <Text style={s.small}>{anyIn ? 'Showing people marked In on Bells today.' : 'Nobody’s marked In on Bells today, so everyone’s shown — set In/Off on Bells to filter this.'} Someone already in another sector moves to this one when you tick them.</Text>
           <View style={s.actions}>
             <Pressable onPress={() => setDraft(null)} style={s.ghost}><Text style={s.ghostText}>Cancel</Text></Pressable>
             <Pressable onPress={saveDraft} disabled={busy === 'save'} style={s.btn}>
