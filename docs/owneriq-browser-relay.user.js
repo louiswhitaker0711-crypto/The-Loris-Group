@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OwnerIQ → The Loris Group relay
 // @namespace    the-loris-group
-// @version      1.1
+// @version      1.2
 // @description  Runs in the Owner's own logged-in OwnerIQ tab. Every few minutes it reads the office's own data (the same data the dashboard shows) and posts it to the app, which stores it exactly as the server sync would. Used because the UK edge blocks server-to-server calls; the Owner's real browser is allowed.
 // @match        https://owner-iq.ai/*
 // @run-at       document-idle
@@ -161,29 +161,40 @@
   }
 
   // Walk 3 — Performance Hub views: company + no-team for this & last week,
-  // and each team for this week. Feeds the Hub screen's cache (owneriq_hub).
+  // and each team for this week (feeds the Hub screen's cache). Also NEXT week's
+  // company view (wk -1), so the week you're planning preloads its Field IQ day
+  // plan into Bells — applied only, not shown on the Hub (schedule_only).
   async function syncHub() {
     const ids = await companyIds();
-    for (const wk of [0, 1]) {
+    for (const wk of [-1, 0, 1]) {
       const ws = mondayISO(wk);
       const views = [];
       for (const mc of ids) {
-        const mcView = await oiq(`/v3/owner/bells_performance/marketing_companies/${mc}`, [["week_start_on", ws]]);
-        views.push({ kind: "mc", ref: mc, payload: mcView });
+        let mcView;
         try {
-          const noTeam = await oiq(`/v3/owner/bells_performance/marketing_companies/${mc}/no_team`, [["week_start_on", ws]]);
-          views.push({ kind: "no_team", ref: mc, payload: noTeam });
-        } catch (e) { /* some offices have no "no team" bucket */ }
-        if (wk === 0) {
-          for (const t of (mcView.teams || [])) {
-            if (t.id == null) continue;
-            const tv = await oiq(`/v3/owner/bells_performance/teams/${t.id}`, [["week_start_on", ws]]);
-            views.push({ kind: "team", ref: t.id, payload: tv });
+          mcView = await oiq(`/v3/owner/bells_performance/marketing_companies/${mc}`, [["week_start_on", ws]]);
+        } catch (e) {
+          if (wk < 0) continue;   // next week may not exist in OwnerIQ yet
+          throw e;
+        }
+        views.push({ kind: "mc", ref: mc, payload: mcView });
+        if (wk >= 0) {
+          try {
+            const noTeam = await oiq(`/v3/owner/bells_performance/marketing_companies/${mc}/no_team`, [["week_start_on", ws]]);
+            views.push({ kind: "no_team", ref: mc, payload: noTeam });
+          } catch (e) { /* some offices have no "no team" bucket */ }
+          if (wk === 0) {
+            for (const t of (mcView.teams || [])) {
+              if (t.id == null) continue;
+              const tv = await oiq(`/v3/owner/bells_performance/teams/${t.id}`, [["week_start_on", ws]]);
+              views.push({ kind: "team", ref: t.id, payload: tv });
+            }
           }
         }
       }
-      await toApp("/api/owneriq/relay/hub", { week_start: ws, views });
-      log(`Hub: posted ${views.length} views for week ${ws}`);
+      if (!views.length) continue;
+      await toApp("/api/owneriq/relay/hub", { week_start: ws, views, schedule_only: wk < 0 });
+      log(`Hub: posted ${views.length} views for week ${ws}${wk < 0 ? " (next week, plan only)" : ""}`);
     }
   }
 

@@ -227,13 +227,17 @@ async def owneriq_relay_hub(request: Request):
     from owneriq_hub import store as _store_hub, clean_week
     from core.owneriq_session import mark_relay_ingest
     week_start = clean_week(str(data.get("week_start") or ""))
+    # Next week is sent "schedule_only": apply its Field IQ plan to Bells but
+    # don't cache it on the Hub screen (which shows this week and earlier).
+    schedule_only = bool(data.get("schedule_only"))
     stored = 0
     mc_payloads = []
     for v in (data.get("views") or []):
         kind, ref, payload = v.get("kind"), v.get("ref"), v.get("payload")
         if kind in ("mc", "team", "no_team") and ref is not None and payload:
-            await _store_hub(kind, str(ref), week_start, payload)
-            stored += 1
+            if not schedule_only:
+                await _store_hub(kind, str(ref), week_start, payload)
+                stored += 1
             if kind == "mc":
                 mc_payloads.append(payload)
     # The company view carries every BA's week, so fill Bells from it (goals,
