@@ -94,7 +94,10 @@ async def mark_relay_ingest(meta: dict | None = None) -> None:
     the status screen) so the app counts OwnerIQ as live and the server's own
     pulls stand down. Best-effort; never raises into the ingest path."""
     try:
-        await _write({"relay_at": _now_iso(), "relay_meta": (meta or {})})
+        fields = {"relay_at": _now_iso()}
+        for k, v in (meta or {}).items():
+            fields[f"relay_meta.{k}"] = v   # merge per key so one cycle's walks add up
+        await _write(fields)
     except Exception:
         pass
 
@@ -114,6 +117,74 @@ async def relay_active(doc: dict | None = None) -> bool:
     server must NOT try to reach OwnerIQ itself (its IP is blocked at the edge);
     it serves what the relay has stored."""
     return _relay_is_fresh(doc if doc is not None else await _read())
+
+
+def _in_field_hours(now_local: datetime) -> bool:
+    """The office's field window in app time: Mon–Fri 13:30–20:00, Sat 10:00–17:00.
+    Outside it, a quiet relay is expected and never alerted."""
+    wd = now_local.weekday()            # 0 = Monday … 6 = Sunday
+    mins = now_local.hour * 60 + now_local.minute
+    if wd <= 4:
+        return 13 * 60 + 30 <= mins <= 20 * 60
+    if wd == 5:
+        return 10 * 60 <= mins <= 17 * 60
+    return False
+
+
+async def relay_stall_tick() -> int:
+    """During field hours, if the browser relay was feeding the app and then
+    stops (laptop asleep, tab closed, session expired), tell the Owner once so
+    they can reopen it. Only when a relay secret is set and the relay has run at
+    least once; silent if OwnerIQ was switched off. Returns 1 if alerted."""
+    if len((os.getenv("OWNERIQ_RELAY_SECRET") or "").strip()) < 16:
+        return 0
+    doc = await _read()
+    if doc.get("state") == OFF or not doc.get("relay_at"):
+        return 0
+    from core.app_time import APP_TZ
+    now_local = datetime.now(APP_TZ)
+    if not _in_field_hours(now_local):
+        return 0
+    if _relay_is_fresh(doc):
+        # Flowing again — clear any past alert so a later stall re-alerts.
+        if doc.get("relay_stall_alerted_for"):
+            await _write({"relay_stall_alerted_for": None})
+        return 0
+    # Stale. Alert once per distinct stall, keyed by the last sync we saw.
+    relay_at = doc.get("relay_at")
+    if doc.get("relay_stall_alerted_for") == relay_at:
+        return 0
+    owner = await db.users.find_one({"is_super_admin": True, "deleted": {"$ne": True}},
+                                    {"email": 1, "name": 1, "_id": 1})
+    if not owner:
+        return 0
+    await _write({"relay_stall_alerted_for": relay_at})
+    try:
+        mins = int((_now() - datetime.fromisoformat(relay_at)).total_seconds() // 60)
+    except ValueError:
+        mins = 0
+    try:
+        from core.push import send_push_to_user
+        await send_push_to_user(
+            str(owner["_id"]), "⚠️ OwnerIQ sync has stopped",
+            f"No data for about {mins} min. Open the owner-iq.ai tab running the sync "
+            "(sign in again if it asks) to restart it.",
+            {"type": "broadcast", "url": "/owneriq-connect"})
+    except Exception as ex:
+        logger.warning("relay stall push failed: %s", ex)
+    try:
+        if owner.get("email"):
+            from core.email_utils import render_email, send_email
+            html = render_email(
+                "OwnerIQ sync has stopped", "The browser relay stopped sending",
+                f"<p>No OwnerIQ data has reached the app for about {mins} minutes.</p>"
+                "<p>On the computer running the sync, open the <b>owner-iq.ai</b> tab "
+                "(sign in again if it asks for a code). The screens come back on their own "
+                "within ~15 minutes. Until then the team's numbers come from the breakdowns.</p>")
+            send_email(owner["email"], "OwnerIQ sync has stopped", html)
+    except Exception as ex:
+        logger.warning("relay stall email failed: %s", ex)
+    return 1
 
 
 def api_base(doc: dict | None = None) -> str:

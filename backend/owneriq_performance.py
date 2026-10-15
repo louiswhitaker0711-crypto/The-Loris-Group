@@ -55,6 +55,20 @@ def _norm(s) -> str:
 
 
 # ── Linking OwnerIQ users to app users ───────────────────────────────────────
+def parse_roster_payload(payload: dict) -> list[dict]:
+    """A raw /v2/users page → [{id, email, badges, active, stage}]. Shared by the
+    live roster fetch and the browser relay, so both link people the same way."""
+    out: list[dict] = []
+    for u in (payload or {}).get("data") or []:
+        a = u.get("attributes") or {}
+        badges = {b.strip().upper() for b in re.split(r"[,;\s]+", str(a.get("badge_number_list") or "")) if b.strip()}
+        if a.get("badge_number"):
+            badges.add(str(a["badge_number"]).strip().upper())
+        out.append({"id": str(u["id"]), "email": _norm(a.get("email")), "badges": badges,
+                    "active": bool(a.get("active")), "stage": a.get("stage")})
+    return out
+
+
 async def _roster(client: httpx.AsyncClient, token: str) -> list[dict]:
     out: dict[str, dict] = {}
     pins = await company_pins(client, token) or [None]
@@ -75,18 +89,30 @@ async def _roster(client: httpx.AsyncClient, token: str) -> list[dict]:
                                  headers=hdrs, timeout=60.0)
         if r.status_code != 200:
             raise OwnerIQError(f"GET /v2/users failed: HTTP {r.status_code}")
-        for u in r.json().get("data") or []:
-            a = u.get("attributes") or {}
-            badges = {b.strip().upper() for b in re.split(r"[,;\s]+", str(a.get("badge_number_list") or "")) if b.strip()}
-            if a.get("badge_number"):
-                badges.add(str(a["badge_number"]).strip().upper())
-            out[str(u["id"])] = {"email": _norm(a.get("email")), "badges": badges, "active": bool(a.get("active")),
-                                 "stage": a.get("stage")}
-    return list({"id": k, **v} for k, v in out.items())
+        for row in parse_roster_payload(r.json()):
+            out[row["id"]] = row
+    return list(out.values())
 
 
 async def link_users(client: httpx.AsyncClient, token: str) -> dict[str, dict]:
-    """OwnerIQ user id → app user doc. Persists new links on users.owneriq_user_id."""
+    """OwnerIQ user id → app user doc, fetching the roster live. Persists new
+    links on users.owneriq_user_id."""
+    # The roster only adds NEW links and refreshes stages. If OwnerIQ can't
+    # serve it this run, carry on with the links we already hold: the week's
+    # figures must not wait on it.
+    try:
+        roster = await _roster(client, token)
+    except (httpx.TransportError, OwnerIQError) as ex:
+        logger.warning("OwnerIQ roster unavailable this run (%s); keeping existing links", type(ex).__name__)
+        roster = []
+    return await link_users_from_roster(roster)
+
+
+async def link_users_from_roster(roster: list[dict]) -> dict[str, dict]:
+    """OwnerIQ user id → app user doc, from a roster already in hand (the live
+    sync or the browser relay). An empty roster just returns the links we
+    already hold (users.owneriq_user_id + the KPI link) and adds nothing.
+    Persists new links on users.owneriq_user_id and refreshes stages."""
     users = await db.users.find({"deleted": {"$ne": True}},
                                 {"email": 1, "name": 1, "role": 1, "office_id": 1, "owneriq_user_id": 1,
                                  "amplifi_codes": 1, "is_super_admin": 1, "reports_to": 1,
@@ -104,14 +130,6 @@ async def link_users(client: httpx.AsyncClient, token: str) -> dict[str, dict]:
     owner_login = _norm(os.getenv("OWNERIQ_EMAIL"))
     super_admin = next((u for u in users if u.get("is_super_admin")), None)
     new_links = []
-    # The roster only adds NEW links and refreshes stages. If OwnerIQ can't
-    # serve it this run, carry on with the links we already hold: the week's
-    # figures must not wait on it.
-    try:
-        roster = await _roster(client, token)
-    except (httpx.TransportError, OwnerIQError) as ex:
-        logger.warning("OwnerIQ roster unavailable this run (%s); keeping existing links", type(ex).__name__)
-        roster = []
     stage_of = {r["id"]: r.get("stage") for r in roster}
     for r in sorted(roster, key=lambda x: not x["active"]):
         if r["id"] in link:
@@ -382,14 +400,57 @@ async def sync_performance(weeks: int = 2, bells_weeks: int = 1) -> dict:
     return out
 
 
+# ── Browser relay drivers ────────────────────────────────────────────────────
+# The server can't reach OwnerIQ (its IP is blocked at the edge), so the Owner's
+# browser posts the raw roster and Performance Hub views and these run the same
+# linking + Bells fill the live sync would. See routes/owneriq.py relay endpoints.
+async def link_from_relayed_roster(payloads: list[dict]) -> dict:
+    """Relay: raw /v2/users page(s) → refresh OwnerIQ↔app links and stages."""
+    roster: dict[str, dict] = {}
+    for p in payloads or []:
+        for row in parse_roster_payload(p or {}):
+            roster[row["id"]] = row
+    link = await link_users_from_roster(list(roster.values()))
+    return {"roster": len(roster), "linked": len(link)}
+
+
+async def apply_relayed_week(week_start: str, mc_payloads: list[dict]) -> dict:
+    """Relay: Performance Hub company view(s) for one week → Bells, exactly as
+    the live sync does: weekly stats, team names, the weekly goal (unless set in
+    the app), the Not-scheduled/No-show day marks, then fill days from the
+    relayed KPIs. Team names are only applied for the current week."""
+    try:
+        wk = date.fromisoformat(week_start)
+    except ValueError:
+        return {"error": "bad week_start"}
+    link = await link_users_from_roster([])   # DB-held links; the roster relay keeps them fresh
+    today = datetime.now(APP_TZ).date()
+    apply_teams = (week_start == monday_of(today).isoformat())
+    out = {"stats": 0, "goals": 0, "teams": 0, "schedule_days": 0}
+    for payload in mc_payloads or []:
+        if not payload:
+            continue
+        payload.setdefault("week_start_on", week_start)
+        try:
+            r = await _apply_week(payload, link, apply_teams)
+        except Exception as ex:
+            logger.warning("relay _apply_week failed for week %s: %s", week_start, ex)
+            continue
+        for k in out:
+            out[k] += int(r.get(k) or 0)
+    iso_to = min(wk + timedelta(days=6), today).isoformat()
+    out["bells"] = await fill_bells(week_start, iso_to)
+    return out
+
+
 async def scheduler_tick() -> None:
     from owneriq_sync import owneriq_on
     from core.owneriq_session import relay_active
     if not await owneriq_on():
         return
     if await relay_active():
-        # The browser relay can't reach the Performance endpoint yet (phase 2);
-        # don't let the server try — its IP is blocked at the edge.
+        # The browser relay feeds the Performance Hub and fills Bells itself
+        # (apply_relayed_week); the server must not try — its IP is blocked.
         logger.info("OwnerIQ performance sync skipped: browser relay active")
         return
     try:

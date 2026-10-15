@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OwnerIQ → The Loris Group relay
 // @namespace    the-loris-group
-// @version      1.0
+// @version      1.1
 // @description  Runs in the Owner's own logged-in OwnerIQ tab. Every few minutes it reads the office's own data (the same data the dashboard shows) and posts it to the app, which stores it exactly as the server sync would. Used because the UK edge blocks server-to-server calls; the Owner's real browser is allowed.
 // @match        https://owner-iq.ai/*
 // @run-at       document-idle
@@ -97,6 +97,22 @@
     return (j.data || []).map((c) => c.id).filter((x) => x != null).map(String);
   }
 
+  // Walk 0 — the roster (every office), so the app can match each OwnerIQ
+  // person to the right person in your app (by badge/email) and keep stages
+  // fresh. Runs first so the KPI + Bells fill below land on the right people.
+  async function syncRoster() {
+    const pins = await companyPins();
+    const walk = pins.length === 0 ? [null] : pins;
+    const payloads = [];
+    for (const pin of walk) {
+      if (pin) await oiq("/v2/marketing_companies", [["mc_pin", pin]]); // select office
+      payloads.push(await oiq("/v2/users", [["limit", 2000]]));
+    }
+    await toApp("/api/owneriq/relay/roster", { payloads });
+    const n = payloads.reduce((a, p) => a + ((p.data || []).length), 0);
+    log(`Roster: posted ${n} people across ${walk.length} office(s)`);
+  }
+
   // Walk 1 — KPIs for yesterday + today, every office, every page.
   async function syncKpis() {
     const today = new Date();
@@ -177,6 +193,7 @@
     running = true;
     try {
       if (!token()) { warn("Not logged in to OwnerIQ — open owner-iq.ai and sign in."); return; }
+      await syncRoster();
       await syncKpis();
       await syncLive();
       await syncHub();

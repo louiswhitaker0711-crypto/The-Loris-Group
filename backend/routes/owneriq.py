@@ -228,13 +228,40 @@ async def owneriq_relay_hub(request: Request):
     from core.owneriq_session import mark_relay_ingest
     week_start = clean_week(str(data.get("week_start") or ""))
     stored = 0
+    mc_payloads = []
     for v in (data.get("views") or []):
         kind, ref, payload = v.get("kind"), v.get("ref"), v.get("payload")
         if kind in ("mc", "team", "no_team") and ref is not None and payload:
             await _store_hub(kind, str(ref), week_start, payload)
             stored += 1
-    await mark_relay_ingest({"hub_week": week_start, "hub_views": stored})
-    return {"ok": True, "week_start": week_start, "views_stored": stored}
+            if kind == "mc":
+                mc_payloads.append(payload)
+    # The company view carries every BA's week, so fill Bells from it (goals,
+    # weekly stats, team names, Not-scheduled/No-show marks) — the same as the
+    # live sync, respecting app-set goals and edited days.
+    applied: dict = {}
+    if mc_payloads:
+        from owneriq_performance import apply_relayed_week
+        try:
+            applied = await apply_relayed_week(week_start, mc_payloads)
+        except Exception as ex:
+            logger.warning("relay Bells fill failed for week %s: %s", week_start, ex)
+            applied = {"error": type(ex).__name__}
+    await mark_relay_ingest({"hub_week": week_start, "hub_views": stored, "bells": applied})
+    return {"ok": True, "week_start": week_start, "views_stored": stored, "applied": applied}
+
+
+@router.post("/owneriq/relay/roster")
+async def owneriq_relay_roster(request: Request):
+    """Browser relay: raw /v2/users roster page(s) → refresh the OwnerIQ↔app
+    links and stages, so KPI rows and the Bells fill land on the right people.
+    Body: {secret, payloads:[<raw /v2/users page>, ...]}."""
+    data = await _relay_body(request)
+    from owneriq_performance import link_from_relayed_roster
+    from core.owneriq_session import mark_relay_ingest
+    res = await link_from_relayed_roster(data.get("payloads") or [])
+    await mark_relay_ingest({"roster": res.get("roster"), "linked": res.get("linked")})
+    return {"ok": True, **res}
 
 
 @router.get("/owneriq/relay/status")

@@ -1021,8 +1021,9 @@ async def _startup_work():
         # held between 22:00 and 07:00. Owner only.
         async def _owneriq_alert():
             try:
-                from core.owneriq_session import alert_tick
+                from core.owneriq_session import alert_tick, relay_stall_tick
                 await alert_tick()
+                await relay_stall_tick()
             except Exception as ex:
                 logger.error(f"OwnerIQ alert failed: {ex}")
 
