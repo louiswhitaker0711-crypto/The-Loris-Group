@@ -47,7 +47,7 @@ def test_cod_position_walks_the_cod_order_with_3_plus_before_stage_4():
 
 def test_cod_position_caps_at_the_total_and_drops_empty_stages():
     out = cod_position({1: 30}, {1: 16, 2: 0})
-    assert out["stages"] == [{"stage": 1, "label": "1", "name": "6 Day Evaluation", "done": 16, "met": 0, "total": 16,
+    assert out["stages"] == [{"stage": 1, "label": "1", "name": "Foundation", "done": 16, "met": 0, "total": 16,
                               "complete": True, "current": False}]
     assert out["current_stage"] is None
 

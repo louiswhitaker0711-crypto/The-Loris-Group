@@ -387,7 +387,7 @@ export default function TraineeProgressScreen() {
 
       {/* Stage 2 body — modules grouped by category, locked overlay until 8 days submitted. */}
       {tab === 'stage2' && stageStatusQ.data?.stage_2_unlocked && (
-        <StageVideo url={codVideosQ.data?.stage2} title="Stage 2 — Becoming a Leader Briefing" />
+        <StageVideo url={codVideosQ.data?.stage2} title="Stage 2 — Self Management Briefing" />
       )}
       {tab === 'stage2' && (
         !stageStatusQ.data?.stage_2_unlocked ? (
@@ -454,7 +454,7 @@ export default function TraineeProgressScreen() {
       {tab === 'stage1' && (
         <>
           {/* Stage 1 briefing video (Cloudinary) — expectations for the stage */}
-          <StageVideo url={codVideosQ.data?.stage1} title="Stage 1 — 6 Day Evaluation Briefing" />
+          <StageVideo url={codVideosQ.data?.stage1} title="Stage 1 — Foundation Briefing" />
           {stage1Q.isLoading || stage1ProgressQ.isLoading ? (
             <View style={{ padding: 32, alignItems: 'center' }}><BrandLoader size={52} /></View>
           ) : (() => {

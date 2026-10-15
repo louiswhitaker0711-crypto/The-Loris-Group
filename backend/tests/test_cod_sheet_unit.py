@@ -37,7 +37,7 @@ def _run(coro):
 def test_stages_follow_the_sheet():
     assert COD_STAGE_ORDER == [1, 2, 3, 5, 4, 6]
     assert [stage_label(s) for s in COD_STAGE_ORDER] == ["1", "2", "3", "3+", "4", "5"]
-    assert STAGE_TITLES[5] == "Being a Core Leader / Coach" and STAGE_TITLES[6] == "Becoming a Business Owner"
+    assert STAGE_TITLES[5] == "Sector/Site Leader" and STAGE_TITLES[6] == "Becoming a Business Owner"
 
 
 def test_items_are_unique_and_carry_overs_are_real():

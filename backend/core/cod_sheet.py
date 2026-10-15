@@ -31,11 +31,11 @@ An entry is one of:
 from __future__ import annotations
 
 STAGE_TITLES = {
-    1: "6 Day Evaluation",
-    2: "Becoming a Leader",
-    3: "Being a Leader",
-    5: "Being a Core Leader / Coach",
-    4: "Advanced Team Building",
+    1: "Foundation",
+    2: "Self Management",
+    3: "Leader",
+    5: "Sector/Site Leader",
+    4: "Team Builder",
     6: "Becoming a Business Owner",
 }
 STAGE_LABELS = {5: "3+", 6: "5"}

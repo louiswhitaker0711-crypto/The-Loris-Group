@@ -49,11 +49,11 @@ const RHYTHM = [
 // as 5 and sits between 3 and 4; Stage 5 (Business Owner) is stored as 6.
 // The Owner's COD sheet (backend core/cod_sheet.py).
 const STAGES = sortByCodStage([
-  { stage: 1, tag: 'STAGE 1', name: '6 Day Evaluation', sub: 'Intro to the business, expectations, the 5 Steps, impulsing, handling questions' },
-  { stage: 2, tag: 'STAGE 2', name: 'Becoming a Leader', sub: 'Company, goals, selling independently, the 8 Steps, profitability, example setting' },
-  { stage: 3, tag: 'STAGE 3', name: 'Being a Leader', sub: 'Recruiting, Week 1 coaching, working with a Stage 2, running sectors, EQ' },
-  { stage: 4, tag: 'STAGE 4', name: 'Advanced Team Building', sub: 'Using the network, public speaking, managing KPI\u2019s, developing people' },
-  { stage: 5, tag: 'STAGE 3+', name: 'Being a Core Leader / Coach', sub: 'Developing your leaders, team development, territory management' },
+  { stage: 1, tag: 'STAGE 1', name: 'Foundation', sub: 'Intro to the business, expectations, the 5 Steps, impulsing, handling questions' },
+  { stage: 2, tag: 'STAGE 2', name: 'Self Management', sub: 'Company, goals, selling independently, the 8 Steps, profitability, example setting' },
+  { stage: 3, tag: 'STAGE 3', name: 'Leader', sub: 'Recruiting, Week 1 coaching, working with a Stage 2, running sectors, EQ' },
+  { stage: 4, tag: 'STAGE 4', name: 'Team Builder', sub: 'Using the network, public speaking, managing KPI\u2019s, developing people' },
+  { stage: 5, tag: 'STAGE 3+', name: 'Sector/Site Leader', sub: 'Developing your leaders, team development, territory management' },
   { stage: 6, tag: 'STAGE 5', name: 'Becoming a Business Owner', sub: 'Your business, administration, recruiting, finance, the daily rhythm' },
 ], (s) => s.stage);
 
