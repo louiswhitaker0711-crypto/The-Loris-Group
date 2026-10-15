@@ -218,6 +218,25 @@ async def owneriq_relay_live(request: Request):
     return {"ok": True, "date": iso_date, **counts}
 
 
+@router.post("/owneriq/relay/hub")
+async def owneriq_relay_hub(request: Request):
+    """Browser relay: raw Performance Hub views → owneriq_hub (the Hub screen's
+    store). Body: {secret, week_start, views:[{kind, ref, payload}, ...]}
+    where kind is 'mc' | 'team' | 'no_team'."""
+    data = await _relay_body(request)
+    from owneriq_hub import store as _store_hub, clean_week
+    from core.owneriq_session import mark_relay_ingest
+    week_start = clean_week(str(data.get("week_start") or ""))
+    stored = 0
+    for v in (data.get("views") or []):
+        kind, ref, payload = v.get("kind"), v.get("ref"), v.get("payload")
+        if kind in ("mc", "team", "no_team") and ref is not None and payload:
+            await _store_hub(kind, str(ref), week_start, payload)
+            stored += 1
+    await mark_relay_ingest({"hub_week": week_start, "hub_views": stored})
+    return {"ok": True, "week_start": week_start, "views_stored": stored}
+
+
 @router.get("/owneriq/relay/status")
 async def owneriq_relay_status(request: Request):
     """Is the browser relay feeding the app, and when did it last post? Admin."""

@@ -28,6 +28,7 @@ from database import db
 from owneriq_live import _company_ids, _headers
 from owneriq_sync import ID_LINKED, OWNERIQ_API_BASE, OwnerIQError, _forget_shared_login, _login_cached, is_oid
 from owneriq_sync import _client  # noqa: E402
+from core.owneriq_session import relay_active  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +105,9 @@ async def get_view(kind: str, ref: str, week_start: str, force: bool = False) ->
     doc = await db.owneriq_hub.find_one({"_id": key})
     if doc and not force and _fresh(doc, week_start):
         return {**doc["payload"], "fetched_at": doc["fetched_at"].isoformat(), "stale": False}
-    if await has_login():
+    # Under the browser relay the server never calls OwnerIQ (its IP is blocked
+    # at the edge); the relay keeps owneriq_hub fed, so serve whatever is stored.
+    if await has_login() and not await relay_active():
         try:
             payload = await _fetch(kind, ref, week_start)
             await store(kind, ref, week_start, payload)
@@ -123,7 +126,7 @@ async def company_id() -> str | None:
     if state and state.get("mc_id"):
         return str(state["mc_id"])
     mc = None
-    if await has_login():
+    if await has_login() and not await relay_active():
         try:
             async with _client(timeout=30.0) as client:
                 ids = await _company_ids(client, await _login_cached(client))

@@ -45,6 +45,12 @@
     const p = (n) => String(n).padStart(2, "0");
     return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
   }
+  function mondayISO(weeksBack) {
+    const d = new Date();
+    const mon = (d.getDay() + 6) % 7;            // 0 = Monday
+    d.setDate(d.getDate() - mon - 7 * (weeksBack || 0));
+    return iso(d);
+  }
 
   // GET from OwnerIQ using the current session (real browser request → allowed).
   async function oiq(path, params) {
@@ -138,6 +144,33 @@
     log(`Live: posted top + ${Object.keys(sectors).length} sectors + ${Object.keys(bas).length} BAs`);
   }
 
+  // Walk 3 — Performance Hub views: company + no-team for this & last week,
+  // and each team for this week. Feeds the Hub screen's cache (owneriq_hub).
+  async function syncHub() {
+    const ids = await companyIds();
+    for (const wk of [0, 1]) {
+      const ws = mondayISO(wk);
+      const views = [];
+      for (const mc of ids) {
+        const mcView = await oiq(`/v3/owner/bells_performance/marketing_companies/${mc}`, [["week_start_on", ws]]);
+        views.push({ kind: "mc", ref: mc, payload: mcView });
+        try {
+          const noTeam = await oiq(`/v3/owner/bells_performance/marketing_companies/${mc}/no_team`, [["week_start_on", ws]]);
+          views.push({ kind: "no_team", ref: mc, payload: noTeam });
+        } catch (e) { /* some offices have no "no team" bucket */ }
+        if (wk === 0) {
+          for (const t of (mcView.teams || [])) {
+            if (t.id == null) continue;
+            const tv = await oiq(`/v3/owner/bells_performance/teams/${t.id}`, [["week_start_on", ws]]);
+            views.push({ kind: "team", ref: t.id, payload: tv });
+          }
+        }
+      }
+      await toApp("/api/owneriq/relay/hub", { week_start: ws, views });
+      log(`Hub: posted ${views.length} views for week ${ws}`);
+    }
+  }
+
   let running = false;
   async function run() {
     if (running) return;
@@ -146,6 +179,7 @@
       if (!token()) { warn("Not logged in to OwnerIQ — open owner-iq.ai and sign in."); return; }
       await syncKpis();
       await syncLive();
+      await syncHub();
       log("sync complete", new Date().toLocaleTimeString());
     } catch (e) {
       if (e.message === "session-expired") warn("OwnerIQ session expired — sign in again at owner-iq.ai.");
