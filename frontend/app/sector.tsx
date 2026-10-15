@@ -128,7 +128,7 @@ export default function SectorScreen() {
 
       {mode === 'breakdown' && !!q.data?.sector && <BreakdownPrimetime date={date} />}
 
-      {mode === 'breakdown' && !!q.data?.can_manage && !!q.data?.sector && (
+      {mode === 'breakdown' && !!q.data?.sector && (
         <PostBreakdown date={date} postedAt={q.data.sector.breakdown_posted_at || null}
           missing={people.filter((p) => !p.breakdown).map((p) => p.user_name.split(' ')[0])}
           onPosted={() => q.refetch()} s={s} c={c} />
