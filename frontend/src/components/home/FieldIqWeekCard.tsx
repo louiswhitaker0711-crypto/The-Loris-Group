@@ -34,11 +34,17 @@ export default function FieldIqWeekCard() {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [showAll, setShowAll] = useState(false);
+  // OwnerIQ off: this card reads OwnerIQ's Performance Hub, which would be
+  // frozen on the last pull and disagree with Bells. Hide it; My week (from
+  // Bells) is the source of truth while OwnerIQ is off.
+  const sw = useQuery({ queryKey: ['owneriq-switch'], queryFn: async () => (await api.get('/owneriq/switch')).data, staleTime: 10 * 60 * 1000, retry: false });
   const q = useQuery({
+    enabled: !!sw.data?.on,
     queryKey: ['owneriq-performance-week'],
     queryFn: async () => (await api.get('/owneriq/performance/week')).data,
     staleTime: 5 * 60 * 1000,
   });
+  if (!sw.isLoading && !sw.data?.on) return null;
   const raw = q.data?.me;
   // Skip the personal block for someone with nothing this week (an owner or
   // admin who doesn't knock doors): no target, no sign-ups, no attendance.
