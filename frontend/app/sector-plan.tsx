@@ -19,8 +19,9 @@ import { showAlert } from '../src/utils/showAlert';
 import { toast } from '../src/utils/toast';
 import { useKeyboardInset } from '../src/hooks/useKeyboardInset';
 import SectorRecap from '../src/components/sector/SectorRecap';
+import PostcodeMiniMap from '../src/components/sector/PostcodeMiniMap';
 
-type Person = { user_id: string; name: string; role: string; sector_leader_id?: string | null };
+type Person = { user_id: string; name: string; role: string; sector_leader_id?: string | null; in_today?: boolean; no_show?: boolean };
 type Sector = { leader_id: string; leader_name: string; postcode: string; goal: number | null; member_ids: string[]; can_delete: boolean };
 type Draft = { leader_id: string; postcode: string; goal: string; member_ids: string[] };
 
@@ -94,13 +95,19 @@ export default function SectorPlanScreen() {
     catch (e) { showAlert('Could not change', err(e)); }
   };
 
+  const noShow = async (uid: string) => {
+    setBusy(`ns:${uid}`);
+    try { refresh((await apiService.markSectorNoShow(date, uid)).data); toast.success('Marked no show'); }
+    catch (e) { showAlert('Could not mark', err(e)); }
+    finally { setBusy(null); }
+  };
   const when = (iso?: string | null) => (iso ? new Date(iso).toLocaleTimeString(APP_LOCALE, { hour: '2-digit', minute: '2-digit', timeZone: APP_TZ }) : '');
   const where = (uid: string) => people.find((p) => p.user_id === uid)?.sector_leader_id || null;
 
   return (
     <ScrollView style={s.page} contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + kb + 60 }]} keyboardShouldPersistTaps="handled">
       {/* Break down the last field day's sectors first, then build today's. */}
-      <SectorRecap collapsible />
+      <SectorRecap collapsible defaultOpen={false} />
       <View>
         <Text style={s.title}>Today’s sectors</Text>
         <Text style={s.muted}>{d.label} · {sent ? `sent at ${when(d.sent_at)}` : confirmed ? `confirmed, going out at ${d.send_at}` : `not confirmed yet · goes out at ${d.send_at} once confirmed`}</Text>
@@ -126,6 +133,34 @@ export default function SectorPlanScreen() {
         </View>
       )}
 
+      {(() => {
+        const roster = people.filter((p) => p.in_today || p.no_show);
+        if (!roster.length) return null;
+        return (
+          <View style={s.card} testID="plan-in-today">
+            <Text style={s.h}>In today · {roster.filter((p) => !p.no_show).length}</Text>
+            {roster.map((p) => {
+              const sec = sectors.find((x) => x.leader_id === p.sector_leader_id);
+              return (
+                <View key={p.user_id} style={s.rosterRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[s.rosterName, p.no_show && s.rosterNo]}>{p.name}</Text>
+                    <Text style={s.small}>
+                      {p.no_show ? 'Not shown up' : p.sector_leader_id ? `In ${first(nameOf(p.sector_leader_id))}'s${sec?.postcode ? ` · ${sec.postcode}` : ''}` : 'Not placed yet'}
+                    </Text>
+                  </View>
+                  {p.no_show
+                    ? <View style={s.nsTag}><Text style={s.nsTagText}>No show</Text></View>
+                    : <Pressable onPress={() => noShow(p.user_id)} disabled={busy === `ns:${p.user_id}`} style={s.nsBtn} accessibilityRole="button" testID={`plan-ns-${p.user_id}`}>
+                        <Text style={s.nsBtnText}>{busy === `ns:${p.user_id}` ? '…' : 'Not shown up'}</Text>
+                      </Pressable>}
+                </View>
+              );
+            })}
+          </View>
+        );
+      })()}
+
       {sectors.map((sec) => (
         <View key={sec.leader_id} style={s.card}>
           <View style={s.rowBetween}>
@@ -147,7 +182,7 @@ export default function SectorPlanScreen() {
           <Text style={s.h}>{sectors.some((x) => x.leader_id === draft.leader_id) ? 'Edit sector' : 'New sector'}</Text>
           <Text style={s.label}>Sector leader</Text>
           <View style={s.chips}>
-            {people.filter((p) => !where(p.user_id) || where(p.user_id) === draft.leader_id || p.user_id === draft.leader_id).map((p) => (
+            {people.filter((p) => (p.in_today || p.user_id === draft.leader_id) && (!where(p.user_id) || where(p.user_id) === draft.leader_id || p.user_id === draft.leader_id)).map((p) => (
               <Pressable key={p.user_id} onPress={() => setDraft({ ...draft, leader_id: p.user_id, member_ids: draft.member_ids.filter((m) => m !== p.user_id) })}
                 style={[s.chip, draft.leader_id === p.user_id && s.chipOn]} disabled={sent && sectors.some((x) => x.leader_id === draft.leader_id)}>
                 <Text style={[s.chipText, draft.leader_id === p.user_id && { color: c.onPrimary }]}>{p.name}</Text>
@@ -159,6 +194,7 @@ export default function SectorPlanScreen() {
               <Text style={s.label}>Postcode</Text>
               <TextInput value={draft.postcode} onChangeText={(v) => setDraft({ ...draft, postcode: v.toUpperCase() })} placeholder="e.g. WF4 2"
                 autoCapitalize="characters" maxLength={10} placeholderTextColor={c.textMuted} style={s.input} />
+              <PostcodeMiniMap postcode={draft.postcode} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={s.label}>Goal (optional)</Text>
@@ -168,7 +204,7 @@ export default function SectorPlanScreen() {
           </View>
           <Text style={s.label}>Who’s in it{locked ? ' (fixed now the field’s started)' : ''}</Text>
           <View style={s.chips}>
-            {people.filter((p) => p.user_id !== draft.leader_id).map((p) => {
+            {people.filter((p) => p.user_id !== draft.leader_id && p.in_today).map((p) => {
               const on = draft.member_ids.includes(p.user_id);
               const elsewhere = where(p.user_id) && where(p.user_id) !== draft.leader_id;
               return (
@@ -204,7 +240,7 @@ export default function SectorPlanScreen() {
         </Pressable>
       )}
       {(() => {
-        const unplaced = people.filter((p) => p.role !== 'admin' && !p.sector_leader_id);
+        const unplaced = people.filter((p) => p.in_today && !p.no_show && p.role !== 'admin' && !p.sector_leader_id);
         return unplaced.length > 0 && sectors.length > 0 ? (
           <Text style={s.muted}>Not in a sector: {unplaced.map((p) => first(p.name)).join(', ')}</Text>
         ) : null;
@@ -226,6 +262,13 @@ const styles = (c: any) => StyleSheet.create({
   bold: { fontFamily: fonts.bodyBold },
   muted: { fontFamily: fonts.body, fontSize: 13.5, lineHeight: 19, color: c.textMuted },
   small: { fontFamily: fonts.body, fontSize: 12, color: c.textMuted },
+  rosterRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 7, borderTopWidth: 1, borderTopColor: c.border },
+  rosterName: { fontFamily: fonts.bodySemibold, fontSize: 14.5, color: c.text },
+  rosterNo: { color: '#000', textDecorationLine: 'line-through' },
+  nsBtn: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: c.red },
+  nsBtnText: { fontFamily: fonts.bodySemibold, fontSize: 12.5, color: c.red },
+  nsTag: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: '#000' },
+  nsTagText: { fontFamily: fonts.bodyBold, fontSize: 12, color: '#fff' },
   link: { fontFamily: fonts.bodySemibold, fontSize: 14, color: c.primary },
   label: { fontFamily: fonts.bodySemibold, fontSize: 13, color: c.text, marginTop: 4 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
