@@ -213,6 +213,15 @@ async def _sector_of_leader(leader_id: str, iso: str) -> Optional[dict]:
     return await db.sectors.find_one({"leader_id": str(leader_id), "date": iso}, {"_id": 0})
 
 
+async def _my_sector(user_id: str, iso: str) -> Optional[dict]:
+    """The sector a person is in that day — one they LEAD, or one they're a
+    MEMBER of. A person is in one sector a day, so a member can do and post the
+    sector's breakdown against the original leader's set-up."""
+    me = str(user_id)
+    sec = await db.sectors.find_one({"leader_id": me, "date": iso}, {"_id": 0})
+    return sec or await db.sectors.find_one({"date": iso, "member_ids": me}, {"_id": 0})
+
+
 async def _users_by_ids(ids: list[str]) -> list[dict]:
     oids = [ObjectId(i) for i in ids if ObjectId.is_valid(str(i))]
     rows = []
@@ -228,8 +237,9 @@ async def _people(user: dict, iso: Optional[str] = None) -> list[dict]:
     have one, otherwise their team (Coach), the office (Admin) or themselves."""
     role = (user.get("role") or "").lower()
     if iso:
-        # Whoever leads a sector that day (a Coach or a BA) works with it.
-        sec = await _sector_of_leader(str(user["id"]), iso)
+        # The sector they're in that day (lead OR a member of): everyone works
+        # with the whole sector, so anyone can fill in its breakdowns.
+        sec = await _my_sector(str(user["id"]), iso)
         if sec and sec.get("member_ids"):
             return await _users_by_ids(sec["member_ids"])
     q: dict = {"office_id": user.get("office_id"), "deleted": {"$ne": True}, "is_active": {"$ne": False},
@@ -250,8 +260,8 @@ async def _can_edit(user: dict, target_id: str, iso: Optional[str] = None) -> bo
     if str(user.get("id")) == str(target_id):
         return True
     if iso:
-        sec = await _sector_of_leader(str(user["id"]), iso)
-        if sec and str(target_id) in (sec.get("member_ids") or []):
+        sec = await _my_sector(str(user["id"]), iso)
+        if sec and str(target_id) in ((sec.get("member_ids") or []) + [sec.get("leader_id")]):
             return True
     return any(p["user_id"] == str(target_id) for p in await _people(user))
 
@@ -287,7 +297,9 @@ async def sector_day(request: Request, date: Optional[str] = None):
     iso = _clean_date(date)
     prev = (Date.fromisoformat(iso) - timedelta(days=1 if Date.fromisoformat(iso).weekday() != 0 else 2)).isoformat()
     people = await _people(user, iso)
-    sector = await _sector_of_leader(str(user["id"]), iso)
+    sector = await _my_sector(str(user["id"]), iso)
+    i_lead = bool(sector) and sector.get("leader_id") == str(user["id"])
+    role = (user.get("role") or "").lower()
     ids = [p["user_id"] for p in people]
     docs = {d["user_id"]: d async for d in db.sector_days.find({"date": iso, "user_id": {"$in": ids}}, {"_id": 0})}
     prev_docs = {d["user_id"]: d async for d in db.sector_days.find({"date": prev, "user_id": {"$in": ids}}, {"_id": 0})}
@@ -308,7 +320,11 @@ async def sector_day(request: Request, date: Optional[str] = None):
         })
     return {
         "date": iso, "previous_date": prev,
-        "can_manage": (user.get("role") or "").lower() in ("leader", "admin") or bool(sector),
+        # Managing a sector (who's in it, the goal, the postcode) is the leader's,
+        # or a Coach/Admin starting a new one. A member can do the breakdown but
+        # never re-pick the set-up — that stays as the leader made it.
+        "can_manage": i_lead or (role in ("leader", "admin") and sector is None),
+        "leads": i_lead,
         "sector": sector,
         "options": {"proud": PROUD_OPTIONS, "change": CHANGE_OPTIONS,
                     "kpi_metrics": [{"key": k, "label": v, "loa": LOA.get(k)} for k, v in KPI_METRICS.items()]},
@@ -325,6 +341,14 @@ async def save_sector_day(user_id: str, request: Request, date: Optional[str] = 
     if not await _can_edit(user, user_id, iso):
         raise HTTPException(status_code=403, detail="That person is not on your team or in your sector")
     body = await request.json()
+    # Breakdowns: anyone in the sector can fill them for anyone in it. Set-ups of
+    # OTHER people stay the leader's (or a Coach/Admin's) — a member only sets
+    # their own.
+    if "setup" in body and str(user_id) != str(user["id"]):
+        sec = await _my_sector(str(user["id"]), iso)
+        leads = bool(sec) and sec.get("leader_id") == str(user["id"])
+        if not (leads or (user.get("role") or "").lower() in ("leader", "admin")):
+            raise HTTPException(status_code=403, detail="Only the sector leader sets other people’s set-ups")
     now = datetime.now(timezone.utc).isoformat()
     upd: dict = {}
     if "setup" in body:
@@ -739,6 +763,15 @@ async def save_my_sector(request: Request, date: Optional[str] = None):
     members = [i for i in dict.fromkeys(wanted) if i in valid]
     if not members:
         raise HTTPException(status_code=400, detail="Nobody from your office in that list")
+    # You can't start/lead a sector while you're a member of someone else's that
+    # day: the set-up is fixed once it's done. This stops a breakdown re-homing a
+    # sector onto whoever happens to be filling it in.
+    in_other = await db.sectors.find_one(
+        {"office_id": user.get("office_id"), "date": iso, "member_ids": str(user["id"]),
+         "leader_id": {"$ne": str(user["id"])}}, {"_id": 0, "leader_name": 1})
+    if in_other:
+        raise HTTPException(status_code=403,
+                            detail=f"You’re in {in_other.get('leader_name') or 'another'}’s sector today — ask them to change who’s in it")
     planned = await _sector_of_leader(str(user["id"]), iso)
     if planned and planned.get("planned_by"):
         raise HTTPException(status_code=403, detail="Your sector was planned this morning: ask the sector planner to change who's in it")
@@ -842,13 +875,14 @@ async def delete_sector(request: Request, date: Optional[str] = None, leader: Op
 
 @router.post("/sector/breakdown/post")
 async def post_breakdown(request: Request, date: Optional[str] = None):
-    """The sector leader posts the breakdown: it's done, and it shows on every
-    Coach's Home with the set-ups (Today's sectors)."""
+    """Post the sector's breakdown: anyone IN the sector can, and it always lands
+    on the original sector (its leader's set-up), never a new one. It's then
+    done and shows on every Coach's Home with the set-ups (Today's sectors)."""
     user = await get_current_user(request)
     iso = _clean_date(date)
-    sec = await _sector_of_leader(str(user["id"]), iso)
+    sec = await _my_sector(str(user["id"]), iso)
     if not sec:
-        raise HTTPException(status_code=403, detail="Only the sector leader posts the breakdown")
+        raise HTTPException(status_code=403, detail="You can only post the breakdown for a sector you’re in")
     at = datetime.now(timezone.utc).isoformat()
     await db.sectors.update_one({"leader_id": sec["leader_id"], "date": iso},
                                 {"$set": {"breakdown_posted_at": at, "breakdown_posted_by": user.get("name") or ""}})
