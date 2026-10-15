@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from bson import ObjectId
@@ -108,6 +108,17 @@ async def get_plan(request: Request, date: Optional[str] = None):
         sectors.append({"leader_id": s["leader_id"], "leader_name": names.get(s["leader_id"]) or s.get("leader_name") or "",
                         "postcode": s.get("postcode") or "", "goal": s.get("goal"),
                         "member_ids": members, "can_delete": await _deletable(s)})
+    # Who's scheduled In today (from Bells, set at the start of the week), and
+    # who's been marked a No Show.
+    d0 = datetime.fromisoformat(iso).date()
+    week_ending = (d0 + timedelta(days=6 - d0.weekday())).isoformat()
+    widx = d0.weekday()
+    bells_status: dict[str, str] = {}
+    async for e in db.bells_entries.find({"office_id": office_id, "week_ending": week_ending}, {"user_id": 1, "days": 1}):
+        days = e.get("days") or []
+        st = (days[widx] or {}).get("status") if widx < len(days) else None
+        if st:
+            bells_status[str(e.get("user_id"))] = st
     planner = await planner_for(office_id, iso)
     sent = await db.sector_plan_sends.find_one({"office_id": office_id, "date": iso}, {"_id": 0})
     d = datetime.fromisoformat(iso).date()
@@ -120,7 +131,9 @@ async def get_plan(request: Request, date: Optional[str] = None):
             "is_admin": (user.get("role") or "").lower() == "admin",
             "planner": ({"user_id": planner["user_id"], "name": names.get(planner["user_id"], "")} if planner else None),
             "sectors": sectors,
-            "people": [{**p, "sector_leader_id": where.get(p["user_id"])} for p in people],
+            "people": [{**p, "sector_leader_id": where.get(p["user_id"]),
+                        "in_today": bells_status.get(p["user_id"]) == "in",
+                        "no_show": bells_status.get(p["user_id"]) == "ns"} for p in people],
             "sent_at": (sent or {}).get("at")}
 
 
@@ -387,6 +400,45 @@ async def sector_recap(request: Request, date: Optional[str] = None):
                                            {"_id": 0, "lines": 1, "sector_leader_id": 1}):
         lines.extend(mk.get("lines") or [])
     return {"date": iso, "label": _label(iso), "sectors": out, "lines": lines[:2000]}
+
+
+@router.put("/sector/plan/no-show")
+async def mark_no_show(request: Request, date: Optional[str] = None):
+    """Someone scheduled in hasn't turned up: mark them No Show on Bells for
+    today (black) and pull them out of any sector. If sectors are already out,
+    their sector hears "Sectors have changed"."""
+    user, iso = await _require_planner(request, date)
+    office_id = user.get("office_id")
+    uid = str((await request.json()).get("user_id") or "")
+    if not ObjectId.is_valid(uid):
+        raise HTTPException(status_code=400, detail="Pick a person")
+    target = await db.users.find_one({"_id": ObjectId(uid), "office_id": office_id},
+                                     {"name": 1, "role": 1, "office_id": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="Person not found")
+    from owneriq_performance import _bells_entry, _empty_day
+    d0 = datetime.fromisoformat(iso).date()
+    entry = await _bells_entry(target, (d0 + timedelta(days=6 - d0.weekday())).isoformat())
+    if entry:
+        idx = d0.weekday()
+        days = list(entry.get("days") or [])
+        while len(days) < 7:
+            days.append(_empty_day())
+        day = dict(days[idx] or {})
+        day.update({"status": "ns", "under30": None, "over30": None, "memberships": None})
+        days[idx] = day
+        await db.bells_entries.update_one({"id": entry["id"]},
+            {"$set": {"days": days, "updated_at": datetime.now(timezone.utc).isoformat()}})
+    before = {x["leader_id"]: x async for x in db.sectors.find({"office_id": office_id, "date": iso}, {"_id": 0})}
+    await db.sectors.update_many({"office_id": office_id, "date": iso}, {"$pull": {"member_ids": uid}})
+    sent = await db.sector_plan_sends.find_one({"office_id": office_id, "date": iso}, {"_id": 0})
+    if sent and sent.get("at"):
+        after = {x["leader_id"]: x async for x in db.sectors.find({"office_id": office_id, "date": iso}, {"_id": 0})}
+        changed = [k for k in before
+                   if set((before.get(k) or {}).get("member_ids") or []) != set((after.get(k) or {}).get("member_ids") or [])]
+        if changed:
+            await _tell(office_id, iso, changed, "🔄 Sectors have changed")
+    return await get_plan(request, iso)
 
 
 @router.put("/sector/plan/planner")
