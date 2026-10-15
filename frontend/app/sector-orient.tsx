@@ -14,12 +14,6 @@ import { todayISO } from '../src/utils/calendarDates';
 import { loadLeaflet, OSM_TILES, OSM_ATTRIBUTION } from '../src/utils/leaflet';
 import { hopHex, hopLabel } from '../src/utils/hopColours';
 
-// How much to scale the map so its corners stay covered at any rotation
-// (1 at north, up to ~1.41 at 45°). Keeps the view full-bleed as it turns.
-const cover = (deg: number) => {
-  const r = (deg * Math.PI) / 180;
-  return Math.abs(Math.sin(r)) + Math.abs(Math.cos(r));
-};
 const norm = (deg: number) => ((deg % 360) + 360) % 360;
 
 export default function SectorOrientScreen() {
@@ -50,7 +44,7 @@ export default function SectorOrientScreen() {
     const el = box.current as unknown as HTMLElement | null;
     if (el) {
       el.style.transformOrigin = '50% 50%';
-      el.style.transform = `rotate(${deg}deg) scale(${cover(deg).toFixed(4)})`;
+      el.style.transform = `rotate(${deg}deg)`; // rotate only — scaling raster tiles blurs them
     }
     const a = norm(deg);
     setRotated(a > 0.5 && a < 359.5);
@@ -66,10 +60,18 @@ export default function SectorOrientScreen() {
       const el = box.current as unknown as HTMLElement | null;
       if (dead || !el) return;
       if (map.current) { map.current.remove(); map.current = null; }
-      const m = L.map(el, { zoomControl: false, attributionControl: true, dragging: false, touchZoom: false,
-        scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false, zoomSnap: 0 });
+      const m = L.map(el, { zoomControl: false, attributionControl: false, dragging: false, touchZoom: false,
+        scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false });
       const pts = plans.flatMap((p) => p.lines || []).flat();
-      m.fitBounds(L.latLngBounds(pts), { padding: [28, 28], maxZoom: 17 });
+      // The map element is oversized (see mapInner), so rotating it never needs
+      // scaling to cover the corners. Fit the area into the VISIBLE centre by
+      // padding out the overhang (~18.75% of the oversized element each side).
+      const fit = () => {
+        const r = el.getBoundingClientRect();
+        const padX = r.width * 0.1875, padY = r.height * 0.1875;
+        m.fitBounds(L.latLngBounds(pts), { paddingTopLeft: [padX, padY], paddingBottomRight: [padX, padY], maxZoom: 17 });
+      };
+      fit();
       L.tileLayer(OSM_TILES, { maxZoom: 19, attribution: OSM_ATTRIBUTION }).addTo(m);
       if (d?.shape?.geometry) {
         L.geoJSON(d.shape.geometry, { interactive: false, style: { color: c.primary, weight: 1.5, fillOpacity: 0.04 } }).addTo(m);
@@ -91,7 +93,7 @@ export default function SectorOrientScreen() {
       const refit = () => {
         if (map.current !== m) return;
         m.invalidateSize();
-        m.fitBounds(L.latLngBounds(pts), { padding: [28, 28], maxZoom: 17 });
+        fit();
         apply(bearing.current);
       };
       [150, 600, 1500].forEach((t) => setTimeout(refit, t));
@@ -159,13 +161,14 @@ export default function SectorOrientScreen() {
       ) : (
         <>
           <View ref={clipRef} style={s.mapBox}>
-            <View ref={box} style={StyleSheet.absoluteFill} />
+            <View ref={box} style={s.mapInner} />
             {rotated && (
               <Pressable onPress={reset} style={s.compass} accessibilityRole="button" accessibilityLabel="Reset to north">
                 <Ionicons name="navigate" size={18} color={c.onPrimary} />
                 <Text style={s.compassText}>N</Text>
               </Pressable>
             )}
+            <Text style={s.attrib}>© OpenStreetMap</Text>
           </View>
           <Text style={s.hint}>Twist with two fingers to turn the map to face the way you’re looking. Tap N to snap back to north.</Text>
         </>
@@ -189,10 +192,14 @@ const styles = (c: any) => StyleSheet.create({
   title: { fontFamily: fonts.bodyBold, fontSize: 17, color: c.text, flex: 1 },
   muted: { fontFamily: fonts.body, fontSize: 13.5, color: c.textMuted },
   mapBox: { flex: 1, marginHorizontal: 12, borderRadius: 16, overflow: 'hidden', backgroundColor: c.surface, position: 'relative' },
+  // Oversized so the map can rotate without its corners pulling away from the
+  // clip box — rotation stays crisp because nothing is scaled.
+  mapInner: { position: 'absolute', left: '-30%', top: '-30%', width: '160%', height: '160%' },
   compass: { position: 'absolute', top: 12, right: 12, flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, backgroundColor: c.primary,
     shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
   compassText: { fontFamily: fonts.bodyBold, fontSize: 13, color: c.onPrimary },
+  attrib: { position: 'absolute', bottom: 3, left: 6, fontFamily: fonts.body, fontSize: 9, color: c.textMuted, backgroundColor: c.background + 'cc', paddingHorizontal: 3, borderRadius: 3 },
   hint: { fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: c.textMuted, textAlign: 'center', paddingHorizontal: 20, paddingTop: 12 },
   footer: { paddingHorizontal: 16, paddingTop: 10 },
   draw: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 14, backgroundColor: c.primary },
