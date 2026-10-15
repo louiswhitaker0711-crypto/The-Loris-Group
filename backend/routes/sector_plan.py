@@ -182,6 +182,83 @@ async def save_planned_sector(request: Request, date: Optional[str] = None):
     return await get_plan(request, iso)
 
 
+@router.put("/sector/plan/bulk")
+async def save_plan_bulk(request: Request, date: Optional[str] = None):
+    """Save the whole board in one go: all sectors, their postcodes, goals and
+    people, atomically. Nobody ends up in two sectors. Sectors not in the list
+    are removed (if still deletable). After sending, everyone in the sectors
+    that changed hears one "Sectors have changed"."""
+    user, iso = await _require_planner(request, date)
+    office_id = user.get("office_id")
+    body = await request.json()
+    rows = body.get("sectors") or []
+    now_iso = datetime.now(timezone.utc).isoformat()
+    sent = await db.sector_plan_sends.find_one({"office_id": office_id, "date": iso}, {"_id": 0})
+    before = {x["leader_id"]: x async for x in db.sectors.find({"office_id": office_id, "date": iso}, {"_id": 0})}
+
+    # Clean every row and give each person to exactly one sector (first wins).
+    cleaned: list[dict] = []
+    claimed: set[str] = set()
+    leader_ids: list[str] = []
+    for r in rows:
+        leader = str(r.get("leader_id") or "")
+        if not ObjectId.is_valid(leader) or leader in leader_ids:
+            continue
+        wanted = [str(i) for i in (r.get("member_ids") or []) if ObjectId.is_valid(str(i))]
+        ids = [leader] + [i for i in wanted if i != leader]
+        members = []
+        for i in dict.fromkeys(ids):
+            if i not in claimed:
+                claimed.add(i)
+                members.append(i)
+        raw = r.get("goal")
+        cleaned.append({"leader_id": leader, "member_ids": members,
+                        "postcode": clean_postcode(r.get("postcode")),
+                        "goal": None if raw in (None, "") else _int(raw, 0, 200)})
+        leader_ids.append(leader)
+
+    # Every leader and member must be in the office and active.
+    all_ids = list({i for r in cleaned for i in [r["leader_id"], *r["member_ids"]]})
+    valid = {str(u["_id"]): u async for u in db.users.find(
+        {"_id": {"$in": [ObjectId(i) for i in all_ids]}, "office_id": office_id, **_ACTIVE}, {"name": 1})}
+    cleaned = [r for r in cleaned if r["leader_id"] in valid]
+    for r in cleaned:
+        r["member_ids"] = [i for i in r["member_ids"] if i in valid]
+
+    # After the field's started, who's in each sector is fixed.
+    if sent and sent.get("at"):
+        d = datetime.fromisoformat(iso).date()
+        if _now_uk().date().isoformat() > iso or _past(_now_uk(), _slot(FIELD_START, d)):
+            same = all(set((before.get(r["leader_id"]) or {}).get("member_ids") or []) == set(r["member_ids"]) for r in cleaned) \
+                and set(before) == {r["leader_id"] for r in cleaned}
+            if not same:
+                raise HTTPException(status_code=400, detail="The field's started: who's in each sector can't change now")
+
+    # Remove sectors no longer on the board (when still deletable).
+    keep = {r["leader_id"] for r in cleaned}
+    for leader_id, sec in before.items():
+        if leader_id not in keep and await _deletable(sec):
+            await db.coverage_marks.delete_many({"office_id": office_id, "date": iso, "sector_leader_id": leader_id})
+            await db.sectors.delete_one({"office_id": office_id, "date": iso, "leader_id": leader_id})
+
+    # Upsert each sector with its final membership.
+    for r in cleaned:
+        await db.sectors.update_one({"office_id": office_id, "leader_id": r["leader_id"], "date": iso}, {
+            "$set": {"leader_name": valid[r["leader_id"]].get("name") or "", "member_ids": r["member_ids"],
+                     "postcode": r["postcode"], "goal": r["goal"],
+                     "planned_by": user.get("name") or "", "updated_at": now_iso},
+            "$setOnInsert": {"id": str(uuid.uuid4()), "created_at": now_iso}}, upsert=True)
+
+    if sent and sent.get("at"):
+        after = {x["leader_id"]: x async for x in db.sectors.find({"office_id": office_id, "date": iso}, {"_id": 0})}
+        changed = [k for k in set(before) | set(after)
+                   if set((before.get(k) or {}).get("member_ids") or []) != set((after.get(k) or {}).get("member_ids") or [])
+                   or (before.get(k) or {}).get("postcode") != (after.get(k) or {}).get("postcode")]
+        if changed:
+            await _tell(office_id, iso, changed, "🔄 Sectors have changed")
+    return await get_plan(request, iso)
+
+
 @router.put("/sector/plan/postcode")
 async def change_postcode(request: Request, date: Optional[str] = None):
     """The planner changes a sector's postcode (also from the sector's page);

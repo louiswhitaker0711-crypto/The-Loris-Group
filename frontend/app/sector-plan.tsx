@@ -5,7 +5,7 @@
 // it's later. After that the planner can still change postcodes, and who's in
 // which sector until the field starts; the people in changed sectors are
 // told. (backend routes/sector_plan.py)
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -24,6 +24,7 @@ import PostcodeMiniMap from '../src/components/sector/PostcodeMiniMap';
 type Person = { user_id: string; name: string; role: string; sector_leader_id?: string | null; in_today?: boolean; no_show?: boolean };
 type Sector = { leader_id: string; leader_name: string; postcode: string; goal: number | null; member_ids: string[]; can_delete: boolean };
 type Draft = { leader_id: string; postcode: string; goal: string; member_ids: string[] };
+type BoardSec = { leader_id: string; leader_name: string; postcode: string; goal: string; member_ids: string[] };
 
 const first = (n: string) => (n || '').trim().split(' ')[0] || 'Someone';
 const err = (e: any, f = 'Try again.') => e?.response?.data?.detail || f;
@@ -37,9 +38,12 @@ export default function SectorPlanScreen() {
   const params = useLocalSearchParams<{ date?: string }>();
   const date = params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date) ? params.date : todayISO();
   const q = useQuery({ queryKey: ['sector-plan', date], queryFn: () => apiService.getSectorPlan(date).then((r) => r.data) });
-  const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [pickingPlanner, setPickingPlanner] = useState(false);
+  // The whole plan is edited locally as one board; a single Save all commits it.
+  const [board, setBoard] = useState<BoardSec[]>([]);
+  const [dirty, setDirty] = useState(false);
+  const [addingLeader, setAddingLeader] = useState(false);
 
   const d = q.data;
   const people: Person[] = d?.people || [];
@@ -53,6 +57,13 @@ export default function SectorPlanScreen() {
     if (data) qc.setQueryData(['sector-plan', date], data); else q.refetch();
     ['sector-days', 'sector-board', 'sector-status'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
   };
+  // Load the board from the server, unless the planner has unsaved local edits.
+  useEffect(() => {
+    if (!d || dirty) return;
+    setBoard((d.sectors || []).map((x: Sector) => ({
+      leader_id: x.leader_id, leader_name: x.leader_name, postcode: x.postcode || '',
+      goal: x.goal != null ? String(x.goal) : '', member_ids: x.member_ids || [] })));
+  }, [d, dirty]);
 
   if (q.isLoading) return <View style={[s.page, s.center]}><ActivityIndicator color={c.primary} /></View>;
   if (!d?.can_plan) {
@@ -62,28 +73,36 @@ export default function SectorPlanScreen() {
   const confirmed = !!d.confirmed_at;
   const locked = !!d.people_locked;
 
-  const saveDraft = async () => {
-    if (!draft) return;
-    if (!draft.leader_id) return showAlert('Sector leader', 'Pick who’s leading it.');
-    setBusy('save');
+  // Local board edits — nothing saved until Save all.
+  const edit = (fn: (b: BoardSec[]) => BoardSec[]) => { setBoard((b) => fn(b.map((x) => ({ ...x, member_ids: [...x.member_ids] })))); setDirty(true); };
+  const setField = (leader: string, k: 'postcode' | 'goal', v: string) =>
+    edit((b) => b.map((x) => (x.leader_id === leader ? { ...x, [k]: v } : x)));
+  // Tick a person into a sector: they leave every other sector on the board.
+  const toggleMember = (leader: string, uid: string) => edit((b) => {
+    const inThis = b.find((x) => x.leader_id === leader)?.member_ids.includes(uid);
+    return b.map((x) => {
+      if (x.leader_id === leader) return { ...x, member_ids: inThis ? x.member_ids.filter((m) => m !== uid) : [...x.member_ids.filter((m) => m !== uid), uid] };
+      return { ...x, member_ids: x.member_ids.filter((m) => m !== uid) };  // pull from everywhere else
+    });
+  });
+  const addSector = (leaderId: string) => {
+    const p = people.find((x) => x.user_id === leaderId);
+    if (!p) return;
+    setAddingLeader(false);
+    edit((b) => [...b, { leader_id: leaderId, leader_name: p.name, postcode: '', goal: '', member_ids: [leaderId] }]);
+  };
+  const removeSector = (leader: string) => edit((b) => b.filter((x) => x.leader_id !== leader));
+  const saveAll = async () => {
+    setBusy('saveall');
     try {
-      const r = await apiService.saveSectorPlan(date, {
-        leader_id: draft.leader_id, postcode: draft.postcode, goal: draft.goal.trim() === '' ? null : Number(draft.goal),
-        member_ids: draft.member_ids,
-      });
+      const r = await apiService.saveSectorPlanBulk(date, board.map((x) => ({
+        leader_id: x.leader_id, postcode: x.postcode, goal: x.goal.trim() === '' ? null : Number(x.goal), member_ids: x.member_ids })));
+      setDirty(false);
       refresh(r.data);
-      setDraft(null);
-      toast.success(sent ? 'Saved: the people in it have been told' : 'Sector saved');
+      toast.success(sent ? 'Saved — the people affected have been told' : 'Sectors saved');
     } catch (e) { showAlert('Could not save', err(e)); }
     finally { setBusy(null); }
   };
-  const remove = (sec: Sector) => showAlert(`Delete ${sec.postcode || first(sec.leader_name) + '’s sector'}?`, 'It comes off today’s plan.', [
-    { text: 'Cancel', style: 'cancel' },
-    { text: 'Delete', style: 'destructive', onPress: async () => {
-      try { refresh((await apiService.deleteSectorPlan(date, sec.leader_id)).data); }
-      catch (e) { showAlert('Could not delete', err(e)); }
-    } },
-  ]);
   const confirm = async () => {
     setBusy('confirm');
     try {
@@ -106,7 +125,6 @@ export default function SectorPlanScreen() {
     finally { setBusy(null); }
   };
   const when = (iso?: string | null) => (iso ? new Date(iso).toLocaleTimeString(APP_LOCALE, { hour: '2-digit', minute: '2-digit', timeZone: APP_TZ }) : '');
-  const where = (uid: string) => people.find((p) => p.user_id === uid)?.sector_leader_id || null;
 
   return (
     <ScrollView style={s.page} contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + kb + 60 }]} keyboardShouldPersistTaps="handled">
@@ -165,87 +183,85 @@ export default function SectorPlanScreen() {
         );
       })()}
 
-      {sectors.map((sec) => (
-        <View key={sec.leader_id} style={s.card}>
-          <View style={s.rowBetween}>
-            <Text style={s.code}>{sec.postcode || 'No postcode'}</Text>
-            <View style={{ flexDirection: 'row', gap: 14 }}>
-              <Pressable onPress={() => setDraft({ leader_id: sec.leader_id, postcode: sec.postcode, goal: sec.goal != null ? String(sec.goal) : '', member_ids: sec.member_ids })} hitSlop={8}>
-                <Text style={s.link}>Edit</Text>
-              </Pressable>
-              {sec.can_delete && <Pressable onPress={() => remove(sec)} hitSlop={8}><Text style={[s.link, { color: c.red }]}>Delete</Text></Pressable>}
+      {/* Everyone's sectors on one board — move people freely, Save all once. */}
+      {board.map((sec) => {
+        const otherLeaders = new Set(board.filter((x) => x.leader_id !== sec.leader_id).map((x) => x.leader_id));
+        return (
+          <View key={sec.leader_id} style={s.card}>
+            <View style={s.rowBetween}>
+              <Text style={s.line}><Text style={s.bold}>{sec.leader_name}</Text> leading</Text>
+              <Pressable onPress={() => removeSector(sec.leader_id)} hitSlop={8} disabled={locked}><Text style={[s.link, { color: c.red }]}>Remove</Text></Pressable>
+            </View>
+            <View style={s.twoCol}>
+              <View style={{ flex: 2 }}>
+                <Text style={s.label}>Postcode</Text>
+                <TextInput value={sec.postcode} onChangeText={(v) => setField(sec.leader_id, 'postcode', v.toUpperCase())} placeholder="e.g. WF4 2"
+                  autoCapitalize="characters" maxLength={10} placeholderTextColor={c.textMuted} style={s.input} />
+                <PostcodeMiniMap postcode={sec.postcode} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.label}>Goal</Text>
+                <TextInput value={sec.goal} onChangeText={(v) => setField(sec.leader_id, 'goal', v.replace(/\D/g, ''))} placeholder="–"
+                  inputMode="numeric" maxLength={3} placeholderTextColor={c.textMuted} style={s.input} />
+              </View>
+            </View>
+            <Text style={s.label}>Who's in it{locked ? ' (fixed now the field\u2019s started)' : ''}</Text>
+            <View style={s.chips}>
+              {people.filter((p) => p.user_id !== sec.leader_id && !otherLeaders.has(p.user_id) && !p.no_show
+                                    && (canPlace(p) || sec.member_ids.includes(p.user_id))).map((p) => {
+                const on = sec.member_ids.includes(p.user_id);
+                const elsewhere = board.find((x) => x.leader_id !== sec.leader_id && x.member_ids.includes(p.user_id));
+                return (
+                  <Pressable key={p.user_id} disabled={locked} onPress={() => toggleMember(sec.leader_id, p.user_id)}
+                    style={[s.chip, on && s.chipOn, !!elsewhere && !on && s.chipElsewhere]}>
+                    <Text style={[s.chipText, on && { color: c.onPrimary }]}>
+                      {p.name}{elsewhere && !on ? ` \u00b7 ${first(elsewhere.leader_name)}\u2019s` : ''}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
           </View>
-          <Text style={s.line}><Text style={s.bold}>{sec.leader_name}</Text> leading{sec.goal != null ? ` · goal ${sec.goal}` : ''}</Text>
-          <Text style={s.muted}>{sec.member_ids.filter((m) => m !== sec.leader_id).map((m) => first(nameOf(m))).join(', ') || 'Nobody else yet'}</Text>
-        </View>
-      ))}
+        );
+      })}
 
-      {draft ? (
-        <View style={[s.card, { borderColor: c.primary }]}>
-          <Text style={s.h}>{sectors.some((x) => x.leader_id === draft.leader_id) ? 'Edit sector' : 'New sector'}</Text>
-          <Text style={s.label}>Sector leader</Text>
+      {!locked && (addingLeader ? (
+        <View style={s.card}>
+          <Text style={s.label}>Who's leading the new sector?</Text>
           <View style={s.chips}>
-            {people.filter((p) => (canPlace(p) || p.user_id === draft.leader_id) && (!where(p.user_id) || where(p.user_id) === draft.leader_id || p.user_id === draft.leader_id)).map((p) => (
-              <Pressable key={p.user_id} onPress={() => setDraft({ ...draft, leader_id: p.user_id, member_ids: draft.member_ids.filter((m) => m !== p.user_id) })}
-                style={[s.chip, draft.leader_id === p.user_id && s.chipOn]} disabled={sent && sectors.some((x) => x.leader_id === draft.leader_id)}>
-                <Text style={[s.chipText, draft.leader_id === p.user_id && { color: c.onPrimary }]}>{p.name}</Text>
-              </Pressable>
+            {people.filter((p) => canPlace(p) && !p.no_show && !board.some((x) => x.leader_id === p.user_id)).map((p) => (
+              <Pressable key={p.user_id} onPress={() => addSector(p.user_id)} style={s.chip}><Text style={s.chipText}>{p.name}</Text></Pressable>
             ))}
           </View>
-          <View style={s.twoCol}>
-            <View style={{ flex: 2 }}>
-              <Text style={s.label}>Postcode</Text>
-              <TextInput value={draft.postcode} onChangeText={(v) => setDraft({ ...draft, postcode: v.toUpperCase() })} placeholder="e.g. WF4 2"
-                autoCapitalize="characters" maxLength={10} placeholderTextColor={c.textMuted} style={s.input} />
-              <PostcodeMiniMap postcode={draft.postcode} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={s.label}>Goal (optional)</Text>
-              <TextInput value={draft.goal} onChangeText={(v) => setDraft({ ...draft, goal: v.replace(/\D/g, '') })} placeholder="–"
-                inputMode="numeric" maxLength={3} placeholderTextColor={c.textMuted} style={s.input} />
-            </View>
-          </View>
-          <Text style={s.label}>Who’s in it{locked ? ' (fixed now the field’s started)' : ''}</Text>
-          <View style={s.chips}>
-            {people.filter((p) => p.user_id !== draft.leader_id && (canPlace(p) || draft.member_ids.includes(p.user_id))).map((p) => {
-              const on = draft.member_ids.includes(p.user_id);
-              const elsewhere = where(p.user_id) && where(p.user_id) !== draft.leader_id;
-              return (
-                <Pressable key={p.user_id} disabled={locked}
-                  onPress={() => setDraft({ ...draft, member_ids: on ? draft.member_ids.filter((m) => m !== p.user_id) : [...draft.member_ids, p.user_id] })}
-                  style={[s.chip, on && s.chipOn, !!elsewhere && !on && s.chipElsewhere]}>
-                  <Text style={[s.chipText, on && { color: c.onPrimary }]}>
-                    {p.name}{elsewhere && !on ? ` · ${first(nameOf(where(p.user_id) as string))}’s` : ''}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          <Text style={s.small}>{anyIn ? 'Showing people marked In on Bells today.' : 'Nobody’s marked In on Bells today, so everyone’s shown — set In/Off on Bells to filter this.'} Someone already in another sector moves to this one when you tick them.</Text>
-          <View style={s.actions}>
-            <Pressable onPress={() => setDraft(null)} style={s.ghost}><Text style={s.ghostText}>Cancel</Text></Pressable>
-            <Pressable onPress={saveDraft} disabled={busy === 'save'} style={s.btn}>
-              {busy === 'save' ? <ActivityIndicator color={c.onPrimary} /> : <Text style={s.btnText}>Save sector</Text>}
-            </Pressable>
-          </View>
+          <Pressable onPress={() => setAddingLeader(false)} style={s.ghost}><Text style={s.ghostText}>Cancel</Text></Pressable>
         </View>
       ) : (
-        <Pressable onPress={() => setDraft({ leader_id: '', postcode: '', goal: '', member_ids: [] })} style={s.add} accessibilityRole="button" testID="plan-add">
+        <Pressable onPress={() => setAddingLeader(true)} style={s.add} accessibilityRole="button" testID="plan-add">
           <Ionicons name="add" size={20} color={c.primary} />
           <Text style={s.addText}>Add a sector</Text>
         </Pressable>
-      )}
+      ))}
 
-      {sectors.length > 0 && !sent && (
-        <Pressable onPress={confirm} disabled={busy === 'confirm'} style={[s.btn, s.big]} accessibilityRole="button" testID="plan-confirm">
-          {busy === 'confirm' ? <ActivityIndicator color={c.onPrimary} /> : <Ionicons name="checkmark-done" size={18} color={c.onPrimary} />}
-          <Text style={s.btnText}>{confirmed ? `Confirmed · going out at ${d.send_at}` : `Confirm sectors (they go out at ${d.send_at})`}</Text>
+      <Text style={s.small}>{anyIn ? 'Showing people marked In on Bells today.' : 'Nobody\u2019s marked In on Bells today, so everyone\u2019s shown \u2014 set In/Off on Bells to filter this.'} Ticking someone moves them here from any other sector. Nothing saves until you press Save all.</Text>
+
+      {dirty && (
+        <Pressable onPress={saveAll} disabled={busy === 'saveall'} style={[s.btn, s.big]} accessibilityRole="button" testID="plan-saveall">
+          {busy === 'saveall' ? <ActivityIndicator color={c.onPrimary} /> : <Ionicons name="save-outline" size={18} color={c.onPrimary} />}
+          <Text style={s.btnText}>Save all{sent ? ' · tell the people affected' : ''}</Text>
         </Pressable>
       )}
+
+      {board.length > 0 && !sent && !dirty && (
+        <Pressable onPress={confirm} disabled={busy === 'confirm'} style={[s.btn, s.big]} accessibilityRole="button" testID="plan-confirm">
+          {busy === 'confirm' ? <ActivityIndicator color={c.onPrimary} /> : <Ionicons name="checkmark-done" size={18} color={c.onPrimary} />}
+          <Text style={s.btnText}>{confirmed ? `Confirmed \u00b7 going out at ${d.send_at}` : `Confirm sectors (they go out at ${d.send_at})`}</Text>
+        </Pressable>
+      )}
+      {!sent && board.length > 0 && dirty && <Text style={s.small}>Save all first, then you can confirm.</Text>}
+
       {(() => {
-        const unplaced = people.filter((p) => p.in_today && !p.no_show && p.role !== 'admin' && !p.sector_leader_id);
-        return unplaced.length > 0 && sectors.length > 0 ? (
+        const unplaced = people.filter((p) => canPlace(p) && !p.no_show && p.role !== 'admin' && !board.some((x) => x.member_ids.includes(p.user_id)));
+        return unplaced.length > 0 && board.length > 0 ? (
           <Text style={s.muted}>Not in a sector: {unplaced.map((p) => first(p.name)).join(', ')}</Text>
         ) : null;
       })()}
