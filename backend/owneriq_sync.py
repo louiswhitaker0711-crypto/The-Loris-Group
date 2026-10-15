@@ -72,7 +72,7 @@ async def _login(client: httpx.AsyncClient) -> str:
 # they sign in on their own, once per run.)
 from core.owneriq_session import (  # noqa: E402
     get_token, available, mark_ok, on_unauthorized as _on_unauth,
-    OwnerIQNeedsReconnect, OwnerIQTransient,
+    relay_active, OwnerIQNeedsReconnect, OwnerIQTransient,
 )
 
 
@@ -138,6 +138,41 @@ async def _select_company(client: httpx.AsyncClient, token: str, pin: str) -> No
         raise OwnerIQError(f"select company {pin} failed: HTTP {r.status_code} {r.text[:200]}")
 
 
+def _parse_kpi_payload(payload: dict) -> list[dict]:
+    """One JSON:API door_interaction_kpis page → normalized rows.
+
+    Pure: shared by the server-side pager (_fetch_kpis) and the browser-relay
+    ingest, so both shape rows identically."""
+    rows: list[dict] = []
+    names = {
+        u["id"]: (u.get("attributes", {}) or {}).get("full_name")
+        for u in (payload or {}).get("included", [])
+        if u.get("type") == "users"
+    }
+    for item in (payload or {}).get("data", []):
+        attr = item.get("attributes", {}) or {}
+        rel = item.get("relationships", {}) or {}
+        uid = (((rel.get("user") or {}).get("data")) or {}).get("id")
+        rows.append({
+            "owneriq_id": str(item.get("id")),
+            "date": attr.get("date"),
+            "doors_knocked": attr.get("doors_knocked"),
+            "spoken_to": attr.get("spoken_to"),
+            "pitches_commenced": attr.get("pitches_commenced"),
+            "pitches_closed": attr.get("pitches_closed"),
+            "sales": attr.get("sales"),
+            "points": attr.get("points"),
+            "mc_pin": (str(attr["mc_pin"]) if attr.get("mc_pin") is not None else None),
+            "badge_number": (attr.get("badge_number") or "").strip().upper() or None,
+            "test_mode": bool(attr.get("test_mode")),
+            "owneriq_user_id": uid,
+            "rep_name": names.get(uid),
+            "owneriq_created_at": attr.get("created_at"),
+            "owneriq_updated_at": attr.get("updated_at"),
+        })
+    return rows
+
+
 async def _fetch_kpis(client: httpx.AsyncClient, token: str, iso_from: str, iso_to: str) -> list[dict]:
     """Return normalized KPI rows for [iso_from, iso_to] (inclusive), all pages.
 
@@ -171,34 +206,7 @@ async def _fetch_kpis(client: httpx.AsyncClient, token: str, iso_from: str, iso_
                 f"door_interaction_kpis page {page} failed: HTTP {r.status_code} {r.text[:200]}"
             )
         payload = r.json()
-        # user id → full name, from the JSON:API `included` sideload
-        names = {
-            u["id"]: (u.get("attributes", {}) or {}).get("full_name")
-            for u in payload.get("included", [])
-            if u.get("type") == "users"
-        }
-        for item in payload.get("data", []):
-            attr = item.get("attributes", {}) or {}
-            rel = item.get("relationships", {}) or {}
-            uid = (((rel.get("user") or {}).get("data")) or {}).get("id")
-            cid = (((rel.get("campaign") or {}).get("data")) or {}).get("id")
-            rows.append({
-                "owneriq_id": str(item.get("id")),
-                "date": attr.get("date"),
-                "doors_knocked": attr.get("doors_knocked"),
-                "spoken_to": attr.get("spoken_to"),
-                "pitches_commenced": attr.get("pitches_commenced"),
-                "pitches_closed": attr.get("pitches_closed"),
-                "sales": attr.get("sales"),
-                "points": attr.get("points"),
-                "mc_pin": (str(attr["mc_pin"]) if attr.get("mc_pin") is not None else None),
-                "badge_number": (attr.get("badge_number") or "").strip().upper() or None,
-                "test_mode": bool(attr.get("test_mode")),
-                "owneriq_user_id": uid,
-                "rep_name": names.get(uid),
-                "owneriq_created_at": attr.get("created_at"),
-                "owneriq_updated_at": attr.get("updated_at"),
-            })
+        rows.extend(_parse_kpi_payload(payload))
         meta = payload.get("meta", {}) or {}
         total_pages = meta.get("total_pages") or 1
         if page >= total_pages:
@@ -333,11 +341,24 @@ async def sync_owneriq(iso_from: str | None = None, iso_to: str | None = None) -
     iso_to = iso_to or today.isoformat()
     iso_from = iso_from or (today - timedelta(days=1)).isoformat()
 
-    synced_at = datetime.now(timezone.utc).isoformat()
     async with _client(timeout=45.0) as client:
         token = await _login(client)
         rows = await _fetch_all_companies(client, token, iso_from, iso_to)
 
+    summary = await ingest_kpi_rows(rows, iso_from, iso_to, source="owneriq")
+    await mark_ok()
+    return summary
+
+
+async def ingest_kpi_rows(rows: list[dict], iso_from: str, iso_to: str,
+                          source: str = "owneriq") -> dict:
+    """Link + upsert normalized KPI rows into `owneriq_kpis` and stamp the
+    last-sync heartbeat. Shared by the server-side sync and the browser-relay
+    ingest, so both link reps and store rows identically.
+
+    `rows` are the output of _parse_kpi_payload (or _fetch_kpis). `source` is a
+    label for the heartbeat ('owneriq' server pull, or 'browser_relay')."""
+    synced_at = datetime.now(timezone.utc).isoformat()
     await retire_name_links()
     # Back on after a spell off: OwnerIQ's numbers replace the breakdown's
     # stand-in rows for the days just pulled.
@@ -381,14 +402,14 @@ async def sync_owneriq(iso_from: str | None = None, iso_to: str | None = None) -
         "reps_matched": matched,
         "reps_unmatched": len(rows) - matched,
         "synced_at": synced_at,
+        "source": source,
     }
     await db.owneriq_sync_state.update_one(
         {"_id": "last"}, {"$set": summary}, upsert=True
     )
-    await mark_ok()
     logger.info(
-        "OwnerIQ sync %s→%s: %d rows, %d matched, %d unmatched",
-        iso_from, iso_to, len(rows), matched, len(rows) - matched,
+        "OwnerIQ KPI ingest (%s) %s→%s: %d rows, %d matched, %d unmatched",
+        source, iso_from, iso_to, len(rows), matched, len(rows) - matched,
     )
     return summary
 
@@ -487,6 +508,9 @@ async def scheduler_tick() -> None:
     """Hourly job entrypoint — swallow errors so the scheduler keeps running."""
     if not await owneriq_on():
         logger.info("OwnerIQ sync skipped: switched off")
+        return
+    if await relay_active():
+        logger.info("OwnerIQ KPI pull skipped: browser relay active (the browser posts the data)")
         return
     try:
         await sync_owneriq()

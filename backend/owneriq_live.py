@@ -31,6 +31,7 @@ import httpx
 from database import db
 from owneriq_sync import OWNERIQ_API_BASE, _UA, _forget_shared_login, _login_cached, OwnerIQError
 from owneriq_sync import _client  # noqa: E402
+from core.owneriq_session import relay_active  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -173,10 +174,15 @@ async def _cache_write(key: str, kind: str, ref_id, iso_date: str, payload: dict
 
 async def _cached(kind: str, ref_id, iso_date: str, fetcher, force: bool = False) -> dict:
     key = f"{kind}:{ref_id}:{iso_date}"
-    if not force:
-        doc = await _cache_read(key)
-        if doc and _fresh_enough(doc):
+    doc = await _cache_read(key)
+    if await relay_active():
+        # The browser relay feeds the cache; the server never calls OwnerIQ (its
+        # IP is blocked at the edge). Serve whatever the relay last stored.
+        if doc:
             return doc["payload"]
+        raise OwnerIQError("No live data for this day yet — the browser relay hasn't sent it.")
+    if not force and doc and _fresh_enough(doc):
+        return doc["payload"]
     payload = await fetcher()
     await _cache_write(key, kind, ref_id, iso_date, payload)
     return payload
@@ -211,7 +217,7 @@ async def compile_funnel(sector_ids: list, iso_date: str, force: bool = False) -
             details[sid] = doc["payload"]
         else:
             missing.append(sid)
-    if missing:
+    if missing and not await relay_active():
         async with _client(timeout=60.0) as client:
             token = await _login_cached(client)
             for sid in missing:
@@ -268,11 +274,36 @@ async def resettle_day(iso_date: str) -> dict:
     return counts
 
 
+async def store_live_from_relay(iso_date: str, top: dict | None,
+                                sectors: dict | None, bas: dict | None) -> dict:
+    """Write a browser-relayed Live Operations walk straight into the cache the
+    Live Ops screens and the Timeline read. Mirrors resettle_day, but the
+    Owner's browser did the fetching (the server's IP is blocked at the edge)."""
+    counts = {"top": 0, "sectors": 0, "bas": 0}
+    if top:
+        await _cache_write(f"live:all:{iso_date}", "live", "all", iso_date, top)
+        counts["top"] = 1
+    for sid, payload in (sectors or {}).items():
+        if payload:
+            await _cache_write(f"sector:{sid}:{iso_date}", "sector", sid, iso_date, payload)
+            counts["sectors"] += 1
+    for bid, payload in (bas or {}).items():
+        if payload:
+            await _cache_write(f"ba:{bid}:{iso_date}", "ba", bid, iso_date, payload)
+            counts["bas"] += 1
+    logger.info("OwnerIQ live relay %s: top=%d sectors=%d bas=%d",
+                iso_date, counts["top"], counts["sectors"], counts["bas"])
+    return counts
+
+
 async def resettle_yesterday_tick() -> None:
     """Nightly scheduler entrypoint — re-settle the day that just ended."""
     from owneriq_sync import owneriq_on
     if not await owneriq_on():
         logger.info("OwnerIQ resettle skipped: creds not set")
+        return
+    if await relay_active():
+        logger.info("OwnerIQ resettle skipped: browser relay active")
         return
     yday = (datetime.now(APP_TZ).date() - timedelta(days=1)).isoformat()
     try:

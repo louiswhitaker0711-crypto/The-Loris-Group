@@ -384,7 +384,13 @@ async def sync_performance(weeks: int = 2, bells_weeks: int = 1) -> dict:
 
 async def scheduler_tick() -> None:
     from owneriq_sync import owneriq_on
+    from core.owneriq_session import relay_active
     if not await owneriq_on():
+        return
+    if await relay_active():
+        # The browser relay can't reach the Performance endpoint yet (phase 2);
+        # don't let the server try — its IP is blocked at the edge.
+        logger.info("OwnerIQ performance sync skipped: browser relay active")
         return
     try:
         res = await sync_performance()
