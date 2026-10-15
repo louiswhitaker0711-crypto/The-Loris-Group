@@ -42,7 +42,7 @@ export default function SectorOrientScreen() {
   const box = useRef<View>(null);
   const map = useRef<any>(null);
   const bearing = useRef(0);
-  const gesture = useRef<{ startAngle: number; startBearing: number } | null>(null);
+  const gesture = useRef<any>(null);
   const [rotated, setRotated] = useState(false);
 
   const apply = (deg: number) => {
@@ -67,7 +67,7 @@ export default function SectorOrientScreen() {
       if (dead || !el) return;
       if (map.current) { map.current.remove(); map.current = null; }
       const m = L.map(el, { zoomControl: false, attributionControl: true, dragging: false, touchZoom: false,
-        scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false });
+        scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false, zoomSnap: 0 });
       const pts = plans.flatMap((p) => p.lines || []).flat();
       m.fitBounds(L.latLngBounds(pts), { padding: [28, 28], maxZoom: 17 });
       L.tileLayer(OSM_TILES, { maxZoom: 19, attribution: OSM_ATTRIBUTION }).addTo(m);
@@ -110,13 +110,22 @@ export default function SectorOrientScreen() {
     // `any` on purpose: React Native's global touch types clash with the DOM
     // ones addEventListener expects, so we read the fields off directly.
     const angleOf = (t: any) => Math.atan2(t[1].clientY - t[0].clientY, t[1].clientX - t[0].clientX) * 180 / Math.PI;
+    const distOf = (t: any) => Math.hypot(t[1].clientX - t[0].clientX, t[1].clientY - t[0].clientY);
     const onStart = (e: any) => {
-      if (e.touches.length === 2) gesture.current = { startAngle: angleOf(e.touches), startBearing: bearing.current };
+      if (e.touches.length === 2) gesture.current = {
+        startAngle: angleOf(e.touches), startBearing: bearing.current,
+        startDist: distOf(e.touches), startZoom: map.current ? map.current.getZoom() : 15,
+      };
     };
     const onMove = (e: any) => {
       if (e.touches.length === 2 && gesture.current) {
         e.preventDefault();
+        // Twist → rotate, pinch → zoom, both from the same two-finger gesture.
         apply(gesture.current.startBearing + (angleOf(e.touches) - gesture.current.startAngle));
+        const dist = distOf(e.touches);
+        if (map.current && gesture.current.startDist > 0) {
+          map.current.setZoom(gesture.current.startZoom + Math.log2(dist / gesture.current.startDist), { animate: false });
+        }
       }
     };
     const onEnd = (e: any) => { if (e.touches.length < 2) gesture.current = null; };
