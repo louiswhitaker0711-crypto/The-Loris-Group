@@ -40,7 +40,14 @@ export default function OwnerIQConnectScreen() {
   if (q.isLoading) return <View style={[s.page, s.center]}><ActivityIndicator color={c.primary} /></View>;
   const d = q.data || {};
   const st = STATE[d.state] || STATE.off;
-  const toneColor = st.tone === 'green' ? c.green : st.tone === 'red' ? c.red : st.tone === 'amber' ? c.yellow : c.textMuted;
+  const isRelay = d.source === 'browser_relay';
+  const relay = d.relay || {};
+  const label = isRelay ? 'Live from your browser' : st.label;
+  const sub = isRelay
+    ? 'Your OwnerIQ tab is feeding the app. Keep that tab open and signed in on the computer running it.'
+    : st.sub;
+  const toneColor = isRelay ? c.green
+    : st.tone === 'green' ? c.green : st.tone === 'red' ? c.red : st.tone === 'amber' ? c.yellow : c.textMuted;
 
   const connect = async () => {
     if (!paste.trim()) return;
@@ -86,13 +93,24 @@ export default function OwnerIQConnectScreen() {
       <View style={[s.statusCard, { borderColor: toneColor }]}>
         <View style={s.statusHead}>
           <View style={[s.dot, { backgroundColor: toneColor }]} />
-          <Text style={[s.statusLabel, { color: toneColor }]}>{st.label}</Text>
+          <Text style={[s.statusLabel, { color: toneColor }]}>{label}</Text>
         </View>
-        <Text style={s.muted}>{st.sub}</Text>
+        <Text style={s.muted}>{sub}</Text>
         <View style={s.meta}>
-          <Text style={s.metaLine}>Last worked: {when(d.last_ok_at)}</Text>
-          {d.source ? <Text style={s.metaLine}>Session from: {d.source === 'browser' ? 'your paste' : 'password sign-in'}</Text> : null}
-          {d.api_base ? <Text style={s.metaLine}>Server: {String(d.api_base).replace('https://', '')}</Text> : null}
+          {isRelay ? (
+            <>
+              <Text style={s.metaLine}>Last sync: {when(relay.at || d.last_ok_at)}</Text>
+              {relay.linked != null ? <Text style={s.metaLine}>People linked: {relay.linked}</Text> : null}
+              {relay.kpis_rows != null ? <Text style={s.metaLine}>Last pull: {relay.kpis_rows} KPI rows</Text> : null}
+              {relay.bells && relay.bells.goals != null ? <Text style={s.metaLine}>Bells goals set from OwnerIQ: {relay.bells.goals}</Text> : null}
+            </>
+          ) : (
+            <>
+              <Text style={s.metaLine}>Last worked: {when(d.last_ok_at)}</Text>
+              {d.source ? <Text style={s.metaLine}>Session from: {d.source === 'browser' ? 'your paste' : 'password sign-in'}</Text> : null}
+              {d.api_base ? <Text style={s.metaLine}>Server: {String(d.api_base).replace('https://', '')}</Text> : null}
+            </>
+          )}
         </View>
       </View>
 
