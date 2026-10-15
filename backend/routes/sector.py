@@ -858,7 +858,9 @@ async def delete_sector(request: Request, date: Optional[str] = None, leader: Op
     sec = await db.sectors.find_one({"office_id": user.get("office_id"), "date": iso, "leader_id": leader_id}, {"_id": 0})
     if not sec:
         raise HTTPException(status_code=404, detail="That sector wasn't found")
-    if not await _deletable(sec):
+    # The leader can only delete an unfinished sector; an Admin can force-delete
+    # even a finished one (map saved or breakdown posted) to clean up a mess.
+    if not is_admin and not await _deletable(sec):
         raise HTTPException(status_code=400, detail="This sector's day is finished (map saved or breakdown posted), so it can't be deleted")
     members = [str(m) for m in sec.get("member_ids") or []] + [leader_id]
     # A person's set-up goes too, unless they're in another sector that day.
@@ -918,8 +920,8 @@ async def sector_board(request: Request, date: Optional[str] = None):
                     "postcode": sec.get("postcode") or "", "stats": sector_stats(rows, sg),
                     "breakdown_posted_at": sec.get("breakdown_posted_at"),
                     "map_saved_at": sec.get("map_saved_at"), "mark_requests": sec.get("mark_requests") or [],
-                    "can_delete": (sec["leader_id"] == str(user["id"]) or (user.get("role") or "").lower() == "admin")
-                                  and await _deletable(sec),
+                    "can_delete": (user.get("role") or "").lower() == "admin"
+                                  or (sec["leader_id"] == str(user["id"]) and await _deletable(sec)),
                     "whatsapp": {"setup": setup_text(rows, iso, sg, sec.get("postcode") or ""),
                                  "breakdown": breakdown_text(rows, iso, sg, sec.get("postcode") or "")}})
     return {"date": iso, "sectors": out}
