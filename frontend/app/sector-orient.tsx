@@ -107,17 +107,19 @@ export default function SectorOrientScreen() {
     if (Platform.OS !== 'web' || !show) return;
     const clip = clipRef.current as unknown as HTMLElement | null;
     if (!clip) return;
-    const angleOf = (t: TouchList) => Math.atan2(t[1].clientY - t[0].clientY, t[1].clientX - t[0].clientX) * 180 / Math.PI;
-    const onStart = (e: TouchEvent) => {
+    // `any` on purpose: React Native's global touch types clash with the DOM
+    // ones addEventListener expects, so we read the fields off directly.
+    const angleOf = (t: any) => Math.atan2(t[1].clientY - t[0].clientY, t[1].clientX - t[0].clientX) * 180 / Math.PI;
+    const onStart = (e: any) => {
       if (e.touches.length === 2) gesture.current = { startAngle: angleOf(e.touches), startBearing: bearing.current };
     };
-    const onMove = (e: TouchEvent) => {
+    const onMove = (e: any) => {
       if (e.touches.length === 2 && gesture.current) {
         e.preventDefault();
         apply(gesture.current.startBearing + (angleOf(e.touches) - gesture.current.startAngle));
       }
     };
-    const onEnd = (e: TouchEvent) => { if (e.touches.length < 2) gesture.current = null; };
+    const onEnd = (e: any) => { if (e.touches.length < 2) gesture.current = null; };
     clip.addEventListener('touchstart', onStart, { passive: false });
     clip.addEventListener('touchmove', onMove, { passive: false });
     clip.addEventListener('touchend', onEnd);
