@@ -40,6 +40,12 @@ const ymd = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const isoToday = () => ymd(new Date());
 const isoYesterday = () => { const d = new Date(); d.setDate(d.getDate() - 1); return ymd(d); };
+const isoWeekStart = () => { const d = new Date(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return ymd(d); };  // Monday
+type Sel = 'week' | 'yesterday' | 'today';
+const rangeFor = (sel: Sel): { from: string; to: string } =>
+  sel === 'today' ? { from: isoToday(), to: isoToday() }
+  : sel === 'yesterday' ? { from: isoYesterday(), to: isoYesterday() }
+  : { from: isoWeekStart(), to: isoToday() };
 
 // The owner's Field IQ names. `th` is the per-rep table header, where a
 // column is ~45px wide — "Pitched" fits as it is.
@@ -52,8 +58,9 @@ const AVG_METRICS = [
 ];
 // The Today / Yesterday switch (labels unchanged from the old pill row).
 const DAY_ITEMS = [
-  { key: 'today', label: 'Today' },
+  { key: 'week', label: 'Week' },
   { key: 'yesterday', label: 'Yest.' },
+  { key: 'today', label: 'Today' },
 ];
 const fmt = (n: any) => (n === null || n === undefined ? '—' : Number(n).toLocaleString(APP_LOCALE));
 const fmt1 = (n: any) => (n === null || n === undefined ? '—' : Number(n).toFixed(n >= 100 ? 0 : 1));
@@ -136,24 +143,25 @@ export default function FieldAveragesCard({ variant, day: fixedDay, defaultExpan
   const isAdmin = role === 'admin';
   const isLeader = role === 'leader';
 
-  const [day, setDay] = useState<'today' | 'yesterday'>(fixedDay || (isAdmin ? 'yesterday' : 'today'));
+  const [day, setDay] = useState<Sel>((fixedDay as Sel) || 'week');
   const [expanded, setExpanded] = useState(!!defaultExpanded);
   const [collapsed, setCollapsed] = useState(homeCollapsed);
   const toggleCollapsed = () => setCollapsed((v) => { homeCollapsed = !v; return !v; });
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
-  const iso = (fixedDay || day) === 'today' ? isoToday() : isoYesterday();
+  const sel: Sel = (fixedDay as Sel) || day;
+  const range = rangeFor(sel);
   const excludeParam = useMemo(() => Array.from(excluded).join(','), [excluded]);
 
   const officeQ = useQuery({
     enabled: isAdmin,
-    queryKey: ['home-loa-office', iso, excludeParam],
+    queryKey: ['home-loa-office', range.from, range.to, excludeParam],
     queryFn: async () =>
-      (await api.get('/owneriq/summary', { params: { from_date: iso, to_date: iso, own_office: true, exclude: excludeParam || undefined } })).data,
+      (await api.get('/owneriq/summary', { params: { from_date: range.from, to_date: range.to, own_office: true, exclude: excludeParam || undefined } })).data,
   });
   const leaderQ = useQuery({
     enabled: isLeader,
-    queryKey: ['home-loa-leader', iso],
-    queryFn: async () => (await api.get('/owneriq/averages', { params: { from_date: iso, to_date: iso } })).data,
+    queryKey: ['home-loa-leader', range.from, range.to],
+    queryFn: async () => (await api.get('/owneriq/averages', { params: { from_date: range.from, to_date: range.to } })).data,
   });
 
   const toggleExclude = useCallback((key: string) => {
@@ -188,8 +196,9 @@ export default function FieldAveragesCard({ variant, day: fixedDay, defaultExpan
   const avg = isAdmin ? (office?.avg_per_rep_day || {}) : (leaderQ.data?.own_avg_per_day || {});
   const teamAvg = leaderQ.data?.team_avg_per_day || {};
 
+  const periodLabel = sel === 'today' ? 'Today' : sel === 'yesterday' ? 'Yesterday' : 'This week';
   const title = isAdmin
-    ? `${(fixedDay || day) === 'today' ? 'Today' : 'Yesterday'}’s LOA${officeName ? ` · ${officeName}` : ''}`
+    ? `${periodLabel}’s LOA${officeName ? ` · ${officeName}` : ''}`
     : 'My averages';
   const subtitle = isAdmin
     ? `Office average / rep / day · ${office?.included_count ?? 0} active`
@@ -212,7 +221,7 @@ export default function FieldAveragesCard({ variant, day: fixedDay, defaultExpan
             tone="paper"
             items={DAY_ITEMS}
             value={day}
-            onChange={(k) => setDay(k as 'today' | 'yesterday')}
+            onChange={(k) => setDay(k as Sel)}
             style={styles.switch}
           />
           <TouchableOpacity onPress={() => router.push('/field-kpis')} style={styles.seeAllBtn}>

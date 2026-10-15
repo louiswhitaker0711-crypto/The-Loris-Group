@@ -1394,7 +1394,6 @@ export default function HomeScreen() {
       <PrimetimeCard />
       <WaitingOnYouCard toGrade={leaderTodayQ.data?.counts?.awaiting || 0} />
       {pNewStarts}
-      {pTimetable}
       {pDailyPlans}
     </>
   );
@@ -1450,7 +1449,6 @@ export default function HomeScreen() {
       {pStartHere}
       <LearnTodayCard stage={codStage || 1} />
       {pPlanner}
-      {pTimetable}
     </>
   );
   const baBreakdown = (
