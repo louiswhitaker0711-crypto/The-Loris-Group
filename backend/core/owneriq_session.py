@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 CONNECTED = "connected"
 SIGNED_OUT = "signed_out"
 NEEDS_RECONNECT = "needs_reconnect"
+OFF = "off"   # the Owner switched it off: no sign-in, runs on the breakdowns
 
 _UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/150.0.0.0 Safari/537.36"
 _DEFAULT_BASE = (os.getenv("OWNERIQ_API_BASE") or "https://uk.owner-iq.ai").rstrip("/")
@@ -98,7 +99,7 @@ async def available() -> bool:
     """Is OwnerIQ usable right now? False once it needs a reconnect, or when
     there's neither a saved token nor a password to sign in with."""
     doc = await _read()
-    if doc.get("state") == NEEDS_RECONNECT:
+    if doc.get("state") in (NEEDS_RECONNECT, OFF):
         return False
     if doc.get("token"):
         return True
@@ -198,6 +199,8 @@ async def get_token(client: httpx.AsyncClient) -> str:
     """The one token source. Every OwnerIQ call uses this."""
     doc = await _read()
     state = doc.get("state")
+    if state == OFF:
+        raise OwnerIQNeedsReconnect("OwnerIQ is switched off.")
     if state == NEEDS_RECONNECT:
         raise OwnerIQNeedsReconnect(doc.get("reason") or "OwnerIQ needs reconnecting.")
     if doc.get("token") and state == CONNECTED:
@@ -278,15 +281,25 @@ async def reconnect(client: httpx.AsyncClient, pasted: str) -> dict:
     resolved = await resolve_api_base(client, email) if email else None
     check_base = resolved or base
     code = await probe(client, token, check_base)
+    if code == 200:
+        now = _now_iso()
+        await _write({"token": token, "source": "browser", "minted_at": now, "state": CONNECTED,
+                      "reason": None, "alerted_at": None, "retry_not_before": None, "api_base": check_base,
+                      "last_ok_at": now, "last_status": 200})
+        return await status()
     if code == 401:
         raise ValueError("OwnerIQ didn't recognise that token (401). Sign in again on owner-iq.ai and copy a fresh one.")
-    now = _now_iso()
-    rec = {"token": token, "source": "browser", "minted_at": now, "state": CONNECTED,
-           "reason": None, "alerted_at": None, "retry_not_before": None, "api_base": check_base,
-           "last_status": code}
-    if code == 200:
-        rec["last_ok_at"] = now
-    await _write(rec)
+    if code == 403:
+        raise ValueError("OwnerIQ's security gate is blocking the app (403). Your token is fine, but OwnerIQ isn't letting "
+                         "outside apps through — they'd need to allow your app in. Nothing is saved.")
+    raise ValueError(f"Couldn't reach OwnerIQ to check the token (HTTP {code}). Nothing is saved; try again shortly.")
+
+
+async def turn_off() -> dict:
+    """The Owner switches OwnerIQ off: clear the session and run on the
+    breakdowns. Reconnecting later brings it back."""
+    await _write({"state": OFF, "token": None, "source": None, "reason": None,
+                  "alerted_at": None, "retry_not_before": None, "last_status": None})
     return await status()
 
 
