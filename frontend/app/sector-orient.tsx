@@ -178,6 +178,7 @@ const styles = (c: any) => StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 10 },
   back: { padding: 4 },
   title: { fontFamily: fonts.bodyBold, fontSize: 17, color: c.text, flex: 1 },
+  muted: { fontFamily: fonts.body, fontSize: 13.5, color: c.textMuted },
   mapBox: { flex: 1, marginHorizontal: 12, borderRadius: 16, overflow: 'hidden', backgroundColor: c.surface, position: 'relative' },
   compass: { position: 'absolute', top: 12, right: 12, flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, backgroundColor: c.primary,
