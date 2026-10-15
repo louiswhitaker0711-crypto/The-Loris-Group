@@ -67,11 +67,11 @@ export function sortByCodStage<T>(rows: readonly T[], stageOf: (row: T) => numbe
  * should read it from here.
  */
 export const COD_STAGE_NAME: Record<number, string> = {
-  1: '6 Day Evaluation',
-  2: 'Becoming a Leader',
-  3: 'Being a Leader',
-  4: 'Advanced Team Building',
-  5: 'Being a Core Leader / Coach',
+  1: 'Foundation',
+  2: 'Self Management',
+  3: 'Leader',
+  4: 'Team Builder',
+  5: 'Sector/Site Leader',
   6: 'Becoming a Business Owner',
 };
 
@@ -83,8 +83,7 @@ export const COD_STAGE_NAME: Record<number, string> = {
  */
 export const COD_STAGE_SHORT: Record<number, string> = {
   ...COD_STAGE_NAME,
-  4: 'Team Building',
-  5: 'Core Leader',
+  5: 'Sector Leader',
   6: 'Business Owner',
 };
 

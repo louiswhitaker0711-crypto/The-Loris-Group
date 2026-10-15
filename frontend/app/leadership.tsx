@@ -47,23 +47,23 @@ import { Keycap } from '../src/components/ui/Keycap';
 // stageOrder.ts (COD_STAGE_ORDER).
 const STAGE_META: Record<number, { toggle: string; sub: string; title: string; icon: any; iconBg?: string; body: string }> = {
   1: {
-    toggle: 'Stage 1', sub: 'STAGE 1 · 6 DAY EVALUATION', title: '6 Day Evaluation', icon: 'flag', iconBg: '#0ea5e9',
+    toggle: 'Stage 1', sub: 'STAGE 1 · FOUNDATION', title: 'Foundation', icon: 'flag', iconBg: '#0ea5e9',
     body: 'Intro to the business, expectations, collateral, the 5 Steps, impulsing, handling questions, and Field IQ & numbers. Each item climbs Know → Do → Deliver on the proof ladder. As a Coach you sign new starters off on this stage, so know it cold.',
   },
   2: {
-    toggle: 'Stage 2', sub: 'STAGE 2 · BECOMING A LEADER', title: 'Becoming a Leader', icon: 'school', iconBg: '#10b981',
+    toggle: 'Stage 2', sub: 'STAGE 2 · SELF MANAGEMENT', title: 'Self Management', icon: 'school', iconBg: '#10b981',
     body: 'Company, sales, goals, selling independently, the 8 Steps, leadership, profitability, example setting, and Field IQ & numbers. Deliver is the standard; your Coach signs the proof.',
   },
   3: {
-    toggle: 'Stage 3', sub: 'STAGE 3 · BEING A LEADER', title: 'Being a Leader', icon: 'trophy',
+    toggle: 'Stage 3', sub: 'STAGE 3 · LEADER', title: 'Leader', icon: 'trophy',
     body: 'Personal development, recruiting, Week 1 coaching, working with a Stage 2, running sectors, EQ, and Field IQ & numbers. Pass an item\'s questions to tick Know, then tap Ready for check — your Coach signs the rest.',
   },
   5: {
-    toggle: 'Stage 3+', sub: 'STAGE 3+ · CORE LEADER / COACH', title: 'Being a Core Leader / Coach', icon: 'map', iconBg: '#ef4444',
+    toggle: 'Stage 3+', sub: 'STAGE 3+ · SECTOR/SITE LEADER', title: 'Sector/Site Leader', icon: 'map', iconBg: '#ef4444',
     body: 'Personal development, developing your leaders, team development, building confidence & expectations, territory management, and Field IQ & numbers.',
   },
   4: {
-    toggle: 'Stage 4', sub: 'STAGE 4 · ADVANCED TEAM BUILDING', title: 'Advanced Team Building', icon: 'construct', iconBg: '#f59e0b',
+    toggle: 'Stage 4', sub: 'STAGE 4 · TEAM BUILDER', title: 'Team Builder', icon: 'construct', iconBg: '#f59e0b',
     body: 'Expectations for Stage 4, using the network, public speaking, managing KPI\u2019s, developing people, and going to the next level.',
   },
   6: {
