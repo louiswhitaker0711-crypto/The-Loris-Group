@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OwnerIQ → The Loris Group relay
 // @namespace    the-loris-group
-// @version      1.2
+// @version      1.3
 // @description  Runs in the Owner's own logged-in OwnerIQ tab. Every few minutes it reads the office's own data (the same data the dashboard shows) and posts it to the app, which stores it exactly as the server sync would. Used because the UK edge blocks server-to-server calls; the Owner's real browser is allowed.
 // @match        https://owner-iq.ai/*
 // @run-at       document-idle
@@ -32,12 +32,17 @@
   const log = (...a) => console.log("%c[OIQ relay]", "color:#0a7", ...a);
   const warn = (...a) => console.warn("[OIQ relay]", ...a);
 
-  function token() {
+  function readToken(store) {
     try {
-      const raw = sessionStorage.getItem("auth-storage");
+      const raw = store && store.getItem("auth-storage");
       const j = raw ? JSON.parse(raw) : null;
       return (j && j.state && j.state.token) || (j && j.token) || null;
     } catch (e) { return null; }
+  }
+  // OwnerIQ has kept the session in sessionStorage AND (older) localStorage;
+  // check both so a "Not logged in" never happens while you're signed in.
+  function token() {
+    return readToken(sessionStorage) || readToken(localStorage) || null;
   }
 
   function iso(d) { return d.toISOString().slice(0, 10); }
