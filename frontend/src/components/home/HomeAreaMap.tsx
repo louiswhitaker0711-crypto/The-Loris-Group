@@ -95,7 +95,7 @@ export default function HomeAreaMap() {
   if (!show) return null;
   const done = marks.filter((m) => !m.other && m.status === 'draft' && (!mine || m.colour === mine)).length;
   return (
-    <Pressable onPress={() => router.push('/sector-map' as never)} style={s.card} accessibilityRole="button"
+    <Pressable onPress={() => router.push('/sector-orient' as never)} style={s.card} accessibilityRole="button"
       accessibilityLabel="Your area today, open the map" testID="home-area-map">
       <View style={s.head}>
         {mine ? <View style={[s.dot, { backgroundColor: hopHex(mine) }]} /> : <Ionicons name="map" size={16} color={c.primary} />}
@@ -108,7 +108,7 @@ export default function HomeAreaMap() {
         {failed && <View style={s.overlay}><Text style={s.muted}>The map couldn't load. Tap to try again.</Text></View>}
       </View>
       <View style={s.foot}>
-        <Text style={s.muted}>{done ? `${done} line${done === 1 ? '' : 's'} marked off today` : 'Tap to open the map and mark off streets as you go'}</Text>
+        <Text style={s.muted}>{done ? `${done} line${done === 1 ? '' : 's'} marked off today` : 'Tap to face your way, then draw as you go'}</Text>
         <Ionicons name="expand-outline" size={16} color={c.primary} />
       </View>
     </Pressable>
