@@ -65,6 +65,15 @@ export default function OwnerIQConnectScreen() {
     }
     setBusy(null);
   };
+  const turnOff = async () => {
+    setBusy('off');
+    try {
+      await apiService.turnOffOwnerIQ();
+      toast.success('OwnerIQ switched off — running on the breakdowns');
+      ['owneriq-connect', 'owneriq-switch', 'owneriq-banner', 'owneriq-performance-week'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+    } catch (e: any) { showAlert('Could not switch off', e?.response?.data?.detail || 'Try again.'); }
+    setBusy(null);
+  };
   const retry = async () => {
     setBusy('retry');
     try { await apiService.retryOwnerIQ(); toast.success('Trying again'); qc.invalidateQueries({ queryKey: ['owneriq-connect'] }); }
@@ -120,6 +129,11 @@ export default function OwnerIQConnectScreen() {
       <Pressable onPress={retry} disabled={busy === 'retry'} style={s.ghost} accessibilityRole="button">
         <Text style={s.ghostText}>{busy === 'retry' ? 'Trying…' : 'Try a password sign-in (if the alert was a false alarm)'}</Text>
       </Pressable>
+      {(d.state === 'connected' || d.has_token) && (
+        <Pressable onPress={turnOff} disabled={busy === 'off'} style={s.offBtn} accessibilityRole="button" testID="owneriq-off-btn">
+          <Text style={s.offText}>{busy === 'off' ? 'Switching off…' : 'Switch OwnerIQ off (run on the breakdowns)'}</Text>
+        </Pressable>
+      )}
       <Text style={s.fine}>This never gets around OwnerIQ’s code. You sign in and enter the code; the app just reuses the session you made. If OwnerIQ ever offers an API key, we’ll switch to that and drop this.</Text>
     </ScrollView>
   );
@@ -149,6 +163,8 @@ const styles = (c: any) => StyleSheet.create({
   testBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: c.primary },
   testText: { fontFamily: fonts.bodyBold, fontSize: 14.5, color: c.primary },
   ghost: { alignItems: 'center', paddingVertical: 10 },
+  offBtn: { alignItems: 'center', paddingVertical: 11, borderRadius: 12, borderWidth: 1, borderColor: c.red },
+  offText: { fontFamily: fonts.bodySemibold, fontSize: 14, color: c.red },
   ghostText: { fontFamily: fonts.bodySemibold, fontSize: 13.5, color: c.primary, textAlign: 'center' },
   muted: { fontFamily: fonts.body, fontSize: 13.5, lineHeight: 19, color: c.textMuted },
   fine: { fontFamily: fonts.body, fontSize: 12, lineHeight: 17, color: c.textMuted },

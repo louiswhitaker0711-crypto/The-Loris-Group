@@ -129,6 +129,14 @@ async def owneriq_connect(request: Request, body: _PasteBody):
         raise HTTPException(status_code=400, detail=str(ex))
 
 
+@router.post("/owneriq/connect/off")
+async def owneriq_turn_off(request: Request):
+    """Switch OwnerIQ off and run on the breakdowns. Owner only."""
+    await require_super_admin(request)
+    from core.owneriq_session import turn_off
+    return await turn_off()
+
+
 @router.post("/owneriq/connect/retry")
 async def owneriq_connect_retry(request: Request):
     """False alarm: clear the stopped state and let one password sign-in run
