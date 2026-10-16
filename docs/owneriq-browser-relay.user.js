@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OwnerIQ → The Loris Group relay
 // @namespace    the-loris-group
-// @version      1.3
+// @version      1.4
 // @description  Runs in the Owner's own logged-in OwnerIQ tab. Every few minutes it reads the office's own data (the same data the dashboard shows) and posts it to the app, which stores it exactly as the server sync would. Used because the UK edge blocks server-to-server calls; the Owner's real browser is allowed.
 // @match        https://owner-iq.ai/*
 // @run-at       document-idle
@@ -11,8 +11,8 @@
 // HOW TO USE (two ways)
 //
 //  A) Quick / console:   open owner-iq.ai, sign in, press F12 → Console,
-//     paste this whole file, press Enter. It syncs now and every 15 min while
-//     the tab stays open and you stay logged in.
+//     paste this whole file, press Enter. It syncs now, then on every quarter
+//     hour (:00, :15, :30, :45) while the tab stays open and you stay logged in.
 //
 //  B) Always-on / Tampermonkey: install the Tampermonkey extension, add this as
 //     a new userscript, and fill in the two CONFIG lines below. It then runs
@@ -26,7 +26,7 @@
   const APP_URL = "https://the-loris-group-production.up.railway.app"; // the app
   const RELAY_SECRET = "PASTE_OWNERIQ_RELAY_SECRET_HERE";              // = Railway OWNERIQ_RELAY_SECRET
   const OIQ = "https://uk.owner-iq.ai";    // OwnerIQ API host for this account
-  const EVERY_MIN = 15;                    // how often to sync
+  const EVERY_MIN = 15;                    // sync on every quarter hour (:00/:15/:30/:45)
   // ───────────────────────────────────────────────────────────────────────
 
   const log = (...a) => console.log("%c[OIQ relay]", "color:#0a7", ...a);
@@ -45,7 +45,12 @@
     return readToken(sessionStorage) || readToken(localStorage) || null;
   }
 
-  function iso(d) { return d.toISOString().slice(0, 10); }
+  // The calendar date on this computer's clock (UK time on the Owner's
+  // laptop), not UTC: just after midnight in summer, UTC is still yesterday.
+  function iso(d) {
+    const p = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  }
   function ddmmyyyy(d) {
     const p = (n) => String(n).padStart(2, "0");
     return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
@@ -145,9 +150,10 @@
     log(`KPIs: posted ${rows} rows across ${walkDefault.length} office(s)`);
   }
 
-  // Walk 2 — today's Live Operations tree (top → each sector → each BA).
-  async function syncLive() {
-    const date = iso(new Date());
+  // Walk 2 — a day's Live Operations tree (top → each sector → each BA).
+  // Today on every sync; yesterday once a day (see syncYesterdayOnce).
+  async function syncLive(day) {
+    const date = iso(day || new Date());
     const ids = await companyIds();
     const extra = ids.map((i) => ["marketing_company_id[]", i]);
     const top = await oiq("/v3/owner/live_operations", [["date", date], ...extra]);
@@ -162,7 +168,22 @@
       }
     }
     await toApp("/api/owneriq/relay/live", { date, top, sectors, bas });
-    log(`Live: posted top + ${Object.keys(sectors).length} sectors + ${Object.keys(bas).length} BAs`);
+    log(`Live${day ? " " + date : ""}: posted top + ${Object.keys(sectors).length} sectors + ${Object.keys(bas).length} BAs`);
+  }
+
+  // Yesterday, settled: on the first sync of each day, send yesterday's whole
+  // Live Operations tree and door logs again. It catches the end of the field
+  // day if the laptop slept early, and any late corrections, and fills the
+  // Timeline. (The server used to re-pull yesterday at 03:00; it can't now.)
+  const YDAY_KEY = "loris-relay-yesterday-sent";
+  function ydaySentFor() { try { return localStorage.getItem(YDAY_KEY); } catch (e) { return null; } }
+  function markYdaySent(d) { try { localStorage.setItem(YDAY_KEY, d); } catch (e) { /* fine: resends tomorrow */ } }
+  async function syncYesterdayOnce() {
+    const today = iso(new Date());
+    if (ydaySentFor() === today) return;
+    const yday = new Date(); yday.setDate(yday.getDate() - 1);
+    await syncLive(yday);
+    markYdaySent(today);
   }
 
   // Walk 3 — Performance Hub views: company + no-team for this & last week,
@@ -213,6 +234,7 @@
       await syncKpis();
       await syncLive();
       await syncHub();
+      await syncYesterdayOnce();
       log("sync complete", new Date().toLocaleTimeString());
     } catch (e) {
       if (e.message === "session-expired") warn("OwnerIQ session expired — sign in again at owner-iq.ai.");
@@ -227,7 +249,20 @@
     warn("Set RELAY_SECRET (and check APP_URL) at the top of the script first.");
     return;
   }
-  log(`starting — syncing now and every ${EVERY_MIN} min while this tab is open`);
+  // Sync on the clock, not every 15 min from whenever the tab opened: the
+  // check-ins go out at 15:00, 16:30 and 19:00 (Saturday 12:00, 14:00, 16:00),
+  // so a sync lands just after each one and the app sends that check-in on
+  // numbers fetched seconds earlier. Re-aimed every time, so it never drifts.
+  function msToNextSlot() {
+    const now = new Date();
+    const step = EVERY_MIN * 60 * 1000;
+    const sinceHour = (now.getMinutes() * 60 + now.getSeconds()) * 1000 + now.getMilliseconds();
+    return step - (sinceHour % step) + 5000;   // 5 s after the quarter hour
+  }
+  function scheduleNext() {
+    setTimeout(() => { run(); scheduleNext(); }, msToNextSlot());
+  }
+  log(`starting — syncing now, then every quarter hour (:00, :15, :30, :45) while this tab is open`);
   run();
-  setInterval(run, EVERY_MIN * 60 * 1000);
+  scheduleNext();
 })();
