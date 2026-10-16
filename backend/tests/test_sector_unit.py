@@ -44,7 +44,7 @@ def test_kpi_suggestion_is_the_step_furthest_behind():
 
 def test_inputs_are_checked():
     assert sec.clean_setup({"goal": "4", "kpi_metric": "Closes", "kpi_target": "20", "focus": "  tov "}) == {
-        "goal": 4, "kpi_metric": "closes", "kpi_target": 20, "focus": "tov", "positive": ""}
+        "goal": 4, "kpi_metric": "closes", "kpi_target": 20, "focus": "tov", "positive": "", "cod_module_id": None}
     with pytest.raises(HTTPException):
         sec.clean_setup({"kpi_metric": "vibes"})
     with pytest.raises(HTTPException):
