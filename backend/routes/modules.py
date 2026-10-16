@@ -167,12 +167,9 @@ async def _is_stage_unlocked_by_role(user: dict, stage: int) -> bool:
     if stage == 4:
         return role == "admin"
     if stage == 5:
-        # Stage 3+ (Core Leader / Coach; stored as 5) — open to every leader
-        # and to admins, so they can browse and grade.
+        # Stage SL (Sector/Site Leader) — open to every leader (the people
+        # who run sectors) and to admins, so they can browse and grade.
         return role in ("leader", "admin")
-    if stage == 6:
-        # Stage 5 (Becoming a Business Owner; stored as 6) — like Stage 4.
-        return role == "admin"
     return False
 
 
@@ -276,13 +273,13 @@ async def get_scale():
     scheme kept for old clients."""
     return {"bands": ASSESSMENT_BANDS, "dimensions": ASSESSMENT_DIMENSIONS,
             "ladder": LADDER_RUNGS, "ladder_completed_at": LADDER_COMPLETED_AT,
-            "ladder_max_by_stage": {1: 3, 2: 3, 3: 4, 4: 5, 5: 5, 6: 5}}
+            "ladder_max_by_stage": {1: 3, 2: 3, 3: 4, 4: 5, 5: 5}}
 
 
 @router.get("/modules")
 async def list_modules(
     request: Request,
-    stage: int = Query(..., ge=1, le=6),
+    stage: int = Query(..., ge=1, le=5),
     office: Optional[str] = None,
 ):
     """List all modules in a stage, scoped to the authenticated user's office."""
@@ -419,10 +416,28 @@ def _compute_completed(merged: dict) -> bool:
     return all((merged.get(k) or 0) >= 7 for k in ASSESSMENT_DIMENSIONS)
 
 
+@router.get("/modules/{module_id}/observations")
+async def module_observations(module_id: str, request: Request, user_id: Optional[str] = None):
+    """When this person was seen doing the item in the field (picked in a
+    sector set-up, marked at the breakdown by the sector leader or a Coach).
+    A record only: it never ticks the COD."""
+    user = await get_current_user(request)
+    me = str(user.get("id") or user.get("_id") or "")
+    target = user_id or me
+    m = await db.training_modules.find_one({"id": module_id}, {"stage": 1, "office_id": 1})
+    if not m:
+        raise HTTPException(status_code=404, detail="Module not found")
+    if target != me and not await _user_can_grade_target(user, target, int(m.get("stage") or 0)):
+        raise HTTPException(status_code=403, detail="Not allowed to view this BA")
+    rows = [{"date": o.get("date"), "by_name": o.get("by_name") or ""}
+            async for o in db.cod_observations.find({"module_id": module_id, "user_id": target}).sort("date", -1)]
+    return {"module_id": module_id, "user_id": target, "observations": rows}
+
+
 @router.get("/module-progress/me")
 async def my_progress(
     request: Request,
-    stage: int = Query(..., ge=1, le=6),
+    stage: int = Query(..., ge=1, le=5),
 ):
     """All progress rows for the current user at a given stage. For Stage 2
     this returns rows where the trainee is the TARGET (graded BY a leader).
@@ -691,6 +706,17 @@ def authored_quiz_questions(stage, topic) -> Optional[list]:
         except Exception:
             logger.exception("cod_quizzes.json unreadable")
             _AUTHORED_QUIZZES = {}
+        # The questions were written while the COD sheet was live (12-16 Oct
+        # 2026), filed under the sheet's names. An original item the sheet
+        # carried over under a new name finds its questions by that name.
+        try:
+            from core.cod_original_migration import carry_overs
+            for (sst, stp), (ost, otp) in carry_overs():
+                sk, ok = f"{sst}|{stp}", f"{ost}|{otp}"
+                if sk in _AUTHORED_QUIZZES and ok not in _AUTHORED_QUIZZES:
+                    _AUTHORED_QUIZZES[ok] = _AUTHORED_QUIZZES[sk]
+        except Exception:
+            logger.exception("COD quiz name mapping failed")
     return _AUTHORED_QUIZZES.get(f"{stage}|{topic}")
 
 
@@ -978,7 +1004,7 @@ async def list_my_trainees(request: Request):
 
 
 @router.get("/leader/trainees/{trainee_user_id}/module-progress")
-async def trainee_module_progress(trainee_user_id: str, request: Request, stage: int = Query(2, ge=1, le=6)):
+async def trainee_module_progress(trainee_user_id: str, request: Request, stage: int = Query(2, ge=1, le=5)):
     """Get the full module-progress list for a single trainee. Caller must be
     the trainee's leader (subtree) or an admin."""
     user = await get_current_user(request)
@@ -1192,7 +1218,6 @@ async def my_stage_status(request: Request):
     s3_unlocked = await _is_stage_unlocked(user, 3)
     s4_unlocked = await _is_stage_unlocked(user, 4)
     s5_unlocked = await _is_stage_unlocked(user, 5)
-    s6_unlocked = await _is_stage_unlocked(user, 6)
     has_junior = is_leader and await _team_has_junior_leader(user)
 
     # Visibility rules:
@@ -1259,7 +1284,6 @@ async def my_stage_status(request: Request):
         "stage_3_unlocked": s3_unlocked,
         "stage_4_unlocked": s4_unlocked,
         "stage_5_unlocked": s5_unlocked,
-        "stage_6_unlocked": s6_unlocked,
         "sales_path_enabled": sales_path_on,
         "sales_level": sales_level,
         "sales_level_name": sales_level_name,
@@ -1328,7 +1352,7 @@ async def cod_vetting_list(request: Request):
     await _ensure_seeded(office_id)
     rows = []
     async for m in db.training_modules.find(
-        {"office_id": office_id, "stage": {"$in": [1, 2, 3, 4, 5, 6]}, "retired": {"$ne": True}},
+        {"office_id": office_id, "stage": {"$in": [1, 2, 3, 4, 5]}, "retired": {"$ne": True}},
     ):
         rows.append({
             "stage": m.get("stage"), "category": m.get("category"), "topic": m.get("topic"),
@@ -1346,7 +1370,7 @@ async def cod_vetting_list(request: Request):
 
 
 class CodVetBody(BaseModel):
-    stage: int = Field(..., ge=1, le=6)
+    stage: int = Field(..., ge=1, le=5)
     topic: str
     updates: Optional[dict] = None   # subset of _VETTABLE_FIELDS
     vetted: bool = True
@@ -1649,7 +1673,7 @@ async def pregenerate_module_quizzes(limit: int = 25) -> dict:
     tick to stay inside LLM rate limits."""
     import hashlib
     made = skipped = 0
-    async for m in db.training_modules.find({"retired": {"$ne": True}, "stage": {"$in": [2, 3, 4, 5, 6]}}):
+    async for m in db.training_modules.find({"retired": {"$ne": True}, "stage": {"$in": [2, 3, 4, 5]}}):
         if made >= limit:
             break
         if authored_quiz_questions(m.get("stage"), m.get("topic")):

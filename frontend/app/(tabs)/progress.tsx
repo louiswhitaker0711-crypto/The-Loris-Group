@@ -14,7 +14,7 @@ import { useColors, useTheme, lightColors, fonts } from '../../src/theme/ThemeCo
 import { GRADIENT } from '../../src/theme/brand';
 import { pageMarkKick } from '../../src/theme/pageScroll';
 import { StageVideo, useCodVideos } from '../../src/components/cod/StageVideo';
-import { sortByCodStage, codStageShortName } from '../../src/components/cod/stageOrder';
+import { sortByCodStage } from '../../src/components/cod/stageOrder';
 import { apiService } from '../../src/api/client';
 import { usePullToRefresh } from '../../src/components/ui/PullRefresh';
 import { useAuth } from '../../src/auth/AuthContext';
@@ -313,12 +313,11 @@ export default function TraineeProgressScreen() {
         // Written in stored-stage order; rendered in COD display order — SL
         // (stored stage 5) sits between Stage 3 and Stage 4. See stageOrder.ts.
         const devSteps: LadderStep[] = sortByCodStage<LadderStep & { stage: number }>([
-          { stage: 1, key: 'd1', label: codStageShortName(1), state: devStage > 1 ? 'done' : 'current' },
-          { stage: 2, key: 'd2', label: codStageShortName(2), state: devStage === 2 ? 'current' : 'upcoming' },
-          { stage: 3, key: 'd3', label: codStageShortName(3), state: 'locked' },
-          { stage: 4, key: 'd4', label: codStageShortName(4), state: 'locked' },
-          { stage: 5, key: 'd5', label: codStageShortName(5), state: 'locked' },
-          { stage: 6, key: 'd6', label: codStageShortName(6), state: 'locked' },
+          { stage: 1, key: 'd1', label: 'Foundation', state: devStage > 1 ? 'done' : 'current' },
+          { stage: 2, key: 'd2', label: 'Self Management', state: devStage === 2 ? 'current' : 'upcoming' },
+          { stage: 3, key: 'd3', label: 'Leader', state: 'locked' },
+          { stage: 4, key: 'd4', label: 'Team Builder', state: 'locked' },
+          { stage: 5, key: 'd5', label: 'Sector Leader', state: 'locked' },
         ], (d) => d.stage);
         const devNext = nextMod
           ? {

@@ -28,7 +28,6 @@ import { SlidingSegments } from '../../src/components/ui/SlidingSegments';
 import { useTabBarClearance } from '../../src/customization/CustomTabBar';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { codStageLabel } from '../../src/components/cod/stageOrder';
-import { TopicRecaps } from '../../src/components/meeting/TopicRecaps';
 import { APP_LOCALE } from '../../src/utils/appTime';
 
 const DIMENSIONS: Array<{ key: 'knowledge' | 'skill' | 'consistency' | 'independence'; label: string; help: string }> = [
@@ -127,18 +126,26 @@ export default function ModuleDetailScreen() {
 
   // Fetch the user's progress for this module's stage so we can pre-populate scores.
   // When grading on behalf of a trainee, we fetch the trainee's progress instead.
-  const stage = moduleQ.data?.stage as 1 | 2 | 3 | 4 | 5 | 6 | undefined;
+  const stage = moduleQ.data?.stage as 1 | 2 | 3 | 4 | 5 | undefined;
   const progressQ = useQuery({
     queryKey: isGradingOnBehalf
       ? ['trainee-module-progress', trainee_id, stage]
       : ['module-progress', stage],
     queryFn: () => isGradingOnBehalf
-      ? apiService.getTraineeModuleProgress(String(trainee_id), stage as 1 | 2 | 3 | 4 | 5 | 6).then(r => r.data.progress)
+      ? apiService.getTraineeModuleProgress(String(trainee_id), stage as 1 | 2 | 3 | 4 | 5).then(r => r.data.progress)
       : apiService.getMyModuleProgress(stage!).then(r => r.data.progress),
     enabled: !!stage,
   });
 
   const myProgress = (progressQ.data || []).find((p: any) => p.module_id === id);
+  // Days they were seen doing this in the field (picked in a sector set-up,
+  // marked at the breakdown). A record only: it never ticks the ladder.
+  const observedQ = useQuery({
+    queryKey: ['module-observations', id, trainee_id || 'me'],
+    queryFn: () => apiService.getModuleObservations(String(id), trainee_id ? String(trainee_id) : undefined).then((r) => r.data.observations || []),
+    enabled: !!id,
+  });
+  const observed: Array<{ date: string; by_name: string }> = observedQ.data || [];
 
   // Local draft state — synced from server when progress loads
   const [scores, setScores] = useState<Record<string, number | null>>({
@@ -347,14 +354,6 @@ export default function ModuleDetailScreen() {
             </Section>
           </ScrollReveal>
         )}
-        {seg === 'learn' && !m.trainee_content && (
-          <Section title="📘 What to Learn" colors={colors}>
-            <Text style={styles.bodyText}>
-              Your Coach teaches this one. Ask them about it, then work towards getting it signed off.
-            </Text>
-          </Section>
-        )}
-        {seg === 'learn' && <TopicRecaps topicId={String(m.id)} />}
 
         {/* What good looks like */}
         {seg === 'prove' && Array.isArray(m.what_good_looks_like) && m.what_good_looks_like.length > 0 && (
@@ -432,6 +431,20 @@ export default function ModuleDetailScreen() {
               </Text>
             </Section>
           )
+        )}
+
+        {/* Seen in the field (sector set-up → breakdown) */}
+        {seg === 'ladder' && observed.length > 0 && (
+          <Section title="👀 Seen in the field" colors={colors}>
+            {observed.map((o, i) => (
+              <Text key={`${o.date}-${i}`} style={{ fontFamily: fonts.body, fontSize: 14, color: colors.text, paddingVertical: 2 }}>
+                {fmtRungDate(o.date)}{o.by_name ? ` · by ${o.by_name}` : ''}
+              </Text>
+            ))}
+            <Text style={{ fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, marginTop: 4 }}>
+              Picked as the day's COD item in a sector set-up and seen at the breakdown. It doesn't tick the ladder: sign-offs stay below.
+            </Text>
+          </Section>
         )}
 
         {/* Scoring panel */}

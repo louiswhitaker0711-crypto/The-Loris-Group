@@ -13,7 +13,7 @@ import { apiService } from '../api/client';
 import { useColors } from '../theme/ThemeContext';
 import { toast } from '../utils/toast';
 import { useKeyboardInset } from '../hooks/useKeyboardInset';
-import { sortCodStages, COD_STAGE_TITLES } from '../components/cod/stageOrder';
+import { sortCodStages } from '../components/cod/stageOrder';
 
 export type Impact = {
   id: string;
@@ -34,12 +34,11 @@ type Props = {
 // COD 2026 stage names — impacts are the live coaching sessions that bring
 // each COD stage to life; they stay browsable here as the library.
 const STAGE_META: Record<number, { label: string; color: string }> = {
-  1: { label: COD_STAGE_TITLES[1], color: '#10b981' },
-  2: { label: COD_STAGE_TITLES[2], color: '#0a9bcb' },
-  3: { label: COD_STAGE_TITLES[3], color: '#e0607e' },
-  5: { label: COD_STAGE_TITLES[5], color: '#ef4444' },
-  4: { label: COD_STAGE_TITLES[4], color: '#f59e0b' },
-  6: { label: COD_STAGE_TITLES[6], color: '#8b5cf6' },
+  1: { label: 'Stage 1 · Foundation', color: '#10b981' },
+  2: { label: 'Stage 2 · Self Management', color: '#0a9bcb' },
+  3: { label: 'Stage 3 · Leader', color: '#e0607e' },
+  4: { label: 'Stage 4 · Team Builder', color: '#f59e0b' },
+  5: { label: 'Stage SL · Sector/Site Leader', color: '#ef4444' },
 };
 
 const CATEGORY_LABEL: Record<string, string> = {

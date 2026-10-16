@@ -29,14 +29,12 @@ export type StageMeta = {
 };
 
 export const STAGE_META: Record<number, StageMeta> = {
-  // Names follow the Owner's COD sheet (stageOrder.ts). 3+ is stored as 5 and
-  // Stage 5 (Business Owner) as 6.
+  // Sector/Site Leader is STORED as 5 but sits between 3 and 4 (stageOrder.ts).
   1: { label: 'Stage 1 · Foundation', short: 'Foundation', color: brand.green, icon: 'flash', tagline: 'Win the door — systems for the pitch itself.' },
   2: { label: 'Stage 2 · Self Management', short: 'Self Management', color: brand.limeDark, icon: 'sparkles', tagline: 'Own your head — habits that survive a bad day.' },
   3: { label: 'Stage 3 · Leader', short: 'Leader', color: brand.rose, icon: 'people', tagline: 'Turn your game into someone else’s game.' },
-  5: { label: 'Stage 3+ · Sector/Site Leader', short: 'Sector Leader', color: brand.cyan, icon: 'navigate', tagline: 'Develop your leaders and build the team.' },
+  5: { label: 'Stage SL · Sector/Site Leader', short: 'Sector/Site Leader', color: brand.cyan, icon: 'navigate', tagline: 'Run the sector — performance management on the ground.' },
   4: { label: 'Stage 4 · Team Builder', short: 'Team Builder', color: brand.yellow, icon: 'trophy', tagline: 'Build the machine that builds people.' },
-  6: { label: 'Stage 5 · Business Owner', short: 'Business Owner', color: brand.limeDark, icon: 'business', tagline: 'Run your own business.' },
 };
 
 export const stageMeta = (s: number): StageMeta =>

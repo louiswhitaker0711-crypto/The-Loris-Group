@@ -1,11 +1,5 @@
 """COD stage DISPLAY order — the backend half of the single source of truth.
 
-Oct 2026: the office runs the Owner's COD sheet (core/cod_sheet.py): Stage 1
-6 Day Evaluation, 2 Becoming a Leader, 3 Being a Leader, 3+ Being a Core
-Leader / Coach (STORED as 5, the old Sector/Site Leader slot), 4 Advanced
-Team Building, 5 Becoming a Business Owner (STORED as 6). The notes below
-describe how the numbers came about.
-
 The Cycle of Development runs:
     Stage 1 Foundation -> Stage 2 Self Management -> Stage 3 Leader ->
     Stage SL Sector/Site Leader -> Stage 4 Team Builder
@@ -31,7 +25,7 @@ query filter or to write a stage value.
 from typing import Iterable, List
 
 #: Stored stage numbers, in the order a person actually meets them.
-COD_STAGE_ORDER: List[int] = [1, 2, 3, 5, 4, 6]
+COD_STAGE_ORDER: List[int] = [1, 2, 3, 5, 4]
 
 
 def cod_stage_rank(stage) -> int:

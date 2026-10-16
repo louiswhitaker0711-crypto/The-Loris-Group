@@ -252,3 +252,48 @@ def test_a_planned_sector_can_be_changed_by_the_owner_but_not_its_leader(monkeyp
     with pytest.raises(HTTPException) as e:
         run(sec.save_my_sector(_Req({"member_ids": [str(lead), str(ba1)]}), date="2026-10-13"))
     assert e.value.status_code == 403
+
+
+def test_cod_pick_is_own_stage_or_below_for_stage_1_and_2():
+    import asyncio
+    run = asyncio.run
+    assert run(sec.cod_pick_stages({"owneriq_stage": "stage_1"})) == [1]
+    assert run(sec.cod_pick_stages({"owneriq_stage": "stage_2"})) == [1, 2]
+    assert run(sec.cod_pick_stages({"owneriq_stage": "stage_3"})) == []
+    assert run(sec.cod_pick_stages({"owneriq_stage": "stage_3_plus"})) == []
+
+
+def test_set_up_cod_pick_and_breakdown_seen_in_the_field(monkeypatch):
+    """A Stage 1 picks one COD item from their stage; a Stage 2 item is
+    refused. At the breakdown a Coach marks it seen: a record on the day and
+    on the item, never a COD tick."""
+    from bson import ObjectId
+    ba, coach = ObjectId(), ObjectId()
+    me = {"id": str(coach), "role": "leader", "office_id": "o1", "name": "Coach Example"}
+    db, run = _setup_db(monkeypatch, me)
+    import routes.modules as mods
+    monkeypatch.setattr(mods, "db", db)
+
+    async def _can(*_a, **_k):
+        return True
+    monkeypatch.setattr(sec, "_can_edit", _can)
+    run(db.users.insert_many([
+        {"_id": ba, "name": "Example BA", "role": "trainee", "office_id": "o1", "owneriq_stage": "stage_1"},
+        {"_id": coach, "name": "Coach Example", "role": "leader", "office_id": "o1"},
+    ]))
+    run(db.training_modules.insert_many([
+        {"id": "s1", "office_id": "o1", "stage": 1, "topic": "Example stage 1 item", "sequence": 1},
+        {"id": "s2", "office_id": "o1", "stage": 2, "topic": "Example stage 2 item", "sequence": 1},
+    ]))
+    with pytest.raises(HTTPException):
+        run(sec.save_sector_day(str(ba), _Req({"setup": {"goal": 3, "cod_module_id": "s2"}}), date="2026-10-16"))
+    run(sec.save_sector_day(str(ba), _Req({"setup": {"goal": 3, "cod_module_id": "s1"}}), date="2026-10-16"))
+
+    out = run(sec.mark_cod_observed(str(ba), _Req({"done": True}), date="2026-10-16"))
+    assert out["cod_observed"]["by_name"] == "Coach Example" and out["cod_observed"]["module_id"] == "s1"
+    seen = run(db.cod_observations.find_one({"user_id": str(ba), "date": "2026-10-16"}))
+    assert seen["module_id"] == "s1"
+    assert run(db.module_progress.count_documents({})) == 0            # never a COD tick
+
+    run(sec.mark_cod_observed(str(ba), _Req({"done": False}), date="2026-10-16"))
+    assert run(db.cod_observations.count_documents({})) == 0

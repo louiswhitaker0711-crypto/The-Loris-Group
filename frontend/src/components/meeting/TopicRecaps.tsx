@@ -1,4 +1,4 @@
-// "Meeting recaps on this item": published recaps tagged with one COD item
+// "Meeting recaps on this topic": published recaps tagged with one COD topic
 // that this person can read. Renders nothing when there are none.
 import React, { useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
@@ -28,7 +28,7 @@ export function TopicRecaps({ topicId }: { topicId: string }) {
   if (!list.length) return null;
   return (
     <View style={s.wrap}>
-      <Text style={s.label}>MEETING RECAPS ON THIS</Text>
+      <Text style={s.label}>MEETING RECAPS ON THIS TOPIC</Text>
       {list.slice(0, 10).map((r) => (
         <Pressable key={r.id} style={s.row} accessibilityRole="button"
           onPress={() => router.push(`/meeting-notes?block_id=${encodeURIComponent(r.block_id)}&date=${r.date}` as any)}>

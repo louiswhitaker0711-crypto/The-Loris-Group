@@ -35,10 +35,10 @@ def test_law_of_averages_adds_two_rows_for_the_same_day_and_survives_nothing():
     assert empty["to_one_sale"]["doors_knocked"] is None and empty["steps"][0]["pct"] is None
 
 
-def test_cod_position_walks_the_cod_order_with_3_plus_before_stage_4():
+def test_cod_position_walks_the_cod_order_with_sl_before_stage_4():
     out = cod_position({1: 16, 2: 5, 5: 2}, {1: 16, 2: 16, 3: 17, 4: 16, 5: 19}, {2: 9})
     assert [s["stage"] for s in out["stages"]] == [1, 2, 3, 5, 4]
-    assert [s["label"] for s in out["stages"]] == ["1", "2", "3", "3+", "4"]
+    assert [s["label"] for s in out["stages"]] == ["1", "2", "3", "SL", "4"]
     assert out["current_stage"] == 2
     two = next(s for s in out["stages"] if s["stage"] == 2)
     assert two["done"] == 5 and two["met"] == 9 and two["current"] and not two["complete"]
