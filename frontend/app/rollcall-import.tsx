@@ -2,6 +2,8 @@
  *  spreadsheet (.xlsx, one tab per week, "WE 2792026"). Pick the file, choose
  *  how far back, preview who matched and how many days each week would fill,
  *  then import. The app wins: only days nobody has filled in are written.
+ *  Anyone the app has no account for comes in as a view-only row, and an
+ *  imported week shows in Bells grouped and ordered as the sheet had it.
  *  The sheet's colours: black No show, grey Not scheduled, yellow In office,
  *  red not a current BA (left alone); a number (0 too) is a day in the field. */
 import React, { useState } from 'react';
@@ -14,14 +16,15 @@ import { useColors, fonts } from '../src/theme/ThemeContext';
 import { apiService } from '../src/api/client';
 import { APP_LOCALE } from '../src/utils/appTime';
 
-type WeekPlan = { week_ending: string; rows: number; days: number; new_rows: number; people: { name: string; days: number }[] };
+type WeekPlan = { week_ending: string; rows: number; days: number; new_rows: number; view_only_rows: number; people: { name: string; days: number }[] };
 type Plan = {
   from_week: string; to_week: string; weeks_found: string[];
   weeks: WeekPlan[];
   matched: { sheet_name: string; app_name: string; how: string }[];
   unmatched: { sheet_name: string; why: string }[];
   total_days: number;
-  applied?: { days_filled: number; rows_updated: number; rows_created: number };
+  view_only_rows: number;
+  applied?: { days_filled: number; rows_updated: number; rows_created: number; view_only_rows: number };
 };
 
 const RANGES = [
@@ -108,7 +111,9 @@ export default function RollcallImportScreen() {
         <Text style={[styles.body, { color: colors.textSecondary }]}>
           Fills the gaps in Bells from your roll call spreadsheet. Anything already in the app stays as it is:
           only days nobody has filled in are written. In the sheet, a number (0 too) is a day in the field,
-          black is No show, grey is Not scheduled, yellow is In office, and red rows are left alone.
+          black is No show, grey is Not scheduled, yellow is In office, and red rows are left alone. People
+          who aren't in the app any more come in as view-only rows, and each imported week shows in Bells
+          under the sheet's teams, in the sheet's order.
         </Text>
       </View>
 
@@ -151,7 +156,7 @@ export default function RollcallImportScreen() {
           <Text style={[styles.h2, text]}>Imported</Text>
           <Text style={[styles.body, text]}>
             {done.days_filled} day{done.days_filled === 1 ? '' : 's'} filled in Bells
-            ({done.rows_updated} existing week row{done.rows_updated === 1 ? '' : 's'}, {done.rows_created} new).
+            ({done.rows_updated} existing week row{done.rows_updated === 1 ? '' : 's'}, {done.rows_created} new, of which {done.view_only_rows || 0} view-only for people not in the app).
           </Text>
           <Text style={[styles.small, muted]}>Running it again only fills days that are still empty.</Text>
         </View>
@@ -162,13 +167,14 @@ export default function RollcallImportScreen() {
           <View style={card}>
             <Text style={[styles.h2, text]}>Preview: nothing saved yet</Text>
             <Text style={[styles.body, text]}>
-              {plan.total_days} empty day{plan.total_days === 1 ? '' : 's'} would be filled across {plan.weeks_found.length} week{plan.weeks_found.length === 1 ? '' : 's'}.
+              {plan.total_days} empty day{plan.total_days === 1 ? '' : 's'} would be filled across {plan.weeks_found.length} week{plan.weeks_found.length === 1 ? '' : 's'}
+              {plan.view_only_rows ? `, including ${plan.view_only_rows} view-only row${plan.view_only_rows === 1 ? '' : 's'} for people not in the app` : ''}.
             </Text>
             {plan.weeks.map((w) => (
               <View key={w.week_ending} style={[styles.row, { borderColor: colors.border }]}>
                 <Text style={[styles.name, text, { flex: 1 }]}>{weLabel(w.week_ending)}</Text>
                 <Text style={[styles.small, w.days ? text : muted]}>
-                  {w.days ? `${w.days} day${w.days === 1 ? '' : 's'} · ${w.rows} people${w.new_rows ? ` (${w.new_rows} new row${w.new_rows === 1 ? '' : 's'})` : ''}` : 'nothing to fill'}
+                  {w.days ? `${w.days} day${w.days === 1 ? '' : 's'} · ${w.rows} in the app${w.view_only_rows ? ` · ${w.view_only_rows} view-only` : ''}` : 'nothing to fill'}
                 </Text>
               </View>
             ))}
@@ -185,14 +191,14 @@ export default function RollcallImportScreen() {
             ))}
             {plan.unmatched.length ? (
               <>
-                <Text style={[styles.h2, { color: colors.red, marginTop: 8 }]}>Not matched, skipped ({plan.unmatched.length})</Text>
+                <Text style={[styles.h2, text, { marginTop: 8 }]}>Not in the app: view-only rows ({plan.unmatched.length})</Text>
                 {plan.unmatched.map((u) => (
                   <View key={u.sheet_name} style={[styles.row, { borderColor: colors.border }]}>
                     <Text style={[styles.small, text, { flex: 1 }]}>{u.sheet_name}</Text>
                     <Text style={[styles.small, muted]}>{u.why}</Text>
                   </View>
                 ))}
-                <Text style={[styles.small, muted]}>If one of these should be someone in the app, change their name in the sheet (or in the app) so the first names match, then preview again.</Text>
+                <Text style={[styles.small, muted]}>These come in exactly as the sheet has them, view only. If one of them is someone who IS in the app, change their name in the sheet (or the app) so the first names match, then preview again.</Text>
               </>
             ) : null}
           </View>

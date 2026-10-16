@@ -15,8 +15,19 @@ A typed number, including 0, is a day in the field with that many sign-ups.
 
 The app wins: a sheet day is only written onto a Bells day nobody has filled
 in (off, no numbers). Rows are matched to people in the office by first name
-(plus the surname initial when the sheet gives one, "Louis W"); a name that
-matches nobody, or more than one person, is listed and skipped.
+(plus the surname initial when the sheet gives one, "Louis W", or the letters
+of a short name in capitals, "AB").
+
+Someone the sheet has but the app doesn't (they've left, or never had an
+account) still comes in, as a VIEW-ONLY row for that week (`archived`, no
+user_id): their name and days exactly as the sheet has them. Nobody can edit
+it and it never reaches alerts or badges; it's there to look back.
+
+Each imported row also keeps the sheet's team for that week (`sheet_team`, the
+team's first row as `sheet_team_leader`) and its place (`sheet_order`), so an
+imported week shows in Bells grouped and ordered the way the sheet had it —
+who was where at the time (`apply_sheet_teams`). Weeks that weren't imported
+group by the app's teams as usual.
 
 Reading is read-only and tab-by-tab (openpyxl read_only): the office's sheet
 has hundreds of tabs and opening it whole takes minutes and gigabytes.
@@ -137,12 +148,15 @@ def read_tab(ws, max_rows: int = 80) -> list[dict]:
         return []
     out = []
     team = ""
+    leader = ""
+    order = 0
     for row in rows[header_idx + 1:]:
         cells = list(row)
         if len(cells) <= name_col:
             continue
         label = cells[0].value if name_col > 0 else None
-        if isinstance(label, str) and label.strip():
+        new_team = isinstance(label, str) and label.strip()
+        if new_team:
             team = label.strip()
         name = cells[name_col].value
         if not isinstance(name, str) or not name.strip():
@@ -160,7 +174,11 @@ def read_tab(ws, max_rows: int = 80) -> list[dict]:
             if di == 6 and day and day["status"] != "in":
                 day = None
             days.append(day)
-        out.append({"name": " ".join(name.split()), "team": team, "days": days})
+        clean = " ".join(name.split())
+        if new_team or not leader:
+            leader = clean          # a team's first row is the person leading it
+        order += 1
+        out.append({"name": clean, "team": team, "team_leader": leader, "order": order, "days": days})
     return out
 
 
@@ -256,13 +274,20 @@ async def plan_import(db, office_id: str, weeks: dict[str, list[dict]]) -> dict:
     unmatched: dict[str, str] = {}
     plan = []
     for we in sorted(weeks):
-        wk = {"week_ending": we, "rows": 0, "days": 0, "new_rows": 0, "people": []}
+        wk = {"week_ending": we, "rows": 0, "days": 0, "new_rows": 0, "view_only_rows": 0, "people": []}
         for row in weeks[we]:
             if not any(row["days"]):
                 continue
             person, how = match_name(row["name"], people)
             if not person:
                 unmatched.setdefault(row["name"], how)
+                existing = await db.bells_entries.find_one(
+                    {"office_id": office_id, "week_ending": we, "archived": True, "user_name": row["name"]},
+                    {"_id": 0, "days": 1})
+                _, filled = merge_days((existing or {}).get("days"), row["days"])
+                if filled:
+                    wk["view_only_rows"] += 0 if existing else 1
+                    wk["days"] += filled
                 continue
             matches.setdefault(row["name"], {"sheet_name": row["name"], "user_id": person["id"],
                                              "app_name": person["name"], "how": how})
@@ -279,6 +304,7 @@ async def plan_import(db, office_id: str, weeks: dict[str, list[dict]]) -> dict:
     return {"weeks": plan,
             "matched": sorted(matches.values(), key=lambda m: m["sheet_name"].lower()),
             "unmatched": [{"sheet_name": k, "why": v} for k, v in sorted(unmatched.items(), key=lambda kv: kv[0].lower())],
+            "view_only_rows": sum(w["view_only_rows"] for w in plan),
             "total_days": sum(w["days"] for w in plan)}
 
 
@@ -289,36 +315,66 @@ async def apply_import(db, office_id: str, weeks: dict[str, list[dict]], fees: O
               async for u in db.users.find({"office_id": office_id, "deleted": {"$ne": True}},
                                            {"name": 1, "role": 1})]
     now = datetime.now(timezone.utc).isoformat()
-    filled_days = rows_written = rows_created = 0
+    filled_days = rows_written = rows_created = view_only = 0
     for we in sorted(weeks):
         for row in weeks[we]:
             if not any(row["days"]):
                 continue
+            sheet = {"sheet_team": row.get("team") or "", "sheet_team_leader": row.get("team_leader") or row["name"],
+                     "sheet_order": row.get("order") or 0}
             person, _ = match_name(row["name"], people)
-            if not person:
-                continue
-            q = {"office_id": office_id, "week_ending": we, "user_id": person["id"]}
+            if person:
+                q = {"office_id": office_id, "week_ending": we, "user_id": person["id"]}
+                base = {"user_name": person["name"], "role": person["role"]}
+            else:
+                # Not in the app: a view-only row under the sheet's name.
+                q = {"office_id": office_id, "week_ending": we, "user_id": None,
+                     "archived": True, "user_name": row["name"]}
+                base = {"role": "trainee"}
             existing = await db.bells_entries.find_one(q, {"_id": 0})
             days, filled = merge_days((existing or {}).get("days"), row["days"])
-            if not filled:
-                continue
             if existing:
                 doc = {**existing, "days": days}
                 await db.bells_entries.update_one({"id": existing["id"]}, {"$set": {
                     "days": days, "earnings": compute_totals(doc, fees).get("earnings", 0.0),
-                    "rollcall_imported_at": now, "updated_at": now}})
+                    **sheet, "rollcall_imported_at": now, "updated_at": now}})
             else:
-                doc = {"id": str(uuid.uuid4()), **q, "user_name": person["name"], "role": person["role"],
+                doc = {"id": str(uuid.uuid4()), **q, **base,
                        "stage": None, "break_even": None, "weekly_goal": None, "last_week_total": None,
                        "last_week_total_source": None, "days": days, "created_by_id": CREATED_BY,
-                       "imported_by_id": actor_id, "rollcall_imported_at": now,
+                       "imported_by_id": actor_id, "rollcall_imported_at": now, **sheet,
                        "created_at": now, "updated_at": now}
                 doc["earnings"] = compute_totals(doc, fees).get("earnings", 0.0)
                 await db.bells_entries.insert_one(dict(doc))
                 rows_created += 1
+                if not person:
+                    view_only += 1
             rows_written += 1
             filled_days += filled
-    return {"days_filled": filled_days, "rows_updated": rows_written - rows_created, "rows_created": rows_created}
+    return {"days_filled": filled_days, "rows_updated": rows_written - rows_created,
+            "rows_created": rows_created, "view_only_rows": view_only}
+
+
+def apply_sheet_teams(entries: list) -> list:
+    """An imported week reads the way the sheet had it: each imported row under
+    its sheet team (a header named for the team, led by its first row) in the
+    sheet's order. Saved rows the sheet didn't have follow after; empty
+    placeholder rows (people with no saved week) are dropped, since the sheet
+    already says who was there. A week with no imported rows is untouched."""
+    if not any(e.get("sheet_team") is not None and e.get("rollcall_imported_at") for e in entries):
+        return entries
+    sheet_rows, others = [], []
+    for e in entries:
+        if e.get("rollcall_imported_at") and e.get("sheet_team") is not None:
+            team = (e.get("sheet_team") or "").strip() or "Roll call"
+            t = {"leader_id": f"sheet:{team}", "leader_name": e.get("sheet_team_leader") or "", "team_name": team}
+            e["primary_team"] = t
+            e["teams"] = [t]
+            sheet_rows.append(e)
+        elif e.get("id"):
+            others.append(e)
+    sheet_rows.sort(key=lambda e: e.get("sheet_order") or 0)
+    return sheet_rows + others
 
 
 def default_range(today: date) -> tuple[date, date]:

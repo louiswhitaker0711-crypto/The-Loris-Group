@@ -97,6 +97,9 @@ def test_reads_a_week_tab():
     assert a[6] is None                                            # grey Sunday: nothing
     assert rows["Example B"]["days"][6]["over30"] == 1             # a Sunday number counts
     assert rows["Example A"]["team"] == "Team Example"
+    # The team's first row leads it; rows keep their place on the sheet.
+    assert rows["Example B"]["team"] == "Team Example" and rows["Example B"]["team_leader"] == "Example A"
+    assert [rows[n]["order"] for n in ("Example A", "Example B", "Nobody Here")] == [1, 2, 3]
 
 
 def test_match_by_first_name():
@@ -151,11 +154,17 @@ def test_preview_then_import():
     plan = run(ri.plan_import(db, "o1", weeks))
     assert [u["sheet_name"] for u in plan["unmatched"]] == ["Nobody Here"]
     wk = plan["weeks"][0]
-    assert wk["days"] == 6 and wk["new_rows"] == 1                 # A: 5 days new row; B: Sunday only
+    # A: 5 days, new row; B: Sunday only; Nobody Here: a view-only row, 1 day.
+    assert wk["days"] == 7 and wk["new_rows"] == 1 and wk["view_only_rows"] == 1
+    assert plan["view_only_rows"] == 1
     assert run(db.bells_entries.count_documents({})) == 1          # preview wrote nothing
 
     out = run(ri.apply_import(db, "o1", weeks, None, _totals, "admin-1"))
-    assert out == {"days_filled": 6, "rows_updated": 1, "rows_created": 1}
+    assert out == {"days_filled": 7, "rows_updated": 1, "rows_created": 2, "view_only_rows": 1}
+    nobody = run(db.bells_entries.find_one({"archived": True}))
+    assert nobody["user_name"] == "Nobody Here" and nobody["user_id"] is None
+    assert nobody["sheet_team"] == "Team Example" and nobody["sheet_order"] == 3
+    assert nobody["days"][0]["over30"] == 1
     ea = run(db.bells_entries.find_one({"user_id": a}))
     assert ea["created_by_id"] == "rollcall-import"
     assert [d["status"] for d in ea["days"]] == ["in", "in", "ns", "ab", "pc", "off", "off"]
@@ -164,5 +173,26 @@ def test_preview_then_import():
     assert eb["days"][1]["under30"] == 4                           # the app's Tuesday kept
     assert eb["days"][6]["over30"] == 1
 
+    assert eb["sheet_team"] == "Team Example" and eb["sheet_order"] == 2   # B keeps the sheet's place
+
     again = run(ri.apply_import(db, "o1", weeks, None, _totals, "admin-1"))
     assert again["days_filled"] == 0                               # nothing left to fill
+    assert run(db.bells_entries.count_documents({"archived": True})) == 1   # no duplicate view-only row
+
+
+def test_imported_week_reads_like_the_sheet():
+    t = "2026-10-16T10:00:00+00:00"
+    entries = [
+        {"id": "1", "user_id": "u1", "user_name": "Example One", "sheet_team": "Team B", "sheet_team_leader": "Example One",
+         "sheet_order": 3, "rollcall_imported_at": t, "primary_team": None},
+        {"id": "2", "user_id": None, "user_name": "Example Two", "archived": True, "sheet_team": "Team A",
+         "sheet_team_leader": "Example Two", "sheet_order": 1, "rollcall_imported_at": t},
+        {"id": "3", "user_id": "u3", "user_name": "Example Three", "primary_team": None},   # saved, not on the sheet
+        {"id": None, "user_id": "u4", "user_name": "Example Four"},                        # empty placeholder
+    ]
+    out = ri.apply_sheet_teams(entries)
+    assert [e["user_name"] for e in out] == ["Example Two", "Example One", "Example Three"]
+    assert out[0]["primary_team"] == {"leader_id": "sheet:Team A", "leader_name": "Example Two", "team_name": "Team A"}
+    # A week nobody imported is left exactly as it was.
+    plain = [{"id": "9", "user_id": "u9", "user_name": "Example Nine", "primary_team": None}, {"id": None, "user_id": "u8"}]
+    assert ri.apply_sheet_teams(plain) == plain

@@ -182,6 +182,12 @@ function buildGroups(entries: Entry[], miniGoal?: number | null): Group[] {
     const idle = (e: Entry) => (e.role === 'admin' && !e.total_sales && !e.days_worked ? 1 : 0);
     mini.members = [...mini.members].sort((x, y) => idle(x) - idle(y));
   }
+  // A week brought in from the roll call sheet keeps the sheet's order: teams
+  // in the order they sat on the sheet, anyone the sheet didn't have after.
+  const sheetPos = (g: Group) => Math.min(...g.members.map((m) => (m.sheet_order != null && m.sheet_team != null ? m.sheet_order : Infinity)));
+  if (entries.some((e) => e.sheet_team != null && e.sheet_order != null)) {
+    return Array.from(map.values()).sort((a, b) => sheetPos(a) - sheetPos(b));
+  }
   return Array.from(map.values()).sort((a, b) => {
     if (a.key === '__no_team__' && b.key !== '__no_team__') return -1;
     if (b.key === '__no_team__' && a.key !== '__no_team__') return 1;
@@ -200,6 +206,15 @@ function everyoneList(groups: Group[], order: EveryoneOrder): EveryoneItem[] {
   if (order === 'sales') {
     return groups.flatMap((g) => g.members.map((e) => ({ kind: 'row' as const, e, g })))
       .sort((x, y) => (y.e.total_sales || 0) - (x.e.total_sales || 0) || (x.e.user_name || '').localeCompare(y.e.user_name || ''));
+  }
+  // A week from the roll call sheet reads exactly as the sheet had it.
+  if (groups.some((g) => g.members.some((m) => m.sheet_team != null && m.sheet_order != null))) {
+    const out: EveryoneItem[] = [];
+    for (const g of groups) {
+      out.push({ kind: 'team', g });
+      for (const e of g.members) out.push({ kind: 'row', e, g });
+    }
+    return out;
   }
   const rank = (g: Group) => {
     if (g.key === MINI_KEY) return 0;
@@ -316,7 +331,8 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
   // the section leader themself and by admins; synced with the Weekly
   // Planner's team-goal box (same team_weekly_goal field on the leader's row).
   const canEditCrewGoal = (g: Group) =>
-    g.key === MINI_KEY
+    (g.leader_id || '').startsWith('sheet:') ? false   // a team from the roll call sheet: history
+    : g.key === MINI_KEY
       ? user?.role === 'admin'
       : !!g.leader_id && (user?.role === 'admin' || !!(user as any)?.is_super_admin || user?.id === g.leader_id);
   const [goalEdit, setGoalEdit] = useState<{ leader_id: string; team_name: string } | null>(null);
@@ -351,8 +367,13 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
   const [rowGoal, setRowGoal] = useState('');
   const [rowBe, setRowBe] = useState('');
   const [rowSaving, setRowSaving] = useState(false);
+  const viewOnly = (e: Entry) => {
+    if (!e.archived) return false;
+    toast.info(`${e.user_name} is from the roll call sheet: view only.`);
+    return true;
+  };
   const openRowEdit = (e: Entry) => {
-    if (!weekEnding) return;
+    if (!weekEnding || viewOnly(e)) return;
     setRowGoal(e.weekly_goal != null ? String(e.weekly_goal) : '');
     setRowBe(e.break_even != null ? String(e.break_even) : '');
     setRowEdit(e);
@@ -398,7 +419,7 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
   // Approved-absence context for the day being viewed, if any.
   const abDetail = cellEdit ? cellEdit.entry.absence_details?.[String(cellEdit.dayIdx)] : undefined;
   const openCellEdit = (entry: Entry, dayIdx: number) => {
-    if (!weekEnding) return;
+    if (!weekEnding || viewOnly(entry)) return;
     const d = entry.days?.[dayIdx] || { over30: null, under30: null, memberships: null, status: 'off' };
     setCellO30(d.over30 != null ? String(d.over30) : '');
     setCellU30(d.under30 != null ? String(d.under30) : '');

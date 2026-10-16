@@ -136,6 +136,13 @@ export type Entry = {
   primary_team?: { leader_id: string; leader_name: string; team_name: string } | null;
   teams?: Array<{ leader_id: string; leader_name: string; team_name: string }>;
   public_hidden?: boolean;
+  /** A view-only row from the roll call sheet: someone the app has no
+   *  account for (they've left). History only — never editable. */
+  archived?: boolean;
+  /** Imported from the roll call sheet: the team it sat under that week and
+   *  its place on the sheet (an imported week reads in the sheet's order). */
+  sheet_team?: string | null;
+  sheet_order?: number | null;
 };
 
 export function emptyDay(): Day {
