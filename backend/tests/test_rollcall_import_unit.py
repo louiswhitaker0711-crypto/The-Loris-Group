@@ -106,6 +106,12 @@ def test_match_by_first_name():
     assert ri.match_name("Sam P", people)[0]["id"] == "3"           # surname initial narrows it
     assert ri.match_name("Sam", people)[0] is None                  # two Sams: skipped
     assert ri.match_name("Zed", people)[0] is None
+    # A short name in capitals: initials, or the start of a first name.
+    shorts = [{"id": "5", "name": "Abcde Placeholder"}, {"id": "6", "name": "Quinn Rivers"}]
+    assert ri.match_name("AB", shorts)[0]["id"] == "5"
+    assert ri.match_name("QR", shorts)[0]["id"] == "6"
+    assert ri.match_name("ZZ", shorts)[0] is None
+    assert ri.match_name("Ab", shorts)[0] is None           # only capitals count as a short name
 
 
 def test_merge_keeps_the_app():

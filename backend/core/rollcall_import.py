@@ -203,6 +203,23 @@ def match_name(sheet_name: str, people: list[dict]) -> tuple[Optional[dict], str
         first = [p for p in first if len(_norm(p.get("name")).split()) > 1 and _norm(p.get("name")).split()[-1][0] == initial]
     if len(first) == 1:
         return first[0], "first name"
+    # Short names written in capitals ("AB"): the one person whose initials
+    # are those letters, or whose first name starts with them.
+    raw = " ".join(str(sheet_name or "").split())
+    if not first and re.fullmatch(r"[A-Z]{2,3}", raw):
+        letters = raw.lower()
+
+        def initials(p):
+            ws = _norm(p.get("name")).split()
+            return "".join(w[0] for w in ws if w)
+
+        short = [p for p in people
+                 if initials(p) == letters
+                 or (_norm(p.get("name")).split() or [""])[0].startswith(letters)]
+        if len(short) == 1:
+            return short[0], "short name"
+        if short:
+            return None, "more than one person"
     return None, ("more than one person" if first else "no one by that name")
 
 
