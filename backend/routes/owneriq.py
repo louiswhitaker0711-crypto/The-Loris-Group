@@ -199,7 +199,23 @@ async def owneriq_relay_kpis(request: Request):
     rows = list(seen.values())
     summary = await ingest_kpi_rows(rows, iso_from, iso_to, source="browser_relay")
     await mark_relay_ingest({"kpis_rows": len(rows), "kpis_range": [iso_from, iso_to]})
-    return {"ok": True, **summary}
+    sent = await _relay_field_checkin()
+    return {"ok": True, **summary, "checkins_sent": sent}
+
+
+async def _relay_field_checkin() -> int:
+    """The relay syncs on the clock (:00/:15/:30/:45), so the KPI post that
+    lands at a check-in time (15:00, 16:30, 19:00; Saturday 12:00, 14:00,
+    16:00) carries numbers fetched seconds ago. Send that slot's check-in now,
+    on those numbers, instead of waiting for the hourly job. Each slot still
+    goes out once a day (`_claim_slot`), so the hourly job can't double it.
+    Best-effort: a push failure never fails the relay post."""
+    try:
+        from routes.sector import field_nudge_after_sync
+        return await field_nudge_after_sync(require_fresh=True)
+    except Exception as ex:
+        logger.warning("relay field check-in failed: %s", ex)
+        return 0
 
 
 @router.post("/owneriq/relay/live")
