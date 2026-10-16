@@ -238,7 +238,10 @@ async def owneriq_relay_live(request: Request):
 async def owneriq_relay_hub(request: Request):
     """Browser relay: raw Performance Hub views → owneriq_hub (the Hub screen's
     store). Body: {secret, week_start, views:[{kind, ref, payload}, ...]}
-    where kind is 'mc' | 'team' | 'no_team'."""
+    where kind is 'mc' | 'team' | 'no_team'. Optional flags:
+    schedule_only (next week: fill Bells from it, don't show it on the Hub) and
+    cache_only (the daily walk back through earlier weeks: show it on the Hub,
+    never touch that week's Bells)."""
     data = await _relay_body(request)
     from owneriq_hub import store as _store_hub, clean_week
     from core.owneriq_session import mark_relay_ingest
@@ -246,6 +249,9 @@ async def owneriq_relay_hub(request: Request):
     # Next week is sent "schedule_only": apply its Field IQ plan to Bells but
     # don't cache it on the Hub screen (which shows this week and earlier).
     schedule_only = bool(data.get("schedule_only"))
+    # Earlier weeks, sent once a day so the Hub can show them: stored for the
+    # Hub screen only. Bells for a past week is never rewritten from here.
+    cache_only = bool(data.get("cache_only")) and not schedule_only
     stored = 0
     mc_payloads = []
     for v in (data.get("views") or []):
@@ -254,7 +260,7 @@ async def owneriq_relay_hub(request: Request):
             if not schedule_only:
                 await _store_hub(kind, str(ref), week_start, payload)
                 stored += 1
-            if kind == "mc":
+            if kind == "mc" and not cache_only:
                 mc_payloads.append(payload)
     # The company view carries every BA's week, so fill Bells from it (goals,
     # weekly stats, team names, Not-scheduled/No-show marks) — the same as the
@@ -267,7 +273,10 @@ async def owneriq_relay_hub(request: Request):
         except Exception as ex:
             logger.warning("relay Bells fill failed for week %s: %s", week_start, ex)
             applied = {"error": type(ex).__name__}
-    await mark_relay_ingest({"hub_week": week_start, "hub_views": stored, "bells": applied})
+    if cache_only:
+        await mark_relay_ingest({"hub_history_week": week_start})
+    else:
+        await mark_relay_ingest({"hub_week": week_start, "hub_views": stored, "bells": applied})
     return {"ok": True, "week_start": week_start, "views_stored": stored, "applied": applied}
 
 
@@ -275,11 +284,16 @@ async def owneriq_relay_hub(request: Request):
 async def owneriq_relay_roster(request: Request):
     """Browser relay: raw /v2/users roster page(s) → refresh the OwnerIQ↔app
     links and stages, so KPI rows and the Bells fill land on the right people.
-    Body: {secret, payloads:[<raw /v2/users page>, ...]}."""
+    Body: {secret, payloads:[<raw /v2/users page>, ...], pins:[<office pin>, ...]}
+    (pins line up with payloads; older scripts leave them out). The list is also
+    kept so "Add the team from OwnerIQ" and the roster check can use it."""
     data = await _relay_body(request)
     from owneriq_performance import link_from_relayed_roster
     from core.owneriq_session import mark_relay_ingest
-    res = await link_from_relayed_roster(data.get("payloads") or [])
+    from core.owneriq_relay_roster import store as store_roster
+    payloads = data.get("payloads") or []
+    await store_roster(payloads, data.get("pins"))
+    res = await link_from_relayed_roster(payloads)
     await mark_relay_ingest({"roster": res.get("roster"), "linked": res.get("linked")})
     return {"ok": True, **res}
 
@@ -1075,9 +1089,15 @@ class ImportPeopleBody(BaseModel):
 
 
 async def _owneriq_roster_for(pin: Optional[str]) -> list[dict]:
-    """Read the office's OwnerIQ people (read-only)."""
+    """Read the office's OwnerIQ people (read-only). While the browser relay
+    feeds the app, its last people list is used: the server can't reach
+    OwnerIQ then (its IP is blocked at the edge)."""
     import httpx
     from owneriq_import import parse_roster
+    from core.owneriq_relay_roster import payload_for
+    relayed = await payload_for(pin)
+    if relayed is not None:
+        return [p for p in parse_roster(relayed) if p["active"]]
     from owneriq_sync import _login, _select_company, _api_headers, OWNERIQ_API_BASE
     async with _client(timeout=60.0) as client:
         token = await _login(client)
