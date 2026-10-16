@@ -1415,6 +1415,24 @@ export const apiService = {
     days?: number;
     office_id?: string;
   }) => api.post('/owneriq/import-people', body, { timeout: 120000 }),
+  // Admin: fill Bells gaps from the office's roll call .xlsx. Without apply it
+  // only previews. `file` is a web File, or {uri, name, type} on a phone.
+  importRollcall: (file: any, opts: { from_week?: string; to_week?: string; apply?: boolean }) => {
+    const form = new FormData();
+    if (file && file.uri && !(typeof Blob !== 'undefined' && file instanceof Blob)) {
+      // @ts-ignore — RN FormData accepts {uri,name,type}
+      form.append('file', { uri: file.uri, name: file.name || 'rollcall.xlsx', type: file.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    } else {
+      form.append('file', file, (file && file.name) || 'rollcall.xlsx');
+    }
+    if (opts.from_week) form.append('from_week', opts.from_week);
+    if (opts.to_week) form.append('to_week', opts.to_week);
+    if (opts.apply) form.append('apply', 'true');
+    return api.post('/admin/bells/import-rollcall', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 300_000,
+    });
+  },
   getTeamTree: (office?: string) => api.get('/team/tree' + (office ? `?office=${encodeURIComponent(office)}` : '')),
   setReportsTo: (userId: string, parentId: string | null) =>
     api.put(`/admin/users/${userId}/reports-to`, { reports_to: parentId }),

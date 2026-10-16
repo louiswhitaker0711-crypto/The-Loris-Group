@@ -531,6 +531,10 @@ export default function AdminScreen() {
                 <Ionicons name="git-network-outline" size={15} color={colors.onPrimary} />
                 <Text style={styles.addBtnText}>Add from OwnerIQ</Text>
               </TouchableOpacity>
+              <TouchableOpacity style={styles.addBtn} onPress={() => router.push('/rollcall-import' as any)} accessibilityRole="button" testID="admin-rollcall-import">
+                <Ionicons name="document-attach-outline" size={15} color={colors.onPrimary} />
+                <Text style={styles.addBtnText}>Import roll call</Text>
+              </TouchableOpacity>
             </View>
             <Text style={styles.accountsHint}>Tap a name for that person's full breakdown and badge. Tap the row to edit their account.</Text>
 

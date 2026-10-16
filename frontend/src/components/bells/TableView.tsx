@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, Alert, Modal, TextInput, KeyboardAvoidingView, LayoutChangeEvent, useWindowDimensions } from 'react-native';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, runOnJS } from 'react-native-reanimated';
@@ -38,9 +39,17 @@ import { SUPER_GREEN_WEEK_MIN, GREEN_WEEK_MIN, AMBER_WEEK_MIN, RED_WEEK_MAX } fr
 // 0 red; a day off is a dash. Tap a day to edit it, a Goal or B/E to change
 // it, a team's goal to set it.
 //
-// Everyone is one list, a line each, most sign-ups first (the strip on the
-// left is their team's colour); the teams follow underneath as totals, then
-// the office. On a phone it's compact so the whole team fits on a page.
+// Everyone is one list, a line each, in one of two orders (a switch above it,
+// remembered on the device):
+//   • Team order: the Owner at the top, then each team under its OwnerIQ name,
+//     always in the same order — the Owner's own team (people with no named
+//     team) first, then admin-led teams, then the rest A–Z. Within a team the
+//     Coach comes first and their people follow in the server's sheet order
+//     (newest joiner right under their Coach, a Coach's own people under them).
+//   • Most sign-ups: everyone by this week's total.
+// The strip on the left is their team's colour; the teams follow underneath
+// as totals, then the office. On a phone it's compact so the whole team fits
+// on a page.
 // ─────────────────────────────────────────────────────────────────────
 
 /** The team for people who aren't in a named team yet (the Owner's own). */
@@ -178,6 +187,51 @@ function buildGroups(entries: Entry[], miniGoal?: number | null): Group[] {
     if (b.key === '__no_team__' && a.key !== '__no_team__') return 1;
     return 0;
   });
+}
+
+type EveryoneOrder = 'team' | 'sales';
+const ORDER_KEY = 'bells-everyone-order';
+
+/** The Everyone list in either order: rows, and in Team order a header row
+ *  before each team. The team order never depends on this week's numbers, so
+ *  the sheet reads the same every week. */
+type EveryoneItem = { kind: 'team'; g: Group } | { kind: 'row'; e: Entry; g: Group };
+function everyoneList(groups: Group[], order: EveryoneOrder): EveryoneItem[] {
+  if (order === 'sales') {
+    return groups.flatMap((g) => g.members.map((e) => ({ kind: 'row' as const, e, g })))
+      .sort((x, y) => (y.e.total_sales || 0) - (x.e.total_sales || 0) || (x.e.user_name || '').localeCompare(y.e.user_name || ''));
+  }
+  const rank = (g: Group) => {
+    if (g.key === MINI_KEY) return 0;
+    const leader = g.members.find((m) => m.user_id && m.user_id === g.leader_id);
+    return leader?.role === 'admin' ? 1 : 2;
+  };
+  const sorted = [...groups].sort((a, b) => rank(a) - rank(b) || (a.team_name || '').localeCompare(b.team_name || ''));
+  const out: EveryoneItem[] = [];
+  // The Owner (an Admin) always sits at the very top, above every team.
+  const owners = sorted.flatMap((g) => g.members.filter((e) => e.role === 'admin').map((e) => ({ e, g })));
+  const pinned = new Set(owners.map((o) => o.e.user_id || o.e.user_name));
+  for (const o of owners) out.push({ kind: 'row', e: o.e, g: o.g });
+  for (const g of sorted) {
+    const rows = g.members.filter((e) => !pinned.has(e.user_id || e.user_name));
+    if (!rows.length) continue;
+    out.push({ kind: 'team', g });
+    for (const e of rows) out.push({ kind: 'row', e, g });
+  }
+  return out;
+}
+
+/** The chosen order, remembered on this device (Team order by default). */
+function useEveryoneOrder(): [EveryoneOrder, (o: EveryoneOrder) => void] {
+  const [order, setOrder] = useState<EveryoneOrder>('team');
+  useEffect(() => {
+    AsyncStorage.getItem(ORDER_KEY).then((v) => { if (v === 'team' || v === 'sales') setOrder(v); }).catch(() => {});
+  }, []);
+  const choose = (o: EveryoneOrder) => {
+    setOrder(o);
+    AsyncStorage.setItem(ORDER_KEY, o).catch(() => {});
+  };
+  return [order, choose];
 }
 
 /** "12 Jul, 15:04" (UK time) — when an absence was signed off. */
@@ -458,6 +512,7 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
   const headerFont = 10 * z;
 
   const groups = useMemo(() => buildGroups(entries, miniGoal), [entries, miniGoal]);
+  const [order, setOrder] = useEveryoneOrder();
   const office = useMemo(() => tally(entries), [entries]);
 
   const head = (label: string, width: number, extra?: any) => (
@@ -490,7 +545,7 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
   const body = (sticky: boolean) => (
     <BodyContent
       groups={groups} office={office} colors={colors} isDark={isDark} styles={styles} z={z} w={w} totalW={totalW} showMc={showMc}
-      cellFont={cellFont} stickyNameCol={sticky ? stickyNameCol : {}} stickyTeam={sticky ? stickyTeam : {}} entries={entries}
+      cellFont={cellFont} stickyNameCol={sticky ? stickyNameCol : {}} stickyTeam={sticky ? stickyTeam : {}} entries={entries} order={order}
       canEditGoal={canEditCrewGoal} onEditGoal={openGoalEdit} onCellPress={openCellEdit} onRowPress={openRowEdit}
     />
   );
@@ -500,6 +555,7 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
       {phone ? (
         <PhoneSheet
           groups={groups} office={office} entries={entries} colors={colors} isDark={isDark} styles={styles} showMc={showMc}
+          order={order} onOrder={setOrder}
           canEditGoal={canEditCrewGoal} onEditGoal={openGoalEdit} onCellPress={openCellEdit} onRowPress={openRowEdit}
         />
       ) : (
@@ -509,6 +565,7 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
         <Text style={styles.zoomHint} numberOfLines={2}>
           Tap a day to edit it · tap a Goal to change it{isWeb ? '' : ' · pinch to zoom'}
         </Text>
+        <OrderSwitch order={order} onOrder={setOrder} styles={styles} colors={colors} />
         <View style={styles.zoomBtns}>
           <TouchableOpacity
             style={[styles.zoomBtn, z <= MIN_Z && styles.zoomBtnDisabled]}
@@ -758,7 +815,7 @@ function useOpenPerson() {
   return (e: Entry) => (can && e.user_id ? () => router.push(`/person/${e.user_id}` as never) : undefined);
 }
 
-function BodyContent({ groups, office, colors, isDark, styles, z, w, totalW, showMc, cellFont, stickyNameCol, stickyTeam, entries, canEditGoal, onEditGoal, onCellPress, onRowPress }: any) {
+function BodyContent({ groups, office, colors, isDark, styles, z, w, totalW, showMc, cellFont, stickyNameCol, stickyTeam, entries, order, canEditGoal, onEditGoal, onCellPress, onRowPress }: any) {
   const openPerson = useOpenPerson();
   const rowH = 38 * z;
   const slimH = 26 * z;
@@ -848,20 +905,33 @@ function BodyContent({ groups, office, colors, isDark, styles, z, w, totalW, sho
                     </View>
                   );
                 };
-  // Everyone on one list, most sign-ups first; the teams follow, as totals.
-  const everyone = groups.flatMap((g: Group) => g.members.map((e: Entry) => ({ e, g })))
-    .sort((x: any, y: any) => (y.e.total_sales || 0) - (x.e.total_sales || 0) || (x.e.user_name || '').localeCompare(y.e.user_name || ''));
+  // Everyone on one list (Team order or most sign-ups); the teams follow, as totals.
+  const everyone = everyoneList(groups, order || 'team');
+  // In Team order, a slim header in the team's colour before each team.
+  const teamRow = (g: Group) => {
+    const tint = g.key === '__no_team__' ? NO_TEAM_TINT : teamColor(g.leader_id || g.team_name);
+    const bandBg = isDark ? tint.border + '26' : tint.pill;
+    const bandText = isDark ? tint.pill : tint.text;
+    return (
+      <View key={`team-${g.key}`} style={[styles.teamHeader, { backgroundColor: bandBg, borderLeftColor: tint.border, width: totalW, minHeight: 26 * z, paddingVertical: 3 }]}>
+        <View style={[styles.teamHeaderLeft, isWebSticky(stickyNameCol) && ({ position: 'sticky', left: 10 } as any)]}>
+          <Text style={[styles.teamHeaderText, { color: bandText, fontSize: 11.5 * z }]} numberOfLines={1}>{g.team_name}</Text>
+          {g.leader_name ? <Text style={[styles.teamHeaderLeader, { color: bandText, fontSize: 10.5 * z }]} numberOfLines={1}>led by {firstName(g.leader_name)}</Text> : null}
+        </View>
+      </View>
+    );
+  };
   return (
     <>
           {everyone.length > 0 && (
             <View style={[styles.teamHeader, stickyTeam, styles.officeBand, { width: totalW }]}>
               <View style={[styles.teamHeaderLeft, isWebSticky(stickyNameCol) && ({ position: 'sticky', left: 10 } as any)]}>
                 <Text style={[styles.teamHeaderText, { color: colors.onPrimary, fontSize: 12.5 * z }]}>Everyone</Text>
-                <Text style={[styles.teamHeaderLeader, { color: colors.onPrimary, fontSize: 11 * z }]}>most sign-ups first</Text>
+                <Text style={[styles.teamHeaderLeader, { color: colors.onPrimary, fontSize: 11 * z }]}>{order === 'sales' ? 'most sign-ups first' : 'by team'}</Text>
               </View>
             </View>
           )}
-          {everyone.map(({ e, g }: any, idx: number) => personRow(e, idx, g))}
+          {everyone.map((it: EveryoneItem, idx: number) => (it.kind === 'team' ? teamRow(it.g) : personRow(it.e, idx, it.g)))}
           {groups.map((g: Group) => {
             const tint = g.key === '__no_team__' ? NO_TEAM_TINT : teamColor(g.leader_id || g.team_name);
             // Dark theme: the pastel pill would read as a paper island floating on
@@ -936,8 +1006,22 @@ function BodyContent({ groups, office, colors, isDark, styles, z, w, totalW, sho
 }
 const isWebSticky = (sticky: any) => !!sticky && sticky.position === 'sticky';
 
+/** Team order | Most sign-ups — how the Everyone list is sorted. */
+function OrderSwitch({ order, onOrder, styles, colors }: { order: EveryoneOrder; onOrder: (o: EveryoneOrder) => void; styles: any; colors: any }) {
+  const opt = (o: EveryoneOrder, label: string) => {
+    const on = order === o;
+    return (
+      <TouchableOpacity key={o} onPress={() => onOrder(o)} style={[styles.orderBtn, on && { backgroundColor: colors.primary }]}
+        accessibilityRole="button" accessibilityState={{ selected: on }} accessibilityLabel={`Sort by ${label}`} testID={`bells-order-${o}`}>
+        <Text style={[styles.orderText, { color: on ? colors.onPrimary : colors.text }]}>{label}</Text>
+      </TouchableOpacity>
+    );
+  };
+  return <View style={styles.orderWrap}>{opt('team', 'Team order')}{opt('sales', 'Most sign-ups')}</View>;
+}
+
 // ── The phone's Bells: the same sections as a list ───────────────────────────
-function PhoneSheet({ groups, office, entries, colors, isDark, styles, showMc, canEditGoal, onEditGoal, onCellPress, onRowPress }: any) {
+function PhoneSheet({ groups, office, entries, colors, isDark, styles, showMc, order, onOrder, canEditGoal, onEditGoal, onCellPress, onRowPress }: any) {
   const openPerson = useOpenPerson();
   // A label and seven cells, lined up under the day letters.
   const statRow = (label: string, vals: (string | number)[], strong?: boolean) => (
@@ -967,12 +1051,14 @@ function PhoneSheet({ groups, office, entries, colors, isDark, styles, showMc, c
       </Text>
     </View>
   );
-  // Everyone on one list, a line each, most sign-ups first; the teams follow.
-  const everyone = groups.flatMap((g: Group) => g.members.map((e: Entry) => ({ e, g })))
-    .sort((x: any, y: any) => (y.e.total_sales || 0) - (x.e.total_sales || 0) || (x.e.user_name || '').localeCompare(y.e.user_name || ''));
+  // Everyone on one list, a line each (Team order or most sign-ups); the teams follow.
+  const everyone = everyoneList(groups, order || 'team');
   return (
     <View>
-      <Text style={styles.pHint}>Tap a day to edit it. Tap a name for their goal.</Text>
+      <View style={styles.pTopRow}>
+        <Text style={[styles.pHint, { flex: 1, marginBottom: 0 }]}>Tap a day to edit it. Tap a name for their goal.</Text>
+        <OrderSwitch order={order || 'team'} onOrder={onOrder} styles={styles} colors={colors} />
+      </View>
       {everyone.length > 0 && (
         <View style={styles.pSection}>
           <View style={styles.lRow}>
@@ -980,8 +1066,19 @@ function PhoneSheet({ groups, office, entries, colors, isDark, styles, showMc, c
             {DAYS.map((d, i) => <Text key={i} style={[styles.lHead, styles.lDayW]}>{d.charAt(0)}</Text>)}
             <Text style={[styles.lHead, styles.lTotW]}>Tot</Text>
           </View>
-          {everyone.map(({ e, g }: any, idx: number) => {
+          {everyone.map((it: EveryoneItem, idx: number) => {
+            const g = it.g;
             const tint = g.key === '__no_team__' ? NO_TEAM_TINT : teamColor(g.leader_id || g.team_name);
+            if (it.kind === 'team') {
+              const bandText = isDark ? tint.pill : tint.text;
+              return (
+                <View key={`team-${g.key}`} style={[styles.lTeamHead, { backgroundColor: isDark ? tint.border + '26' : tint.pill, borderLeftColor: tint.border }]}>
+                  <Text style={[styles.lTeamHeadText, { color: bandText }]} numberOfLines={1}>{g.team_name}</Text>
+                  {g.leader_name ? <Text style={[styles.lTeamHeadLeader, { color: bandText }]} numberOfLines={1}>led by {firstName(g.leader_name)}</Text> : null}
+                </View>
+              );
+            }
+            const e = it.e;
             const light = trafficLight(e);
             return (
               <View key={e.user_id || idx} style={styles.lRow}>
@@ -1131,6 +1228,13 @@ const createStyles = (colors: any) => StyleSheet.create({
   // ── Phone list ──
   phoneWrap: { marginTop: 10 },
   pHint: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, marginBottom: 8, marginLeft: 2 },
+  pTopRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  orderWrap: { flexDirection: 'row', borderWidth: 1, borderColor: colors.border, borderRadius: 8, overflow: 'hidden' },
+  orderBtn: { paddingHorizontal: 9, paddingVertical: 5 },
+  orderText: { fontFamily: fonts.bodySemibold, fontSize: 11.5 },
+  lTeamHead: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 8, paddingVertical: 4, borderLeftWidth: 4, borderTopWidth: 1, borderTopColor: colors.border },
+  lTeamHeadText: { fontFamily: fonts.bodyBold, fontSize: 11.5, letterSpacing: 0.3, textTransform: 'uppercase', flexShrink: 1 },
+  lTeamHeadLeader: { fontFamily: fonts.body, fontSize: 10.5 },
   pSection: { marginBottom: 14, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, overflow: 'hidden' },
   pBand: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44, paddingHorizontal: 12, paddingVertical: 7, borderLeftWidth: 4, borderLeftColor: 'transparent' },
   lRow: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 6, paddingVertical: 2, borderTopWidth: 1, borderTopColor: colors.border, minHeight: 30 },
