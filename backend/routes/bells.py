@@ -38,7 +38,7 @@ from typing import Optional, List
 from bson import ObjectId
 from pymongo.errors import DuplicateKeyError
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
 
 from auth import get_current_user, require_super_admin, get_subtree_ids
 from database import db
@@ -1748,6 +1748,65 @@ async def backfill_bells_earnings(request: Request):
         updated += 1
 
     return {"updated": updated, "skipped": skipped}
+
+
+# ── Roll call import (the office's old Bells spreadsheet → gaps only) ────────
+MAX_ROLLCALL_BYTES = 40 * 1024 * 1024
+
+
+@router.post("/admin/bells/import-rollcall")
+async def import_rollcall(request: Request, file: UploadFile = File(...),
+                          from_week: Optional[str] = Form(None), to_week: Optional[str] = Form(None),
+                          apply: Optional[str] = Form(None), office_id: Optional[str] = Form(None)):
+    """Admin: fill Bells gaps from the office's roll call .xlsx (one tab per
+    week, "WE 2792026"). Without apply=true it only previews: who each sheet
+    name matched, who it couldn't, and how many days each week would fill.
+    The app wins: only days nobody has filled in are written
+    (core/rollcall_import.py)."""
+    import asyncio
+    from auth import require_admin
+    from core import rollcall_import as ri
+    admin = await require_admin(request)
+    office = await resolve_office_id(request, admin, office_id)
+    if not office:
+        raise HTTPException(status_code=400, detail="Choose an office first")
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="That file is empty.")
+    if len(data) > MAX_ROLLCALL_BYTES:
+        raise HTTPException(status_code=413, detail="That file is too big (40 MB at most).")
+    today = datetime.now(APP_TZ).date()
+    dflt_from, dflt_to = ri.default_range(today)
+
+    def _sunday(v: Optional[str], fallback: date) -> date:
+        if not v:
+            return fallback
+        try:
+            d = date.fromisoformat(v[:10])
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Weeks must be dates (YYYY-MM-DD).")
+        return d + timedelta(days=(6 - d.weekday()))
+
+    wk_from, wk_to = _sunday(from_week, dflt_from), _sunday(to_week, dflt_to)
+    if wk_to > dflt_to:
+        wk_to = dflt_to   # this week is live in the app: never imported
+    if wk_from > wk_to:
+        raise HTTPException(status_code=400, detail="The first week is after the last week.")
+    try:
+        weeks = await asyncio.to_thread(ri.read_workbook, data, wk_from, wk_to)
+    except Exception as ex:
+        logger.warning("roll call import: couldn't read the file: %s", ex)
+        raise HTTPException(status_code=400, detail="Couldn't read that file. Is it the roll call sheet saved as .xlsx?")
+    if not weeks:
+        raise HTTPException(status_code=400, detail="No week tabs (like \"WE 2792026\") between those dates in that file.")
+    out = {"from_week": wk_from.isoformat(), "to_week": wk_to.isoformat(),
+           "weeks_found": sorted(weeks), **(await ri.plan_import(db, office, weeks))}
+    if str(apply).lower() in ("1", "true", "yes"):
+        fees = await db.commission_fees.find_one({"office_id": office}, {"_id": 0}) \
+            or await db.commission_fees.find_one({}, {"_id": 0})
+        out["applied"] = await ri.apply_import(db, office, weeks, fees, compute_totals, str(admin.get("id")))
+        logger.info("roll call import by %s for office %s: %s", admin.get("id"), office, out["applied"])
+    return out
 
 
 @router.delete("/bells/{entry_id}")
