@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OwnerIQ → The Loris Group relay
 // @namespace    the-loris-group
-// @version      1.4
+// @version      1.5
 // @description  Runs in the Owner's own logged-in OwnerIQ tab. Every few minutes it reads the office's own data (the same data the dashboard shows) and posts it to the app, which stores it exactly as the server sync would. Used because the UK edge blocks server-to-server calls; the Owner's real browser is allowed.
 // @match        https://owner-iq.ai/*
 // @run-at       document-idle
@@ -118,7 +118,7 @@
       if (pin) await oiq("/v2/marketing_companies", [["mc_pin", pin]]); // select office
       payloads.push(await oiq("/v2/users", [["limit", 2000]]));
     }
-    await toApp("/api/owneriq/relay/roster", { payloads });
+    await toApp("/api/owneriq/relay/roster", { payloads, pins: walk });
     const n = payloads.reduce((a, p) => a + ((p.data || []).length), 0);
     log(`Roster: posted ${n} people across ${walk.length} office(s)`);
   }
@@ -224,6 +224,53 @@
     }
   }
 
+  // Earlier weeks on the Performance Hub: once a day, send the office, no-team
+  // and every team view for the last 11 weeks (the Hub goes back 12, and this
+  // week is sent on every sync). Saved for viewing only (cache_only): the app
+  // never rewrites a past week's Bells from these.
+  const HUB_WEEKS_BACK = 11;
+  const HUB_KEY = "loris-relay-hub-history-sent";
+  async function syncHubHistoryOnce() {
+    const today = iso(new Date());
+    let sent = null;
+    try { sent = localStorage.getItem(HUB_KEY); } catch (e) { /* resend */ }
+    if (sent === today) return;
+    const ids = await companyIds();
+    let weeks = 0;
+    for (let wk = 1; wk <= HUB_WEEKS_BACK; wk++) {
+      const ws = mondayISO(wk);
+      const views = [];
+      for (const mc of ids) {
+        let mcView;
+        try {
+          mcView = await oiq(`/v3/owner/bells_performance/marketing_companies/${mc}`, [["week_start_on", ws]]);
+        } catch (e) {
+          if (e.message === "session-expired" || e.message === "not-logged-in") throw e;
+          continue;   // a week OwnerIQ won't serve: skip it
+        }
+        views.push({ kind: "mc", ref: mc, payload: mcView });
+        try {
+          const noTeam = await oiq(`/v3/owner/bells_performance/marketing_companies/${mc}/no_team`, [["week_start_on", ws]]);
+          views.push({ kind: "no_team", ref: mc, payload: noTeam });
+        } catch (e) { /* some offices have no "no team" bucket */ }
+        for (const t of (mcView.teams || [])) {
+          if (t.id == null) continue;
+          try {
+            const tv = await oiq(`/v3/owner/bells_performance/teams/${t.id}`, [["week_start_on", ws]]);
+            views.push({ kind: "team", ref: t.id, payload: tv });
+          } catch (e) {
+            if (e.message === "session-expired" || e.message === "not-logged-in") throw e;
+          }
+        }
+      }
+      if (!views.length) continue;
+      await toApp("/api/owneriq/relay/hub", { week_start: ws, views, cache_only: true });
+      weeks += 1;
+    }
+    log(`Hub history: posted ${weeks} earlier week(s) for viewing`);
+    try { localStorage.setItem(HUB_KEY, today); } catch (e) { /* fine: resends next sync */ }
+  }
+
   let running = false;
   async function run() {
     if (running) return;
@@ -235,6 +282,7 @@
       await syncLive();
       await syncHub();
       await syncYesterdayOnce();
+      await syncHubHistoryOnce();
       log("sync complete", new Date().toLocaleTimeString());
     } catch (e) {
       if (e.message === "session-expired") warn("OwnerIQ session expired — sign in again at owner-iq.ai.");

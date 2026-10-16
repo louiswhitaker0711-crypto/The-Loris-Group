@@ -91,14 +91,64 @@ async def _pull_comparison() -> dict:
         }
 
     offices = []
+    pin_names = {c["pin"]: c.get("name") for c in await known_companies()}
+    global_roots = root_user_ids()
+
+    def compare(pin, office_name: str, users: list) -> None:
+        both, oiq_only = [], []
+        claimed_cg1: set[str] = set()
+        for u in users:
+            at = u.get("attributes", {}) or {}
+            oid = str(u["id"])
+            if oid in global_roots or not at.get("active"):
+                continue  # platform-wide root node / inactive
+            full_name = at.get("full_name") or ""
+            stage = str(at.get("stage") or "").replace("stage_", "")
+            badges = {b.strip().upper() for b in str(at.get("badge_number_list") or "").replace(",", " ").split() if b.strip()}
+            # badge link first, then normalised name
+            cg1_uid = next((by_badge[b] for b in badges if b in by_badge), None) \
+                or by_name.get(_norm_name(full_name))
+            entry = {"name": full_name, "stage": stage}
+            if cg1_uid and cg1_uid in cg1_active:
+                claimed_cg1.add(cg1_uid)
+                cg1n = cg1_active[cg1_uid]["name"]
+                if _norm_name(cg1n) != _norm_name(full_name):
+                    entry["cg1_name"] = cg1n
+                both.append(entry)
+            else:
+                entry["reason"] = f"{APP_NAME} account deactivated/deleted" if cg1_uid else f"no {APP_NAME} account found"
+                oiq_only.append(entry)
+
+        cg1_only = sorted(
+            ({"name": v["name"], "role": v["role"]}
+             for uid, v in cg1_active.items() if v["pin"] == pin and uid not in claimed_cg1),
+            key=lambda x: x["name"].lower(),
+        )
+        offices.append({
+            "pin": pin, "office": office_name,
+            "both": both, "oiq_only": oiq_only, "cg1_only": cg1_only,
+            "counts": {"owneriq_active": len(both) + len(oiq_only),
+                       "both": len(both), "oiq_only": len(oiq_only), "cg1_only": len(cg1_only)},
+        })
+
+    # While the browser relay feeds the app, the server can't reach OwnerIQ
+    # (its IP is blocked at the edge): compare against the people list the
+    # relay last sent instead of pulling it.
+    from core.owneriq_relay_roster import offices as relayed_offices
+    relayed = await relayed_offices()
+    if relayed is not None:
+        known = list(pin_names) or sorted({p for p in office_to_pin.values() if p})
+        for o in relayed:
+            pin = o.get("pin") or (known[0] if len(known) == 1 else None)
+            compare(pin, pin_names.get(pin) or f"Office {pin}", o.get("users") or [])
+        return {"pulled_at": datetime.now(timezone.utc).isoformat(), "source": "browser_relay", "offices": offices}
+
     hdrs_extra = {"accept": "application/vnd.api+json", "x-requested-with": "XMLHttpRequest",
                   "origin": "https://owner-iq.ai", "user-agent": _UA}
     async with _client(timeout=60.0) as client:
         tok = await _login(client)
         H = {**hdrs_extra, "authorization": f"Bearer {tok}"}
         pins = await company_pins(client, tok)
-        pin_names = {c["pin"]: c.get("name") for c in await known_companies()}
-        global_roots = root_user_ids()
         for pin in pins:
             office_name = pin_names.get(pin) or f"Office {pin}"
             try:
@@ -120,42 +170,7 @@ async def _pull_comparison() -> dict:
             )
             if r.status_code != 200:
                 raise HTTPException(status_code=502, detail=f"OwnerIQ roster for {office_name}: HTTP {r.status_code}")
-
-            both, oiq_only = [], []
-            claimed_cg1: set[str] = set()
-            for u in r.json().get("data", []):
-                at = u.get("attributes", {}) or {}
-                oid = str(u["id"])
-                if oid in global_roots or not at.get("active"):
-                    continue  # platform-wide root node / inactive
-                full_name = at.get("full_name") or ""
-                stage = str(at.get("stage") or "").replace("stage_", "")
-                badges = {b.strip().upper() for b in str(at.get("badge_number_list") or "").replace(",", " ").split() if b.strip()}
-                # badge link first, then normalised name
-                cg1_uid = next((by_badge[b] for b in badges if b in by_badge), None) \
-                    or by_name.get(_norm_name(full_name))
-                entry = {"name": full_name, "stage": stage}
-                if cg1_uid and cg1_uid in cg1_active:
-                    claimed_cg1.add(cg1_uid)
-                    cg1n = cg1_active[cg1_uid]["name"]
-                    if _norm_name(cg1n) != _norm_name(full_name):
-                        entry["cg1_name"] = cg1n
-                    both.append(entry)
-                else:
-                    entry["reason"] = f"{APP_NAME} account deactivated/deleted" if cg1_uid else f"no {APP_NAME} account found"
-                    oiq_only.append(entry)
-
-            cg1_only = sorted(
-                ({"name": v["name"], "role": v["role"]}
-                 for uid, v in cg1_active.items() if v["pin"] == pin and uid not in claimed_cg1),
-                key=lambda x: x["name"].lower(),
-            )
-            offices.append({
-                "pin": pin, "office": office_name,
-                "both": both, "oiq_only": oiq_only, "cg1_only": cg1_only,
-                "counts": {"owneriq_active": len(both) + len(oiq_only),
-                           "both": len(both), "oiq_only": len(oiq_only), "cg1_only": len(cg1_only)},
-            })
+            compare(pin, office_name, r.json().get("data", []))
 
     return {"pulled_at": datetime.now(timezone.utc).isoformat(), "offices": offices}
 
