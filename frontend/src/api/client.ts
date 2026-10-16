@@ -1004,6 +1004,12 @@ export const apiService = {
   getSectorDay: (date: string) => api.get('/sector/day', { params: { date } }),
   saveSectorDay: (userId: string, date: string, body: { setup?: any; breakdown?: any }) =>
     api.put(`/sector/day/${userId}`, body, { params: { date } }),
+  // Breakdown: the sector leader or a Coach marks today's COD item as seen in
+  // the field (a record of the day; never a tick on the COD).
+  markCodObserved: (userId: string, date: string, done: boolean) =>
+    api.put(`/sector/day/${userId}/cod-observed`, { done }, { params: { date } }),
+  getModuleObservations: (moduleId: string, userId?: string) =>
+    api.get(`/modules/${moduleId}/observations`, { params: userId ? { user_id: userId } : {} }),
   notifySectorSetups: (date: string) => api.post('/sector/setup/notify', {}, { params: { date } }),
   getSectorRoster: (date: string) => api.get('/sector/roster', { params: { date } }),
   saveMySector: (date: string, memberIds: string[]) => api.put('/sector/sectors', { member_ids: memberIds }, { params: { date } }),
@@ -1143,8 +1149,8 @@ export const apiService = {
       is_trainee: boolean; is_leader: boolean; is_admin: boolean;
       is_leader_or_admin: boolean; team_has_junior_leader: boolean;
       stage_1_days_submitted: number[]; stage_1_days_passed_off: number[]; stage_1_total_days: number;
-      stage_2_visible: boolean; stage_3_visible: boolean; stage_4_visible: boolean; stage_5_visible: boolean; stage_6_visible?: boolean;
-      stage_2_unlocked: boolean; stage_3_unlocked: boolean; stage_4_unlocked: boolean; stage_5_unlocked: boolean; stage_6_unlocked?: boolean;
+      stage_2_visible: boolean; stage_3_visible: boolean; stage_4_visible: boolean; stage_5_visible: boolean;
+      stage_2_unlocked: boolean; stage_3_unlocked: boolean; stage_4_unlocked: boolean; stage_5_unlocked: boolean;
       sales_path_enabled?: boolean; sales_level?: number | null; sales_level_name?: string | null;
       ramp_status?: string | null; ramp_week?: number | null;
     }>('/stage-status/me'),
@@ -1206,7 +1212,7 @@ export const apiService = {
     api.put('/cod/videos', body),
   getModuleScale: () =>
     api.get<{ bands: Array<{min:number;max:number;label:string}>; dimensions: string[] }>('/modules/scale'),
-  listModules: (stage: 1 | 2 | 3 | 4 | 5 | 6, office?: string) =>
+  listModules: (stage: 1 | 2 | 3 | 4 | 5, office?: string) =>
     api.get<{ stage: number; unlocked: boolean; modules: Array<any> }>(`/modules`, { params: { stage, ...(office ? { office } : {}) } }),
   getModule: (moduleId: string) =>
     api.get<any>(`/modules/${moduleId}`),
@@ -1214,7 +1220,7 @@ export const apiService = {
     api.get<{ quiz_id: string; questions: Array<{ id: string; question: string; choices: string[] }> }>(`/modules/${moduleId}/quiz`),
   submitModuleQuiz: (moduleId: string, body: { quiz_id: string; answers: Record<string, number> }) =>
     api.post<{ score: number; total: number; passed: boolean; results: Array<{ id: string; correct: number; chosen: number; ok: boolean }> }>(`/modules/${moduleId}/quiz/submit`, body),
-  getMyModuleProgress: (stage: 1 | 2 | 3 | 4 | 5 | 6) =>
+  getMyModuleProgress: (stage: 1 | 2 | 3 | 4 | 5) =>
     api.get<{ stage: number; progress: Array<any> }>(`/module-progress/me`, { params: { stage } }),
   upsertModuleProgress: (
     moduleId: string,
@@ -1229,14 +1235,14 @@ export const apiService = {
   // Leader-grades-trainee endpoints
   listMyTrainees: () => api.get<{ trainees: Array<{ id: string; name: string; email: string; role: string; new_hire_id?: string; office_id?: string }> }>('/leader/trainees'),
   listUnassignedHires: () => api.get<{ hires: Array<{ hire_id: string; name: string; start_date?: string; campaign?: string; current_day?: number }> }>('/admin/unassigned-hires'),
-  getTraineeModuleProgress: (traineeUserId: string, stage: 1 | 2 | 3 | 4 | 5 | 6 = 2) =>
+  getTraineeModuleProgress: (traineeUserId: string, stage: 1 | 2 | 3 | 4 | 5 = 2) =>
     api.get<{ stage: number; trainee_user_id: string; progress: Array<any> }>(
       `/leader/trainees/${traineeUserId}/module-progress`, { params: { stage } }),
   passOffModule: (moduleId: string, targetUserId: string, passedOff = true, note?: string) =>
     api.post<any>(`/module-progress/${moduleId}/pass-off`, { passed_off: passedOff, note }, { params: { target_user_id: targetUserId } }),
   // Manual editor — Stage 2/3/4 module CRUD (admin only). Auth piggy-backs on
   // the user's normal Bearer/cookie session via the backend's _check_auth.
-  adminListModules: (stage: 1 | 2 | 3 | 4 | 5 | 6, officeId?: string | null) =>
+  adminListModules: (stage: 2 | 3 | 4 | 5, officeId?: string | null) =>
     api.get<{ stage: number; office_id: string | null; is_global: boolean; items: Array<any> }>(
       `/manual-editor/modules`,
       { params: { stage, ...(officeId !== undefined ? { office_id: officeId === null ? '__global__' : officeId } : {}) } }),

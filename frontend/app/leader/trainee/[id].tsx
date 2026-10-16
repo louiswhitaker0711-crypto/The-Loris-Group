@@ -27,10 +27,10 @@ import TraineeProductExamCard from '../../../src/components/TraineeProductExamCa
 import { SalesPathPanel } from '../../../src/components/salespath/SalesPathPanel';
 import { useTabBarClearance } from '../../../src/customization/CustomTabBar';
 import { usePullToRefresh } from '../../../src/components/ui/PullRefresh';
-import { sortCodStages, COD_STAGE_TITLES } from '../../../src/components/cod/stageOrder';
+import { sortCodStages } from '../../../src/components/cod/stageOrder';
 import { APP_LOCALE } from '../../../src/utils/appTime';
 
-type TabKey = 'orientation' | 'field' | 'stage1' | 'stage2' | 'stage3' | 'stage4' | 'stage5' | 'stage6' | 'sales';
+type TabKey = 'orientation' | 'field' | 'stage1' | 'stage2' | 'stage3' | 'stage4' | 'stage5' | 'sales';
 
 const ORIENT_DAYS = [1, 2];
 const FIELD_DAYS = [3, 4, 5, 6, 7, 8];
@@ -38,12 +38,11 @@ const FIELD_DAYS = [3, 4, 5, 6, 7, 8];
 const TAB_META: Record<TabKey, { title: string; subtitle: string }> = {
   orientation: { title: 'BA Academy — Days 1-2', subtitle: 'BA Academy grading' },
   field:       { title: 'Field — Days 3-8',       subtitle: 'In-field training grading' },
-  stage1:      { title: COD_STAGE_TITLES[1], subtitle: 'COD sheet' },
-  stage2:      { title: COD_STAGE_TITLES[2], subtitle: 'COD sheet' },
-  stage3:      { title: COD_STAGE_TITLES[3], subtitle: 'COD sheet' },
-  stage4:      { title: COD_STAGE_TITLES[4], subtitle: 'COD sheet' },
-  stage5:      { title: COD_STAGE_TITLES[5], subtitle: 'COD sheet' },
-  stage6:      { title: COD_STAGE_TITLES[6], subtitle: 'COD sheet' },
+  stage1:      { title: 'Stage 1 — Foundation',   subtitle: 'COD sheet — build your core competencies' },
+  stage2:      { title: 'Stage 2 — Self Management', subtitle: 'Operate like a professional' },
+  stage3:      { title: 'Stage 3 — Leader',          subtitle: 'Creating success in others' },
+  stage4:      { title: 'Stage 4 — Team Builder',    subtitle: 'Systems, standards & independence' },
+  stage5:      { title: 'Stage SL — Sector Leader',  subtitle: 'Performance management' },
   sales:       { title: 'Sales Path',                subtitle: '30-day ramp + proficiency ladder — the second of the two ladders' },
 };
 
@@ -93,7 +92,7 @@ export default function TraineeProgressScreen() {
       // Stage tabs in COD display order — Stage SL (stored as 5) sits
       // between Stage 3 and Stage 4. See stageOrder.ts.
       return withSales(isAdmin
-        ? sortCodStages([2, 3, 4, 5, 6]).map((n) => `stage${n}` as TabKey)
+        ? sortCodStages([2, 3, 4, 5]).map((n) => `stage${n}` as TabKey)
         : sortCodStages([2, 3]).map((n) => `stage${n}` as TabKey));
     }
     return withSales(['orientation', 'field', 'stage1', 'stage2']);
@@ -117,8 +116,8 @@ export default function TraineeProgressScreen() {
   }, [targetIsLeader, trainee?.id, isHireMode, tabParam, availableTabs]);
 
   // Map active tab → stage number for module queries (stage tabs only)
-  const stageForTab: 1 | 2 | 3 | 4 | 5 | 6 | null =
-    tab === 'stage1' ? 1 : tab === 'stage2' ? 2 : tab === 'stage3' ? 3 : tab === 'stage4' ? 4 : tab === 'stage5' ? 5 : tab === 'stage6' ? 6 : null;
+  const stageForTab: 1 | 2 | 3 | 4 | 5 | null =
+    tab === 'stage1' ? 1 : tab === 'stage2' ? 2 : tab === 'stage3' ? 3 : tab === 'stage4' ? 4 : tab === 'stage5' ? 5 : null;
 
   // ── Data fetches ─────────────────────────────────────────────────────────
   // Daily assessments (Day 1-8) — only for trainee targets
@@ -130,12 +129,12 @@ export default function TraineeProgressScreen() {
 
   const modulesQ = useQuery({
     queryKey: ['stage-modules', stageForTab],
-    queryFn: () => apiService.listModules(stageForTab as 1 | 2 | 3 | 4 | 5 | 6).then(r => r.data.modules),
+    queryFn: () => apiService.listModules(stageForTab as 1 | 2 | 3 | 4 | 5).then(r => r.data.modules),
     enabled: !!stageForTab,
   });
   const progressQ = useQuery({
     queryKey: ['trainee-module-progress', id, stageForTab],
-    queryFn: () => apiService.getTraineeModuleProgress(String(id), stageForTab as 1 | 2 | 3 | 4 | 5 | 6).then(r => r.data.progress),
+    queryFn: () => apiService.getTraineeModuleProgress(String(id), stageForTab as 1 | 2 | 3 | 4 | 5).then(r => r.data.progress),
     enabled: !!id && !!stageForTab && !isHireMode,
   });
 
@@ -336,8 +335,7 @@ export default function TraineeProgressScreen() {
                    t === 'stage2' ? 'Stage 2' :
                    t === 'stage3' ? 'Stage 3' :
                    t === 'stage4' ? 'Stage 4' :
-                   t === 'stage5' ? 'Stage 3+' :
-                   t === 'stage6' ? 'Stage 5' : 'Sales'}
+                   t === 'sales' ? 'Sales' : 'SL'}
                 </Text>
               </TouchableOpacity>
             ))}

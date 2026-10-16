@@ -435,15 +435,16 @@ async def _startup_work():
     except Exception:
         logger.exception("Law of Averages update failed (continuing)")
 
-    # The Owner's COD sheet (stages 1, 2, 3, 3+, 4, 5): once per database,
-    # carry earlier items over in place, archive the rest, add the new ones.
+    # The original COD (Foundation, Self Management, Leader, Sector/Site Leader,
+    # Team Builder), back on 16 Oct 2026 after the Owner's COD sheet was tried:
+    # once per database, restore the original items and their content, hide the
+    # sheet's items and Stage 5, and clear the old ticks (copied to an archive).
+    # The sheet's own updates no longer run.
     try:
-        from core.cod_sheet_migration import run_cod_sheet_update
-        await run_cod_sheet_update(db)
-        from core.cod_sheet_migration import run_cod_notes_update
-        await run_cod_notes_update(db)
+        from core.cod_original_migration import run_cod_original_restore
+        await run_cod_original_restore(db)
     except Exception:
-        logger.exception("COD sheet update failed (continuing)")
+        logger.exception("COD original restore failed (continuing)")
 
     await db.users.create_index("email", unique=True)
     # Primetime reads the whole office's week on every Home render, and writes

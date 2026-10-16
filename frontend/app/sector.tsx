@@ -20,13 +20,16 @@ import { SectorPicker } from '../src/components/sector/SectorPicker';
 import { SectorMap } from '../src/components/sector/SectorMap';
 import BreakdownPrimetime from '../src/components/sector/BreakdownPrimetime';
 
-type Setup = { goal: number | null; kpi_metric: string | null; kpi_target: number | null; focus: string; positive?: string };
+type Setup = { goal: number | null; kpi_metric: string | null; kpi_target: number | null; focus: string; positive?: string; cod_module_id?: string | null };
+type CodItem = { id: string; stage: number; topic: string; category?: string };
+type CodDay = { stages: number[]; pick: CodItem | null; observed: { by_name: string; date: string } | null };
 type Breakdown = { doors: number | null; spoken: number | null; pitched: number | null; closed: number | null;
   note: string; goal: number | null; hit: number | null; proud: string; change: string;
   silver?: number | null; gold?: number | null; round?: number | null };
 type Person = { user_id: string; user_name: string; setup: Setup | null; breakdown: Breakdown | null;
   prefill: Partial<Record<'doors' | 'spoken' | 'pitched' | 'closed' | 'hit' | 'silver' | 'gold' | 'round', number>>;
-  yesterday: { change: string; proud: string; goal: number | null; kpi: { kpi_metric: string; kpi_target: number } | null } };
+  yesterday: { change: string; proud: string; goal: number | null; kpi: { kpi_metric: string; kpi_target: number } | null };
+  cod?: CodDay };
 type Mode = 'setup' | 'breakdown';
 const errText = (e: any, f: string) => (typeof e?.response?.data?.detail === 'string' ? e.response.data.detail : f);
 
@@ -120,9 +123,9 @@ export default function SectorScreen() {
 
       {q.isLoading ? <ActivityIndicator color={c.primary} /> : people.map((p) => (
         mode === 'setup'
-          ? <SetupCard key={p.user_id + date} p={p} date={date} opts={opts} open={open === p.user_id}
+          ? <SetupCard key={p.user_id + date} p={p} date={date} opts={opts} codOptions={q.data?.cod_options || []} open={open === p.user_id}
               onToggle={() => setOpen(open === p.user_id ? null : p.user_id)} onSaved={() => q.refetch()} s={s} c={c} />
-          : <BreakdownCard key={p.user_id + date} p={p} date={date} opts={opts} open={open === p.user_id}
+          : <BreakdownCard key={p.user_id + date} p={p} date={date} opts={opts} canMarkCod={!!q.data?.can_mark_cod} open={open === p.user_id}
               onToggle={() => setOpen(open === p.user_id ? null : p.user_id)} onSaved={() => q.refetch()} s={s} c={c} />
       ))}
 
@@ -295,8 +298,53 @@ function Chips({ items, value, onPick, s, c, highlight }: { items: string[]; val
   );
 }
 
-function SetupCard({ p, date, opts, open, onToggle, onSaved, s, c }: any) {
+/** "16 Oct" for a YYYY-MM-DD date. */
+const shortDate = (iso?: string | null) => {
+  if (!iso) return '';
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(APP_LOCALE, { day: 'numeric', month: 'short' });
+};
+
+/** Today's COD item: one item from their own stage or below (Stage 1-2 only). */
+function CodPicker({ stages, options, value, onPick, s, c }: { stages: number[]; options: CodItem[]; value: string; onPick: (id: string) => void; s: any; c: any }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const mine = options.filter((o) => stages.includes(o.stage));
+  const picked = mine.find((o) => o.id === value);
+  const shown = mine.filter((o) => o.topic.toLowerCase().includes(search.trim().toLowerCase()));
+  return (
+    <View style={{ gap: 6 }}>
+      <Pressable onPress={() => setOpen(!open)} style={[s.input, { flexDirection: 'row', alignItems: 'center', gap: 8 }]} accessibilityRole="button" testID="setup-cod-pick">
+        <Ionicons name="school-outline" size={16} color={c.primary} />
+        <Text style={[s.ghostText, { flex: 1, color: picked ? c.text : c.textMuted }]} numberOfLines={2}>
+          {picked ? `Stage ${picked.stage} · ${picked.topic}` : 'Pick one thing to learn today'}
+        </Text>
+        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={c.textMuted} />
+      </Pressable>
+      {open && (
+        <View style={{ gap: 4 }}>
+          <TextInput value={search} onChangeText={setSearch} placeholder="Search the COD" placeholderTextColor={c.textMuted} style={s.input} />
+          {!!value && (
+            <Pressable onPress={() => { onPick(''); setOpen(false); }} style={{ paddingVertical: 6 }} accessibilityRole="button">
+              <Text style={[s.muted, { color: c.red }]}>Clear (nothing from the COD today)</Text>
+            </Pressable>
+          )}
+          {shown.map((o) => (
+            <Pressable key={o.id} onPress={() => { onPick(o.id); setOpen(false); }} style={{ paddingVertical: 6, flexDirection: 'row', gap: 8, alignItems: 'center' }} accessibilityRole="button">
+              <Ionicons name={o.id === value ? 'radio-button-on' : 'radio-button-off'} size={16} color={o.id === value ? c.primary : c.textMuted} />
+              <Text style={[s.ghostText, { flex: 1, color: c.text }]}>{`${o.stage} · ${o.topic}`}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
+function SetupCard({ p, date, opts, codOptions, open, onToggle, onSaved, s, c }: any) {
   const cur: Setup = p.setup || { goal: null, kpi_metric: null, kpi_target: null, focus: '' };
+  const [cod, setCod] = useState<string>(cur.cod_module_id || '');
+  const canPickCod = (p.cod?.stages || []).length > 0;
   const [goal, setGoal] = useState(cur.goal != null ? String(cur.goal) : '');
   const [metric, setMetric] = useState<string>(cur.kpi_metric || '');
   const [target, setTarget] = useState(cur.kpi_target != null ? String(cur.kpi_target) : '');
@@ -305,7 +353,8 @@ function SetupCard({ p, date, opts, open, onToggle, onSaved, s, c }: any) {
   const [busy, setBusy] = useState(false);
   const y = p.yesterday || {};
   const metrics: Array<{ key: string; label: string; loa: number | null }> = opts?.kpi_metrics || [];
-  const summary = p.setup ? [cur.goal != null ? `Goal ${cur.goal}` : '', cur.kpi_metric ? `${cur.kpi_target ?? ''} ${metrics.find((m) => m.key === cur.kpi_metric)?.label || ''}`.trim() : '', cur.focus].filter(Boolean).join(' · ') : 'Not set';
+  const summary = p.setup ? [cur.goal != null ? `Goal ${cur.goal}` : '', cur.kpi_metric ? `${cur.kpi_target ?? ''} ${metrics.find((m) => m.key === cur.kpi_metric)?.label || ''}`.trim() : '', cur.focus,
+    p.cod?.pick ? `COD: ${p.cod.pick.topic}` : ''].filter(Boolean).join(' · ') : 'Not set';
 
   // Yesterday's goal and suggested KPI. Yesterday's "Change" is only offered
   // as a suggestion for the focus, never filled in for them.
@@ -316,7 +365,8 @@ function SetupCard({ p, date, opts, open, onToggle, onSaved, s, c }: any) {
   const save = async () => {
     setBusy(true);
     try {
-      await apiService.saveSectorDay(p.user_id, date, { setup: { goal: num(goal), kpi_metric: metric || null, kpi_target: num(target), focus, positive } });
+      await apiService.saveSectorDay(p.user_id, date, { setup: { goal: num(goal), kpi_metric: metric || null, kpi_target: num(target), focus, positive,
+        cod_module_id: canPickCod ? (cod || null) : (cur.cod_module_id || null) } });
       toast.success('Saved'); onSaved(); onToggle();
     } catch (e) { showAlert('Could not save', errText(e, 'Try again.')); }
     finally { setBusy(false); }
@@ -371,6 +421,13 @@ function SetupCard({ p, date, opts, open, onToggle, onSaved, s, c }: any) {
             </Pressable>
           )}
           <TextInput value={positive} onChangeText={setPositive} placeholder="e.g. great tone of voice on the doors" placeholderTextColor={c.textMuted} style={s.input} maxLength={120} />
+          {canPickCod && (
+            <>
+              <Text style={s.label}>Learning from the COD</Text>
+              <Text style={s.muted}>One thing to learn today, from their stage or below. At the breakdown the sector leader or a Coach can mark that they saw it done.</Text>
+              <CodPicker stages={p.cod.stages} options={codOptions || []} value={cod} onPick={setCod} s={s} c={c} />
+            </>
+          )}
           <Pressable onPress={save} disabled={busy} style={s.btn} accessibilityRole="button">
             {busy ? <ActivityIndicator size="small" color={c.onPrimary} /> : <Ionicons name="checkmark" size={16} color={c.onPrimary} />}
             <Text style={s.btnText}>Save</Text>
@@ -381,7 +438,36 @@ function SetupCard({ p, date, opts, open, onToggle, onSaved, s, c }: any) {
   );
 }
 
-function BreakdownCard({ p, date, opts, open, onToggle, onSaved, s, c }: any) {
+/** At the breakdown: was today's COD item seen in the field? */
+function CodObserved({ p, date, canMark, onSaved, s, c }: any) {
+  const [busy, setBusy] = useState(false);
+  const pick: CodItem | null = p.cod?.pick || null;
+  if (!pick) return null;
+  const seen = p.cod?.observed;
+  const toggle = async () => {
+    setBusy(true);
+    try { await apiService.markCodObserved(p.user_id, date, !seen); onSaved(); }
+    catch (e) { showAlert('Could not save', errText(e, 'Try again.')); }
+    finally { setBusy(false); }
+  };
+  return (
+    <View style={[s.hint, { alignItems: 'flex-start' }]}>
+      <Ionicons name={seen ? 'checkmark-circle' : 'school-outline'} size={16} color={seen ? c.green : c.primary} />
+      <View style={{ flex: 1, gap: 4 }}>
+        <Text style={[s.ghostText, { color: c.text }]}>Today's COD: {pick.topic}</Text>
+        <Text style={s.muted}>{seen ? `Seen in the field by ${seen.by_name} · ${shortDate(seen.date)}` : canMark ? 'Did you see them do it?' : 'The sector leader or a Coach marks this.'}</Text>
+        {canMark && (
+          <Pressable onPress={toggle} disabled={busy} style={[s.chip, seen ? null : s.chipOn, { alignSelf: 'flex-start' }]} accessibilityRole="button" testID="bd-cod-observed">
+            {busy ? <ActivityIndicator size="small" color={seen ? c.primary : c.onPrimary} />
+              : <Text style={[s.chipText, !seen && { color: c.onPrimary }]}>{seen ? 'Undo' : 'Seen doing it'}</Text>}
+          </Pressable>
+        )}
+      </View>
+    </View>
+  );
+}
+
+function BreakdownCard({ p, date, opts, canMarkCod, open, onToggle, onSaved, s, c }: any) {
   const cur: Partial<Breakdown> = p.breakdown || {};
   const pre = p.prefill || {};
   type K = 'doors' | 'spoken' | 'pitched' | 'closed' | 'hit' | 'silver' | 'gold' | 'round';
@@ -425,6 +511,7 @@ function BreakdownCard({ p, date, opts, open, onToggle, onSaved, s, c }: any) {
       </Pressable>
       {open && (
         <View style={{ gap: 10 }}>
+          <CodObserved p={p} date={date} canMark={canMarkCod} onSaved={onSaved} s={s} c={c} />
           <View style={s.numRow}>
             {(['doors', 'spoken', 'pitched', 'closed'] as const).map((k) => (
               <View key={k} style={s.numBox}>

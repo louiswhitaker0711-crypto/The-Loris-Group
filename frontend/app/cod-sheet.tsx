@@ -27,6 +27,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useColors, fonts, GRADIENT } from '../src/theme/ThemeContext';
 import { apiService } from '../src/api/client';
+import { APP_LOCALE } from '../src/utils/appTime';
 import { useAuth } from '../src/auth/AuthContext';
 import { BrandLoader } from '../src/components/ui/BrandLoader';
 import { useTabBarClearance } from '../src/customization/CustomTabBar';
@@ -36,15 +37,13 @@ import { EditorialHero } from '../src/components/ui/EditorialHero';
 import { DepthCard } from '../src/components/ui/DepthCard';
 import { XPBar } from '../src/components/ui/XPBar';
 import { Keycap } from '../src/components/ui/Keycap';
-import { COD_STAGE_TITLES } from '../src/components/cod/stageOrder';
 
 const STAGE_TITLE: Record<number, { name: string; sub: string }> = {
-  1: { name: COD_STAGE_TITLES[1], sub: 'Your COD sheet: learn it, prove it, get it signed off' },
-  2: { name: COD_STAGE_TITLES[2], sub: 'Your COD sheet: learn it, prove it, get it signed off' },
-  3: { name: COD_STAGE_TITLES[3], sub: 'Your COD sheet: learn it, prove it, get it signed off' },
-  5: { name: COD_STAGE_TITLES[5], sub: 'Your COD sheet: learn it, prove it, get it signed off' },
-  4: { name: COD_STAGE_TITLES[4], sub: 'Your COD sheet: learn it, prove it, get it signed off' },
-  6: { name: COD_STAGE_TITLES[6], sub: 'Your COD sheet: learn it, prove it, get it signed off' },
+  1: { name: 'Stage 1 · Foundation', sub: 'Build Your Core Competencies' },
+  2: { name: 'Stage 2 · Self Management', sub: 'Operate Like a Professional' },
+  3: { name: 'Stage 3 · Leader', sub: 'Creating Success in Others' },
+  4: { name: 'Stage 4 · Team Builder', sub: 'Embedding Systems & Creating Independence' },
+  5: { name: 'Stage SL · Sector/Site Leader', sub: 'Performance Management' },
 };
 // The sheet's boxes. Second D is Deliver — same as the PDF. The ladder
 // grows with the stage: 1-2 top out at Deliver, 3 adds Teach, 4/SL add
@@ -56,6 +55,13 @@ const ALL_BOXES = [
   { rung: 4, letter: 'T', label: 'Teach' },
   { rung: 5, letter: 'S', label: 'Systemize' },
 ];
+const RUNG_KEYS = ['know', 'do', 'deliver', 'teach', 'systemize'];
+/** "16 Oct" for a ticked rung's YYYY-MM-DD date (the day it was signed). */
+const tickDate = (iso?: string | null) => {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}/.test(iso)) return '';
+  const d = new Date(iso.slice(0, 10) + 'T12:00:00Z');
+  return d.toLocaleDateString(APP_LOCALE, { day: 'numeric', month: 'short', timeZone: 'UTC' });
+};
 const boxesForStage = (stage: number) => ALL_BOXES.filter((b) => b.rung <= (stage <= 2 ? 3 : stage === 3 ? 4 : 5));
 /** Ladder box size — the printed sheet's tick box, as a keycap. */
 const BOX = 28;
@@ -70,7 +76,7 @@ export default function CodSheetScreen() {
   const { user } = useAuth();
   const { scrollY, onScroll } = useParallaxScroll();
   const params = useLocalSearchParams<{ stage?: string; user_id?: string; name?: string }>();
-  const stage = Math.min(6, Math.max(1, parseInt(String(params.stage || '2'), 10) || 2)) as 1 | 2 | 3 | 4 | 5 | 6;
+  const stage = Math.min(5, Math.max(1, parseInt(String(params.stage || '2'), 10) || 2)) as 1 | 2 | 3 | 4 | 5;
   const targetId = typeof params.user_id === 'string' && params.user_id ? params.user_id : undefined;
 
   const modulesQ = useQuery({
@@ -211,6 +217,14 @@ export default function CodSheetScreen() {
                                 : <Text style={styles.boxLetter}>{b.letter}</Text>}
                         </Keycap>
                       );
+                      // The day each rung was ticked, under its box ("16 Oct").
+                      const when = on ? tickDate(progressById[m.id]?.ladder_dates?.[RUNG_KEYS[b.rung - 1]]) : '';
+                      const cell = (
+                        <View style={styles.boxCell}>
+                          {box}
+                          <Text style={styles.boxDate} numberOfLines={1}>{when}</Text>
+                        </View>
+                      );
                       return canTap ? (
                         <TouchableOpacity
                           key={b.rung}
@@ -221,9 +235,9 @@ export default function CodSheetScreen() {
                           accessibilityLabel={`${m.topic}: ${b.label}${on ? ', signed' : ''}`}
                           hitSlop={4}
                         >
-                          {box}
+                          {cell}
                         </TouchableOpacity>
-                      ) : <View key={b.rung}>{box}</View>;
+                      ) : <View key={b.rung}>{cell}</View>;
                     })}
                   </View>
                 </View>
@@ -271,6 +285,8 @@ const createStyles = (colors: any) => StyleSheet.create({
   rowDivider: { borderTopWidth: 1, borderTopColor: colors.border },
   topic: { fontFamily: fonts.bodyMedium, fontSize: 13.5, lineHeight: 18.5, color: colors.text },
   boxRow: { flexDirection: 'row', gap: 6 },
+  boxCell: { alignItems: 'center', width: BOX + 8 },
+  boxDate: { fontFamily: fonts.body, fontSize: 8.5, color: colors.textMuted, marginTop: 2, height: 11 },
   boxPending: { borderRadius: 8, boxShadow: '0 0 0 1.5px ' + colors.yellow },
   rag: { width: 10, height: 10, borderRadius: 5 },
   ragGreen: { backgroundColor: colors.green, boxShadow: '0 0 8px ' + colors.green },

@@ -39,36 +39,34 @@ import { useParallaxScroll } from '../src/components/ui/Parallax';
 import { DepthCard } from '../src/components/ui/DepthCard';
 import { Keycap } from '../src/components/ui/Keycap';
 
-// Per-stage hub copy — the Owner's COD sheet: 1, 2, 3, 3+ (stored as 5),
-// 4, 5 Business Owner (stored as 6). `icon` and `iconBg` are legacy and no
-// longer read (the stage header carries no icon).
+// Per-stage hub copy — COD 2026 names: Stage 4 "Team Builder", Stage SL
+// "Sector/Site Leader" (stored as stage 5; unlocked for every leader).
+// `icon` and `iconBg` are legacy and no longer read (the stage header carries
+// no icon). Left in place so the per-stage data block still matches the other
+// stage tables in the app.
 // LOOKUP ONLY — never iterate this Record to build a rail: JS walks
-// integer-like keys in ascending numeric order. The display sequence lives in
-// stageOrder.ts (COD_STAGE_ORDER).
+// integer-like keys in ascending numeric order, which puts SL last. The
+// display sequence lives in stageOrder.ts (COD_STAGE_ORDER).
 const STAGE_META: Record<number, { toggle: string; sub: string; title: string; icon: any; iconBg?: string; body: string }> = {
   1: {
-    toggle: 'Stage 1', sub: 'STAGE 1 · FOUNDATION', title: 'Foundation', icon: 'flag', iconBg: '#0ea5e9',
-    body: 'Intro to the business, expectations, collateral, the 5 Steps, impulsing, handling questions, and Field IQ & numbers. Each item climbs Know → Do → Deliver on the proof ladder. As a Coach you sign new starters off on this stage, so know it cold.',
+    toggle: 'Stage 1', sub: 'STAGE 1 · FOUNDATION', title: 'Build Your Core Competencies', icon: 'flag', iconBg: '#0ea5e9',
+    body: 'Foundation — the core competencies every BA runs on: the 5-step sign-up, SEE, impulses, reliability, Field IQ and quality. Each capability climbs Know → Do → Deliver on the proof ladder. As a coach you sign new starters off on this stage (COD 1), so know it cold.',
   },
   2: {
-    toggle: 'Stage 2', sub: 'STAGE 2 · SELF MANAGEMENT', title: 'Self Management', icon: 'school', iconBg: '#10b981',
-    body: 'Company, sales, goals, selling independently, the 8 Steps, leadership, profitability, example setting, and Field IQ & numbers. Deliver is the standard; your Coach signs the proof.',
+    toggle: 'Stage 2', sub: 'STAGE 2 · INDEPENDENCE', title: 'Independence Modules', icon: 'school', iconBg: '#10b981',
+    body: 'Self Management — operate like a professional. Every capability climbs the proof ladder: Know → Do → Deliver → Teach → Systemize. Deliver is the standard; your coach signs the proof.',
   },
   3: {
-    toggle: 'Stage 3', sub: 'STAGE 3 · LEADER', title: 'Leader', icon: 'trophy',
-    body: 'Personal development, recruiting, Week 1 coaching, working with a Stage 2, running sectors, EQ, and Field IQ & numbers. Pass an item\'s questions to tick Know, then tap Ready for check — your Coach signs the rest.',
-  },
-  5: {
-    toggle: 'Stage 3+', sub: 'STAGE 3+ · SECTOR/SITE LEADER', title: 'Sector/Site Leader', icon: 'map', iconBg: '#ef4444',
-    body: 'Personal development, developing your leaders, team development, building confidence & expectations, territory management, and Field IQ & numbers.',
+    toggle: 'Stage 3', sub: 'STAGE 3 · BEING A LEADER', title: 'Leadership Development', icon: 'trophy',
+    body: 'Creating success in others — teaching, protecting quality, performance conversations, building independence. Pass a module\'s questions to tick Know, then tap Ready for check — your coach signs the rest.',
   },
   4: {
-    toggle: 'Stage 4', sub: 'STAGE 4 · TEAM BUILDER', title: 'Team Builder', icon: 'construct', iconBg: '#f59e0b',
-    body: 'Expectations for Stage 4, using the network, public speaking, managing KPI\u2019s, developing people, and going to the next level.',
+    toggle: 'Stage 4', sub: 'STAGE 4 · TEAM BUILDER', title: 'Embedding Systems & Independence', icon: 'construct', iconBg: '#f59e0b',
+    body: 'Stop being the producer of results — build the people who produce results. The 4 Pillars at Team Builder level: your team runs to the standard when you are not in the room, and every standard has a metric and a consequence.',
   },
-  6: {
-    toggle: 'Stage 5', sub: 'STAGE 5 · BUSINESS OWNER', title: 'Becoming a Business Owner', icon: 'business', iconBg: '#8b5cf6',
-    body: 'Knowing your business, administration, recruiting, finance, daily considerations, customer service, preparing for change, and your first 2 weeks.',
+  5: {
+    toggle: 'SL', sub: 'STAGE SL · SECTOR/SITE LEADER', title: 'Performance Management', icon: 'map', iconBg: '#ef4444',
+    body: 'Running sectors and sites: territory, targets, quality, and belief — owned end to end.',
   },
 };
 
@@ -78,7 +76,7 @@ const STAGE_META: Record<number, { toggle: string; sub: string; title: string; i
 type StageLink = { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; onPress: () => void };
 
 function StageHero({ stage, links, completed, total, pct, wide }: {
-  stage: 1 | 2 | 3 | 4 | 5 | 6;
+  stage: 1 | 2 | 3 | 4 | 5;
   links: StageLink[];
   completed: number;
   total: number;
@@ -206,7 +204,7 @@ export default function LeadershipScreen() {
   // they completed before being promoted) and Stage 3 (leadership
   // development). Both stages render with the exact same module-row UI
   // below — only the data source + hero copy change.
-  const [stage, setStage] = useState<1 | 2 | 3 | 4 | 5 | 6>(3);
+  const [stage, setStage] = useState<1 | 2 | 3 | 4 | 5>(3);
 
   const role = (user?.role || '').toLowerCase();
   const isAuthorized = role === 'leader' || role === 'admin';
@@ -223,7 +221,7 @@ export default function LeadershipScreen() {
     const ss: any = stageStatusQ.data;
     if (!ss || pickedStage.current) return;
     pickedStage.current = true;
-    setStage(furthestCodStage(COD_STAGE_ORDER.filter((n) => n === 1 || ss[`stage_${n}_unlocked`]), 1) as 1 | 2 | 3 | 4 | 5 | 6);
+    setStage(furthestCodStage(COD_STAGE_ORDER.filter((n) => n === 1 || ss[`stage_${n}_unlocked`]), 1) as 1 | 2 | 3 | 4 | 5);
   }, [stageStatusQ.data]);
   const checksQ = useQuery({
     queryKey: ['cod-checks'],
@@ -315,16 +313,15 @@ export default function LeadershipScreen() {
   const stageVisible = (s: number) =>
     s === 4 ? !!stageStatusQ.data?.stage_4_visible
       : s === 5 ? !!stageStatusQ.data?.stage_5_visible
-        : s === 6 ? !!stageStatusQ.data?.stage_6_visible
-          : true;
-  const visibleStages = COD_STAGE_ORDER.filter(stageVisible) as Array<1 | 2 | 3 | 4 | 5 | 6>;
+        : true;
+  const visibleStages = COD_STAGE_ORDER.filter(stageVisible) as Array<1 | 2 | 3 | 4 | 5>;
   const stageItems = visibleStages.map((s) => {
     const locked = s !== 1 && !!stageStatusQ.data && !(stageStatusQ.data as any)[`stage_${s}_unlocked`];
     return { key: String(s), label: STAGE_META[s].toggle, locked };
   });
 
   const heroLinks: StageLink[] = [
-    { icon: 'information-circle-outline', label: 'How the COD works — the stages and the proof ladder', onPress: () => router.push('/cod-intro') },
+    { icon: 'information-circle-outline', label: 'How the COD works — proof ladder & the 4 Pillars', onPress: () => router.push('/cod-intro') },
     { icon: 'grid-outline', label: 'Sheet view — the K·D·D·T·S grid, like the paper COD', onPress: () => router.push(`/cod-sheet?stage=${stage}`) },
     ...(role === 'admin'
       ? [{ icon: 'shield-checkmark-outline' as const, label: 'Vet the COD — review & edit every module (syncs every office)', onPress: () => router.push('/cod-vetting') }]
@@ -354,7 +351,7 @@ export default function LeadershipScreen() {
           const devSteps: LadderStep[] = (visibleStages as number[])
             .map((n) => ({
               key: `d${n}`,
-              label: codStageShortName(n),
+              label: n === 1 ? 'Foundation' : n === 2 ? 'Self Management' : n === 3 ? 'Leader' : n === 4 ? 'Team Builder' : 'Sector Leader',
               state: n === stage ? 'current'
                 : n !== 1 && !(stageStatusQ.data as any)?.[`stage_${n}_unlocked`]
                   ? 'locked'
@@ -386,7 +383,7 @@ export default function LeadershipScreen() {
             return (
               <TouchableOpacity
                 key={it.key}
-                onPress={() => setStage(Number(it.key) as 1 | 2 | 3 | 4 | 5 | 6)}
+                onPress={() => setStage(Number(it.key) as 1 | 2 | 3 | 4 | 5)}
                 style={[styles.stagePill, on && styles.stagePillOn]}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: on }}
@@ -538,7 +535,7 @@ export default function LeadershipScreen() {
                 <Text style={styles.lockedTitle}>Stage {codStageLabel(stage)} — preview</Text>
                 <Text style={styles.lockedBody}>
                   {stage === 5
-                    ? 'Stage 3+ opens when OwnerIQ has you at Stage 3+, or when you have a Stage 3 on your team. You can preview the items meanwhile.'
+                    ? 'Stage SL (Sector/Site Leader) opens when OwnerIQ has you at Stage 3+, or when you have a Stage 3 on your team. You can preview the items meanwhile.'
                     : `Stage ${codStageLabel(stage)} opens when OwnerIQ has you at Stage ${codStageLabel(stage)}. You can preview the items meanwhile.`}
                 </Text>
               </View>

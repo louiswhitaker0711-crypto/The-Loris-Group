@@ -23,7 +23,7 @@ def test_a_stage_3_with_a_stage_3_on_the_team_opens_3_plus():
 
 def test_a_stage_4_opens_up_to_4_and_a_stage_5_opens_everything():
     assert unlocked_stages(stage_num("stage_4"), False) == {1, 2, 3, 5, 4}
-    assert unlocked_stages(stage_num("stage_5"), False) == {1, 2, 3, 5, 4, 6}
+    assert unlocked_stages(stage_num("stage_5"), False) == {1, 2, 3, 5, 4}   # the original COD: no Stage 5 items
 
 
 def test_a_new_ba_opens_stage_1_and_sees_stage_2_as_a_teaser():

@@ -84,9 +84,43 @@ def clean_setup(body: dict) -> dict:
     metric = str(body.get("kpi_metric") or "").strip().lower()
     if metric and metric not in KPI_METRICS:
         raise HTTPException(status_code=400, detail="Pick the KPI: doors, spoken, pitched, closes or call backs")
+    cod = str(body.get("cod_module_id") or "").strip()[:64] or None
     return {"goal": _int(body.get("goal"), 0, 30), "kpi_metric": metric or None,
             "kpi_target": _int(body.get("kpi_target"), 0, 300), "focus": _text(body.get("focus")),
-            "positive": _text(body.get("positive"))}
+            "positive": _text(body.get("positive")), "cod_module_id": cod}
+
+
+# ── COD learning in the set-up ──────────────────────────────────────────────
+# A Stage 1 or 2 picks ONE item from the COD to learn that day, from their own
+# stage or below. At the breakdown the sector leader or a Coach can mark that
+# they were seen doing it: a record of the day ("observed in the field by …"),
+# never a tick on their COD (sign-offs stay on the COD itself).
+COD_PICK_STAGES = (1, 2)
+
+
+async def cod_pick_stages(target: dict) -> list[int]:
+    """The COD stages this person may pick from in a set-up: their own stage
+    and below, for Stage 1-2 people only (Stage 3 and up pick nothing)."""
+    from core.schedule_template import stage_num
+    n = stage_num(target.get("owneriq_stage"))
+    if n is None:
+        # No OwnerIQ stage: BAs only, Stage 2 once it's open to them.
+        if (target.get("role") or "").lower() != "trainee":
+            return []
+        from routes.modules import _is_stage_unlocked_by_role
+        return [1] + ([2] if await _is_stage_unlocked_by_role(target, 2) else [])
+    if n >= 3:
+        return []
+    return [s for s in COD_PICK_STAGES if s <= n]
+
+
+async def cod_options(office_id) -> list[dict]:
+    """The office's COD items a set-up can pick from (Stages 1-2), in order."""
+    return [{"id": m["id"], "stage": m.get("stage"), "topic": m.get("topic"), "category": m.get("category")}
+            async for m in db.training_modules.find(
+                {"office_id": office_id, "stage": {"$in": list(COD_PICK_STAGES)}, "retired": {"$ne": True}},
+                {"_id": 0, "id": 1, "stage": 1, "topic": 1, "category": 1, "sequence": 1}).sort([("stage", 1), ("sequence", 1)])
+            if m.get("id")]
 
 
 def clean_breakdown(body: dict) -> dict:
@@ -304,13 +338,22 @@ async def sector_day(request: Request, date: Optional[str] = None):
     docs = {d["user_id"]: d async for d in db.sector_days.find({"date": iso, "user_id": {"$in": ids}}, {"_id": 0})}
     prev_docs = {d["user_id"]: d async for d in db.sector_days.find({"date": prev, "user_id": {"$in": ids}}, {"_id": 0})}
     pre = await _prefill(ids, iso)
+    # COD learning: who may pick, the items, and what's been seen today.
+    targets = {str(u["_id"]): u async for u in db.users.find(
+        {"_id": {"$in": [ObjectId(i) for i in ids if ObjectId.is_valid(i)]}},
+        {"role": 1, "owneriq_stage": 1, "office_id": 1, "new_hire_id": 1})}
+    options = await cod_options(user.get("office_id"))
+    by_id = {o["id"]: o for o in options}
     rows = []
     for p in people:
         doc = docs.get(p["user_id"]) or {}
         y = prev_docs.get(p["user_id"]) or {}
         yb = y.get("breakdown") or {}
+        picked = by_id.get(((doc.get("setup") or {}).get("cod_module_id")) or "")
         rows.append({
             **p,
+            "cod": {"stages": await cod_pick_stages(targets.get(p["user_id"]) or {}),
+                    "pick": picked, "observed": doc.get("cod_observed")},
             "setup": doc.get("setup"),
             "breakdown": doc.get("breakdown"),
             "prefill": pre.get(p["user_id"]) or {},
@@ -325,6 +368,9 @@ async def sector_day(request: Request, date: Optional[str] = None):
         # never re-pick the set-up — that stays as the leader made it.
         "can_manage": i_lead or (role in ("leader", "admin") and sector is None),
         "leads": i_lead,
+        # Marking a COD item as seen in the field: the sector leader or a Coach.
+        "can_mark_cod": i_lead or role in ("leader", "admin"),
+        "cod_options": options,
         "sector": sector,
         "options": {"proud": PROUD_OPTIONS, "change": CHANGE_OPTIONS,
                     "kpi_metrics": [{"key": k, "label": v, "loa": LOA.get(k)} for k, v in KPI_METRICS.items()]},
@@ -353,6 +399,14 @@ async def save_sector_day(user_id: str, request: Request, date: Optional[str] = 
     upd: dict = {}
     if "setup" in body:
         upd["setup"] = {**clean_setup(body.get("setup") or {}), "by_id": str(user["id"]), "at": now}
+        cod_id = upd["setup"].get("cod_module_id")
+        if cod_id:
+            who = await db.users.find_one({"_id": ObjectId(user_id)}, {"role": 1, "owneriq_stage": 1, "office_id": 1, "new_hire_id": 1}) \
+                if ObjectId.is_valid(user_id) else None
+            item = await db.training_modules.find_one(
+                {"id": cod_id, "office_id": (who or {}).get("office_id"), "retired": {"$ne": True}}, {"stage": 1})
+            if not who or not item or item.get("stage") not in await cod_pick_stages(who):
+                raise HTTPException(status_code=400, detail="Pick a COD item from their own stage or below")
     if "breakdown" in body:
         upd["breakdown"] = {**clean_breakdown(body.get("breakdown") or {}), "by_id": str(user["id"]), "at": now}
     if not upd:
@@ -361,6 +415,13 @@ async def save_sector_day(user_id: str, request: Request, date: Optional[str] = 
         if ObjectId.is_valid(user_id) else None
     if not target:
         raise HTTPException(status_code=404, detail="Person not found")
+    if "setup" in upd:
+        # A different COD item picked: what was seen for the old one no longer applies.
+        before = await db.sector_days.find_one({"user_id": user_id, "date": iso}, {"cod_observed": 1})
+        seen = (before or {}).get("cod_observed") or {}
+        if seen and seen.get("module_id") != upd["setup"].get("cod_module_id"):
+            upd["cod_observed"] = None
+            await db.cod_observations.delete_many({"user_id": user_id, "date": iso})
     await db.sector_days.update_one(
         {"user_id": user_id, "date": iso},
         {"$set": {**upd, "office_id": target.get("office_id"), "user_name": target.get("name") or "", "updated_at": now},
@@ -373,6 +434,42 @@ async def save_sector_day(user_id: str, request: Request, date: Optional[str] = 
             await apply_breakdown(target, iso, upd["breakdown"])
         except Exception as ex:
             logger.warning("breakdown numbers for %s failed: %s", user_id, ex)
+    return await db.sector_days.find_one({"user_id": user_id, "date": iso}, {"_id": 0})
+
+
+@router.put("/sector/day/{user_id}/cod-observed")
+async def mark_cod_observed(user_id: str, request: Request, date: Optional[str] = None):
+    """At the breakdown: the sector leader or a Coach marks that this person was
+    seen doing today's COD item (or takes it back). A record of the day, kept
+    on the item as "observed in the field by … · 16 Oct" — it never ticks
+    their COD."""
+    user = await get_current_user(request)
+    iso = _clean_date(date)
+    role = (user.get("role") or "").lower()
+    target = await db.users.find_one({"_id": ObjectId(user_id)}, {"name": 1, "office_id": 1}) \
+        if ObjectId.is_valid(user_id) else None
+    if not target or (target.get("office_id") != user.get("office_id") and not user.get("is_super_admin")):
+        raise HTTPException(status_code=404, detail="Person not found")
+    sec = await _my_sector(user_id, iso)
+    leads = bool(sec) and sec.get("leader_id") == str(user["id"])
+    if not (leads or role in ("leader", "admin")):
+        raise HTTPException(status_code=403, detail="Only the sector leader or a Coach marks this")
+    doc = await db.sector_days.find_one({"user_id": user_id, "date": iso}, {"_id": 0})
+    module_id = ((doc or {}).get("setup") or {}).get("cod_module_id")
+    if not module_id:
+        raise HTTPException(status_code=400, detail="They didn't pick a COD item in today's set-up")
+    done = bool((await request.json()).get("done"))
+    now = datetime.now(timezone.utc).isoformat()
+    if done:
+        seen = {"module_id": module_id, "date": iso, "by_id": str(user["id"]),
+                "by_name": user.get("name") or "", "at": now}
+        await db.sector_days.update_one({"user_id": user_id, "date": iso}, {"$set": {"cod_observed": seen, "updated_at": now}})
+        await db.cod_observations.update_one(
+            {"user_id": user_id, "date": iso},
+            {"$set": {**seen, "user_id": user_id, "office_id": target.get("office_id")}}, upsert=True)
+    else:
+        await db.sector_days.update_one({"user_id": user_id, "date": iso}, {"$set": {"cod_observed": None, "updated_at": now}})
+        await db.cod_observations.delete_many({"user_id": user_id, "date": iso})
     return await db.sector_days.find_one({"user_id": user_id, "date": iso}, {"_id": 0})
 
 

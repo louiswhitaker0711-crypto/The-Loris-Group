@@ -450,12 +450,12 @@ export default function HomeScreen() {
   const codStage = (() => {
     const ss: any = stageStatusQ.data;
     if (!ss) return null;
-    return furthestCodStage([2, 3, 4, 5, 6].filter((n) => ss[`stage_${n}_unlocked`]), 1);
+    return furthestCodStage([2, 3, 4, 5].filter((n) => ss[`stage_${n}_unlocked`]), 1);
   })();
   const codPct = (() => {
     const ss: any = stageStatusQ.data;
     if (!ss) return 0;
-    return ([2, 3, 4, 5, 6].filter((n) => ss[`stage_${n}_unlocked`]).length + 1) / 6;
+    return ([2, 3, 4, 5].filter((n) => ss[`stage_${n}_unlocked`]).length + 1) / 5;
   })();
   // What the coin, the rank line and both bars (hero + StatusRail) run on.
   const gameLevel = noLadder ? codStage : heroLevel;  // coin still shows the ladder that owns this viewer

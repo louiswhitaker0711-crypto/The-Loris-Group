@@ -67,20 +67,18 @@ def test_cod_topics_are_checked_against_the_cod():
     import asyncio
     from mongomock_motor import AsyncMongoMockClient
     fake = AsyncMongoMockClient()["t"]
-    asyncio.run(fake.training_modules.insert_many([
-        {"id": "t1", "topic": "Example topic one", "stage": 1, "category": "Expectations", "office_id": OFFICE},
-        {"id": "t3", "topic": "Example topic three", "stage": 3, "category": "B. Recruiting", "office_id": None},
-        {"id": "old", "topic": "Archived", "stage": 101, "retired": True, "office_id": OFFICE},
-        {"id": "other", "topic": "Other office", "stage": 1, "office_id": "office-b"},
+    asyncio.run(fake.coaching_impacts.insert_many([
+        {"id": "t1", "title": "Example topic one", "stage": 1},
+        {"id": "t3", "title": "Example topic three", "stage": 3},
     ]))
     real_db = mn.db
     mn.db = fake
     try:
-        out = asyncio.run(mn.clean_topics(["t3", "nope", "t1", "t3", "old", "other"], OFFICE))
+        out = asyncio.run(mn.clean_topics(["t3", "nope", "t1", "t3"]))
     finally:
         mn.db = real_db
-    assert out == [{"id": "t3", "title": "Example topic three", "stage": 3, "section": "B. Recruiting"},
-                   {"id": "t1", "title": "Example topic one", "stage": 1, "section": "Expectations"}]
+    assert out == [{"id": "t3", "title": "Example topic three", "stage": 3},
+                   {"id": "t1", "title": "Example topic one", "stage": 1}]
 
 
 def test_recap_prompt_mentions_topics_and_pdf():
