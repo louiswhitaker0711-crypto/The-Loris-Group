@@ -206,7 +206,45 @@ function everyoneList(groups: Group[], order: EveryoneOrder): EveryoneItem[] {
     const leader = g.members.find((m) => m.user_id && m.user_id === g.leader_id);
     return leader?.role === 'admin' ? 1 : 2;
   };
-  const sorted = [...groups].sort((a, b) => rank(a) - rank(b) || (a.team_name || '').localeCompare(b.team_name || ''));
+  // A team led by someone inside another team (Next Gen under Rockodia) sits
+  // straight after that team, not in the A–Z run. The parent is the next
+  // team up the chain each row carries (`teams`: own team first, then the
+  // teams above it).
+  const keys = new Set(groups.map((g) => g.key));
+  const parentOf = (g: Group): string | null => {
+    if (!g.leader_id) return null;
+    const rows = [...g.members.filter((m) => m.user_id === g.leader_id), ...g.members];
+    for (const m of rows) {
+      const chain = m.teams || [];
+      const i = chain.findIndex((t) => t.leader_id === g.leader_id);
+      if (i < 0) continue;
+      const up = chain.slice(i + 1).find((t) => keys.has(t.leader_id));
+      return up ? up.leader_id : null;
+    }
+    return null;
+  };
+  const byName = (a: Group, b: Group) => (a.team_name || '').localeCompare(b.team_name || '');
+  const kids = new Map<string, Group[]>();
+  const roots: Group[] = [];
+  for (const g of groups) {
+    const p = parentOf(g);
+    if (p && p !== g.key) {
+      if (!kids.has(p)) kids.set(p, []);
+      kids.get(p)!.push(g);
+    } else {
+      roots.push(g);
+    }
+  }
+  const sorted: Group[] = [];
+  const seen = new Set<string>();
+  const walk = (g: Group) => {
+    if (seen.has(g.key)) return;
+    seen.add(g.key);
+    sorted.push(g);
+    for (const k of [...(kids.get(g.key) || [])].sort(byName)) walk(k);
+  };
+  [...roots].sort((a, b) => rank(a) - rank(b) || byName(a, b)).forEach(walk);
+  groups.forEach(walk);   // anything left (a loop in the data): still shown
   const out: EveryoneItem[] = [];
   // The Owner (an Admin) always sits at the very top, above every team.
   const owners = sorted.flatMap((g) => g.members.filter((e) => e.role === 'admin').map((e) => ({ e, g })));
