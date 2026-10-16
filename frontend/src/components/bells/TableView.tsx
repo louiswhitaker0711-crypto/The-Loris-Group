@@ -41,7 +41,8 @@ import { SUPER_GREEN_WEEK_MIN, GREEN_WEEK_MIN, AMBER_WEEK_MIN, RED_WEEK_MAX } fr
 //
 // Everyone is one list, a line each, in one of two orders (a switch above it,
 // remembered on the device):
-//   • Team order: the Owner at the top, then each team under its OwnerIQ name,
+//   • Team order: the Owner's team first (headed as the office, led by the
+//     Owner, the Owner's own row at its top), then each team under its OwnerIQ name,
 //     always in the same order — the Owner's own team (people with no named
 //     team) first, then admin-led teams, then the rest A–Z. Within a team the
 //     Coach comes first and their people follow in the server's sheet order
@@ -261,17 +262,28 @@ function everyoneList(groups: Group[], order: EveryoneOrder): EveryoneItem[] {
   [...roots].sort((a, b) => rank(a) - rank(b) || byName(a, b)).forEach(walk);
   groups.forEach(walk);   // anything left (a loop in the data): still shown
   const out: EveryoneItem[] = [];
-  // The Owner (an Admin) always sits at the very top, above every team.
-  const owners = sorted.flatMap((g) => g.members.filter((e) => e.role === 'admin').map((e) => ({ e, g })));
-  const pinned = new Set(owners.map((o) => o.e.user_id || o.e.user_name));
-  for (const o of owners) out.push({ kind: 'row', e: o.e, g: o.g });
+  // The Owner's own team comes first (rank 0), headed as the office itself
+  // ("The Loris Group · led by Louis", see teamTitle): the Owner (an Admin)
+  // first within their team, then their people in the server's order.
   for (const g of sorted) {
-    const rows = g.members.filter((e) => !pinned.has(e.user_id || e.user_name));
-    if (!rows.length) continue;
+    if (!g.members.length) continue;
+    const isAdmin = (e: Entry) => (e.role === 'admin' ? 0 : 1);
+    const rows = [...g.members].sort((a, b) => isAdmin(a) - isAdmin(b));
     out.push({ kind: 'team', g });
     for (const e of rows) out.push({ kind: 'row', e, g });
   }
   return out;
+}
+
+/** A team header in the Everyone list. The people with no named team are the
+ *  Owner's own team, so it reads as the office ("The Loris Group"), led by the
+ *  Owner; elsewhere (the Teams totals) it stays "Mini …". */
+function teamTitle(g: Group): { name: string; leader: string | null } {
+  if (g.key === MINI_KEY) {
+    const owner = g.members.find((e) => e.role === 'admin');
+    return { name: APP_SHORT_NAME, leader: owner?.user_name || null };
+  }
+  return { name: g.team_name, leader: g.leader_name };
 }
 
 /** The chosen order, remembered on this device (Team order by default). */
@@ -974,8 +986,8 @@ function BodyContent({ groups, office, colors, isDark, styles, z, w, totalW, sho
     return (
       <View key={`team-${g.key}`} style={[styles.teamHeader, { backgroundColor: bandBg, borderLeftColor: tint.border, width: totalW, minHeight: 26 * z, paddingVertical: 3 }]}>
         <View style={[styles.teamHeaderLeft, isWebSticky(stickyNameCol) && ({ position: 'sticky', left: 10 } as any)]}>
-          <Text style={[styles.teamHeaderText, { color: bandText, fontSize: 11.5 * z }]} numberOfLines={1}>{g.team_name}</Text>
-          {g.leader_name ? <Text style={[styles.teamHeaderLeader, { color: bandText, fontSize: 10.5 * z }]} numberOfLines={1}>led by {firstName(g.leader_name)}</Text> : null}
+          <Text style={[styles.teamHeaderText, { color: bandText, fontSize: 11.5 * z }]} numberOfLines={1}>{teamTitle(g).name}</Text>
+          {teamTitle(g).leader ? <Text style={[styles.teamHeaderLeader, { color: bandText, fontSize: 10.5 * z }]} numberOfLines={1}>led by {firstName(teamTitle(g).leader)}</Text> : null}
         </View>
       </View>
     );
@@ -1132,8 +1144,8 @@ function PhoneSheet({ groups, office, entries, colors, isDark, styles, showMc, o
               const bandText = isDark ? tint.pill : tint.text;
               return (
                 <View key={`team-${g.key}`} style={[styles.lTeamHead, { backgroundColor: isDark ? tint.border + '26' : tint.pill, borderLeftColor: tint.border }]}>
-                  <Text style={[styles.lTeamHeadText, { color: bandText }]} numberOfLines={1}>{g.team_name}</Text>
-                  {g.leader_name ? <Text style={[styles.lTeamHeadLeader, { color: bandText }]} numberOfLines={1}>led by {firstName(g.leader_name)}</Text> : null}
+                  <Text style={[styles.lTeamHeadText, { color: bandText }]} numberOfLines={1}>{teamTitle(g).name}</Text>
+                  {teamTitle(g).leader ? <Text style={[styles.lTeamHeadLeader, { color: bandText }]} numberOfLines={1}>led by {firstName(teamTitle(g).leader)}</Text> : null}
                 </View>
               );
             }
