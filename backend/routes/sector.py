@@ -901,6 +901,12 @@ async def sector_board(request: Request, date: Optional[str] = None):
     breakdown: the one place to see the whole field."""
     user = await get_current_user(request)
     iso = _clean_date(date)
+    # Someone marked No Show today isn't in a sector (however the No Show came in).
+    try:
+        from routes.sector_plan import drop_no_shows
+        await drop_no_shows(user.get("office_id"), iso)
+    except Exception as ex:
+        logger.warning("sector board: no-show tidy failed: %s", ex)
     sectors = [x async for x in db.sectors.find({"office_id": user.get("office_id"), "date": iso, "member_ids.0": {"$exists": True}},
                                                 {"_id": 0}).sort("leader_name", 1)]
     all_ids = [m for sec in sectors for m in sec.get("member_ids") or []]
