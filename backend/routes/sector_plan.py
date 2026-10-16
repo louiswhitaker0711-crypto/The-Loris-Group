@@ -92,11 +92,36 @@ async def _office_people(office_id: str) -> list[dict]:
     return rows
 
 
+async def drop_no_shows(office_id: str, iso: str) -> int:
+    """Nobody marked No Show on Bells for the day stays in a sector. The
+    planner's No Show button already pulls them out; this also catches a No
+    Show that came in another way (OwnerIQ's day plan says absent, or someone
+    set it on Bells). Only today and later: past days are left as they were.
+    Returns how many sectors changed."""
+    if not office_id or iso < _now_uk().date().isoformat():
+        return 0
+    d0 = datetime.fromisoformat(iso).date()
+    week_ending = (d0 + timedelta(days=6 - d0.weekday())).isoformat()
+    widx = d0.weekday()
+    ns: list[str] = []
+    async for e in db.bells_entries.find({"office_id": office_id, "week_ending": week_ending,
+                                          "user_id": {"$type": "string"}}, {"user_id": 1, "days": 1}):
+        days = e.get("days") or []
+        if widx < len(days) and (days[widx] or {}).get("status") == "ns":
+            ns.append(str(e["user_id"]))
+    if not ns:
+        return 0
+    res = await db.sectors.update_many({"office_id": office_id, "date": iso, "member_ids": {"$in": ns}},
+                                       {"$pull": {"member_ids": {"$in": ns}}})
+    return int(getattr(res, "modified_count", 0) or 0)
+
+
 @router.get("/sector/plan")
 async def get_plan(request: Request, date: Optional[str] = None):
     user = await get_current_user(request)
     iso = _clean_date(date)
     office_id = user.get("office_id")
+    await drop_no_shows(office_id, iso)
     people = await _office_people(office_id)
     names = {p["user_id"]: p["name"] for p in people}
     sectors = []

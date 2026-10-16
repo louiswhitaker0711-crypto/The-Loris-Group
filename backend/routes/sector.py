@@ -773,7 +773,11 @@ async def save_my_sector(request: Request, date: Optional[str] = None):
         raise HTTPException(status_code=403,
                             detail=f"You’re in {in_other.get('leader_name') or 'another'}’s sector today — ask them to change who’s in it")
     planned = await _sector_of_leader(str(user["id"]), iso)
-    if planned and planned.get("planned_by"):
+    # A planned sector's people are fixed for its leader — but not for the
+    # Owner or today's sector planner, who made the plan and may change it
+    # (e.g. take out someone who didn't come in).
+    from routes.sector_plan import can_plan
+    if planned and planned.get("planned_by") and not await can_plan(user, iso):
         raise HTTPException(status_code=403, detail="Your sector was planned this morning: ask the sector planner to change who's in it")
     await db.sectors.update_many({"office_id": user.get("office_id"), "date": iso, "leader_id": {"$ne": str(user["id"])}},
                                  {"$pull": {"member_ids": {"$in": members}}})
@@ -897,6 +901,12 @@ async def sector_board(request: Request, date: Optional[str] = None):
     breakdown: the one place to see the whole field."""
     user = await get_current_user(request)
     iso = _clean_date(date)
+    # Someone marked No Show today isn't in a sector (however the No Show came in).
+    try:
+        from routes.sector_plan import drop_no_shows
+        await drop_no_shows(user.get("office_id"), iso)
+    except Exception as ex:
+        logger.warning("sector board: no-show tidy failed: %s", ex)
     sectors = [x async for x in db.sectors.find({"office_id": user.get("office_id"), "date": iso, "member_ids.0": {"$exists": True}},
                                                 {"_id": 0}).sort("leader_name", 1)]
     all_ids = [m for sec in sectors for m in sec.get("member_ids") or []]
