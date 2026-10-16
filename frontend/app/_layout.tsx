@@ -253,6 +253,8 @@ function RootNavigator() {
       <Stack.Screen name="bas" options={{ headerShown: true, title: 'BAs', ...MASTHEAD_COMPACT }} />
       <Stack.Screen name="sector-recap" options={{ headerShown: true, title: 'Sector recap', ...MASTHEAD_COMPACT }} />
       <Stack.Screen name="owneriq-connect" options={{ headerShown: true, title: 'OwnerIQ', ...MASTHEAD_COMPACT }} />
+      <Stack.Screen name="owneriq-import" options={{ headerShown: true, title: 'Add from OwnerIQ', ...MASTHEAD_COMPACT }} />
+      <Stack.Screen name="rollcall-import" options={{ headerShown: true, title: 'Import roll call', ...MASTHEAD_COMPACT }} />
       <Stack.Screen name="territory" options={{ headerShown: true, title: 'Territory', headerLeft: () => null, headerBackVisible: false, animation: 'none', ...MASTHEAD_COMPACT }} />
       <Stack.Screen name="quality" options={{ headerShown: true, title: 'Quality', headerLeft: () => null, headerBackVisible: false, animation: 'none', ...MASTHEAD_COMPACT }} />
       <Stack.Screen name="live-sector" options={{ headerShown: true, title: 'Sector', headerBackTitle: 'Back', ...MASTHEAD_COMPACT }} />

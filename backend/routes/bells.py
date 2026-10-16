@@ -1006,6 +1006,10 @@ async def list_bells(
     # See _section_aware_sort() docstring. Section leader pinned at top,
     # then leaves-first/branches-after walk applied to each section.
     entries = _section_aware_sort(entries, reports_to_map, _join_key, role_map)
+    # A week brought in from the roll call sheet reads the way the sheet had it
+    # (its teams, its order); other weeks keep the app's teams.
+    from core.rollcall_import import apply_sheet_teams
+    entries = apply_sheet_teams(entries)
 
     # Count prior weeks on bells per user — used for the 4-week minimum before
     # the traffic light activates (one aggregation, not N per-user queries).
@@ -1854,7 +1858,8 @@ async def clear_bells_day(request: Request):
     ) or user.get("office_id") or ""
     if not office_id:
         raise HTTPException(status_code=400, detail="Office unknown")
-    query: dict = {"week_ending": week_ending, "office_id": office_id}
+    # View-only rows from the roll call sheet are history: never cleared.
+    query: dict = {"week_ending": week_ending, "office_id": office_id, "archived": {"$ne": True}}
     if user.get("role") == "leader" and not user.get("is_super_admin"):
         allowed = set(await get_subtree_ids(user["id"]))
         allowed.add(str(user["id"]))
