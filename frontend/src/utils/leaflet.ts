@@ -40,6 +40,20 @@ export async function placePostcode(pc: string): Promise<{ lat: number; lng: num
         if (j?.result?.latitude) return { lat: j.result.latitude, lng: j.result.longitude, zoom: 16 };
       }
     }
+    // A sector ("BD4 6"): the middle of the postcodes in it, not the whole district.
+    const sector = pc.trim().toUpperCase().match(/^([A-Z]{1,2}\d[A-Z\d]?)\s*(\d)$/);
+    if (sector) {
+      const r3 = await fetch(`https://api.postcodes.io/postcodes?q=${encodeURIComponent(`${sector[1]} ${sector[2]}`)}&limit=100`);
+      if (r3.ok) {
+        const j = await r3.json();
+        const pts = ((j?.result || []) as any[]).filter((x) => x?.latitude && String(x.postcode || '').replace(/\s/g, '').startsWith(sector[1] + sector[2]));
+        if (pts.length) {
+          const lat = pts.reduce((a, x) => a + x.latitude, 0) / pts.length;
+          const lng = pts.reduce((a, x) => a + x.longitude, 0) / pts.length;
+          return { lat, lng, zoom: 15 };
+        }
+      }
+    }
     const out = pc.trim().toUpperCase().split(/\s+/)[0] || clean;
     const r2 = await fetch(`https://api.postcodes.io/outcodes/${encodeURIComponent(out)}`);
     if (r2.ok) {

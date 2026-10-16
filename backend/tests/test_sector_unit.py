@@ -219,3 +219,36 @@ def test_evening_chase_window_and_text():
         "🗺️ Mark your map", "Still to do: save your sector's map · post your sector's breakdown · your breakdown.")
     assert sec.chase_text(["breakdown"])[0] == "📝 Breakdown"
     assert sec.chase_text([]) == ("", "")
+
+
+def test_a_planned_sector_can_be_changed_by_the_owner_but_not_its_leader(monkeypatch):
+    """Once Plan sectors has set a sector, its leader can't change who's in it —
+    but the Owner (or today's sector planner) can, e.g. to take out someone who
+    didn't come in."""
+    from bson import ObjectId
+    import routes.sector_plan as sp
+    owner, ba1, lead = (ObjectId() for _ in range(3))
+    me = {"id": str(owner), "role": "admin", "office_id": "o1", "name": "Owner Example"}
+    db, run = _setup_db(monkeypatch, me)
+    monkeypatch.setattr(sp, "db", db)
+    run(db.users.insert_many([
+        {"_id": owner, "name": "Owner Example", "role": "admin", "office_id": "o1"},
+        {"_id": ba1, "name": "Example One", "role": "trainee", "office_id": "o1"},
+        {"_id": lead, "name": "Lead Example", "role": "trainee", "office_id": "o1"},
+    ]))
+    run(db.sectors.insert_many([
+        {"id": "s1", "leader_id": str(owner), "leader_name": "Owner Example", "office_id": "o1", "date": "2026-10-13",
+         "member_ids": [str(owner), str(ba1)], "planned_by": "Owner Example"},
+        {"id": "s2", "leader_id": str(lead), "leader_name": "Lead Example", "office_id": "o1", "date": "2026-10-13",
+         "member_ids": [str(lead)], "planned_by": "Owner Example"},
+    ]))
+    run(sec.save_my_sector(_Req({"member_ids": [str(owner)]}), date="2026-10-13"))
+    assert run(db.sectors.find_one({"id": "s1"}))["member_ids"] == [str(owner)]
+
+    # The planned sector's own (non-planner) leader is still told to ask.
+    async def _lead(_r):
+        return {"id": str(lead), "role": "trainee", "office_id": "o1", "name": "Lead Example"}
+    monkeypatch.setattr(sec, "get_current_user", _lead)
+    with pytest.raises(HTTPException) as e:
+        run(sec.save_my_sector(_Req({"member_ids": [str(lead), str(ba1)]}), date="2026-10-13"))
+    assert e.value.status_code == 403
