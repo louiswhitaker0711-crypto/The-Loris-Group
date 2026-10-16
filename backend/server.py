@@ -410,6 +410,14 @@ async def _startup_work():
     except Exception:
         logger.exception("content fixes sweep failed (continuing)")
 
+    # One-off: remove the past-week Bells rows the 16 Oct Hub-history sync made
+    # by mistake (core/relay_history_cleanup.py). Runs once.
+    try:
+        from core.relay_history_cleanup import run as relay_history_cleanup
+        await relay_history_cleanup(db)
+    except Exception:
+        logger.exception("relay history cleanup failed (continuing)")
+
     # The Inbox keeps one-offs only: clear the everyday pushes from it.
     try:
         from core.notify import clear_daily_rows
