@@ -1,22 +1,27 @@
 // ==UserScript==
 // @name         OwnerIQ → The Loris Group relay
 // @namespace    the-loris-group
-// @version      2.0
-// @description  Runs in the Owner's own logged-in OwnerIQ tab. Once a day, at 20:00, it reads the office's own data for that day (the same data the dashboard shows) and posts it to the app. Used because the UK edge blocks server-to-server calls; the Owner's real browser is allowed.
+// @version      2.1
+// @description  Runs in the Owner's own logged-in OwnerIQ tab. Once a day, between 20:00 and 20:15, it reads the office's own data for that day (the same data the dashboard shows) and posts it to the app. Used because the UK edge blocks server-to-server calls; the Owner's real browser is allowed.
 // @match        https://owner-iq.ai/*
 // @run-at       document-idle
 // @grant        none
 // ==/UserScript==
 //
-// WHAT IT DOES (v2.0, the Owner's settings, 17 Oct 2026)
+// WHAT IT DOES (v2.1, the Owner's settings, 17 Oct 2026)
 //
-//  • Pulls ONCE A DAY, at 20:00 on this computer's clock. If the tab wasn't
-//    open (or the laptop was asleep) at 20:00, it pulls once when the tab is
-//    next open that evening, before midnight. Nothing at any other time.
+//  • Pulls ONCE A DAY, at a random time between 20:00 and 20:15 on this
+//    computer's clock (a new time each day). If the tab wasn't open (or the
+//    laptop was asleep) then, it pulls once when the tab is next open that
+//    evening, before midnight. Nothing at any other time.
 //  • Only THAT DAY's data: the roster, today's KPIs, today's Live Operations,
 //    and this week's Performance Hub (the view today sits in). No yesterday,
 //    no earlier weeks, no next week.
-//  • Waits 20 SECONDS between every request to OwnerIQ, so it's gentle.
+//  • Live Operations only opens the sectors someone knocked in and the BAs who
+//    knocked doors that day, so the number of requests follows how many people
+//    were out — different every day.
+//  • Waits a random 15 to 45 SECONDS between every request to OwnerIQ, like
+//    someone tapping through the pages.
 //    A full pull takes a few minutes (longer on a busy day): leave the tab
 //    open until the console says "sync complete".
 //  • To pull straight away (e.g. to test): in this tab's console type
@@ -34,8 +39,10 @@
   const APP_URL = "https://the-loris-group-production.up.railway.app"; // the app
   const RELAY_SECRET = "PASTE_OWNERIQ_RELAY_SECRET_HERE";              // = Railway OWNERIQ_RELAY_SECRET
   const OIQ = "https://uk.owner-iq.ai";    // OwnerIQ API host for this account
-  const PULL_HOUR = 20;                    // pull once a day at 20:00
-  const GAP_MS = 20 * 1000;                // 20 seconds between OwnerIQ requests
+  const PULL_HOUR = 20;                    // pull once a day from 20:00…
+  const START_SPREAD_MIN = 15;             // …at a random minute up to 20:15
+  const GAP_MIN_MS = 15 * 1000;            // a random 15-45 s between OwnerIQ requests
+  const GAP_MAX_MS = 45 * 1000;
   // ───────────────────────────────────────────────────────────────────────
 
   const log = (...a) => console.log("%c[OIQ relay]", "color:#0a7", ...a);
@@ -69,10 +76,11 @@
     return iso(d);
   }
 
-  // GET from OwnerIQ using the current session, 20 s after the last one.
+  // GET from OwnerIQ using the current session, a random 15-45 s after the last one.
   let lastCall = 0;
+  const gap = () => GAP_MIN_MS + Math.floor(Math.random() * (GAP_MAX_MS - GAP_MIN_MS + 1));
   async function oiq(path, params) {
-    const wait = lastCall + GAP_MS - Date.now();
+    const wait = lastCall + gap() - Date.now();
     if (lastCall && wait > 0) await sleep(wait);
     lastCall = Date.now();
     const tok = token();
@@ -134,6 +142,17 @@
     log(`Roster: posted ${n} people`);
   }
 
+  // Who knocked doors today (OwnerIQ user ids), from today's KPIs: the live
+  // walk only opens these BAs.
+  let knocked = new Set();
+  function noteKnocked(payload) {
+    for (const item of ((payload && payload.data) || [])) {
+      const a = item.attributes || {};
+      const uid = ((((item.relationships || {}).user || {}).data) || {}).id;
+      if (uid != null && ((+a.doors_knocked || 0) > 0 || (+a.sales || 0) > 0)) knocked.add(String(uid));
+    }
+  }
+
   // 2 — today's KPIs, every office, every page.
   async function syncKpis() {
     const today = new Date();
@@ -150,6 +169,7 @@
           ["include", "user"], ["sortColumn", ""], ["sortDirection", ""],
         ]);
         payloads.push(j);
+        noteKnocked(j);
         const total = (j.meta && j.meta.total_pages) || 1;
         if (page >= total) break;
         page += 1;
@@ -157,7 +177,7 @@
     }
     await toApp("/api/owneriq/relay/kpis", { from: iso(today), to: iso(today), payloads });
     const rows = payloads.reduce((n, p) => n + ((p.data || []).length), 0);
-    log(`KPIs: posted ${rows} rows for today`);
+    log(`KPIs: posted ${rows} rows for today (${knocked.size} BA(s) knocked doors)`);
   }
 
   // 3 — today's Live Operations (top → each sector → each BA's door log).
@@ -167,14 +187,24 @@
     const extra = ids.map((i) => ["marketing_company_id[]", i]);
     const top = await oiq("/v3/owner/live_operations", [["date", date], ...extra]);
     const sectors = {}, bas = {};
-    const nSec = (top.sectors || []).length;
-    if (nSec) log(`Live: ${nSec} sector(s) to read — this part takes a few minutes`);
-    for (const s of (top.sectors || [])) {
-      if (s.id == null) continue;
+    // A sector nobody knocked in today has nothing to read.
+    const worked = (top.sectors || []).filter((s) => s.id != null
+      && (s.first_knock_at || (+s.total_sales || 0) > 0 || (s.members || []).some((m) => knocked.has(String(m.id != null ? m.id : m)))));
+    if (worked.length) log(`Live: ${worked.length} sector(s) worked today — this part takes a few minutes`);
+    // A member's own door count, when the sector page gives one.
+    const doorsOf = (m) => [m.doors, m.doors_knocked, (m.hero || {}).doors, (m.kpis || {}).doors_knocked, (m.stats || {}).doors]
+      .find((v) => typeof v === "number");
+    for (const s of worked) {
       const sd = await oiq(`/v3/owner/live_operations/sectors/${s.id}`, [["date", date]]);
       sectors[s.id] = sd;
-      for (const m of (sd.members || [])) {
-        if (m.id == null) continue;
+      const members = (sd.members || []).filter((m) => m.id != null);
+      // Only the BAs who knocked doors today (by today's KPIs; else by the
+      // sector page's own door count; if neither says, read them).
+      const idsMatch = members.some((m) => knocked.has(String(m.id)));
+      for (const m of members) {
+        const d = doorsOf(m);
+        const out = idsMatch ? !knocked.has(String(m.id)) : (d !== undefined && d <= 0);
+        if (out) continue;
         bas[m.id] = await oiq(`/v3/owner/live_operations/bas/${m.id}`, [["date", date]]);
       }
     }
@@ -218,8 +248,8 @@
     if (!force && doneFor() === today) return;
     if (!token()) { warn("Not logged in to OwnerIQ — sign in at owner-iq.ai and the 20:00 pull will run."); return; }
     running = true;
-    pinsCache = null; idsCache = null; lastCall = 0;
-    log("pulling today's data (20 s between requests — leave this tab open)…");
+    pinsCache = null; idsCache = null; lastCall = 0; knocked = new Set();
+    log("pulling today's data (15-45 s between requests — leave this tab open)…");
     try {
       await syncRoster();
       await syncKpis();
@@ -236,12 +266,26 @@
     }
   }
 
-  // Checked once a minute: from 20:00 to midnight, pull once if today's pull
-  // hasn't happened. A failed pull is retried at most once an hour.
+  // Today's start minute (0-15 past 20:00): picked at random once a day and
+  // remembered, so a page reload doesn't move it.
+  const START_KEY = "loris-relay-start";
+  function startMinute() {
+    const today = iso(new Date());
+    try {
+      const saved = JSON.parse(localStorage.getItem(START_KEY) || "null");
+      if (saved && saved.d === today) return saved.m;
+    } catch (e) { /* pick a new one */ }
+    const m = Math.floor(Math.random() * (START_SPREAD_MIN + 1));
+    try { localStorage.setItem(START_KEY, JSON.stringify({ d: today, m })); } catch (e) { /* fine */ }
+    return m;
+  }
+
+  // Checked once a minute: from today's start time to midnight, pull once if
+  // today's pull hasn't happened. A failed pull is retried at most once an hour.
   let lastTry = 0;
   function tick() {
-    const h = new Date().getHours();
-    if (h < PULL_HOUR) return;
+    const now = new Date();
+    if (now.getHours() * 60 + now.getMinutes() < PULL_HOUR * 60 + startMinute()) return;
     if (doneFor() === iso(new Date())) return;
     if (Date.now() - lastTry < 60 * 60 * 1000) return;
     lastTry = Date.now();
@@ -253,7 +297,8 @@
     return;
   }
   window.oiqSyncNow = () => run(true);
-  log(`ready — pulls today's data once a day at ${PULL_HOUR}:00 (${doneFor() === iso(new Date()) ? "today's is done" : "not yet today"}). Type oiqSyncNow() to pull now.`);
+  const sm = String(startMinute()).padStart(2, "0");
+  log(`ready — pulls today's data once a day, today at ${PULL_HOUR}:${sm} (${doneFor() === iso(new Date()) ? "today's is done" : "not yet today"}). Type oiqSyncNow() to pull now.`);
   tick();
   setInterval(tick, 60 * 1000);
 })();
