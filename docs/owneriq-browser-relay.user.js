@@ -17,6 +17,9 @@
 //  • Only THAT DAY's data: the roster, today's KPIs, today's Live Operations,
 //    and this week's Performance Hub (the view today sits in). No yesterday,
 //    no earlier weeks, no next week.
+//  • Live Operations only opens the sectors someone knocked in and the BAs who
+//    knocked doors that day, so the number of requests follows how many people
+//    were out — different every day.
 //  • Waits a random 15 to 45 SECONDS between every request to OwnerIQ, like
 //    someone tapping through the pages.
 //    A full pull takes a few minutes (longer on a busy day): leave the tab
@@ -139,6 +142,17 @@
     log(`Roster: posted ${n} people`);
   }
 
+  // Who knocked doors today (OwnerIQ user ids), from today's KPIs: the live
+  // walk only opens these BAs.
+  let knocked = new Set();
+  function noteKnocked(payload) {
+    for (const item of ((payload && payload.data) || [])) {
+      const a = item.attributes || {};
+      const uid = ((((item.relationships || {}).user || {}).data) || {}).id;
+      if (uid != null && ((+a.doors_knocked || 0) > 0 || (+a.sales || 0) > 0)) knocked.add(String(uid));
+    }
+  }
+
   // 2 — today's KPIs, every office, every page.
   async function syncKpis() {
     const today = new Date();
@@ -155,6 +169,7 @@
           ["include", "user"], ["sortColumn", ""], ["sortDirection", ""],
         ]);
         payloads.push(j);
+        noteKnocked(j);
         const total = (j.meta && j.meta.total_pages) || 1;
         if (page >= total) break;
         page += 1;
@@ -162,7 +177,7 @@
     }
     await toApp("/api/owneriq/relay/kpis", { from: iso(today), to: iso(today), payloads });
     const rows = payloads.reduce((n, p) => n + ((p.data || []).length), 0);
-    log(`KPIs: posted ${rows} rows for today`);
+    log(`KPIs: posted ${rows} rows for today (${knocked.size} BA(s) knocked doors)`);
   }
 
   // 3 — today's Live Operations (top → each sector → each BA's door log).
@@ -172,14 +187,24 @@
     const extra = ids.map((i) => ["marketing_company_id[]", i]);
     const top = await oiq("/v3/owner/live_operations", [["date", date], ...extra]);
     const sectors = {}, bas = {};
-    const nSec = (top.sectors || []).length;
-    if (nSec) log(`Live: ${nSec} sector(s) to read — this part takes a few minutes`);
-    for (const s of (top.sectors || [])) {
-      if (s.id == null) continue;
+    // A sector nobody knocked in today has nothing to read.
+    const worked = (top.sectors || []).filter((s) => s.id != null
+      && (s.first_knock_at || (+s.total_sales || 0) > 0 || (s.members || []).some((m) => knocked.has(String(m.id != null ? m.id : m)))));
+    if (worked.length) log(`Live: ${worked.length} sector(s) worked today — this part takes a few minutes`);
+    // A member's own door count, when the sector page gives one.
+    const doorsOf = (m) => [m.doors, m.doors_knocked, (m.hero || {}).doors, (m.kpis || {}).doors_knocked, (m.stats || {}).doors]
+      .find((v) => typeof v === "number");
+    for (const s of worked) {
       const sd = await oiq(`/v3/owner/live_operations/sectors/${s.id}`, [["date", date]]);
       sectors[s.id] = sd;
-      for (const m of (sd.members || [])) {
-        if (m.id == null) continue;
+      const members = (sd.members || []).filter((m) => m.id != null);
+      // Only the BAs who knocked doors today (by today's KPIs; else by the
+      // sector page's own door count; if neither says, read them).
+      const idsMatch = members.some((m) => knocked.has(String(m.id)));
+      for (const m of members) {
+        const d = doorsOf(m);
+        const out = idsMatch ? !knocked.has(String(m.id)) : (d !== undefined && d <= 0);
+        if (out) continue;
         bas[m.id] = await oiq(`/v3/owner/live_operations/bas/${m.id}`, [["date", date]]);
       }
     }
@@ -223,7 +248,7 @@
     if (!force && doneFor() === today) return;
     if (!token()) { warn("Not logged in to OwnerIQ — sign in at owner-iq.ai and the 20:00 pull will run."); return; }
     running = true;
-    pinsCache = null; idsCache = null; lastCall = 0;
+    pinsCache = null; idsCache = null; lastCall = 0; knocked = new Set();
     log("pulling today's data (15-45 s between requests — leave this tab open)…");
     try {
       await syncRoster();
