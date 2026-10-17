@@ -49,7 +49,10 @@ _TRANSIENT_BACKOFF_SECONDS = 300  # 5xx / 429 / network: wait before the next tr
 # can't reach (the UK edge blocks server-to-server calls). While a relay has
 # posted within this window, OwnerIQ counts as "connected" and the server's own
 # OwnerIQ pulls stand down — the browser is the only thing that talks to OwnerIQ.
-RELAY_TTL_S = int((os.getenv("OWNERIQ_RELAY_TTL_MIN") or "40")) * 60
+# The relay pulls once a day at 20:00 (userscript v2.0), so one pull keeps the
+# app on the relay's data until the next evening: the server never reaches
+# OwnerIQ itself in between.
+RELAY_TTL_S = int((os.getenv("OWNERIQ_RELAY_TTL_MIN") or str(26 * 60))) * 60
 RELAY = "relay"
 _lock = asyncio.Lock()
 
@@ -143,10 +146,15 @@ async def relay_stall_tick() -> int:
         return 0
     from core.app_time import APP_TZ
     now_local = datetime.now(APP_TZ)
-    if not _in_field_hours(now_local):
+    # The relay pulls once a day at 20:00. From 21:00, if today's pull hasn't
+    # arrived, tell the Owner once (the tab may be closed or signed out).
+    if now_local.hour < 21:
         return 0
-    if _relay_is_fresh(doc):
-        # Flowing again — clear any past alert so a later stall re-alerts.
+    try:
+        last = datetime.fromisoformat(doc["relay_at"]).astimezone(APP_TZ)
+    except (TypeError, ValueError):
+        last = None
+    if last and last.date() == now_local.date() and last.hour >= 19:
         if doc.get("relay_stall_alerted_for"):
             await _write({"relay_stall_alerted_for": None})
         return 0
@@ -166,9 +174,9 @@ async def relay_stall_tick() -> int:
     try:
         from core.push import send_push_to_user
         await send_push_to_user(
-            str(owner["_id"]), "⚠️ OwnerIQ sync has stopped",
-            f"No data for about {mins} min. Open the owner-iq.ai tab running the sync "
-            "(sign in again if it asks) to restart it.",
+            str(owner["_id"]), "⚠️ Tonight's OwnerIQ pull hasn't run",
+            "Open the owner-iq.ai tab on your laptop (sign in if it asks). It pulls today's data "
+            "as soon as it's open, before midnight.",
             {"type": "broadcast", "url": "/owneriq-connect"})
     except Exception as ex:
         logger.warning("relay stall push failed: %s", ex)
@@ -176,12 +184,11 @@ async def relay_stall_tick() -> int:
         if owner.get("email"):
             from core.email_utils import render_email, send_email
             html = render_email(
-                "OwnerIQ sync has stopped", "The browser relay stopped sending",
-                f"<p>No OwnerIQ data has reached the app for about {mins} minutes.</p>"
-                "<p>On the computer running the sync, open the <b>owner-iq.ai</b> tab "
-                "(sign in again if it asks for a code). The screens come back on their own "
-                "within ~15 minutes. Until then the team's numbers come from the breakdowns.</p>")
-            send_email(owner["email"], "OwnerIQ sync has stopped", html)
+                "Tonight's OwnerIQ pull hasn't run", "The 20:00 pull didn't reach the app",
+                "<p>Today's OwnerIQ data hasn't reached the app yet.</p>"
+                "<p>On your laptop, open the <b>owner-iq.ai</b> tab (sign in again if it asks for a code). "
+                "It pulls today's data as soon as it's open, before midnight.</p>")
+            send_email(owner["email"], "Tonight's OwnerIQ pull hasn't run", html)
     except Exception as ex:
         logger.warning("relay stall email failed: %s", ex)
     return 1
