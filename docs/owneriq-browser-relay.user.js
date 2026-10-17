@@ -1,22 +1,24 @@
 // ==UserScript==
 // @name         OwnerIQ → The Loris Group relay
 // @namespace    the-loris-group
-// @version      2.0
-// @description  Runs in the Owner's own logged-in OwnerIQ tab. Once a day, at 20:00, it reads the office's own data for that day (the same data the dashboard shows) and posts it to the app. Used because the UK edge blocks server-to-server calls; the Owner's real browser is allowed.
+// @version      2.1
+// @description  Runs in the Owner's own logged-in OwnerIQ tab. Once a day, between 20:00 and 20:15, it reads the office's own data for that day (the same data the dashboard shows) and posts it to the app. Used because the UK edge blocks server-to-server calls; the Owner's real browser is allowed.
 // @match        https://owner-iq.ai/*
 // @run-at       document-idle
 // @grant        none
 // ==/UserScript==
 //
-// WHAT IT DOES (v2.0, the Owner's settings, 17 Oct 2026)
+// WHAT IT DOES (v2.1, the Owner's settings, 17 Oct 2026)
 //
-//  • Pulls ONCE A DAY, at 20:00 on this computer's clock. If the tab wasn't
-//    open (or the laptop was asleep) at 20:00, it pulls once when the tab is
-//    next open that evening, before midnight. Nothing at any other time.
+//  • Pulls ONCE A DAY, at a random time between 20:00 and 20:15 on this
+//    computer's clock (a new time each day). If the tab wasn't open (or the
+//    laptop was asleep) then, it pulls once when the tab is next open that
+//    evening, before midnight. Nothing at any other time.
 //  • Only THAT DAY's data: the roster, today's KPIs, today's Live Operations,
 //    and this week's Performance Hub (the view today sits in). No yesterday,
 //    no earlier weeks, no next week.
-//  • Waits 20 SECONDS between every request to OwnerIQ, so it's gentle.
+//  • Waits a random 15 to 45 SECONDS between every request to OwnerIQ, like
+//    someone tapping through the pages.
 //    A full pull takes a few minutes (longer on a busy day): leave the tab
 //    open until the console says "sync complete".
 //  • To pull straight away (e.g. to test): in this tab's console type
@@ -34,8 +36,10 @@
   const APP_URL = "https://the-loris-group-production.up.railway.app"; // the app
   const RELAY_SECRET = "PASTE_OWNERIQ_RELAY_SECRET_HERE";              // = Railway OWNERIQ_RELAY_SECRET
   const OIQ = "https://uk.owner-iq.ai";    // OwnerIQ API host for this account
-  const PULL_HOUR = 20;                    // pull once a day at 20:00
-  const GAP_MS = 20 * 1000;                // 20 seconds between OwnerIQ requests
+  const PULL_HOUR = 20;                    // pull once a day from 20:00…
+  const START_SPREAD_MIN = 15;             // …at a random minute up to 20:15
+  const GAP_MIN_MS = 15 * 1000;            // a random 15-45 s between OwnerIQ requests
+  const GAP_MAX_MS = 45 * 1000;
   // ───────────────────────────────────────────────────────────────────────
 
   const log = (...a) => console.log("%c[OIQ relay]", "color:#0a7", ...a);
@@ -69,10 +73,11 @@
     return iso(d);
   }
 
-  // GET from OwnerIQ using the current session, 20 s after the last one.
+  // GET from OwnerIQ using the current session, a random 15-45 s after the last one.
   let lastCall = 0;
+  const gap = () => GAP_MIN_MS + Math.floor(Math.random() * (GAP_MAX_MS - GAP_MIN_MS + 1));
   async function oiq(path, params) {
-    const wait = lastCall + GAP_MS - Date.now();
+    const wait = lastCall + gap() - Date.now();
     if (lastCall && wait > 0) await sleep(wait);
     lastCall = Date.now();
     const tok = token();
@@ -219,7 +224,7 @@
     if (!token()) { warn("Not logged in to OwnerIQ — sign in at owner-iq.ai and the 20:00 pull will run."); return; }
     running = true;
     pinsCache = null; idsCache = null; lastCall = 0;
-    log("pulling today's data (20 s between requests — leave this tab open)…");
+    log("pulling today's data (15-45 s between requests — leave this tab open)…");
     try {
       await syncRoster();
       await syncKpis();
@@ -236,12 +241,26 @@
     }
   }
 
-  // Checked once a minute: from 20:00 to midnight, pull once if today's pull
-  // hasn't happened. A failed pull is retried at most once an hour.
+  // Today's start minute (0-15 past 20:00): picked at random once a day and
+  // remembered, so a page reload doesn't move it.
+  const START_KEY = "loris-relay-start";
+  function startMinute() {
+    const today = iso(new Date());
+    try {
+      const saved = JSON.parse(localStorage.getItem(START_KEY) || "null");
+      if (saved && saved.d === today) return saved.m;
+    } catch (e) { /* pick a new one */ }
+    const m = Math.floor(Math.random() * (START_SPREAD_MIN + 1));
+    try { localStorage.setItem(START_KEY, JSON.stringify({ d: today, m })); } catch (e) { /* fine */ }
+    return m;
+  }
+
+  // Checked once a minute: from today's start time to midnight, pull once if
+  // today's pull hasn't happened. A failed pull is retried at most once an hour.
   let lastTry = 0;
   function tick() {
-    const h = new Date().getHours();
-    if (h < PULL_HOUR) return;
+    const now = new Date();
+    if (now.getHours() * 60 + now.getMinutes() < PULL_HOUR * 60 + startMinute()) return;
     if (doneFor() === iso(new Date())) return;
     if (Date.now() - lastTry < 60 * 60 * 1000) return;
     lastTry = Date.now();
@@ -253,7 +272,8 @@
     return;
   }
   window.oiqSyncNow = () => run(true);
-  log(`ready — pulls today's data once a day at ${PULL_HOUR}:00 (${doneFor() === iso(new Date()) ? "today's is done" : "not yet today"}). Type oiqSyncNow() to pull now.`);
+  const sm = String(startMinute()).padStart(2, "0");
+  log(`ready — pulls today's data once a day, today at ${PULL_HOUR}:${sm} (${doneFor() === iso(new Date()) ? "today's is done" : "not yet today"}). Type oiqSyncNow() to pull now.`);
   tick();
   setInterval(tick, 60 * 1000);
 })();
