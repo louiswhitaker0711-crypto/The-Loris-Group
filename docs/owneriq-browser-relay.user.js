@@ -1,22 +1,30 @@
 // ==UserScript==
 // @name         OwnerIQ → The Loris Group relay
 // @namespace    the-loris-group
-// @version      1.5
-// @description  Runs in the Owner's own logged-in OwnerIQ tab. Every few minutes it reads the office's own data (the same data the dashboard shows) and posts it to the app, which stores it exactly as the server sync would. Used because the UK edge blocks server-to-server calls; the Owner's real browser is allowed.
+// @version      2.0
+// @description  Runs in the Owner's own logged-in OwnerIQ tab. Once a day, at 20:00, it reads the office's own data for that day (the same data the dashboard shows) and posts it to the app. Used because the UK edge blocks server-to-server calls; the Owner's real browser is allowed.
 // @match        https://owner-iq.ai/*
 // @run-at       document-idle
 // @grant        none
 // ==/UserScript==
 //
-// HOW TO USE (two ways)
+// WHAT IT DOES (v2.0, the Owner's settings, 17 Oct 2026)
 //
-//  A) Quick / console:   open owner-iq.ai, sign in, press F12 → Console,
-//     paste this whole file, press Enter. It syncs now, then on every quarter
-//     hour (:00, :15, :30, :45) while the tab stays open and you stay logged in.
+//  • Pulls ONCE A DAY, at 20:00 on this computer's clock. If the tab wasn't
+//    open (or the laptop was asleep) at 20:00, it pulls once when the tab is
+//    next open that evening, before midnight. Nothing at any other time.
+//  • Only THAT DAY's data: the roster, today's KPIs, today's Live Operations,
+//    and this week's Performance Hub (the view today sits in). No yesterday,
+//    no earlier weeks, no next week.
+//  • Waits 20 SECONDS between every request to OwnerIQ, so it's gentle.
+//    A full pull takes a few minutes (longer on a busy day): leave the tab
+//    open until the console says "sync complete".
+//  • To pull straight away (e.g. to test): in this tab's console type
+//      oiqSyncNow()
+//    and press Enter.
 //
-//  B) Always-on / Tampermonkey: install the Tampermonkey extension, add this as
-//     a new userscript, and fill in the two CONFIG lines below. It then runs
-//     automatically whenever an owner-iq.ai tab is open.
+// HOW TO INSTALL (Tampermonkey): add this as a new userscript, fill in the
+// RELAY_SECRET line below, save. It runs whenever an owner-iq.ai tab is open.
 //
 //  Fill these two in before using:
 (function () {
@@ -26,11 +34,13 @@
   const APP_URL = "https://the-loris-group-production.up.railway.app"; // the app
   const RELAY_SECRET = "PASTE_OWNERIQ_RELAY_SECRET_HERE";              // = Railway OWNERIQ_RELAY_SECRET
   const OIQ = "https://uk.owner-iq.ai";    // OwnerIQ API host for this account
-  const EVERY_MIN = 15;                    // sync on every quarter hour (:00/:15/:30/:45)
+  const PULL_HOUR = 20;                    // pull once a day at 20:00
+  const GAP_MS = 20 * 1000;                // 20 seconds between OwnerIQ requests
   // ───────────────────────────────────────────────────────────────────────
 
   const log = (...a) => console.log("%c[OIQ relay]", "color:#0a7", ...a);
   const warn = (...a) => console.warn("[OIQ relay]", ...a);
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   function readToken(store) {
     try {
@@ -39,14 +49,12 @@
       return (j && j.state && j.state.token) || (j && j.token) || null;
     } catch (e) { return null; }
   }
-  // OwnerIQ has kept the session in sessionStorage AND (older) localStorage;
-  // check both so a "Not logged in" never happens while you're signed in.
+  // OwnerIQ has kept the session in sessionStorage AND (older) localStorage.
   function token() {
     return readToken(sessionStorage) || readToken(localStorage) || null;
   }
 
-  // The calendar date on this computer's clock (UK time on the Owner's
-  // laptop), not UTC: just after midnight in summer, UTC is still yesterday.
+  // The calendar date on this computer's clock (UK time), not UTC.
   function iso(d) {
     const p = (n) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
@@ -55,15 +63,18 @@
     const p = (n) => String(n).padStart(2, "0");
     return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
   }
-  function mondayISO(weeksBack) {
+  function thisMondayISO() {
     const d = new Date();
-    const mon = (d.getDay() + 6) % 7;            // 0 = Monday
-    d.setDate(d.getDate() - mon - 7 * (weeksBack || 0));
+    d.setDate(d.getDate() - ((d.getDay() + 6) % 7));   // back to Monday
     return iso(d);
   }
 
-  // GET from OwnerIQ using the current session (real browser request → allowed).
+  // GET from OwnerIQ using the current session, 20 s after the last one.
+  let lastCall = 0;
   async function oiq(path, params) {
+    const wait = lastCall + GAP_MS - Date.now();
+    if (lastCall && wait > 0) await sleep(wait);
+    lastCall = Date.now();
     const tok = token();
     if (!tok) throw new Error("not-logged-in");
     const url = new URL(OIQ + path);
@@ -83,9 +94,7 @@
     return r.json();
   }
 
-  // Fire-and-forget POST to the app. text/plain = a "simple" cross-origin
-  // request, so the browser sends it with no CORS preflight; no-cors means we
-  // don't read the (irrelevant) response. The app authorises by the secret.
+  // POST to the app (text/plain: no CORS preflight; the app checks the secret).
   async function toApp(path, obj) {
     obj.secret = RELAY_SECRET;
     await fetch(APP_URL + path, {
@@ -96,20 +105,22 @@
     });
   }
 
+  // Looked up once per pull, not once per step.
+  let pinsCache = null, idsCache = null;
   async function companyPins() {
+    if (pinsCache) return pinsCache;
     const j = await oiq("/v2/marketing_companies");
-    return (j.data || []).map((c) => c.attributes && c.attributes.pin)
-      .filter((p) => p != null).map(String);
+    pinsCache = (j.data || []).map((c) => c.attributes && c.attributes.pin).filter((p) => p != null).map(String);
+    return pinsCache;
   }
-
   async function companyIds() {
+    if (idsCache) return idsCache;
     const j = await oiq("/v3/owner/marketing_companies/light_index");
-    return (j.data || []).map((c) => c.id).filter((x) => x != null).map(String);
+    idsCache = (j.data || []).map((c) => c.id).filter((x) => x != null).map(String);
+    return idsCache;
   }
 
-  // Walk 0 — the roster (every office), so the app can match each OwnerIQ
-  // person to the right person in your app (by badge/email) and keep stages
-  // fresh. Runs first so the KPI + Bells fill below land on the right people.
+  // 1 — the roster, so the app links each OwnerIQ person to the right person.
   async function syncRoster() {
     const pins = await companyPins();
     const walk = pins.length === 0 ? [null] : pins;
@@ -120,18 +131,17 @@
     }
     await toApp("/api/owneriq/relay/roster", { payloads, pins: walk });
     const n = payloads.reduce((a, p) => a + ((p.data || []).length), 0);
-    log(`Roster: posted ${n} people across ${walk.length} office(s)`);
+    log(`Roster: posted ${n} people`);
   }
 
-  // Walk 1 — KPIs for yesterday + today, every office, every page.
+  // 2 — today's KPIs, every office, every page.
   async function syncKpis() {
     const today = new Date();
-    const yday = new Date(today.getTime() - 864e5);
-    const between = `${ddmmyyyy(yday)},${ddmmyyyy(today)}`;
+    const between = `${ddmmyyyy(today)},${ddmmyyyy(today)}`;
     const pins = await companyPins();
     const payloads = [];
-    const walkDefault = pins.length === 0 ? [null] : pins;
-    for (const pin of walkDefault) {
+    const walk = pins.length === 0 ? [null] : pins;
+    for (const pin of walk) {
       if (pin) await oiq("/v2/marketing_companies", [["mc_pin", pin]]); // select office
       let page = 1;
       for (;;) {
@@ -145,19 +155,20 @@
         page += 1;
       }
     }
-    await toApp("/api/owneriq/relay/kpis", { from: iso(yday), to: iso(today), payloads });
+    await toApp("/api/owneriq/relay/kpis", { from: iso(today), to: iso(today), payloads });
     const rows = payloads.reduce((n, p) => n + ((p.data || []).length), 0);
-    log(`KPIs: posted ${rows} rows across ${walkDefault.length} office(s)`);
+    log(`KPIs: posted ${rows} rows for today`);
   }
 
-  // Walk 2 — a day's Live Operations tree (top → each sector → each BA).
-  // Today on every sync; yesterday once a day (see syncYesterdayOnce).
-  async function syncLive(day) {
-    const date = iso(day || new Date());
+  // 3 — today's Live Operations (top → each sector → each BA's door log).
+  async function syncLive() {
+    const date = iso(new Date());
     const ids = await companyIds();
     const extra = ids.map((i) => ["marketing_company_id[]", i]);
     const top = await oiq("/v3/owner/live_operations", [["date", date], ...extra]);
     const sectors = {}, bas = {};
+    const nSec = (top.sectors || []).length;
+    if (nSec) log(`Live: ${nSec} sector(s) to read — this part takes a few minutes`);
     for (const s of (top.sectors || [])) {
       if (s.id == null) continue;
       const sd = await oiq(`/v3/owner/live_operations/sectors/${s.id}`, [["date", date]]);
@@ -168,149 +179,81 @@
       }
     }
     await toApp("/api/owneriq/relay/live", { date, top, sectors, bas });
-    log(`Live${day ? " " + date : ""}: posted top + ${Object.keys(sectors).length} sectors + ${Object.keys(bas).length} BAs`);
+    log(`Live: posted ${Object.keys(sectors).length} sectors + ${Object.keys(bas).length} BAs for today`);
   }
 
-  // Yesterday, settled: on the first sync of each day, send yesterday's whole
-  // Live Operations tree and door logs again. It catches the end of the field
-  // day if the laptop slept early, and any late corrections, and fills the
-  // Timeline. (The server used to re-pull yesterday at 03:00; it can't now.)
-  const YDAY_KEY = "loris-relay-yesterday-sent";
-  function ydaySentFor() { try { return localStorage.getItem(YDAY_KEY); } catch (e) { return null; } }
-  function markYdaySent(d) { try { localStorage.setItem(YDAY_KEY, d); } catch (e) { /* fine: resends tomorrow */ } }
-  async function syncYesterdayOnce() {
-    const today = iso(new Date());
-    if (ydaySentFor() === today) return;
-    const yday = new Date(); yday.setDate(yday.getDate() - 1);
-    await syncLive(yday);
-    markYdaySent(today);
-  }
-
-  // Walk 3 — Performance Hub views: company + no-team for this & last week,
-  // and each team for this week (feeds the Hub screen's cache). Also NEXT week's
-  // company view (wk -1), so the week you're planning preloads its Field IQ day
-  // plan into Bells — applied only, not shown on the Hub (schedule_only).
+  // 4 — this week's Performance Hub (the week today is in): the office, the
+  // no-team bucket and each team. Fills this week's Bells goals and marks.
   async function syncHub() {
-    const ids = await companyIds();
-    for (const wk of [-1, 0, 1]) {
-      const ws = mondayISO(wk);
-      const views = [];
-      for (const mc of ids) {
-        let mcView;
-        try {
-          mcView = await oiq(`/v3/owner/bells_performance/marketing_companies/${mc}`, [["week_start_on", ws]]);
-        } catch (e) {
-          if (wk < 0) continue;   // next week may not exist in OwnerIQ yet
-          throw e;
-        }
-        views.push({ kind: "mc", ref: mc, payload: mcView });
-        if (wk >= 0) {
-          try {
-            const noTeam = await oiq(`/v3/owner/bells_performance/marketing_companies/${mc}/no_team`, [["week_start_on", ws]]);
-            views.push({ kind: "no_team", ref: mc, payload: noTeam });
-          } catch (e) { /* some offices have no "no team" bucket */ }
-          if (wk === 0) {
-            for (const t of (mcView.teams || [])) {
-              if (t.id == null) continue;
-              const tv = await oiq(`/v3/owner/bells_performance/teams/${t.id}`, [["week_start_on", ws]]);
-              views.push({ kind: "team", ref: t.id, payload: tv });
-            }
-          }
-        }
+    const ws = thisMondayISO();
+    const views = [];
+    for (const mc of await companyIds()) {
+      const mcView = await oiq(`/v3/owner/bells_performance/marketing_companies/${mc}`, [["week_start_on", ws]]);
+      views.push({ kind: "mc", ref: mc, payload: mcView });
+      try {
+        const noTeam = await oiq(`/v3/owner/bells_performance/marketing_companies/${mc}/no_team`, [["week_start_on", ws]]);
+        views.push({ kind: "no_team", ref: mc, payload: noTeam });
+      } catch (e) {
+        if (e.message === "session-expired" || e.message === "not-logged-in") throw e;
       }
-      if (!views.length) continue;
-      await toApp("/api/owneriq/relay/hub", { week_start: ws, views, schedule_only: wk < 0 });
-      log(`Hub: posted ${views.length} views for week ${ws}${wk < 0 ? " (next week, plan only)" : ""}`);
+      for (const t of (mcView.teams || [])) {
+        if (t.id == null) continue;
+        const tv = await oiq(`/v3/owner/bells_performance/teams/${t.id}`, [["week_start_on", ws]]);
+        views.push({ kind: "team", ref: t.id, payload: tv });
+      }
     }
+    if (views.length) await toApp("/api/owneriq/relay/hub", { week_start: ws, views });
+    log(`Hub: posted ${views.length} views for this week`);
   }
 
-  // Earlier weeks on the Performance Hub: once a day, send the office, no-team
-  // and every team view for the last 11 weeks (the Hub goes back 12, and this
-  // week is sent on every sync). Saved for viewing only (cache_only): the app
-  // never rewrites a past week's Bells from these.
-  const HUB_WEEKS_BACK = 11;
-  const HUB_KEY = "loris-relay-hub-history-sent";
-  async function syncHubHistoryOnce() {
-    const today = iso(new Date());
-    let sent = null;
-    try { sent = localStorage.getItem(HUB_KEY); } catch (e) { /* resend */ }
-    if (sent === today) return;
-    const ids = await companyIds();
-    let weeks = 0;
-    for (let wk = 1; wk <= HUB_WEEKS_BACK; wk++) {
-      const ws = mondayISO(wk);
-      const views = [];
-      for (const mc of ids) {
-        let mcView;
-        try {
-          mcView = await oiq(`/v3/owner/bells_performance/marketing_companies/${mc}`, [["week_start_on", ws]]);
-        } catch (e) {
-          if (e.message === "session-expired" || e.message === "not-logged-in") throw e;
-          continue;   // a week OwnerIQ won't serve: skip it
-        }
-        views.push({ kind: "mc", ref: mc, payload: mcView });
-        try {
-          const noTeam = await oiq(`/v3/owner/bells_performance/marketing_companies/${mc}/no_team`, [["week_start_on", ws]]);
-          views.push({ kind: "no_team", ref: mc, payload: noTeam });
-        } catch (e) { /* some offices have no "no team" bucket */ }
-        for (const t of (mcView.teams || [])) {
-          if (t.id == null) continue;
-          try {
-            const tv = await oiq(`/v3/owner/bells_performance/teams/${t.id}`, [["week_start_on", ws]]);
-            views.push({ kind: "team", ref: t.id, payload: tv });
-          } catch (e) {
-            if (e.message === "session-expired" || e.message === "not-logged-in") throw e;
-          }
-        }
-      }
-      if (!views.length) continue;
-      await toApp("/api/owneriq/relay/hub", { week_start: ws, views, cache_only: true });
-      weeks += 1;
-    }
-    log(`Hub history: posted ${weeks} earlier week(s) for viewing`);
-    try { localStorage.setItem(HUB_KEY, today); } catch (e) { /* fine: resends next sync */ }
-  }
+  // ── Once a day at 20:00 ─────────────────────────────────────────────────
+  const DONE_KEY = "loris-relay-done-for";
+  const doneFor = () => { try { return localStorage.getItem(DONE_KEY); } catch (e) { return null; } };
+  const markDone = (d) => { try { localStorage.setItem(DONE_KEY, d); } catch (e) { /* fine */ } };
 
   let running = false;
-  async function run() {
+  async function run(force) {
     if (running) return;
+    const today = iso(new Date());
+    if (!force && doneFor() === today) return;
+    if (!token()) { warn("Not logged in to OwnerIQ — sign in at owner-iq.ai and the 20:00 pull will run."); return; }
     running = true;
+    pinsCache = null; idsCache = null; lastCall = 0;
+    log("pulling today's data (20 s between requests — leave this tab open)…");
     try {
-      if (!token()) { warn("Not logged in to OwnerIQ — open owner-iq.ai and sign in."); return; }
       await syncRoster();
       await syncKpis();
       await syncLive();
       await syncHub();
-      await syncYesterdayOnce();
-      await syncHubHistoryOnce();
+      markDone(today);
       log("sync complete", new Date().toLocaleTimeString());
     } catch (e) {
-      if (e.message === "session-expired") warn("OwnerIQ session expired — sign in again at owner-iq.ai.");
+      if (e.message === "session-expired") warn("OwnerIQ session expired — sign in again; it will retry within the hour.");
       else if (e.message === "not-logged-in") warn("Not logged in to OwnerIQ.");
-      else warn("sync failed:", e.message);
+      else warn("sync failed:", e.message, "— it will retry within the hour.");
     } finally {
       running = false;
     }
+  }
+
+  // Checked once a minute: from 20:00 to midnight, pull once if today's pull
+  // hasn't happened. A failed pull is retried at most once an hour.
+  let lastTry = 0;
+  function tick() {
+    const h = new Date().getHours();
+    if (h < PULL_HOUR) return;
+    if (doneFor() === iso(new Date())) return;
+    if (Date.now() - lastTry < 60 * 60 * 1000) return;
+    lastTry = Date.now();
+    run(false);
   }
 
   if (RELAY_SECRET.includes("PASTE_")) {
     warn("Set RELAY_SECRET (and check APP_URL) at the top of the script first.");
     return;
   }
-  // Sync on the clock, not every 15 min from whenever the tab opened: the
-  // check-ins go out at 15:00, 16:30 and 19:00 (Saturday 12:00, 14:00, 16:00),
-  // so a sync lands just after each one and the app sends that check-in on
-  // numbers fetched seconds earlier. Re-aimed every time, so it never drifts.
-  function msToNextSlot() {
-    const now = new Date();
-    const step = EVERY_MIN * 60 * 1000;
-    const sinceHour = (now.getMinutes() * 60 + now.getSeconds()) * 1000 + now.getMilliseconds();
-    return step - (sinceHour % step) + 5000;   // 5 s after the quarter hour
-  }
-  function scheduleNext() {
-    setTimeout(() => { run(); scheduleNext(); }, msToNextSlot());
-  }
-  log(`starting — syncing now, then every quarter hour (:00, :15, :30, :45) while this tab is open`);
-  run();
-  scheduleNext();
+  window.oiqSyncNow = () => run(true);
+  log(`ready — pulls today's data once a day at ${PULL_HOUR}:00 (${doneFor() === iso(new Date()) ? "today's is done" : "not yet today"}). Type oiqSyncNow() to pull now.`);
+  tick();
+  setInterval(tick, 60 * 1000);
 })();
