@@ -311,7 +311,7 @@ function BellsScreen() {
                 : 'Bells will appear here once sign-ups come through for the week.'}
             />
           ) : (
-            <TableView entries={entries} weekEnding={weekEnding} onRefresh={onRefresh} miniGoal={list.data?.mini_team_goal ?? null} officeId={officeId} />
+            <TableView entries={entries} weekEnding={weekEnding} onRefresh={onRefresh} miniGoal={list.data?.mini_team_goal ?? null} officeId={officeId} onShowWeek={setWeekEnding} />
           )}
           </View>
         </ScrollView>

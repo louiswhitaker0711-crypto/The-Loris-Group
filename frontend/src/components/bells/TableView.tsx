@@ -12,7 +12,7 @@ import { useColors, useTheme, fonts } from '../../theme/ThemeContext';
 import { useAuth } from '../../auth/AuthContext';
 import { teamColor, NO_TEAM_TINT } from '../../utils/teamColors';
 import { toast } from '../../utils/toast';
-import { Day, Entry, MIN_AB_REASON, TIER, isInDay, dayTotal, exitedBy } from './types';
+import { Day, Entry, MIN_AB_REASON, TIER, isInDay, dayTotal, exitedBy, appWeekEndingISO } from './types';
 import { DAY_STATUS_LABEL, DAY_STATUS_SHORT, NO_NUMBER_STATUSES, statusSquare } from '../../utils/dayStatus';
 import { dayBandLook } from '../../utils/dayBands';
 import { APP_LOCALE, APP_TZ, formatMoney } from '../../utils/appTime';
@@ -356,8 +356,10 @@ function cellForDay(d: Day, c: typeof colors, dark: boolean, exited: false | 'fi
   return { text: String(tot), fg: look.fg, bg: look.bg };
 }
 
-export default function TableView({ entries, weekEnding, onRefresh, miniGoal, officeId }: {
+export default function TableView({ entries, weekEnding, onRefresh, miniGoal, officeId, onShowWeek }: {
   entries: Entry[]; weekEnding?: string; onRefresh?: () => void;
+  /** Switch the sheet to a week (the This week | Last week tabs). */
+  onShowWeek?: (weekEnding: string) => void;
   /** Mini Vertex's goal for the week (it has no Coach's row to live on). */
   miniGoal?: number | null;
   officeId?: string;
@@ -663,7 +665,7 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
       {phone ? (
         <PhoneSheet
           groups={groups} office={office} entries={entries} colors={colors} isDark={isDark} styles={styles} showMc={showMc} weekEnding={weekEnding}
-          order={order} onOrder={setOrder}
+          onShowWeek={onShowWeek} order={order} onOrder={setOrder}
           canEditGoal={canEditCrewGoal} onEditGoal={openGoalEdit} onCellPress={openCellEdit} onRowPress={openRowEdit}
         />
       ) : (
@@ -673,6 +675,7 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
         <Text style={styles.zoomHint} numberOfLines={2}>
           Tap a day to edit it · tap a Goal to change it{isWeb ? '' : ' · pinch to zoom'}
         </Text>
+        {onShowWeek ? <WeekSwitch weekEnding={weekEnding} onShowWeek={onShowWeek} styles={styles} colors={colors} /> : null}
         <OrderSwitch order={order} onOrder={setOrder} styles={styles} colors={colors} />
         <View style={styles.zoomBtns}>
           <TouchableOpacity
@@ -1172,8 +1175,25 @@ function OrderSwitch({ order, onOrder, styles, colors }: { order: EveryoneOrder;
   return <View style={styles.orderWrap}>{opt('team', 'Team order')}{opt('sales', 'Most sign-ups')}</View>;
 }
 
+/** This week | Last week, at the top of Bells. */
+function WeekSwitch({ weekEnding, onShowWeek, styles, colors }: { weekEnding?: string; onShowWeek: (we: string) => void; styles: any; colors: any }) {
+  const thisWeek = appWeekEndingISO();
+  const d = new Date(thisWeek + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - 7);
+  const lastWeek = d.toISOString().slice(0, 10);
+  const opt = (we: string, label: string) => {
+    const on = weekEnding === we;
+    return (
+      <TouchableOpacity key={we} onPress={() => onShowWeek(we)} style={[styles.orderBtn, on && { backgroundColor: colors.primary }]}
+        accessibilityRole="tab" accessibilityState={{ selected: on }} testID={`bells-week-${label === 'This week' ? 'this' : 'last'}`}>
+        <Text style={[styles.orderText, { color: on ? colors.onPrimary : colors.text }]}>{label}</Text>
+      </TouchableOpacity>
+    );
+  };
+  return <View style={styles.orderWrap}>{opt(thisWeek, 'This week')}{opt(lastWeek, 'Last week')}</View>;
+}
+
 // ── The phone's Bells: the same sections as a list ───────────────────────────
-function PhoneSheet({ groups, office, entries, colors, isDark, styles, showMc, weekEnding, order, onOrder, canEditGoal, onEditGoal, onCellPress, onRowPress }: any) {
+function PhoneSheet({ groups, office, entries, colors, isDark, styles, showMc, weekEnding, onShowWeek, order, onOrder, canEditGoal, onEditGoal, onCellPress, onRowPress }: any) {
   const openPerson = useOpenPerson();
   // A label and seven cells, lined up under the day letters.
   const statRow = (label: string, vals: (string | number)[], strong?: boolean) => (
@@ -1207,10 +1227,11 @@ function PhoneSheet({ groups, office, entries, colors, isDark, styles, showMc, w
   const everyone = everyoneList(groups, order || 'team');
   return (
     <View>
-      <View style={styles.pTopRow}>
-        <Text style={[styles.pHint, { flex: 1, marginBottom: 0 }]}>Tap a day to edit it. Tap a name for their goal.</Text>
+      <View style={[styles.pTopRow, { justifyContent: 'space-between', flexWrap: 'wrap' }]}>
+        {onShowWeek ? <WeekSwitch weekEnding={weekEnding} onShowWeek={onShowWeek} styles={styles} colors={colors} /> : null}
         <OrderSwitch order={order || 'team'} onOrder={onOrder} styles={styles} colors={colors} />
       </View>
+      <Text style={styles.pHint}>Names are coloured by last week's result. Tap a day to edit it, a goal to change it.</Text>
       {everyone.length > 0 && (
         <View style={styles.pSection}>
           <View style={styles.lRow}>
@@ -1238,24 +1259,18 @@ function PhoneSheet({ groups, office, entries, colors, isDark, styles, showMc, w
               <View key={e.user_id || idx} style={styles.lRow}>
                 <View style={[styles.lTeam, { backgroundColor: tint.border }]} />
                 <View style={styles.lNameWrap}>
-                  {/* Line 1: the name (opens their page) and PR / OR. */}
-                  <View style={styles.lLine}>
-                    {light ? <View style={[styles.lightDot, { backgroundColor: light.color, marginRight: 5 }]} /> : null}
-                    <TouchableOpacity onPress={openPerson(e) || (() => onRowPress?.(e))} activeOpacity={0.6} style={{ flexShrink: 1 }}
-                      accessibilityRole="link" accessibilityLabel={`Open ${e.user_name}`}>
-                      <Text style={styles.lName} numberOfLines={1}>{e.user_name}</Text>
-                    </TouchableOpacity>
-                    <RecruitBadge e={e} colors={colors} />
-                  </View>
-                  {/* Line 2: goal and last week, each tinted by its zone. Tap to change the goal. */}
-                  <TouchableOpacity onPress={() => onRowPress?.(e)} activeOpacity={0.6} hitSlop={4} style={[styles.lLine, { marginTop: 2, marginLeft: light ? 11 : 0 }]}
-                    accessibilityLabel={`${e.user_name}: goal ${e.weekly_goal ?? 'not set'}, last week ${e.last_week_total ?? 'none'}. Tap to change the goal`} testID={`bells-goal-${e.user_id || idx}`}>
-                    <Text style={[styles.lPill, gLook ? { color: gLook.fg, backgroundColor: gLook.bg } : { color: colors.textMuted }]} numberOfLines={1}>
-                      Goal {e.weekly_goal ?? '–'}
-                    </Text>
-                    {e.last_week_total != null && lLook ? (
-                      <Text style={[styles.lPill, { color: lLook.fg, backgroundColor: lLook.bg, marginLeft: 4 }]} numberOfLines={1}>LW {e.last_week_total}</Text>
-                    ) : null}
+                  {light ? <View style={[styles.lightDot, { backgroundColor: light.color, marginRight: 4 }]} /> : null}
+                  {/* First name, highlighted in last week's zone colour. Opens their page. */}
+                  <TouchableOpacity onPress={openPerson(e) || (() => onRowPress?.(e))} activeOpacity={0.6} style={{ flexShrink: 1 }}
+                    accessibilityRole="link" accessibilityLabel={`Open ${e.user_name}${e.last_week_total != null ? `, last week ${e.last_week_total}` : ''}`}>
+                    <Text style={[styles.lName, lLook && { color: lLook.fg, backgroundColor: lLook.bg, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 5, overflow: 'hidden' }]}
+                      numberOfLines={1}>{firstName(e.user_name) || e.user_name}</Text>
+                  </TouchableOpacity>
+                  <RecruitBadge e={e} colors={colors} />
+                  {/* Their goal, in its zone colour. Tap to change it. */}
+                  <TouchableOpacity onPress={() => onRowPress?.(e)} activeOpacity={0.6} hitSlop={6}
+                    accessibilityLabel={`${e.user_name}: goal ${e.weekly_goal ?? 'not set'}. Tap to change`} testID={`bells-goal-${e.user_id || idx}`}>
+                    <Text style={[styles.lGoal, gLook && { color: gLook.fg, fontFamily: fonts.bodySemibold }]}>/{e.weekly_goal ?? '–'}</Text>
                   </TouchableOpacity>
                 </View>
                 {(e.days || []).slice(0, 7).map((d: Day, i: number) => {
@@ -1403,7 +1418,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   lRow: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 6, paddingVertical: 2, borderTopWidth: 1, borderTopColor: colors.border, minHeight: 30 },
   lHead: { fontFamily: fonts.bodyBold, fontSize: 10.5, color: colors.textMuted, textAlign: 'center' },
   lTeam: { width: 3, alignSelf: 'stretch', borderRadius: 2, marginRight: 3 },
-  lNameWrap: { flex: 1, minWidth: 0, paddingVertical: 4 },
+  lNameWrap: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', paddingVertical: 4 },
   lLine: { flexDirection: 'row', alignItems: 'center', minWidth: 0 },
   lPill: { fontFamily: fonts.bodySemibold, fontSize: 10, paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4, overflow: 'hidden' },
   lName: { flexShrink: 1, fontFamily: fonts.bodySemibold, fontSize: 12.5, color: colors.text },
