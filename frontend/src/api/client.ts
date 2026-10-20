@@ -1093,6 +1093,8 @@ export const apiService = {
   setCoachPlus: (userId: string, enabled: boolean) =>
     api.put(`/admin/users/${userId}/coach-plus`, { enabled }),
   deleteUser: (userId: string) => api.delete(`/admin/users/${userId}`),
+  // Who recruited someone (Bells PR / OR badge): 'office', a user id, or '' to clear. Admins only.
+  setRecruitedBy: (userId: string, recruitedBy: string) => api.put(`/admin/users/${userId}/recruited-by`, { recruited_by: recruitedBy }),
 
   // Bundled-content force-sync — replaces the deployed Mongo's curated
   // collections (Product Knowledge / Manual / Modules / Assessments /

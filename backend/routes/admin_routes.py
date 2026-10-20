@@ -772,6 +772,29 @@ async def _guard_target_user(admin: dict, user_id: str) -> dict:
     return target
 
 
+@router.put("/admin/users/{user_id}/recruited-by")
+async def set_recruited_by(user_id: str, request: Request):
+    """Who recruited someone, for the PR / OR badge on Bells (Admins only):
+    {"recruited_by": "office"} office recruitment, {"recruited_by": "<user id>"}
+    a personal recruit by that person (the Owner or a BA/Coach in the same
+    office), {"recruited_by": ""} not set."""
+    admin = await require_admin(request)
+    target = await _guard_target_user(admin, user_id)
+    body = await request.json()
+    val = str(body.get("recruited_by") or "").strip()[:64]
+    if not val:
+        await db.users.update_one({"_id": target["_id"]}, {"$unset": {"recruited_by": ""}})
+        return {"ok": True, "recruited_by": None}
+    if val != "office":
+        if val == str(target["_id"]) or not ObjectId.is_valid(val):
+            raise HTTPException(status_code=400, detail="Pick who recruited them")
+        who = await db.users.find_one({"_id": ObjectId(val), "office_id": target.get("office_id")}, {"_id": 1})
+        if not who:
+            raise HTTPException(status_code=400, detail="Pick someone from the same office")
+    await db.users.update_one({"_id": target["_id"]}, {"$set": {"recruited_by": val}})
+    return {"ok": True, "recruited_by": val}
+
+
 @router.delete("/admin/users/{user_id}/profile-image")
 async def admin_remove_profile_image(user_id: str, request: Request):
     admin = await require_admin(request)

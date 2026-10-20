@@ -116,6 +116,30 @@ def exited_before_week(left_on: Optional[str], week_ending: str) -> bool:
     return str(left_on)[:10] < monday
 
 
+async def attach_recruit_badges(entries: list, with_names: bool = False) -> None:
+    """Each row's recruit badge from users.recruited_by: 'OR' = office
+    recruitment, 'PR' = a personal recruit (by the Owner or a BA/Coach), None =
+    not set. Inside the app (with_names) the recruiter's id and name come too;
+    the public link gets the badge only."""
+    ids = [ObjectId(str(e["user_id"])) for e in entries if ObjectId.is_valid(str(e.get("user_id") or ""))]
+    rec: dict = {}
+    if ids:
+        async for u in db.users.find({"_id": {"$in": ids}}, {"recruited_by": 1}):
+            rec[str(u["_id"])] = u.get("recruited_by")
+    names: dict = {}
+    if with_names:
+        pids = {v for v in rec.values() if v and v != "office" and ObjectId.is_valid(str(v))}
+        if pids:
+            async for u in db.users.find({"_id": {"$in": [ObjectId(x) for x in pids]}}, {"name": 1}):
+                names[str(u["_id"])] = u.get("name") or ""
+    for e in entries:
+        r = rec.get(str(e.get("user_id") or ""))
+        e["recruit_badge"] = "OR" if r == "office" else "PR" if r else None
+        if with_names:
+            e["recruited_by"] = r or None
+            e["recruited_by_name"] = names.get(str(r), "") if r and r != "office" else ""
+
+
 def _is_in_day(d: dict) -> bool:
     """A day counts as 'in' (working) for piece-average and scoring purposes ONLY when
     status is explicitly 'in'. RT, NC, Off (and legacy 'normal') are excluded."""
@@ -1220,6 +1244,7 @@ async def list_bells(
         sum_totals["fee_mc_standard"] = _knobs["fee_mc_standard"]
         sum_totals["fee_mc_target"] = _knobs["fee_mc_target"]
 
+    await attach_recruit_badges(enriched, with_names=True)
     return {
         "week_ending": week_ending,
         "previous_week_ending": prev_week,
@@ -2598,6 +2623,7 @@ async def public_bells(office_slug: str, request: Request):
         today_dow if is_current_week else -1,
     )
 
+    await attach_recruit_badges(enriched)
     return {
         "office_name": office.get("name"),
         "office_slug": office_slug,
