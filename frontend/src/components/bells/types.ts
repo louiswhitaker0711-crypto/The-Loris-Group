@@ -143,7 +143,20 @@ export type Entry = {
    *  its place on the sheet (an imported week reads in the sheet's order). */
   sheet_team?: string | null;
   sheet_order?: number | null;
+  /** The day they exited (removed by an Admin), YYYY-MM-DD. From that day
+   *  their days read red; from the next week they're off the sheet. */
+  left_on?: string | null;
+  user_active?: boolean;
 };
+
+/** Has this person exited by day `dayIdx` (0 = Mon) of the week ending `weekEnding`? */
+export function exitedBy(e: { left_on?: string | null }, weekEnding: string, dayIdx: number): boolean {
+  if (!e.left_on || !weekEnding) return false;
+  const d = new Date(weekEnding + 'T00:00:00Z');
+  if (!Number.isFinite(d.getTime())) return false;
+  d.setUTCDate(d.getUTCDate() - 6 + dayIdx);
+  return d.toISOString().slice(0, 10) >= e.left_on.slice(0, 10);
+}
 
 export function emptyDay(): Day {
   return { over30: null, under30: null, memberships: null, status: 'off' };

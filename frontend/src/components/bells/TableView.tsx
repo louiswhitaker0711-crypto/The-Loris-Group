@@ -12,7 +12,7 @@ import { useColors, useTheme, fonts } from '../../theme/ThemeContext';
 import { useAuth } from '../../auth/AuthContext';
 import { teamColor, NO_TEAM_TINT } from '../../utils/teamColors';
 import { toast } from '../../utils/toast';
-import { Day, Entry, MIN_AB_REASON, TIER, isInDay, dayTotal } from './types';
+import { Day, Entry, MIN_AB_REASON, TIER, isInDay, dayTotal, exitedBy } from './types';
 import { DAY_STATUS_LABEL, DAY_STATUS_SHORT, NO_NUMBER_STATUSES, statusSquare } from '../../utils/dayStatus';
 import { dayBandLook } from '../../utils/dayBands';
 import { APP_LOCALE, APP_TZ, formatMoney } from '../../utils/appTime';
@@ -318,8 +318,10 @@ function absDateTime(iso?: string | null): string {
 // A day cell the way the sheet colours it: in with 2+ sign-ups green, 1 amber,
 // 0 red; off is a dash; the absence codes keep their letters.
 type DayLook = { text: string; fg: string; bg?: string };
-function cellForDay(d: Day, c: typeof colors, dark: boolean): DayLook {
+function cellForDay(d: Day, c: typeof colors, dark: boolean, exited = false): DayLook {
   const red = dark ? '#fca5a5' : '#b91c1c';
+  // Exited (removed by an Admin): red from that day on.
+  if (exited) return { text: 'EX', fg: '#ffffff', bg: dark ? '#b91c1c' : '#dc2626' };
   const amber = dark ? '#fcd34d' : '#b45309';
   const green = dark ? '#86efac' : '#166534';
   if (d.status === 'off') return { text: '–', fg: c.textMuted };
@@ -622,7 +624,7 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
   );
   const body = (sticky: boolean) => (
     <BodyContent
-      groups={groups} office={office} colors={colors} isDark={isDark} styles={styles} z={z} w={w} totalW={totalW} showMc={showMc}
+      groups={groups} office={office} colors={colors} isDark={isDark} styles={styles} z={z} w={w} totalW={totalW} showMc={showMc} weekEnding={weekEnding}
       cellFont={cellFont} stickyNameCol={sticky ? stickyNameCol : {}} stickyTeam={sticky ? stickyTeam : {}} entries={entries} order={order}
       canEditGoal={canEditCrewGoal} onEditGoal={openGoalEdit} onCellPress={openCellEdit} onRowPress={openRowEdit}
     />
@@ -632,7 +634,7 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
     <View style={phone ? styles.phoneWrap : styles.wrap} onLayout={onWrapLayout}>
       {phone ? (
         <PhoneSheet
-          groups={groups} office={office} entries={entries} colors={colors} isDark={isDark} styles={styles} showMc={showMc}
+          groups={groups} office={office} entries={entries} colors={colors} isDark={isDark} styles={styles} showMc={showMc} weekEnding={weekEnding}
           order={order} onOrder={setOrder}
           canEditGoal={canEditCrewGoal} onEditGoal={openGoalEdit} onCellPress={openCellEdit} onRowPress={openRowEdit}
         />
@@ -893,7 +895,7 @@ function useOpenPerson() {
   return (e: Entry) => (can && e.user_id ? () => router.push(`/person/${e.user_id}` as never) : undefined);
 }
 
-function BodyContent({ groups, office, colors, isDark, styles, z, w, totalW, showMc, cellFont, stickyNameCol, stickyTeam, entries, order, canEditGoal, onEditGoal, onCellPress, onRowPress }: any) {
+function BodyContent({ groups, office, colors, isDark, styles, z, w, totalW, showMc, weekEnding, cellFont, stickyNameCol, stickyTeam, entries, order, canEditGoal, onEditGoal, onCellPress, onRowPress }: any) {
   const openPerson = useOpenPerson();
   const rowH = 38 * z;
   const slimH = 26 * z;
@@ -979,7 +981,7 @@ function BodyContent({ groups, office, colors, isDark, styles, z, w, totalW, sho
                         <Text style={[styles.cellText, styles.softText, { fontSize: cellFont }]}>{e.break_even != null ? String(e.break_even) : '–'}</Text>
                       </TouchableOpacity>
                       {(e.days || []).slice(0, 7).map((d: Day, i: number) => {
-                        const look = cellForDay(d, colors, !!isDark);
+                        const look = cellForDay(d, colors, !!isDark, exitedBy(e, weekEnding, i));
                         return (
                           <TouchableOpacity key={i} style={[styles.cell, { width: w.day, height: rowH }]} onPress={() => onCellPress?.(e, i)} activeOpacity={0.6}>
                             <View style={[styles.dayPill, { minWidth: 30 * z, height: 24 * z, borderRadius: 7 * z }, look.bg ? { backgroundColor: look.bg } : null]}>
@@ -1112,7 +1114,7 @@ function OrderSwitch({ order, onOrder, styles, colors }: { order: EveryoneOrder;
 }
 
 // ── The phone's Bells: the same sections as a list ───────────────────────────
-function PhoneSheet({ groups, office, entries, colors, isDark, styles, showMc, order, onOrder, canEditGoal, onEditGoal, onCellPress, onRowPress }: any) {
+function PhoneSheet({ groups, office, entries, colors, isDark, styles, showMc, weekEnding, order, onOrder, canEditGoal, onEditGoal, onCellPress, onRowPress }: any) {
   const openPerson = useOpenPerson();
   // A label and seven cells, lined up under the day letters.
   const statRow = (label: string, vals: (string | number)[], strong?: boolean) => (
@@ -1193,7 +1195,7 @@ function PhoneSheet({ groups, office, entries, colors, isDark, styles, showMc, o
                   ) : null}
                 </View>
                 {(e.days || []).slice(0, 7).map((d: Day, i: number) => {
-                  const look = cellForDay(d, colors, !!isDark);
+                  const look = cellForDay(d, colors, !!isDark, exitedBy(e, weekEnding, i));
                   return (
                     <TouchableOpacity key={i} style={[styles.lDay, styles.lDayW, look.bg ? { backgroundColor: look.bg } : null]} onPress={() => onCellPress?.(e, i)} activeOpacity={0.6}
                       accessibilityLabel={`${e.user_name}, ${DAYS_LONG[i]}: ${look.text}. Tap to edit`}>

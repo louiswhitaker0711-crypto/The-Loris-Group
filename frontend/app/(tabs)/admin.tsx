@@ -132,8 +132,8 @@ export default function AdminScreen() {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] });
       queryClient.invalidateQueries({ queryKey: ['new-hires'] });
       const msg = res.data?.reassigned > 0
-        ? `User deleted. ${res.data.reassigned} new starter(s) moved to Unassigned.`
-        : 'User deleted';
+        ? `Exited. ${res.data.reassigned} new starter(s) moved to Unassigned.`
+        : 'Exited. Their records are kept.';
       showAlert('Done', msg);
     },
   });
@@ -807,12 +807,13 @@ export default function AdminScreen() {
                                 </TouchableOpacity>
                               )}
                               {!u.is_super_admin && (
-                                <TouchableOpacity style={[styles.act, styles.actDanger]} onPress={() => showAlert('Delete', `Remove ${u.name}?`, [
+                                <TouchableOpacity style={[styles.act, styles.actDanger]} onPress={() => showAlert(`Exit ${u.name}?`,
+                                  `From today their Bells go red and they drop off everything going forward: Bells from next week, teams, plans and lists. They can no longer sign in. Their past numbers and records are kept.`, [
                                   { text: 'Cancel', style: 'cancel' },
-                                  { text: 'Delete', style: 'destructive', onPress: () => deleteMut.mutate(u.id) },
+                                  { text: 'Exit', style: 'destructive', onPress: () => deleteMut.mutate(u.id) },
                                 ])}>
-                                  <Ionicons name="trash-outline" size={14} color={colors.red} />
-                                  <Text style={[styles.actText, { color: colors.red }]}>Delete</Text>
+                                  <Ionicons name="exit-outline" size={14} color={colors.red} />
+                                  <Text style={[styles.actText, { color: colors.red }]}>Exit</Text>
                                 </TouchableOpacity>
                               )}
                             </View>
