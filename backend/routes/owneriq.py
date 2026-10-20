@@ -298,6 +298,20 @@ async def owneriq_relay_roster(request: Request):
     return {"ok": True, **res}
 
 
+@router.post("/owneriq/relay/log")
+async def owneriq_relay_log(request: Request):
+    """The relay script's diary: when tonight's pull started, finished or
+    failed (and why: signed out, blocked, a page OwnerIQ didn't have).
+    Body: {secret, event: started|done|failed|skipped, detail}."""
+    data = await _relay_body(request)
+    from core.owneriq_session import add_relay_log
+    event = str(data.get("event") or "")
+    if event not in ("started", "done", "failed", "skipped", "ready"):
+        raise HTTPException(status_code=400, detail="Unknown event")
+    await add_relay_log(event, str(data.get("detail") or ""))
+    return {"ok": True}
+
+
 @router.get("/owneriq/relay/status")
 async def owneriq_relay_status(request: Request):
     """Is the browser relay feeding the app, and when did it last post? Admin."""

@@ -112,6 +112,17 @@ export default function OwnerIQConnectScreen() {
             </>
           )}
         </View>
+        {(d.relay_log || []).length > 0 && (
+          <View style={[s.meta, { marginTop: 10 }]}>
+            <Text style={[s.metaLine, { fontWeight: '700' }]}>Nightly pull, latest first</Text>
+            {(d.relay_log || []).slice(0, 10).map((e: any, i: number) => (
+              <Text key={`${e.at}-${i}`} style={[s.metaLine, e.event === 'failed' ? { color: c.red } : e.event === 'done' ? { color: c.green } : null]}>
+                {when(e.at)} · {e.event === 'started' ? 'started' : e.event === 'done' ? 'finished' : e.event === 'failed' ? 'failed' : e.event}
+                {e.detail ? ` · ${e.detail}` : ''}
+              </Text>
+            ))}
+          </View>
+        )}
       </View>
 
       <View style={s.card}>

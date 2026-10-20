@@ -105,6 +105,17 @@ async def mark_relay_ingest(meta: dict | None = None) -> None:
         pass
 
 
+RELAY_LOG_KEEP = 20
+
+
+async def add_relay_log(event: str, detail: str = "") -> None:
+    """The relay's own diary (started / done / failed and why), newest last,
+    for Admin → OwnerIQ. Never counts as data arriving."""
+    entry = {"at": _now_iso(), "event": str(event)[:20], "detail": str(detail or "")[:300]}
+    await db.owneriq_session.update_one(
+        {"_id": "session"}, {"$push": {"relay_log": {"$each": [entry], "$slice": -RELAY_LOG_KEEP}}}, upsert=True)
+
+
 def _relay_is_fresh(doc: dict) -> bool:
     at = doc.get("relay_at")
     if not at:
@@ -240,6 +251,7 @@ async def status() -> dict:
             "email": email or None,
             "api_base": api_base(doc),
             "relay": {"active": True, "at": doc.get("relay_at"), **(doc.get("relay_meta") or {})},
+            "relay_log": list(reversed(doc.get("relay_log") or [])),
         }
     return {
         "state": doc.get("state") or (SIGNED_OUT if (doc.get("token") or password) else "off"),
@@ -254,6 +266,7 @@ async def status() -> dict:
         "email": email or None,
         "api_base": api_base(doc),
         "relay": {"active": False, "at": doc.get("relay_at")},
+        "relay_log": list(reversed(doc.get("relay_log") or [])),
     }
 
 

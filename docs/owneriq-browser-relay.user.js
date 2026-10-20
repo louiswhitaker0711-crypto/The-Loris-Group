@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OwnerIQ → The Loris Group relay
 // @namespace    the-loris-group
-// @version      2.1
+// @version      2.2
 // @description  Runs in the Owner's own logged-in OwnerIQ tab. Once a day, between 20:00 and 20:15, it reads the office's own data for that day (the same data the dashboard shows) and posts it to the app. Used because the UK edge blocks server-to-server calls; the Owner's real browser is allowed.
 // @match        https://owner-iq.ai/*
 // @run-at       document-idle
@@ -24,6 +24,10 @@
 //    someone tapping through the pages.
 //    A full pull takes a few minutes (longer on a busy day): leave the tab
 //    open until the console says "sync complete".
+//  • Tells the app each night when the pull started, finished or failed and
+//    why (signed out, blocked, a page OwnerIQ didn't have): Admin → OwnerIQ.
+//    A page that isn't there (404) is skipped; one step failing doesn't stop
+//    the others.
 //  • To pull straight away (e.g. to test): in this tab's console type
 //      oiqSyncNow()
 //    and press Enter.
@@ -77,17 +81,16 @@
   }
 
   // GET from OwnerIQ using the current session, a random 15-45 s after the last one.
+  // optional: a page that isn't there (404) gives null instead of an error.
   let lastCall = 0;
   const gap = () => GAP_MIN_MS + Math.floor(Math.random() * (GAP_MAX_MS - GAP_MIN_MS + 1));
-  async function oiq(path, params) {
-    const wait = lastCall + gap() - Date.now();
-    if (lastCall && wait > 0) await sleep(wait);
-    lastCall = Date.now();
+  const short = (path) => path.replace(/\/\d+/g, "/…");
+  async function get(path, params) {
     const tok = token();
     if (!tok) throw new Error("not-logged-in");
     const url = new URL(OIQ + path);
     (params || []).forEach(([k, v]) => url.searchParams.append(k, v));
-    const r = await fetch(url.toString(), {
+    return fetch(url.toString(), {
       method: "GET",
       headers: {
         "accept": "application/vnd.api+json, application/json, text/plain, */*",
@@ -97,9 +100,27 @@
         "authorization": "Bearer " + tok,
       },
     });
-    if (r.status === 401) throw new Error("session-expired");
-    if (!r.ok) throw new Error(`${path} HTTP ${r.status}`);
+  }
+  async function oiq(path, params, optional) {
+    const wait = lastCall + gap() - Date.now();
+    if (lastCall && wait > 0) await sleep(wait);
+    lastCall = Date.now();
+    let r = await get(path, params);
+    if (r.status === 401) {
+      // The session may have just been refreshed: read it again and try once more.
+      await sleep(5000);
+      r = await get(path, params);
+      if (r.status === 401) throw new Error("session-expired");
+    }
+    if (r.status === 403 || r.status === 429) throw new Error(`blocked (HTTP ${r.status} on ${short(path)})`);
+    if (r.status === 404 && optional) { warn(`skipped ${short(path)} (not found)`); return null; }
+    if (!r.ok) throw new Error(`HTTP ${r.status} on ${short(path)}`);
     return r.json();
+  }
+
+  // The relay's diary in the app (Admin → OwnerIQ).
+  async function report(event, detail) {
+    try { await toApp("/api/owneriq/relay/log", { event, detail: detail || "" }); } catch (e) { /* best effort */ }
   }
 
   // POST to the app (text/plain: no CORS preflight; the app checks the secret).
@@ -195,7 +216,8 @@
     const doorsOf = (m) => [m.doors, m.doors_knocked, (m.hero || {}).doors, (m.kpis || {}).doors_knocked, (m.stats || {}).doors]
       .find((v) => typeof v === "number");
     for (const s of worked) {
-      const sd = await oiq(`/v3/owner/live_operations/sectors/${s.id}`, [["date", date]]);
+      const sd = await oiq(`/v3/owner/live_operations/sectors/${s.id}`, [["date", date]], true);
+      if (!sd) continue;
       sectors[s.id] = sd;
       const members = (sd.members || []).filter((m) => m.id != null);
       // Only the BAs who knocked doors today (by today's KPIs; else by the
@@ -205,7 +227,8 @@
         const d = doorsOf(m);
         const out = idsMatch ? !knocked.has(String(m.id)) : (d !== undefined && d <= 0);
         if (out) continue;
-        bas[m.id] = await oiq(`/v3/owner/live_operations/bas/${m.id}`, [["date", date]]);
+        const b = await oiq(`/v3/owner/live_operations/bas/${m.id}`, [["date", date]], true);
+        if (b) bas[m.id] = b;
       }
     }
     await toApp("/api/owneriq/relay/live", { date, top, sectors, bas });
@@ -220,16 +243,12 @@
     for (const mc of await companyIds()) {
       const mcView = await oiq(`/v3/owner/bells_performance/marketing_companies/${mc}`, [["week_start_on", ws]]);
       views.push({ kind: "mc", ref: mc, payload: mcView });
-      try {
-        const noTeam = await oiq(`/v3/owner/bells_performance/marketing_companies/${mc}/no_team`, [["week_start_on", ws]]);
-        views.push({ kind: "no_team", ref: mc, payload: noTeam });
-      } catch (e) {
-        if (e.message === "session-expired" || e.message === "not-logged-in") throw e;
-      }
+      const noTeam = await oiq(`/v3/owner/bells_performance/marketing_companies/${mc}/no_team`, [["week_start_on", ws]], true);
+      if (noTeam) views.push({ kind: "no_team", ref: mc, payload: noTeam });
       for (const t of (mcView.teams || [])) {
         if (t.id == null) continue;
-        const tv = await oiq(`/v3/owner/bells_performance/teams/${t.id}`, [["week_start_on", ws]]);
-        views.push({ kind: "team", ref: t.id, payload: tv });
+        const tv = await oiq(`/v3/owner/bells_performance/teams/${t.id}`, [["week_start_on", ws]], true);
+        if (tv) views.push({ kind: "team", ref: t.id, payload: tv });
       }
     }
     if (views.length) await toApp("/api/owneriq/relay/hub", { week_start: ws, views });
@@ -246,21 +265,42 @@
     if (running) return;
     const today = iso(new Date());
     if (!force && doneFor() === today) return;
-    if (!token()) { warn("Not logged in to OwnerIQ — sign in at owner-iq.ai and the 20:00 pull will run."); return; }
+    if (!token()) {
+      warn("Not logged in to OwnerIQ — sign in at owner-iq.ai and the pull will run.");
+      report("skipped", "signed out of OwnerIQ");
+      return;
+    }
     running = true;
     pinsCache = null; idsCache = null; lastCall = 0; knocked = new Set();
     log("pulling today's data (15-45 s between requests — leave this tab open)…");
+    report("started", "");
+    const steps = [["roster", syncRoster], ["KPIs", syncKpis], ["Live Ops", syncLive], ["Hub", syncHub]];
+    const failed = [];
     try {
-      await syncRoster();
-      await syncKpis();
-      await syncLive();
-      await syncHub();
-      markDone(today);
-      log("sync complete", new Date().toLocaleTimeString());
-    } catch (e) {
-      if (e.message === "session-expired") warn("OwnerIQ session expired — sign in again; it will retry within the hour.");
-      else if (e.message === "not-logged-in") warn("Not logged in to OwnerIQ.");
-      else warn("sync failed:", e.message, "— it will retry within the hour.");
+      for (const [name, fn] of steps) {
+        try {
+          await fn();
+        } catch (e) {
+          const why = e.message === "session-expired" ? "OwnerIQ said signed out (401)"
+            : e.message === "not-logged-in" ? "signed out of OwnerIQ" : e.message;
+          warn(`${name} failed: ${why}`);
+          failed.push(`${name}: ${why}`);
+          // Signed out or blocked: stop, the rest would fail the same way.
+          if (/signed out|blocked/.test(why)) break;
+        }
+      }
+      if (failed.length) {
+        // Retry later only if nothing got through (signed out / blocked); a
+        // part-pull counts as tonight's pull, so OwnerIQ isn't asked twice.
+        const nothing = failed.length === steps.length || /signed out|blocked/.test(failed[0]) && failed[0].startsWith("roster");
+        report("failed", failed.join("; ") + (nothing ? " — will retry within the hour" : " — the other steps went through"));
+        if (nothing) warn("sync failed — it will retry within the hour.");
+        else { markDone(today); warn("sync partly done — see Admin → OwnerIQ in the app."); }
+      } else {
+        markDone(today);
+        report("done", `${knocked.size} BA(s) knocked today`);
+        log("sync complete", new Date().toLocaleTimeString());
+      }
     } finally {
       running = false;
     }
