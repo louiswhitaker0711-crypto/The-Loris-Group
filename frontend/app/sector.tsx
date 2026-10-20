@@ -1,5 +1,5 @@
 // Sector set-up and breakdown, in the office's WhatsApp layout. Breakdown
-// numbers come in from OwnerIQ and Bells; tomorrow's set-up is prompted from
+// numbers are typed in here (sign-ups pre-fill from Bells); tomorrow's set-up is prompted from
 // today's "Change". Share either to the group in one tap, and send each person
 // their own set-up as a notification. (backend routes/sector.py)
 import React, { useEffect, useMemo, useState } from 'react';
@@ -41,6 +41,11 @@ function label(iso: string) {
   const [y, m, d] = iso.split('-').map(Number);
   return new Date(y, m - 1, d).toLocaleDateString(APP_LOCALE, { weekday: 'long', day: 'numeric', month: 'short' });
 }
+// The office does no breakdown on a Saturday (field 10:00–17:00, no Primetime after).
+function isSaturday(iso: string) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay() === 6;
+}
 const num = (v: string) => (v.trim() === '' ? null : Math.max(0, parseInt(v, 10) || 0));
 
 export default function SectorScreen() {
@@ -57,7 +62,8 @@ export default function SectorScreen() {
   const q = useQuery({ queryKey: ['sector-day', date], queryFn: () => apiService.getSectorDay(date).then((r) => r.data) });
   const people: Person[] = q.data?.people || [];
   const opts = q.data?.options;
-  const text: string = q.data?.whatsapp?.[mode] || '';
+  const satNoBreakdown = mode === 'breakdown' && isSaturday(date);
+  const text: string = satNoBreakdown ? '' : q.data?.whatsapp?.[mode] || '';
   const hasText = text.split('\n').length > 1;
   // A BA only sees themselves: open their card straight away.
   useEffect(() => { if (people.length === 1 && open === null) setOpen(people[0].user_id); }, [people.length]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -90,7 +96,7 @@ export default function SectorScreen() {
       <Text style={s.muted}>
         {mode === 'setup'
           ? 'Goal, KPI, focus and a positive for each person. Yesterday’s "Change" shows as a suggestion for the focus.'
-          : 'Doors / spoken / pitched / closed and sign-ups come in from OwnerIQ and Bells. Add what they’re proud of and what they’ll change.'}
+          : 'Type in doors / spoken / pitched / closed (sign-ups fill in from Bells), then what they’re proud of and what they’ll change. These numbers feed the KPIs and Bells.'}
       </Text>
 
       {!!q.data?.sector?.planned_by && mode === 'setup' && (
@@ -113,7 +119,14 @@ export default function SectorScreen() {
           suggested={people.reduce((a, p) => a + (p.setup?.goal || 0), 0)} onSaved={() => q.refetch()} s={s} c={c} />
       )}
 
-      {!!q.data?.can_manage && !!q.data?.sector && mode === 'breakdown' && (
+      {satNoBreakdown && (
+        <View style={s.card}>
+          <Text style={s.h}>No breakdown on a Saturday</Text>
+          <Text style={s.muted}>Saturday's numbers still come in from Bells. Use the arrows for Friday's or Monday's breakdown.</Text>
+        </View>
+      )}
+
+      {!!q.data?.can_manage && !!q.data?.sector && mode === 'breakdown' && !satNoBreakdown && (
         <View style={s.card}>
           <Text style={s.h}>🗺️ Today's map</Text>
           <Text style={s.muted}>Press Mark done and draw over the streets worked today in black, on top of the coloured areas. Remove anything that wasn't done, then Save the map: the black lines are kept and the coloured plan comes off.</Text>
@@ -121,7 +134,7 @@ export default function SectorScreen() {
         </View>
       )}
 
-      {q.isLoading ? <ActivityIndicator color={c.primary} /> : people.map((p) => (
+      {satNoBreakdown ? null : q.isLoading ? <ActivityIndicator color={c.primary} /> : people.map((p) => (
         mode === 'setup'
           ? <SetupCard key={p.user_id + date} p={p} date={date} opts={opts} codOptions={q.data?.cod_options || []} open={open === p.user_id}
               onToggle={() => setOpen(open === p.user_id ? null : p.user_id)} onSaved={() => q.refetch()} s={s} c={c} />
@@ -129,9 +142,9 @@ export default function SectorScreen() {
               onToggle={() => setOpen(open === p.user_id ? null : p.user_id)} onSaved={() => q.refetch()} s={s} c={c} />
       ))}
 
-      {mode === 'breakdown' && !!q.data?.sector && <BreakdownPrimetime date={date} />}
+      {mode === 'breakdown' && !satNoBreakdown && !!q.data?.sector && <BreakdownPrimetime date={date} />}
 
-      {mode === 'breakdown' && !!q.data?.sector && (
+      {mode === 'breakdown' && !satNoBreakdown && !!q.data?.sector && (
         <PostBreakdown date={date} postedAt={q.data.sector.breakdown_posted_at || null}
           missing={people.filter((p) => !p.breakdown).map((p) => p.user_name.split(' ')[0])}
           onPosted={() => q.refetch()} s={s} c={c} />
