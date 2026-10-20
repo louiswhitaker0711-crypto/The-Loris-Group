@@ -68,6 +68,12 @@ function RecruitBadge({ e, colors, z = 1 }: { e: Entry; colors: any; z?: number 
   );
 }
 
+/** 'first' on the day someone exited, 'after' for the days after, else false. */
+function exitState(e: Entry, weekEnding: string, i: number): false | 'first' | 'after' {
+  if (!exitedBy(e, weekEnding, i)) return false;
+  return i > 0 && exitedBy(e, weekEnding, i - 1) ? 'after' : 'first';
+}
+
 /** The team for people who aren't in a named team yet (the Owner's own). */
 const MINI_TEAM = `Mini ${APP_SHORT_NAME}`;
 const MINI_KEY = '__no_team__';
@@ -331,10 +337,11 @@ function absDateTime(iso?: string | null): string {
 // A day cell the way the sheet colours it: in with 2+ sign-ups green, 1 amber,
 // 0 red; off is a dash; the absence codes keep their letters.
 type DayLook = { text: string; fg: string; bg?: string };
-function cellForDay(d: Day, c: typeof colors, dark: boolean, exited = false): DayLook {
+function cellForDay(d: Day, c: typeof colors, dark: boolean, exited: false | 'first' | 'after' = false): DayLook {
   const red = dark ? '#fca5a5' : '#b91c1c';
-  // Exited (removed by an Admin): red from that day on.
-  if (exited) return { text: 'EX', fg: '#ffffff', bg: dark ? '#b91c1c' : '#dc2626' };
+  // Exited (removed by an Admin): EX on the day they left, then a soft red.
+  if (exited === 'first') return { text: 'EX', fg: '#ffffff', bg: dark ? '#b91c1c' : '#dc2626' };
+  if (exited === 'after') return { text: '', fg: red, bg: dark ? 'rgba(239,68,68,0.18)' : 'rgba(239,68,68,0.12)' };
   const amber = dark ? '#fcd34d' : '#b45309';
   const green = dark ? '#86efac' : '#166534';
   if (d.status === 'off') return { text: '–', fg: c.textMuted };
@@ -1033,7 +1040,7 @@ function BodyContent({ groups, office, colors, isDark, styles, z, w, totalW, sho
                         <Text style={[styles.cellText, styles.softText, { fontSize: cellFont }]}>{e.break_even != null ? String(e.break_even) : '–'}</Text>
                       </TouchableOpacity>
                       {(e.days || []).slice(0, 7).map((d: Day, i: number) => {
-                        const look = cellForDay(d, colors, !!isDark, exitedBy(e, weekEnding, i));
+                        const look = cellForDay(d, colors, !!isDark, exitState(e, weekEnding, i));
                         return (
                           <TouchableOpacity key={i} style={[styles.cell, { width: w.day, height: rowH }]} onPress={() => onCellPress?.(e, i)} activeOpacity={0.6}>
                             <View style={[styles.dayPill, { minWidth: 30 * z, height: 24 * z, borderRadius: 7 * z }, look.bg ? { backgroundColor: look.bg } : null]}>
@@ -1231,24 +1238,28 @@ function PhoneSheet({ groups, office, entries, colors, isDark, styles, showMc, w
               <View key={e.user_id || idx} style={styles.lRow}>
                 <View style={[styles.lTeam, { backgroundColor: tint.border }]} />
                 <View style={styles.lNameWrap}>
-                  {light ? <View style={[styles.lightDot, { backgroundColor: light.color, marginRight: 5 }]} /> : null}
-                  {/* Name opens their page (Coaches and Admins); the goal opens the goal. */}
-                  <TouchableOpacity onPress={openPerson(e) || (() => onRowPress?.(e))} activeOpacity={0.6} style={{ flexShrink: 1 }}
-                    accessibilityRole="link" accessibilityLabel={`Open ${e.user_name}`}>
-                    <Text style={styles.lName} numberOfLines={1}>{e.user_name}</Text>
+                  {/* Line 1: the name (opens their page) and PR / OR. */}
+                  <View style={styles.lLine}>
+                    {light ? <View style={[styles.lightDot, { backgroundColor: light.color, marginRight: 5 }]} /> : null}
+                    <TouchableOpacity onPress={openPerson(e) || (() => onRowPress?.(e))} activeOpacity={0.6} style={{ flexShrink: 1 }}
+                      accessibilityRole="link" accessibilityLabel={`Open ${e.user_name}`}>
+                      <Text style={styles.lName} numberOfLines={1}>{e.user_name}</Text>
+                    </TouchableOpacity>
+                    <RecruitBadge e={e} colors={colors} />
+                  </View>
+                  {/* Line 2: goal and last week, each tinted by its zone. Tap to change the goal. */}
+                  <TouchableOpacity onPress={() => onRowPress?.(e)} activeOpacity={0.6} hitSlop={4} style={[styles.lLine, { marginTop: 2, marginLeft: light ? 11 : 0 }]}
+                    accessibilityLabel={`${e.user_name}: goal ${e.weekly_goal ?? 'not set'}, last week ${e.last_week_total ?? 'none'}. Tap to change the goal`} testID={`bells-goal-${e.user_id || idx}`}>
+                    <Text style={[styles.lPill, gLook ? { color: gLook.fg, backgroundColor: gLook.bg } : { color: colors.textMuted }]} numberOfLines={1}>
+                      Goal {e.weekly_goal ?? '–'}
+                    </Text>
+                    {e.last_week_total != null && lLook ? (
+                      <Text style={[styles.lPill, { color: lLook.fg, backgroundColor: lLook.bg, marginLeft: 4 }]} numberOfLines={1}>LW {e.last_week_total}</Text>
+                    ) : null}
                   </TouchableOpacity>
-                  <RecruitBadge e={e} colors={colors} />
-                  <TouchableOpacity onPress={() => onRowPress?.(e)} activeOpacity={0.6} hitSlop={6}
-                    accessibilityLabel={`${e.user_name}: goal ${e.weekly_goal ?? 'not set'}. Tap to change`} testID={`bells-goal-${e.user_id || idx}`}>
-                    <Text style={[styles.lGoal, gLook && { color: gLook.fg, backgroundColor: gLook.bg, paddingHorizontal: 3, borderRadius: 4 }]}>/{e.weekly_goal ?? '–'}</Text>
-                  </TouchableOpacity>
-                  {e.last_week_total != null && lLook ? (
-                    <Text style={[styles.lGoal, { color: lLook.fg, backgroundColor: lLook.bg, paddingHorizontal: 3, borderRadius: 4, marginLeft: 3 }]}
-                      accessibilityLabel={`Last week: ${e.last_week_total}`}>LW {e.last_week_total}</Text>
-                  ) : null}
                 </View>
                 {(e.days || []).slice(0, 7).map((d: Day, i: number) => {
-                  const look = cellForDay(d, colors, !!isDark, exitedBy(e, weekEnding, i));
+                  const look = cellForDay(d, colors, !!isDark, exitState(e, weekEnding, i));
                   return (
                     <TouchableOpacity key={i} style={[styles.lDay, styles.lDayW, look.bg ? { backgroundColor: look.bg } : null]} onPress={() => onCellPress?.(e, i)} activeOpacity={0.6}
                       accessibilityLabel={`${e.user_name}, ${DAYS_LONG[i]}: ${look.text}. Tap to edit`}>
@@ -1392,7 +1403,9 @@ const createStyles = (colors: any) => StyleSheet.create({
   lRow: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 6, paddingVertical: 2, borderTopWidth: 1, borderTopColor: colors.border, minHeight: 30 },
   lHead: { fontFamily: fonts.bodyBold, fontSize: 10.5, color: colors.textMuted, textAlign: 'center' },
   lTeam: { width: 3, alignSelf: 'stretch', borderRadius: 2, marginRight: 3 },
-  lNameWrap: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', paddingVertical: 4 },
+  lNameWrap: { flex: 1, minWidth: 0, paddingVertical: 4 },
+  lLine: { flexDirection: 'row', alignItems: 'center', minWidth: 0 },
+  lPill: { fontFamily: fonts.bodySemibold, fontSize: 10, paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4, overflow: 'hidden' },
   lName: { flexShrink: 1, fontFamily: fonts.bodySemibold, fontSize: 12.5, color: colors.text },
   lGoal: { fontFamily: fonts.body, fontSize: 11, color: colors.textMuted, marginLeft: 2 },
   lDayW: { width: 25 },
