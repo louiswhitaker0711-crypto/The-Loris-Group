@@ -18,7 +18,7 @@ import { dayBandLook } from '../../utils/dayBands';
 import { APP_LOCALE, APP_TZ, formatMoney } from '../../utils/appTime';
 import { centerNotice } from '../../utils/centerNotice';
 import { APP_SHORT_NAME } from '../../theme/brand';
-import { SUPER_GREEN_WEEK_MIN, GREEN_WEEK_MIN, AMBER_WEEK_MIN, RED_WEEK_MAX } from '../../utils/weekBands';
+import { SUPER_GREEN_WEEK_MIN, GREEN_WEEK_MIN, AMBER_WEEK_MIN, RED_WEEK_MAX, weekBandLook } from '../../utils/weekBands';
 
 // ─────────────────────────────────────────────────────────────────────
 // The weekly Bells sheet, laid out like the office's own spreadsheet.
@@ -35,6 +35,8 @@ import { SUPER_GREEN_WEEK_MIN, GREEN_WEEK_MIN, AMBER_WEEK_MIN, RED_WEEK_MAX } fr
 // average per day. Each band also says what share of the office's sign-ups
 // the team has brought in.
 //
+// Goal and LW sit in their own ruled-off block, each tinted by its weekly zone
+// (Red under 8, Amber 8–14, Green 15–19, Super Green 20+: utils/weekBands).
 // A day cell is tinted the way the sheet colours it: 2 or more green, 1 amber,
 // 0 red; a day off is a dash. Tap a day to edit it, a Goal or B/E to change
 // it, a team's goal to set it.
@@ -87,6 +89,11 @@ function trafficLight(e: Entry): { color: string; label: string } | undefined {
   const alsoRedPrev = ppw != null && ppw <= RED_WEEK_MAX;
   return alsoRedPrev ? { color: '#991b1b', label: 'Red two weeks running' } : { color: '#ef4444', label: 'Red last week' };
 }
+
+// The rule either side of the Goal · LW block.
+const BLOCK_RULE = 2;
+const blockLeft = (c: any) => ({ borderLeftWidth: BLOCK_RULE, borderLeftColor: c.text });
+const blockRight = (c: any) => ({ borderRightWidth: BLOCK_RULE, borderRightColor: c.text });
 
 /** A team's (or the office's) week, summed from its rows. */
 type Tally = {
@@ -598,8 +605,8 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
       </View>
       {head('Coach', w.coach, { alignItems: 'flex-start', paddingHorizontal: 8 * z })}
       {head('Stage', w.stage)}
-      {head('Goal', w.goal)}
-      {head('LW', w.lw)}
+      {head('Goal', w.goal, blockLeft(colors))}
+      {head('LW', w.lw, blockRight(colors))}
       {head('B/E', w.be)}
       {DAYS.map((d, i) => (
         <TouchableOpacity key={i} style={[styles.headerCell, { width: w.day, height: HEAD_H }]} onLongPress={() => handleClearDay(i, d)} delayLongPress={600}>
@@ -902,7 +909,9 @@ function BodyContent({ groups, office, colors, isDark, styles, z, w, totalW, sho
       <View style={[styles.cell, styles.nameCell, stickyNameCol, { width: w.name, height: slimH, backgroundColor: colors.surface }]}>
         <Text style={[styles.slimLabel, { fontSize: small }]} numberOfLines={1}>{label}</Text>
       </View>
-      <View style={{ width: w.coach + w.stage + w.goal + w.lw + w.be }} />
+      <View style={{ width: w.coach + w.stage }} />
+      <View style={[{ width: w.goal + w.lw, height: slimH }, blockLeft(colors), blockRight(colors)]} />
+      <View style={{ width: w.be }} />
       {days.map((v, i) => (
         <View key={i} style={[styles.cell, { width: w.day, height: slimH }]}><Text style={[styles.slimText, { fontSize: small }]}>{v}</Text></View>
       ))}
@@ -917,8 +926,10 @@ function BodyContent({ groups, office, colors, isDark, styles, z, w, totalW, sho
         <Text style={[styles.totalLabel, { fontSize: cellFont }]} numberOfLines={1}>{label}</Text>
       </View>
       <View style={{ width: w.coach + w.stage }} />
-      <View style={[styles.cell, { width: w.goal, height: rowH }]}>{goal}</View>
-      {num(t.lastWeek ?? '–', w.lw, styles.totalText)}
+      <View style={[styles.cell, { width: w.goal, height: rowH }, blockLeft(colors)]}>{goal}</View>
+      <View style={[styles.cell, { width: w.lw, height: rowH }, blockRight(colors)]}>
+        <Text style={[styles.cellText, { fontSize: cellFont }, styles.totalText]} numberOfLines={1}>{t.lastWeek ?? '–'}</Text>
+      </View>
       <View style={{ width: w.be }} />
       {t.sales.map((v, i) => <React.Fragment key={i}>{num(v, w.day, styles.totalText)}</React.Fragment>)}
       {num(t.total, w.tot, styles.totalBig)}
@@ -932,6 +943,9 @@ function BodyContent({ groups, office, colors, isDark, styles, z, w, totalW, sho
   const personRow = (e: Entry, idx: number, g: Group) => {
                   const isLeader = e.user_id === g.leader_id;
                   const light = trafficLight(e);
+                  // Goal and LW tinted by the weekly zone they fall in.
+                  const goalLook = e.weekly_goal != null ? weekBandLook(Number(e.weekly_goal) || 0, !!isDark) : null;
+                  const lwLook = e.last_week_total != null ? weekBandLook(Number(e.last_week_total) || 0, !!isDark) : null;
                   return (
                     <View key={e.user_id || idx} style={[styles.bodyRow, { width: totalW }]}>
                       {/* The frozen name cell is OPAQUE, always, or the scrolling
@@ -949,11 +963,17 @@ function BodyContent({ groups, office, colors, isDark, styles, z, w, totalW, sho
                         <Text style={[styles.softText, { fontSize: 12 * z }]} numberOfLines={1}>{firstName(e.coach_name) || '–'}</Text>
                       </View>
                       {num(e.stage_label || '–', w.stage, styles.softText)}
-                      <TouchableOpacity style={[styles.cell, { width: w.goal, height: rowH }]} onPress={() => onRowPress?.(e)} activeOpacity={0.6}
+                      <TouchableOpacity style={[styles.cell, { width: w.goal, height: rowH }, blockLeft(colors), goalLook && { backgroundColor: goalLook.bg }]}
+                        onPress={() => onRowPress?.(e)} activeOpacity={0.6}
                         accessibilityLabel={`${e.user_name}'s goal: ${e.weekly_goal ?? 'not set'}. Tap to change`} testID={`bells-goal-${e.user_id || idx}`}>
-                        <Text style={[styles.cellText, { fontSize: cellFont }, e.weekly_goal == null && styles.softText]}>{e.weekly_goal != null ? String(e.weekly_goal) : '–'}</Text>
+                        <Text style={[styles.cellText, { fontSize: cellFont }, e.weekly_goal == null && styles.softText, goalLook && { color: goalLook.fg }]}>{e.weekly_goal != null ? String(e.weekly_goal) : '–'}</Text>
                       </TouchableOpacity>
-                      {num(e.last_week_total != null ? String(e.last_week_total) : '–', w.lw, styles.softText)}
+                      <View style={[styles.cell, { width: w.lw, height: rowH }, blockRight(colors), lwLook && { backgroundColor: lwLook.bg }]}
+                        accessibilityLabel={`Last week: ${e.last_week_total ?? 'none'}`}>
+                        <Text style={[styles.cellText, { fontSize: cellFont }, lwLook ? { color: lwLook.fg } : styles.softText]} numberOfLines={1}>
+                          {e.last_week_total != null ? String(e.last_week_total) : '–'}
+                        </Text>
+                      </View>
                       <TouchableOpacity style={[styles.cell, { width: w.be, height: rowH }]} onPress={() => onRowPress?.(e)} activeOpacity={0.6}
                         accessibilityLabel={`${e.user_name}'s break-even: ${e.break_even ?? 'not set'}. Tap to change`}>
                         <Text style={[styles.cellText, styles.softText, { fontSize: cellFont }]}>{e.break_even != null ? String(e.break_even) : '–'}</Text>
@@ -1151,6 +1171,8 @@ function PhoneSheet({ groups, office, entries, colors, isDark, styles, showMc, o
             }
             const e = it.e;
             const light = trafficLight(e);
+            const gLook = e.weekly_goal != null ? weekBandLook(Number(e.weekly_goal) || 0, !!isDark) : null;
+            const lLook = e.last_week_total != null ? weekBandLook(Number(e.last_week_total) || 0, !!isDark) : null;
             return (
               <View key={e.user_id || idx} style={styles.lRow}>
                 <View style={[styles.lTeam, { backgroundColor: tint.border }]} />
@@ -1163,8 +1185,12 @@ function PhoneSheet({ groups, office, entries, colors, isDark, styles, showMc, o
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => onRowPress?.(e)} activeOpacity={0.6} hitSlop={6}
                     accessibilityLabel={`${e.user_name}: goal ${e.weekly_goal ?? 'not set'}. Tap to change`} testID={`bells-goal-${e.user_id || idx}`}>
-                    <Text style={styles.lGoal}>/{e.weekly_goal ?? '–'}</Text>
+                    <Text style={[styles.lGoal, gLook && { color: gLook.fg, backgroundColor: gLook.bg, paddingHorizontal: 3, borderRadius: 4 }]}>/{e.weekly_goal ?? '–'}</Text>
                   </TouchableOpacity>
+                  {e.last_week_total != null && lLook ? (
+                    <Text style={[styles.lGoal, { color: lLook.fg, backgroundColor: lLook.bg, paddingHorizontal: 3, borderRadius: 4, marginLeft: 3 }]}
+                      accessibilityLabel={`Last week: ${e.last_week_total}`}>LW {e.last_week_total}</Text>
+                  ) : null}
                 </View>
                 {(e.days || []).slice(0, 7).map((d: Day, i: number) => {
                   const look = cellForDay(d, colors, !!isDark);

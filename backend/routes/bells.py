@@ -74,6 +74,23 @@ def _empty_day() -> dict:
     return {"over30": None, "under30": None, "memberships": None, "status": "off"}
 
 
+SUNDAY = 6
+
+
+def _sunday_ns(days):
+    """Nobody really plans Sunday, so it reads Not scheduled ('ab', NS) for
+    everyone unless someone changes it: an untouched Sunday ('off', no
+    numbers) becomes 'ab'. Any other status, or any number, is kept."""
+    if not isinstance(days, list) or len(days) <= SUNDAY or not isinstance(days[SUNDAY], dict):
+        return days
+    d = days[SUNDAY]
+    if (d.get("status") or "off") == "off" and not any((_num_or_none(d.get(k)) or 0) > 0
+                                                      for k in ("over30", "under30", "memberships")):
+        days = list(days)
+        days[SUNDAY] = {**d, "status": "ab"}
+    return days
+
+
 def _is_in_day(d: dict) -> bool:
     """A day counts as 'in' (working) for piece-average and scoring purposes ONLY when
     status is explicitly 'in'. RT, NC, Off (and legacy 'normal') are excluded."""
@@ -122,7 +139,7 @@ def _normalize_days(raw) -> list:
             "memberships": memberships,
             "status": raw_status,
         })
-    return out
+    return _sunday_ns(out)
 
 
 def _num_or_none(v):
@@ -1061,6 +1078,7 @@ async def list_bells(
     reps_active = 0
     reps_green = 0
     for e in entries:
+        e["days"] = _sunday_ns(e.get("days"))
         t = compute_totals(e, fees)
         e.update(t)
         key = e.get("user_id") or (e.get("user_name") or "").strip().lower()
@@ -2387,6 +2405,7 @@ async def _public_bells_payload(office_slug: str, week: Optional[str], code: Opt
     reps_active = 0
     reps_green = 0
     for e in entries:
+        e["days"] = _sunday_ns(e.get("days"))
         t = compute_totals(e, fees)
         e.update(t)
         key = e.get("user_id") or (e.get("user_name") or "").strip().lower()
