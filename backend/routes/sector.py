@@ -1041,7 +1041,8 @@ LOA_DAY = {"doors": 120, "spoken": 70, "pitched": 25, "closed": 15, "sales": 4}
 def averages_from(days: list[dict]) -> dict:
     """Your field days → an average day, and what one sign-up takes. With no
     sign-ups yet, what one takes comes from the Law of Averages."""
-    days = [x for x in days if (x.get("doors") or 0) > 0]
+    from core.kpi_rules import day_counts
+    days = [x for x in days if day_counts(x.get("doors"), x.get("spoken"), x.get("pitched"), x.get("closed"))]
     n = len(days)
     keys = ("doors", "spoken", "pitched", "closed", "sales")
     tot = {k: sum(int(x.get(k) or 0) for x in days) for k in keys}

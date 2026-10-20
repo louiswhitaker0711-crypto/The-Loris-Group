@@ -1,9 +1,10 @@
 """Weekly Bulletin — cross-office leaderboards rendered Monday-morning style.
 
 Returns countrywide, read-only weekly rankings derived from Bells data:
-  1. top_sales        — Top 5 brand ambassadors by total sales (no minimum)
-  2. top_membership   — Top 5 by memberships / sales %, min 10 sales
-  3. top_gold         — Top 5 by over30 / sales % (Gold = $30+), min 10 sales
+  1. top_sales        — Top 5 BAs by total sign-ups, 10+ sign-ups to appear
+  2. top_membership   — Top 5 by memberships (The Round) / sales %, min 8 sign-ups
+  3. top_gold         — Top 5 by over30 / sales % (Gold = £10+ order), min 8 sign-ups
+(the Owner's thresholds, 20 Oct 2026)
 
 Tie-breaker (per user spec): higher total sales wins.
 Permissions: admins and leaders. These endpoints expose only the intentionally
@@ -20,8 +21,10 @@ from routes.bells import compute_totals
 
 router = APIRouter()
 
-# Minimum total sales required to qualify for the % leaderboards.
-MIN_SALES_FOR_PCT = 10
+# Sign-ups needed to appear on the bulletin's Top BAs board…
+MIN_SALES_FOR_TOP = 10
+# …and on the Gold % and The Round % boards.
+MIN_SALES_FOR_PCT = 8
 TOP_N = 5
 
 
@@ -197,6 +200,7 @@ async def bulletin_weekly(request: Request, week_ending: Optional[str] = None):
         return {
             "week_ending": week_ending,
             "min_sales_pct": MIN_SALES_FOR_PCT,
+            "min_sales_top": MIN_SALES_FOR_TOP,
             "top_sales": [],
             "top_membership": [],
             "top_gold": [],
@@ -258,6 +262,7 @@ async def bulletin_weekly(request: Request, week_ending: Optional[str] = None):
         return {
             "week_ending": week_ending,
             "min_sales_pct": MIN_SALES_FOR_PCT,
+            "min_sales_top": MIN_SALES_FOR_TOP,
             "top_sales": [],
             "top_membership": [],
             "top_gold": [],
@@ -300,7 +305,7 @@ async def bulletin_weekly(request: Request, week_ending: Optional[str] = None):
     all_reps = list(per_rep.values())
 
     top_sales = sorted(
-        all_reps,
+        [r for r in all_reps if r["sales"] >= MIN_SALES_FOR_TOP],
         key=lambda r: (-r["sales"], -r["earnings"], r["user_name"].lower()),
     )[:TOP_N]
     top_sales_out = [{
@@ -348,6 +353,7 @@ async def bulletin_weekly(request: Request, week_ending: Optional[str] = None):
     return {
         "week_ending": week_ending,
         "min_sales_pct": MIN_SALES_FOR_PCT,
+        "min_sales_top": MIN_SALES_FOR_TOP,
         "top_sales": top_sales_out,
         "top_membership": top_membership_out,
         "top_gold": top_gold_out,
