@@ -87,7 +87,12 @@ def clean_setup(body: dict) -> dict:
     cod = str(body.get("cod_module_id") or "").strip()[:64] or None
     return {"goal": _int(body.get("goal"), 0, 30), "kpi_metric": metric or None,
             "kpi_target": _int(body.get("kpi_target"), 0, 300), "focus": _text(body.get("focus")),
-            "positive": _text(body.get("positive")), "cod_module_id": cod}
+            "positive": _text(body.get("positive")), "cod_module_id": cod,
+            # Stage 1-2: who's teaching them today (someone in their sector).
+            "teacher_id": str(body.get("teacher_id") or "").strip()[:64] or None,
+            # Stage 3+: what they're being an example of — a COD item, or their own words.
+            "example_module_id": str(body.get("example_module_id") or "").strip()[:64] or None,
+            "example_text": _text(body.get("example_text"))}
 
 
 # ── COD learning in the set-up ──────────────────────────────────────────────
@@ -115,10 +120,12 @@ async def cod_pick_stages(target: dict) -> list[int]:
 
 
 async def cod_options(office_id) -> list[dict]:
-    """The office's COD items a set-up can pick from (Stages 1-2), in order."""
+    """The office's COD items a set-up can pick from, in order. Learning (Stage
+    1-2) picks from their own stage or below; "an example of" (Stage 3+) from
+    any stage."""
     return [{"id": m["id"], "stage": m.get("stage"), "topic": m.get("topic"), "category": m.get("category")}
             async for m in db.training_modules.find(
-                {"office_id": office_id, "stage": {"$in": list(COD_PICK_STAGES)}, "retired": {"$ne": True}},
+                {"office_id": office_id, "stage": {"$in": [1, 2, 3, 4, 5]}, "retired": {"$ne": True}},
                 {"_id": 0, "id": 1, "stage": 1, "topic": 1, "category": 1, "sequence": 1}).sort([("stage", 1), ("sequence", 1)])
             if m.get("id")]
 
@@ -208,6 +215,13 @@ def setup_text(rows: list, iso: str, sector_goal: Optional[int] = None, postcode
             out.append(f"KPI: {kpi_text(s)}")
         if s.get("focus"):
             out += ["", f"Focus: {s['focus']}"]
+        learn = ((r.get("cod") or {}).get("pick") or {}).get("topic")
+        if learn:
+            out.append(f"Learning: {learn}")
+        if r.get("teacher_name"):
+            out.append(f"Taught by: {_first(r['teacher_name'])}")
+        if r.get("example"):
+            out.append(f"Example of: {r['example']}")
     return "\n".join(out)
 
 
@@ -344,16 +358,36 @@ async def sector_day(request: Request, date: Optional[str] = None):
         {"role": 1, "owneriq_stage": 1, "office_id": 1, "new_hire_id": 1})}
     options = await cod_options(user.get("office_id"))
     by_id = {o["id"]: o for o in options}
+    # This week's COD focus (routes/cod_focus.py) fills the set-up.
+    from routes.cod_focus import focus_for, week_ending_of
+    week_focus = await focus_for(ids, week_ending_of(Date.fromisoformat(iso)))
+    # Who can teach a Stage 1-2 today: the people in the sector.
+    sector_ids = ((sector or {}).get("member_ids") or []) + ([sector["leader_id"]] if (sector or {}).get("leader_id") else [])
+    sector_people = await _users_by_ids(list(dict.fromkeys(sector_ids))) if sector_ids else \
+        [{"user_id": p["user_id"], "user_name": p["user_name"]} for p in people]
+    names = {p["user_id"]: p["user_name"] for p in sector_people}
+    missing = [(d.get("setup") or {}).get("teacher_id") for d in docs.values()]
+    missing = [t for t in missing if t and t not in names]
+    if missing:
+        names.update({u["user_id"]: u["user_name"] for u in await _users_by_ids(missing)})
     rows = []
     for p in people:
         doc = docs.get(p["user_id"]) or {}
         y = prev_docs.get(p["user_id"]) or {}
         yb = y.get("breakdown") or {}
-        picked = by_id.get(((doc.get("setup") or {}).get("cod_module_id")) or "")
+        st = doc.get("setup") or {}
+        picked = by_id.get(st.get("cod_module_id") or "")
+        stages = await cod_pick_stages(targets.get(p["user_id"]) or {})
+        example = (by_id.get(st.get("example_module_id") or "") or {}).get("topic") or st.get("example_text") or ""
         rows.append({
             **p,
-            "cod": {"stages": await cod_pick_stages(targets.get(p["user_id"]) or {}),
+            "cod": {"stages": stages,
                     "pick": picked, "observed": doc.get("cod_observed")},
+            # Stage 3+ (no learning pick): "what I'm being an example of".
+            "example_mode": not stages,
+            "week_focus": week_focus.get(p["user_id"]),
+            "teacher_name": names.get(st.get("teacher_id") or "") or "",
+            "example": example,
             "setup": doc.get("setup"),
             "breakdown": doc.get("breakdown"),
             "prefill": pre.get(p["user_id"]) or {},
@@ -371,6 +405,7 @@ async def sector_day(request: Request, date: Optional[str] = None):
         # Marking a COD item as seen in the field: the sector leader or a Coach.
         "can_mark_cod": i_lead or role in ("leader", "admin"),
         "cod_options": options,
+        "sector_people": sector_people,
         "sector": sector,
         "options": {"proud": PROUD_OPTIONS, "change": CHANGE_OPTIONS,
                     "kpi_metrics": [{"key": k, "label": v, "loa": LOA.get(k)} for k, v in KPI_METRICS.items()]},
@@ -407,6 +442,21 @@ async def save_sector_day(user_id: str, request: Request, date: Optional[str] = 
                 {"id": cod_id, "office_id": (who or {}).get("office_id"), "retired": {"$ne": True}}, {"stage": 1})
             if not who or not item or item.get("stage") not in await cod_pick_stages(who):
                 raise HTTPException(status_code=400, detail="Pick a COD item from their own stage or below")
+        teacher = upd["setup"].get("teacher_id")
+        if teacher:
+            office = (await db.users.find_one({"_id": ObjectId(user_id)}, {"office_id": 1}) or {}).get("office_id") \
+                if ObjectId.is_valid(user_id) else None
+            t = await db.users.find_one({"_id": ObjectId(teacher), "deleted": {"$ne": True}}, {"office_id": 1}) \
+                if ObjectId.is_valid(teacher) else None
+            if teacher == user_id or not t or t.get("office_id") != office:
+                raise HTTPException(status_code=400, detail="Pick who's teaching them from their sector")
+        ex = upd["setup"].get("example_module_id")
+        if ex:
+            office = (await db.users.find_one({"_id": ObjectId(user_id)}, {"office_id": 1}) or {}).get("office_id") \
+                if ObjectId.is_valid(user_id) else None
+            if not await db.training_modules.find_one({"id": ex, "office_id": office, "retired": {"$ne": True},
+                                                       "stage": {"$in": [1, 2, 3, 4, 5]}}, {"_id": 1}):
+                raise HTTPException(status_code=400, detail="Pick an item from the COD, or type it")
     if "breakdown" in body:
         upd["breakdown"] = {**clean_breakdown(body.get("breakdown") or {}), "by_id": str(user["id"]), "at": now}
     if not upd:

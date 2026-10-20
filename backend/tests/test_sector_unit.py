@@ -35,6 +35,15 @@ def test_setup_text_matches_the_office_layout():
         "\n\n*Sam*\nGoal: 4\nKPI: 70 spoken\n\nFocus: handling objections")
 
 
+def test_setup_text_adds_learning_teacher_and_example():
+    rows = [{"user_name": "Alex Example", "setup": {"goal": 4, "focus": "KISS"},
+             "cod": {"pick": {"topic": "Impulses"}}, "teacher_name": "Sam Example"},
+            {"user_name": "Jo Example", "setup": {"goal": 5}, "example": "The 8 Steps"}]
+    out = sec.setup_text(rows, "2026-10-13")
+    assert "Focus: KISS\nLearning: Impulses\nTaught by: Sam" in out
+    assert out.endswith("*Jo*\nGoal: 5\nExample of: The 8 Steps")
+
+
 def test_kpi_suggestion_is_the_step_furthest_behind():
     assert sec.suggest_kpi({"doors": 101, "spoken": 56, "pitched": 24, "closed": 18}) == {"kpi_metric": "spoken", "kpi_target": 70}
     assert sec.suggest_kpi({"doors": 101, "spoken": 56, "pitched": 14, "closed": 6}) == {"kpi_metric": "closes", "kpi_target": 15}
@@ -44,7 +53,8 @@ def test_kpi_suggestion_is_the_step_furthest_behind():
 
 def test_inputs_are_checked():
     assert sec.clean_setup({"goal": "4", "kpi_metric": "Closes", "kpi_target": "20", "focus": "  tov "}) == {
-        "goal": 4, "kpi_metric": "closes", "kpi_target": 20, "focus": "tov", "positive": "", "cod_module_id": None}
+        "goal": 4, "kpi_metric": "closes", "kpi_target": 20, "focus": "tov", "positive": "", "cod_module_id": None,
+        "teacher_id": None, "example_module_id": None, "example_text": ""}
     with pytest.raises(HTTPException):
         sec.clean_setup({"kpi_metric": "vibes"})
     with pytest.raises(HTTPException):

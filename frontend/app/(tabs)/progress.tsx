@@ -37,6 +37,7 @@ import { TwoLadders, salesNextFrom, salesStepsFrom, LadderStep } from '../../src
 // user isn't a trainee, we hand the entire screen off to it so the
 // bottom-tab UX mirrors what trainees see at the same slot.
 import LeadershipScreen from '../leadership';
+import WeeklyCodFocus from '../../src/components/cod/WeeklyCodFocus';
 
 // ── Stage hero ───────────────────────────────────────────────────────────────
 // The "Ink & Cube" stage header (spec §4 COD): a paper EditorialHero with a
@@ -303,6 +304,8 @@ export default function TraineeProgressScreen() {
       scrollEventThrottle={16}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
     >
+      {/* This week's COD focus, picked by their Coach. */}
+      <WeeklyCodFocus />
       {/* ── Two ladders, side by side — always a next thing on each ── */}
       {salesPathQ.data?.enabled && salesPathQ.data?.path && salesPathQ.data?.meta && (() => {
         const curQ = devStage === 2 ? stage2Q : stage1Q;

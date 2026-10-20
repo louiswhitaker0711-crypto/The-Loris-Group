@@ -75,6 +75,7 @@ import {
 } from '../src/components/cod/types';
 import { firstSentence, readMinutes } from '../src/components/cod/parseNotes';
 import { sortCodStages, codStagePad } from '../src/components/cod/stageOrder';
+import WeeklyCodFocus from '../src/components/cod/WeeklyCodFocus';
 
 type Folder = {
   id: string; name: string; parent_id: string | null; order: number;
@@ -512,6 +513,8 @@ export default function LeadershipHub() {
         >
           {tab === 'cycle' ? (
             <>
+            {/* This week's COD focus: yours, and your team's to pick. */}
+            <WeeklyCodFocus team />
             {/* What this is, and how far through the quick checks you are. */}
             <View style={styles.heroCard}>
               <Text style={styles.heroEyebrow}>COD — CYCLE OF DEVELOPMENT</Text>

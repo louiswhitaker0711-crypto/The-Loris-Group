@@ -20,7 +20,9 @@ import { SectorPicker } from '../src/components/sector/SectorPicker';
 import { SectorMap } from '../src/components/sector/SectorMap';
 import BreakdownPrimetime from '../src/components/sector/BreakdownPrimetime';
 
-type Setup = { goal: number | null; kpi_metric: string | null; kpi_target: number | null; focus: string; positive?: string; cod_module_id?: string | null };
+type Setup = { goal: number | null; kpi_metric: string | null; kpi_target: number | null; focus: string; positive?: string; cod_module_id?: string | null;
+  teacher_id?: string | null; example_module_id?: string | null; example_text?: string };
+type WeekFocus = { module_id: string; topic: string; stage: number } | null;
 type CodItem = { id: string; stage: number; topic: string; category?: string };
 type CodDay = { stages: number[]; pick: CodItem | null; observed: { by_name: string; date: string } | null };
 type Breakdown = { doors: number | null; spoken: number | null; pitched: number | null; closed: number | null;
@@ -29,7 +31,9 @@ type Breakdown = { doors: number | null; spoken: number | null; pitched: number 
 type Person = { user_id: string; user_name: string; setup: Setup | null; breakdown: Breakdown | null;
   prefill: Partial<Record<'doors' | 'spoken' | 'pitched' | 'closed' | 'hit' | 'silver' | 'gold' | 'round', number>>;
   yesterday: { change: string; proud: string; goal: number | null; kpi: { kpi_metric: string; kpi_target: number } | null };
-  cod?: CodDay };
+  cod?: CodDay;
+  /** Stage 3+: "What I'm being an example of" instead of learning. */
+  example_mode?: boolean; week_focus?: WeekFocus; teacher_name?: string; example?: string };
 type Mode = 'setup' | 'breakdown';
 const errText = (e: any, f: string) => (typeof e?.response?.data?.detail === 'string' ? e.response.data.detail : f);
 
@@ -136,7 +140,7 @@ export default function SectorScreen() {
 
       {satNoBreakdown ? null : q.isLoading ? <ActivityIndicator color={c.primary} /> : people.map((p) => (
         mode === 'setup'
-          ? <SetupCard key={p.user_id + date} p={p} date={date} opts={opts} codOptions={q.data?.cod_options || []} open={open === p.user_id}
+          ? <SetupCard key={p.user_id + date} p={p} date={date} opts={opts} codOptions={q.data?.cod_options || []} sectorPeople={q.data?.sector_people || []} open={open === p.user_id}
               onToggle={() => setOpen(open === p.user_id ? null : p.user_id)} onSaved={() => q.refetch()} s={s} c={c} />
           : <BreakdownCard key={p.user_id + date} p={p} date={date} opts={opts} canMarkCod={!!q.data?.can_mark_cod} open={open === p.user_id}
               onToggle={() => setOpen(open === p.user_id ? null : p.user_id)} onSaved={() => q.refetch()} s={s} c={c} />
@@ -319,7 +323,8 @@ const shortDate = (iso?: string | null) => {
 };
 
 /** Today's COD item: one item from their own stage or below (Stage 1-2 only). */
-function CodPicker({ stages, options, value, onPick, s, c }: { stages: number[]; options: CodItem[]; value: string; onPick: (id: string) => void; s: any; c: any }) {
+function CodPicker({ stages, options, value, onPick, s, c, placeholder = 'Pick one thing to learn today', testID = 'setup-cod-pick' }: {
+  stages: number[]; options: CodItem[]; value: string; onPick: (id: string) => void; s: any; c: any; placeholder?: string; testID?: string }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const mine = options.filter((o) => stages.includes(o.stage));
@@ -327,10 +332,10 @@ function CodPicker({ stages, options, value, onPick, s, c }: { stages: number[];
   const shown = mine.filter((o) => o.topic.toLowerCase().includes(search.trim().toLowerCase()));
   return (
     <View style={{ gap: 6 }}>
-      <Pressable onPress={() => setOpen(!open)} style={[s.input, { flexDirection: 'row', alignItems: 'center', gap: 8 }]} accessibilityRole="button" testID="setup-cod-pick">
+      <Pressable onPress={() => setOpen(!open)} style={[s.input, { flexDirection: 'row', alignItems: 'center', gap: 8 }]} accessibilityRole="button" testID={testID}>
         <Ionicons name="school-outline" size={16} color={c.primary} />
         <Text style={[s.ghostText, { flex: 1, color: picked ? c.text : c.textMuted }]} numberOfLines={2}>
-          {picked ? `Stage ${picked.stage} · ${picked.topic}` : 'Pick one thing to learn today'}
+          {picked ? `${picked.stage === 5 ? 'SL' : `Stage ${picked.stage}`} · ${picked.topic}` : placeholder}
         </Text>
         <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={c.textMuted} />
       </Pressable>
@@ -339,7 +344,7 @@ function CodPicker({ stages, options, value, onPick, s, c }: { stages: number[];
           <TextInput value={search} onChangeText={setSearch} placeholder="Search the COD" placeholderTextColor={c.textMuted} style={s.input} />
           {!!value && (
             <Pressable onPress={() => { onPick(''); setOpen(false); }} style={{ paddingVertical: 6 }} accessibilityRole="button">
-              <Text style={[s.muted, { color: c.red }]}>Clear (nothing from the COD today)</Text>
+              <Text style={[s.muted, { color: c.red }]}>Clear</Text>
             </Pressable>
           )}
           {shown.map((o) => (
@@ -354,10 +359,21 @@ function CodPicker({ stages, options, value, onPick, s, c }: { stages: number[];
   );
 }
 
-function SetupCard({ p, date, opts, codOptions, open, onToggle, onSaved, s, c }: any) {
+const ALL_COD_STAGES = [1, 2, 3, 4, 5];
+
+function SetupCard({ p, date, opts, codOptions, sectorPeople, open, onToggle, onSaved, s, c }: any) {
   const cur: Setup = p.setup || { goal: null, kpi_metric: null, kpi_target: null, focus: '' };
-  const [cod, setCod] = useState<string>(cur.cod_module_id || '');
-  const canPickCod = (p.cod?.stages || []).length > 0;
+  const stages: number[] = p.cod?.stages || [];
+  const canPickCod = stages.length > 0;
+  const exampleMode = !!p.example_mode;
+  // This week's COD focus fills a new set-up (never one already saved).
+  const wf: WeekFocus = p.week_focus || null;
+  const wfLearn = wf && canPickCod && stages.includes(wf.stage) ? wf.module_id : '';
+  const [cod, setCod] = useState<string>(cur.cod_module_id || (!p.setup ? wfLearn : ''));
+  const [teacher, setTeacher] = useState<string>(cur.teacher_id || '');
+  const [exMod, setExMod] = useState<string>(cur.example_module_id || (!p.setup && exampleMode && wf ? wf.module_id : ''));
+  const [exText, setExText] = useState<string>(cur.example_text || '');
+  const teachers: Array<{ user_id: string; user_name: string }> = (sectorPeople || []).filter((x: any) => x.user_id !== p.user_id);
   const [goal, setGoal] = useState(cur.goal != null ? String(cur.goal) : '');
   const [metric, setMetric] = useState<string>(cur.kpi_metric || '');
   const [target, setTarget] = useState(cur.kpi_target != null ? String(cur.kpi_target) : '');
@@ -367,7 +383,8 @@ function SetupCard({ p, date, opts, codOptions, open, onToggle, onSaved, s, c }:
   const y = p.yesterday || {};
   const metrics: Array<{ key: string; label: string; loa: number | null }> = opts?.kpi_metrics || [];
   const summary = p.setup ? [cur.goal != null ? `Goal ${cur.goal}` : '', cur.kpi_metric ? `${cur.kpi_target ?? ''} ${metrics.find((m) => m.key === cur.kpi_metric)?.label || ''}`.trim() : '', cur.focus,
-    p.cod?.pick ? `COD: ${p.cod.pick.topic}` : ''].filter(Boolean).join(' · ') : 'Not set';
+    p.cod?.pick ? `COD: ${p.cod.pick.topic}` : '', p.teacher_name ? `Taught by ${p.teacher_name.split(' ')[0]}` : '',
+    p.example ? `Example of ${p.example}` : ''].filter(Boolean).join(' · ') : 'Not set';
 
   // Yesterday's goal and suggested KPI. Yesterday's "Change" is only offered
   // as a suggestion for the focus, never filled in for them.
@@ -379,7 +396,10 @@ function SetupCard({ p, date, opts, codOptions, open, onToggle, onSaved, s, c }:
     setBusy(true);
     try {
       await apiService.saveSectorDay(p.user_id, date, { setup: { goal: num(goal), kpi_metric: metric || null, kpi_target: num(target), focus, positive,
-        cod_module_id: canPickCod ? (cod || null) : (cur.cod_module_id || null) } });
+        cod_module_id: canPickCod ? (cod || null) : (cur.cod_module_id || null),
+        teacher_id: canPickCod ? (teacher || null) : null,
+        example_module_id: exampleMode ? (exMod || null) : null,
+        example_text: exampleMode && !exMod ? exText.trim() : '' } });
       toast.success('Saved'); onSaved(); onToggle();
     } catch (e) { showAlert('Could not save', errText(e, 'Try again.')); }
     finally { setBusy(false); }
@@ -438,7 +458,40 @@ function SetupCard({ p, date, opts, codOptions, open, onToggle, onSaved, s, c }:
             <>
               <Text style={s.label}>Learning from the COD</Text>
               <Text style={s.muted}>One thing to learn today, from their stage or below. At the breakdown the sector leader or a Coach can mark that they saw it done.</Text>
+              {!!wf && !!wfLearn && cod !== wfLearn && (
+                <Pressable onPress={() => setCod(wfLearn)} style={s.hint} accessibilityRole="button">
+                  <Ionicons name="flag-outline" size={15} color={c.primary} />
+                  <Text style={[s.ghostText, { flex: 1 }]}>This week's focus: {wf.topic}. Tap to use</Text>
+                </Pressable>
+              )}
               <CodPicker stages={p.cod.stages} options={codOptions || []} value={cod} onPick={setCod} s={s} c={c} />
+              <Text style={s.label}>Who's teaching you</Text>
+              {teachers.length === 0 ? <Text style={s.muted}>Nobody else in the sector yet.</Text> : (
+                <View style={s.chips}>
+                  {teachers.map((t) => (
+                    <Pressable key={t.user_id} onPress={() => setTeacher(teacher === t.user_id ? '' : t.user_id)}
+                      style={[s.chip, teacher === t.user_id && s.chipOn]} accessibilityRole="button" testID={`setup-teacher-${t.user_id}`}>
+                      <Text style={[s.chipText, teacher === t.user_id && { color: c.onPrimary }]}>{t.user_name.split(' ')[0]}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+            </>
+          )}
+          {exampleMode && (
+            <>
+              <Text style={s.label}>What I'm being an example of</Text>
+              <Text style={s.muted}>Pick it from the COD. If it isn't there, type it.</Text>
+              {!!wf && exMod !== wf.module_id && (
+                <Pressable onPress={() => { setExMod(wf.module_id); setExText(''); }} style={s.hint} accessibilityRole="button">
+                  <Ionicons name="flag-outline" size={15} color={c.primary} />
+                  <Text style={[s.ghostText, { flex: 1 }]}>This week's focus: {wf.topic}. Tap to use</Text>
+                </Pressable>
+              )}
+              <CodPicker stages={ALL_COD_STAGES} options={codOptions || []} value={exMod} onPick={(id) => { setExMod(id); if (id) setExText(''); }}
+                s={s} c={c} placeholder="Pick from the COD" testID="setup-example-pick" />
+              <TextInput value={exText} onChangeText={(t) => { setExText(t); if (t.trim()) setExMod(''); }}
+                placeholder="Not in the COD? Type it" placeholderTextColor={c.textMuted} style={s.input} maxLength={120} />
             </>
           )}
           <Pressable onPress={save} disabled={busy} style={s.btn} accessibilityRole="button">

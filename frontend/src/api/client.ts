@@ -1008,6 +1008,11 @@ export const apiService = {
   // the field (a record of the day; never a tick on the COD).
   markCodObserved: (userId: string, date: string, done: boolean) =>
     api.put(`/sector/day/${userId}/cod-observed`, { done }, { params: { date } }),
+  // This week's COD focus: a Coach picks their own and their BAs'.
+  getCodFocusMe: (week?: string) => api.get('/cod-focus/me', { params: week ? { week } : {} }),
+  getCodFocusTeam: (week?: string) => api.get('/cod-focus/team', { params: week ? { week } : {} }),
+  setCodFocus: (userId: string, moduleId: string | null, week?: string) =>
+    api.put(`/cod-focus/${userId}`, { module_id: moduleId }, { params: week ? { week } : {} }),
   getModuleObservations: (moduleId: string, userId?: string) =>
     api.get(`/modules/${moduleId}/observations`, { params: userId ? { user_id: userId } : {} }),
   notifySectorSetups: (date: string) => api.post('/sector/setup/notify', {}, { params: { date } }),
