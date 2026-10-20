@@ -343,6 +343,12 @@ async def _prefill(user_ids: list[str], iso: str) -> dict:
 async def sector_day(request: Request, date: Optional[str] = None):
     user = await get_current_user(request)
     iso = _clean_date(date)
+    # Someone marked No Show or Not scheduled on Bells today isn't in a sector.
+    try:
+        from routes.sector_plan import drop_no_shows
+        await drop_no_shows(user.get("office_id"), iso)
+    except Exception as ex:
+        logger.warning("sector day: no-show tidy failed: %s", ex)
     prev = (Date.fromisoformat(iso) - timedelta(days=1 if Date.fromisoformat(iso).weekday() != 0 else 2)).isoformat()
     people = await _people(user, iso)
     sector = await _my_sector(str(user["id"]), iso)
@@ -1048,7 +1054,7 @@ async def sector_board(request: Request, date: Optional[str] = None):
     breakdown: the one place to see the whole field."""
     user = await get_current_user(request)
     iso = _clean_date(date)
-    # Someone marked No Show today isn't in a sector (however the No Show came in).
+    # Someone marked No Show or Not scheduled today isn't in a sector (however it came in).
     try:
         from routes.sector_plan import drop_no_shows
         await drop_no_shows(user.get("office_id"), iso)

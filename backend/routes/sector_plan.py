@@ -92,8 +92,13 @@ async def _office_people(office_id: str) -> list[dict]:
     return rows
 
 
+# Bells statuses that mean someone isn't out today: No show (X) and Not scheduled (NS).
+OUT_TODAY = ("ns", "ab")
+
+
 async def drop_no_shows(office_id: str, iso: str) -> int:
-    """Nobody marked No Show on Bells for the day stays in a sector. The
+    """Nobody marked No Show (X) or Not scheduled (NS) on Bells for the day
+    stays in a sector. The
     planner's No Show button already pulls them out; this also catches a No
     Show that came in another way (OwnerIQ's day plan says absent, or someone
     set it on Bells). Only today and later: past days are left as they were.
@@ -107,7 +112,7 @@ async def drop_no_shows(office_id: str, iso: str) -> int:
     async for e in db.bells_entries.find({"office_id": office_id, "week_ending": week_ending,
                                           "user_id": {"$type": "string"}}, {"user_id": 1, "days": 1}):
         days = e.get("days") or []
-        if widx < len(days) and (days[widx] or {}).get("status") == "ns":
+        if widx < len(days) and (days[widx] or {}).get("status") in OUT_TODAY:
             ns.append(str(e["user_id"]))
     if not ns:
         return 0
@@ -158,7 +163,8 @@ async def get_plan(request: Request, date: Optional[str] = None):
             "sectors": sectors,
             "people": [{**p, "sector_leader_id": where.get(p["user_id"]),
                         "in_today": bells_status.get(p["user_id"]) == "in",
-                        "no_show": bells_status.get(p["user_id"]) == "ns"} for p in people],
+                        "no_show": bells_status.get(p["user_id"]) == "ns",
+                        "not_scheduled": bells_status.get(p["user_id"]) == "ab"} for p in people],
             "sent_at": (sent or {}).get("at")}
 
 

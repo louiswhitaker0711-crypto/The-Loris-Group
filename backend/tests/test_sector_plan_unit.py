@@ -67,3 +67,21 @@ def test_a_no_show_leaves_todays_sectors(monkeypatch):
     assert run(db.sectors.find_one({"id": "s1"}))["member_ids"] == ["lead", "here"]
     assert run(sp.drop_no_shows("o1", "2026-10-15")) == 0                         # yesterday: left as it was
     assert run(db.sectors.find_one({"id": "s0"}))["member_ids"] == ["lead", "gone"]
+
+
+def test_not_scheduled_on_bells_leaves_todays_sectors(monkeypatch):
+    """NS (Not scheduled, 'ab') on Bells takes someone out of today's sector, like X."""
+    import asyncio
+    from mongomock_motor import AsyncMongoMockClient
+    import routes.sector_plan as sp
+    db = AsyncMongoMockClient()["t"]
+    monkeypatch.setattr(sp, "db", db)
+    monkeypatch.setattr(sp, "_now_uk", lambda: datetime(2026, 10, 16, 12, 50))   # a Friday
+    run = asyncio.run
+    days = [{"status": "in"} for _ in range(7)]
+    days[4] = {"status": "ab"}
+    run(db.bells_entries.insert_one({"id": "e1", "office_id": "o1", "week_ending": "2026-10-18", "user_id": "off", "days": days}))
+    run(db.sectors.insert_one({"id": "s1", "office_id": "o1", "date": "2026-10-16", "leader_id": "lead",
+                               "member_ids": ["lead", "off"]}))
+    assert run(sp.drop_no_shows("o1", "2026-10-16")) == 1
+    assert run(db.sectors.find_one({"id": "s1"}))["member_ids"] == ["lead"]
