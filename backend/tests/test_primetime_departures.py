@@ -241,8 +241,8 @@ def test_from_field_start_the_plan_rolls_to_tomorrow():
     # 13:30 (field start) is already tomorrow: today's Primetime is done.
     assert pt._planning_day(_at_hm("2026-08-04", 13, 30)).isoformat() == "2026-08-05"
     assert pt._planning_day(_at("2026-08-04", 23)).isoformat() == "2026-08-05"
-    # Saturday's field starts at 10:00.
-    assert pt._planning_day(_at("2026-08-08", 9)).isoformat() == "2026-08-08"
+    # No Primetime on Saturday: all of Saturday looks ahead to Monday.
+    assert pt._planning_day(_at("2026-08-08", 9)).isoformat() == "2026-08-10"
     assert pt._planning_day(_at("2026-08-08", 10)).isoformat() == "2026-08-10"
 
 
@@ -264,9 +264,9 @@ def test_sunday_daytime_looks_ahead_to_monday():
     assert pt._planning_day(_at("2026-08-09", 10)).isoformat() == "2026-08-10"
 
 
-def test_friday_evening_is_saturday_not_monday():
-    # Saturday is a working day here, so no skipping.
-    assert pt._planning_day(_at("2026-08-07", 20)).isoformat() == "2026-08-08"
+def test_friday_evening_is_monday():
+    # No Primetime on Saturday mornings (sectors): Friday plans Monday.
+    assert pt._planning_day(_at("2026-08-07", 20)).isoformat() == "2026-08-10"
 
 
 # --------------------------------------------------------------------------
@@ -397,8 +397,8 @@ def test_an_absent_day_is_read_off_the_bells_sheet(monkeypatch):
                  {"status": "in"}, {"status": "in"}, {"status": "off"}, {"status": "off"}],
     }]
     out = _statuses(rows, monkeypatch)
-    assert out["u1"] == ["in", "in", "ab", "in", "in", "off"]
-    assert [d for d in range(6) if out["u1"][d] == "ab"] == [2]
+    assert out["u1"] == ["in", "in", "ab", "in", "in"]          # Mon–Fri: no Saturday Primetime
+    assert [d for d in range(5) if out["u1"][d] == "ab"] == [2]
 
 
 def test_a_missing_bells_row_is_not_an_absence(monkeypatch):
@@ -419,9 +419,9 @@ def test_a_short_or_ragged_days_array_does_not_crash(monkeypatch):
         {"user_id": "u3", "office_id": "office-boston", "week_ending": WEEK},  # no days at all
     ]
     out = _statuses(rows, monkeypatch, ids=("u1", "u2", "u3"))
-    assert out["u1"] == ["in", "", "", "", "", ""]
+    assert out["u1"] == ["in", "", "", "", ""]
     assert out["u2"][2] == "ab" and out["u2"][0] == ""
-    assert out["u3"] == ["", "", "", "", "", ""]
+    assert out["u3"] == ["", "", "", "", ""]
 
 
 def test_no_ids_means_no_query(monkeypatch):

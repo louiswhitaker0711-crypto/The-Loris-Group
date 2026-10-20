@@ -38,6 +38,7 @@ import { usePullToRefresh } from '../src/components/ui/PullRefresh';
 import { useParallaxScroll } from '../src/components/ui/Parallax';
 import { DepthCard } from '../src/components/ui/DepthCard';
 import { Keycap } from '../src/components/ui/Keycap';
+import WeeklyCodFocus from '../src/components/cod/WeeklyCodFocus';
 
 // Per-stage hub copy — COD 2026 names: Stage 4 "Team Builder", Stage SL
 // "Sector/Site Leader" (stored as stage 5; unlocked for every leader).
@@ -339,6 +340,8 @@ export default function LeadershipScreen() {
         scrollEventThrottle={16}
       >
         <View style={styles.shell} onLayout={(e) => setShellW(e.nativeEvent.layout.width)}>
+        {/* This week's COD focus: yours, and your team's to pick. */}
+        <WeeklyCodFocus team />
         {/* ── Two ladders, side by side — always a next thing on each.
             Development column mirrors the ACTIVE toggle stage; sales column
             comes from the leader's own path. ── */}

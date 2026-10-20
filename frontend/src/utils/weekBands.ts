@@ -41,3 +41,14 @@ export const WEEK_BAND_LABELS: Record<WeekBand, { name: string; range: string }>
   amber: { name: 'Amber', range: `${AMBER_WEEK_MIN}–${GREEN_WEEK_MIN - 1}` },
   red: { name: 'Red', range: `under ${AMBER_WEEK_MIN}` },
 };
+
+/** Text and fill for a week's number on the Bells sheet (Last Week, a
+ *  goal), in the same family of colours as a day cell (utils/dayBands). */
+export function weekBandLook(signUps: number, dark: boolean): { fg: string; bg: string } {
+  switch (weekBand(signUps)) {
+    case 'super_green': return dark ? { fg: '#ffffff', bg: '#15803d' } : { fg: '#ffffff', bg: '#166534' };
+    case 'green': return dark ? { fg: '#bbf7d0', bg: 'rgba(74,222,128,0.22)' } : { fg: '#15803d', bg: 'rgba(74,222,128,0.24)' };
+    case 'amber': return dark ? { fg: '#fcd34d', bg: 'rgba(245,158,11,0.20)' } : { fg: '#b45309', bg: 'rgba(245,158,11,0.20)' };
+    default: return dark ? { fg: '#fca5a5', bg: 'rgba(239,68,68,0.18)' } : { fg: '#b91c1c', bg: 'rgba(239,68,68,0.14)' };
+  }
+}

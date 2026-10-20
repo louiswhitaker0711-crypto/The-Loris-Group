@@ -443,6 +443,9 @@ def aggregate_rows(rows: list[dict], exclude_keys: set[str] | None = None, inclu
                   as "off that day" and dropped from the group average/ratios.
     """
     exclude_keys = exclude_keys or set()
+    # Days under 10 doors, or all four numbers the same, don't count (core/kpi_rules.py).
+    from core.kpi_rules import counted_rows
+    rows = counted_rows(rows)
     reps: dict[str, dict] = {}
     for row in rows:
         k = _rep_key(row)

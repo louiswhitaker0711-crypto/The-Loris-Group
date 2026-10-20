@@ -74,6 +74,48 @@ def _empty_day() -> dict:
     return {"over30": None, "under30": None, "memberships": None, "status": "off"}
 
 
+SUNDAY = 6
+
+
+def _sunday_ns(days):
+    """Nobody really plans Sunday, so it reads Not scheduled ('ab', NS) for
+    everyone unless someone changes it: an untouched Sunday ('off', no
+    numbers) becomes 'ab'. Any other status, or any number, is kept."""
+    if not isinstance(days, list) or len(days) <= SUNDAY or not isinstance(days[SUNDAY], dict):
+        return days
+    d = days[SUNDAY]
+    if (d.get("status") or "off") == "off" and not any((_num_or_none(d.get(k)) or 0) > 0
+                                                      for k in ("over30", "under30", "memberships")):
+        days = list(days)
+        days[SUNDAY] = {**d, "status": "ab"}
+    return days
+
+
+def exit_day(user: dict) -> Optional[str]:
+    """The day someone exited (YYYY-MM-DD): users.left_on, else the UK date of
+    deleted_at. None when neither is known."""
+    if user.get("left_on"):
+        return str(user["left_on"])[:10]
+    at = user.get("deleted_at")
+    if at:
+        try:
+            return datetime.fromisoformat(str(at).replace("Z", "+00:00")).astimezone(APP_TZ).date().isoformat()
+        except ValueError:
+            return None
+    return None
+
+
+def exited_before_week(left_on: Optional[str], week_ending: str) -> bool:
+    """True when the exit day is before this week's Monday: off the sheet."""
+    if not left_on:
+        return False
+    try:
+        monday = (date.fromisoformat(week_ending) - timedelta(days=6)).isoformat()
+    except ValueError:
+        return False
+    return str(left_on)[:10] < monday
+
+
 def _is_in_day(d: dict) -> bool:
     """A day counts as 'in' (working) for piece-average and scoring purposes ONLY when
     status is explicitly 'in'. RT, NC, Off (and legacy 'normal') are excluded."""
@@ -122,7 +164,7 @@ def _normalize_days(raw) -> list:
             "memberships": memberships,
             "status": raw_status,
         })
-    return out
+    return _sunday_ns(out)
 
 
 def _num_or_none(v):
@@ -939,14 +981,17 @@ async def list_bells(
     reports_to_map: dict = {}
     role_map: dict = {}
     active_map: dict = {}
+    left_map: dict = {}     # uid -> the day they exited (users.left_on)
     all_uids = [e["user_id"] for e in entries if e.get("user_id")]
     if all_uids:
         try:
             async for u in db.users.find(
                 {"_id": {"$in": [ObjectId(x) for x in all_uids]}},
-                {"_id": 1, "role": 1, "reports_to": 1, "deleted": 1, "is_active": 1},
+                {"_id": 1, "role": 1, "reports_to": 1, "deleted": 1, "is_active": 1, "left_on": 1, "deleted_at": 1},
             ):
                 uid = str(u["_id"])
+                if u.get("deleted") or u.get("is_active") is False:
+                    left_map[uid] = exit_day(u)
                 role_map[uid] = u.get("role")
                 reports_to_map[uid] = u.get("reports_to")
                 active_map[uid] = not u.get("deleted") and u.get("is_active") is not False
@@ -961,8 +1006,13 @@ async def list_bells(
                 uid = e.get("user_id")
                 if uid:
                     e["user_active"] = bool(active_map.get(uid, False))
+                    if left_map.get(uid):
+                        e["left_on"] = left_map[uid]
         except Exception:
             pass
+        # An exited BA: their week shows red from the exit day; from the week
+        # after, they're off the sheet. Their saved weeks stay in the database.
+        entries = [e for e in entries if not exited_before_week(e.get("left_on"), week_ending)]
 
     # Hierarchy-based sort matching the office's printed bells sheet (Apr 2026):
     # Within each parent's children, emit "leaves" (no children of their own)
@@ -1061,6 +1111,7 @@ async def list_bells(
     reps_active = 0
     reps_green = 0
     for e in entries:
+        e["days"] = _sunday_ns(e.get("days"))
         t = compute_totals(e, fees)
         e.update(t)
         key = e.get("user_id") or (e.get("user_name") or "").strip().lower()
@@ -2387,6 +2438,7 @@ async def _public_bells_payload(office_slug: str, week: Optional[str], code: Opt
     reps_active = 0
     reps_green = 0
     for e in entries:
+        e["days"] = _sunday_ns(e.get("days"))
         t = compute_totals(e, fees)
         e.update(t)
         key = e.get("user_id") or (e.get("user_name") or "").strip().lower()

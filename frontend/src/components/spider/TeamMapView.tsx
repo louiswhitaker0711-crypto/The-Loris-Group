@@ -679,7 +679,7 @@ export default function TeamMapView({
                 </TouchableOpacity>
                 {onRemove && !sel.node.is_super_admin ? (
                   <TouchableOpacity style={[styles.btn, styles.btnDanger, busy && { opacity: 0.5 }]} disabled={busy} onPress={remove} testID="spider-remove">
-                    <Text style={styles.btnDangerText}>Remove</Text><Ionicons name="person-remove-outline" size={15} color="#fca5a5" />
+                    <Text style={styles.btnDangerText}>Exit</Text><Ionicons name="exit-outline" size={15} color="#fca5a5" />
                   </TouchableOpacity>
                 ) : null}
               </View>

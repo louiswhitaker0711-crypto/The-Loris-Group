@@ -49,6 +49,8 @@ def law_of_averages(rows: Iterable[dict]) -> dict:
     """Totals, average per active day, step-to-step conversion and
     "how many to one sign-up" for one person's daily rows. A day with no
     door activity at all is a day off, not a zero: it isn't averaged in."""
+    from core.kpi_rules import counted_rows   # under 10 doors or 2/2/2/2: doesn't count
+    rows = counted_rows(list(rows))
     totals = {m: 0 for m in METRICS}
     by_date: dict[str, dict] = {}
     for r in rows:

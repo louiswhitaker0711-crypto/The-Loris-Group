@@ -411,13 +411,13 @@ export default function HiresScreen() {
   const onSpiderRemove = useCallback(
     (userId: string, name: string, directReports: number) => new Promise<void>((resolve) => {
       showAlert(
-        `Remove ${name}?`,
-        `${name} is released from the team and can no longer sign in. They are deactivated in OwnerIQ too. Their past numbers are kept.`
+        `Exit ${name}?`,
+        `From today ${name}'s Bells go red and they drop off everything going forward. They can no longer sign in. Their past numbers and records are kept.`
           + (directReports ? ` The ${directReports === 1 ? 'person' : `${directReports} people`} they coach will need a new Coach.` : ''),
         [
           { text: 'Cancel', style: 'cancel', onPress: () => resolve() },
           {
-            text: 'Remove',
+            text: 'Exit',
             style: 'destructive',
             onPress: async () => {
               try {
@@ -425,7 +425,7 @@ export default function HiresScreen() {
                 await Promise.all([refetchTree(), refetch()]);
                 queryClient.invalidateQueries({ queryKey: ['admin-users'] });
               } catch (e: any) {
-                showAlert('Not removed', e?.response?.data?.detail || 'Could not remove them. Try again.');
+                showAlert('Not exited', e?.response?.data?.detail || 'Could not exit them. Only an Admin can. Try again.');
               } finally {
                 resolve();
               }

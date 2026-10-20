@@ -22,6 +22,7 @@ from routes import primetime as pt  # noqa: E402
 def test_tomorrow_skips_sunday():
     assert pt._next_primetime_day(date(2026, 10, 13)) == date(2026, 10, 14)   # Tue → Wed
     assert pt._next_primetime_day(date(2026, 10, 17)) == date(2026, 10, 19)   # Sat → Mon
+    assert pt._next_primetime_day(date(2026, 10, 16)) == date(2026, 10, 19)   # Fri → Mon (no Saturday Primetime)
     assert "free" in pt.MODES
 
 

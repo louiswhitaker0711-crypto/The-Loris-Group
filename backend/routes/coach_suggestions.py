@@ -41,6 +41,7 @@ async def coach_suggestions(request: Request):
     async for e in db.bells_entries.find({"user_id": {"$in": ids}, "week_ending": {"$gte": since_week}},
                                          {"_id": 0, "user_id": 1, "week_ending": 1, "days": 1}):
         entries.setdefault(str(e["user_id"]), []).append(e)
+    from core.kpi_rules import day_counts   # days under 10 doors or 2/2/2/2 don't count
     field: dict = {}
     since = (through - timedelta(days=21)).isoformat()
     async for r in db.owneriq_kpis.find({"cg1_user_id": {"$in": ids}, "date": {"$gte": since, "$lte": through.isoformat()},
@@ -68,7 +69,8 @@ async def coach_suggestions(request: Request):
         quality = {b["user_id"]: b.get("metrics") or {} for b in qdoc.get("bas") or [] if b.get("user_id")}
     out = []
     for uid, name in people.items():
-        for s in suggest(name, bells_days(entries.get(uid, [])), list((field.get(uid) or {}).values()), through,
+        for s in suggest(name, bells_days(entries.get(uid, [])), [f for f in (field.get(uid) or {}).values()
+                                                                          if day_counts(f["doors"], f["spoken"], f["pitched"], f["closed"])], through,
                          quality.get(uid), qweek):
             out.append({**s, "user_id": uid, "name": name})
     out.sort(key=lambda s: (s["priority"], s["name"].lower()))

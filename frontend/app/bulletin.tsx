@@ -53,6 +53,8 @@ type PctRow   = { rank: number; user_id: string | null; name: string; office: st
 export type Bulletin = {
   week_ending: string;
   min_sales_pct: number;
+  /** Sign-ups needed to appear on the Top 5 board (10). */
+  min_sales_top?: number;
   top_sales: SalesRow[];
   /** Still sent by the API; not used by Vertex and never rendered. */
   top_membership?: PctRow[];
@@ -261,7 +263,7 @@ export default function BulletinScreen() {
               formatValue={(r) => `${r.sales}`}
               secondaryLabel="fees"
               formatSecondary={(r) => `${formatMoney(r.earnings || 0)} est. fees`}
-              emptyHint="No sign-ups recorded for this week."
+              emptyHint={`No BAs with ${data.min_sales_top ?? 10}+ sign-ups this week.`}
               styles={styles}
             />
 
@@ -283,7 +285,7 @@ export default function BulletinScreen() {
 
             <View style={styles.footerLine}>
               <Text style={styles.footerText}>Gold % = share of sign-ups that were Gold (a repeat weekly order of £10 or more)</Text>
-              <Text style={styles.footerText}>Gold % needs {data.min_sales_pct}+ sign-ups to qualify · Tied? More sign-ups wins.</Text>
+              <Text style={styles.footerText}>Top 5 needs {data.min_sales_top ?? 10}+ sign-ups · Gold % needs {data.min_sales_pct}+ · Tied? More sign-ups wins.</Text>
             </View>
           </View>
         )}

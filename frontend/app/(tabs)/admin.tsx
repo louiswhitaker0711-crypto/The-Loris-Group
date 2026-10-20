@@ -49,6 +49,9 @@ export default function AdminScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const isSuperAdmin = user?.is_super_admin;
+  // OwnerIQ is switched off for this office: its screens don't show.
+  const oiqOn = !!useQuery({ queryKey: ['owneriq-switch'], queryFn: () => apiService.getOwnerIQSwitch().then((r) => r.data),
+    staleTime: 10 * 60 * 1000, retry: false }).data?.on;
   const [tab, setTab] = useState<'users' | 'offices'>('users');
   const [selectedOffice, setSelectedOffice] = useState<string | undefined>(undefined);
   const [roleFilter, setRoleFilter] = useState<'all' | 'admin' | 'leader' | 'trainee'>('all');
@@ -129,8 +132,8 @@ export default function AdminScreen() {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] });
       queryClient.invalidateQueries({ queryKey: ['new-hires'] });
       const msg = res.data?.reassigned > 0
-        ? `User deleted. ${res.data.reassigned} new starter(s) moved to Unassigned.`
-        : 'User deleted';
+        ? `Exited. ${res.data.reassigned} new starter(s) moved to Unassigned.`
+        : 'Exited. Their records are kept.';
       showAlert('Done', msg);
     },
   });
@@ -397,7 +400,7 @@ export default function AdminScreen() {
     usesExternalBadgeMaker
       ? { key: 'badges', icon: 'ribbon-outline', title: 'Badges', sub: 'Opens your badge maker in a new tab', testID: 'admin-badges', onPress: openBadgeMaker }
       : { key: 'badges', icon: 'ribbon-outline', title: 'Badges', sub: 'Make, edit and print ID badges', testID: 'admin-badges', onPress: () => router.push('/badges' as any) },
-    ...(isSuperAdmin ? [{ key: 'owneriq', icon: 'flash-outline' as const, title: 'OwnerIQ', sub: 'Reconnect the OwnerIQ data feed', onPress: () => router.push('/owneriq-connect' as any) }] : []),
+    ...(isSuperAdmin && oiqOn ? [{ key: 'owneriq', icon: 'flash-outline' as const, title: 'OwnerIQ', sub: 'Reconnect the OwnerIQ data feed', onPress: () => router.push('/owneriq-connect' as any) }] : []),
     ...(isSuperAdmin ? [{ key: 'restore', icon: 'library-outline' as const, title: 'Restore Manual + Modules', sub: 'Put back anything missing', onPress: restoreBundle }] : []),
   ];
 
@@ -527,10 +530,10 @@ export default function AdminScreen() {
                 <Ionicons name="person-add" size={15} color={colors.onPrimary} />
                 <Text style={styles.addBtnText}>Add Coach / BA</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.addBtn} onPress={() => router.push('/owneriq-import' as any)} accessibilityRole="button" testID="admin-add-owneriq">
+              {oiqOn && <TouchableOpacity style={styles.addBtn} onPress={() => router.push('/owneriq-import' as any)} accessibilityRole="button" testID="admin-add-owneriq">
                 <Ionicons name="git-network-outline" size={15} color={colors.onPrimary} />
                 <Text style={styles.addBtnText}>Add from OwnerIQ</Text>
-              </TouchableOpacity>
+              </TouchableOpacity>}
               <TouchableOpacity style={styles.addBtn} onPress={() => router.push('/rollcall-import' as any)} accessibilityRole="button" testID="admin-rollcall-import">
                 <Ionicons name="document-attach-outline" size={15} color={colors.onPrimary} />
                 <Text style={styles.addBtnText}>Import roll call</Text>
@@ -804,12 +807,13 @@ export default function AdminScreen() {
                                 </TouchableOpacity>
                               )}
                               {!u.is_super_admin && (
-                                <TouchableOpacity style={[styles.act, styles.actDanger]} onPress={() => showAlert('Delete', `Remove ${u.name}?`, [
+                                <TouchableOpacity style={[styles.act, styles.actDanger]} onPress={() => showAlert(`Exit ${u.name}?`,
+                                  `From today their Bells go red and they drop off everything going forward: Bells from next week, teams, plans and lists. They can no longer sign in. Their past numbers and records are kept.`, [
                                   { text: 'Cancel', style: 'cancel' },
-                                  { text: 'Delete', style: 'destructive', onPress: () => deleteMut.mutate(u.id) },
+                                  { text: 'Exit', style: 'destructive', onPress: () => deleteMut.mutate(u.id) },
                                 ])}>
-                                  <Ionicons name="trash-outline" size={14} color={colors.red} />
-                                  <Text style={[styles.actText, { color: colors.red }]}>Delete</Text>
+                                  <Ionicons name="exit-outline" size={14} color={colors.red} />
+                                  <Text style={[styles.actText, { color: colors.red }]}>Exit</Text>
                                 </TouchableOpacity>
                               )}
                             </View>

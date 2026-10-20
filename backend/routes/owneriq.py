@@ -154,7 +154,7 @@ async def owneriq_connect_retry(request: Request):
 # so every screen fills in with no change to the read paths. Authorised by a
 # shared secret in the body (OWNERIQ_RELAY_SECRET) — not a logged-in session,
 # because the post comes cross-origin from the owner-iq.ai tab. See
-# docs/owneriq-browser-relay.user.js.
+# The userscript (docs/owneriq-browser-relay.user.js) was removed on 20 Oct 2026 when OwnerIQ was switched off.
 import os as _os
 import json as _json
 import secrets as _secrets
@@ -167,6 +167,10 @@ def _relay_secret() -> str:
 async def _relay_body(request: Request) -> dict:
     """Parse + authorise a relay POST. The body is text/plain JSON (a 'simple'
     cross-origin request, so the browser sends it with no CORS preflight)."""
+    from core.owneriq_session import disabled
+    if disabled():
+        # OwnerIQ is switched off: nothing from the relay is taken.
+        raise HTTPException(status_code=410, detail="OwnerIQ is switched off.")
     secret = _relay_secret()
     if len(secret) < 16:
         raise HTTPException(status_code=503, detail="Relay is not configured (set OWNERIQ_RELAY_SECRET).")
