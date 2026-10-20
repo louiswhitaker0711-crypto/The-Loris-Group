@@ -55,6 +55,19 @@ import { SUPER_GREEN_WEEK_MIN, GREEN_WEEK_MIN, AMBER_WEEK_MIN, RED_WEEK_MAX, wee
 // on a page.
 // ─────────────────────────────────────────────────────────────────────
 
+/** PR (personal recruit) / OR (office recruitment) beside a name on Bells. */
+function RecruitBadge({ e, colors, z = 1 }: { e: Entry; colors: any; z?: number }) {
+  if (!e.recruit_badge) return null;
+  const pr = e.recruit_badge === 'PR';
+  return (
+    <Text style={{ fontSize: 9 * z, fontFamily: fonts.bodyBold, letterSpacing: 0.4, marginLeft: 4, paddingHorizontal: 4, paddingVertical: 1,
+      borderRadius: 4, overflow: 'hidden', color: pr ? colors.onPrimary : colors.textSecondary, backgroundColor: pr ? colors.primary : colors.surfaceAlt }}
+      accessibilityLabel={pr ? `Personal recruit${e.recruited_by_name ? ` of ${e.recruited_by_name}` : ''}` : 'Office recruitment'}>
+      {e.recruit_badge}
+    </Text>
+  );
+}
+
 /** The team for people who aren't in a named team yet (the Owner's own). */
 const MINI_TEAM = `Mini ${APP_SHORT_NAME}`;
 const MINI_KEY = '__no_team__';
@@ -388,6 +401,9 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
   const [rowGoal, setRowGoal] = useState('');
   const [rowBe, setRowBe] = useState('');
   const [rowSaving, setRowSaving] = useState(false);
+  const [rowRec, setRowRec] = useState('');            // 'office' | a user id | '' (Admins only)
+  const [recOpen, setRecOpen] = useState(false);
+  const isAdmin = user?.role === 'admin';
   const viewOnly = (e: Entry) => {
     if (!e.archived) return false;
     toast.info(`${e.user_name} is from the roll call sheet: view only.`);
@@ -397,6 +413,8 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
     if (!weekEnding || viewOnly(e)) return;
     setRowGoal(e.weekly_goal != null ? String(e.weekly_goal) : '');
     setRowBe(e.break_even != null ? String(e.break_even) : '');
+    setRowRec(e.recruited_by || '');
+    setRecOpen(false);
     setRowEdit(e);
   };
   const saveRow = async () => {
@@ -409,6 +427,9 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
         week_ending: weekEnding, user_name: rowEdit.user_name, user_id: rowEdit.user_id, office_id: rowEdit.office_id,
         stage: null, break_even: n(rowBe), weekly_goal: n(rowGoal), days,
       });
+      if (isAdmin && rowEdit.user_id && rowRec !== (rowEdit.recruited_by || '')) {
+        await apiService.setRecruitedBy(rowEdit.user_id, rowRec);
+      }
       setRowEdit(null);
       toast.success('Saved');
       onRefresh?.();
@@ -718,6 +739,36 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
                   placeholder="–" placeholderTextColor={colors.textMuted} accessibilityLabel="Break-even" />
               </View>
             </View>
+            {isAdmin && !!rowEdit?.user_id && (() => {
+              const others = entries.filter((x) => x.user_id && x.user_id !== rowEdit.user_id && x.user_id !== user?.id && !x.archived)
+                .sort((a, b) => (a.user_name || '').localeCompare(b.user_name || ''));
+              const pickedName = rowRec && rowRec !== 'office' && rowRec !== user?.id
+                ? (entries.find((x) => x.user_id === rowRec)?.user_name || rowEdit.recruited_by_name || 'Someone') : '';
+              const chip = (key: string, label: string, on: boolean, onPress: () => void) => (
+                <TouchableOpacity key={key} onPress={onPress} style={[styles.ceStatusChip, on && styles.ceStatusChipActive]}>
+                  <Text style={[styles.ceStatusChipText, on && { color: colors.onPrimary }]}>{label}</Text>
+                </TouchableOpacity>
+              );
+              return (
+                <View style={{ marginTop: 12 }}>
+                  <Text style={styles.ceNumLabel}>RECRUITED BY (PR / OR ON BELLS)</Text>
+                  <View style={[styles.ceStatusRow, { marginTop: 4 }]}>
+                    {chip('office', 'Office recruitment (OR)', rowRec === 'office', () => setRowRec('office'))}
+                    {chip('me', 'Me (PR)', !!user?.id && rowRec === user.id, () => setRowRec(user?.id || ''))}
+                    {chip('other', pickedName ? `${pickedName.split(' ')[0]} (PR)` : 'A BA or Coach (PR)', !!pickedName, () => setRecOpen(!recOpen))}
+                    {!!rowRec && chip('clear', 'Not set', false, () => setRowRec(''))}
+                  </View>
+                  {recOpen && (
+                    <ScrollView style={{ maxHeight: 150, marginTop: 6 }} nestedScrollEnabled>
+                      <View style={styles.ceStatusRow}>
+                        {others.map((x) => chip(x.user_id!, (x.user_name || '').split(' ').slice(0, 2).join(' '), rowRec === x.user_id,
+                          () => { setRowRec(x.user_id!); setRecOpen(false); }))}
+                      </View>
+                    </ScrollView>
+                  )}
+                </View>
+              );
+            })()}
             <View style={styles.cgRowBtns}>
               <TouchableOpacity style={[styles.cgBtn, styles.cgBtnGhost]} onPress={() => setRowEdit(null)} disabled={rowSaving}>
                 <Text style={styles.cgBtnGhostText}>Cancel</Text>
@@ -960,6 +1011,7 @@ function BodyContent({ groups, office, colors, isDark, styles, z, w, totalW, sho
                           accessibilityRole="link" accessibilityLabel={`Open ${e.user_name}`}>
                           <Text style={[styles.nameText, { fontSize: cellFont, lineHeight: 15.5 * z, fontFamily: isLeader ? fonts.bodyBold : fonts.bodySemibold }]} numberOfLines={2}>{e.user_name}</Text>
                         </TouchableOpacity>
+                        <RecruitBadge e={e} colors={colors} z={z} />
                       </View>
                       <View style={[styles.cell, { width: w.coach, height: rowH, alignItems: 'flex-start', paddingHorizontal: 8 * z }]}>
                         <Text style={[styles.softText, { fontSize: 12 * z }]} numberOfLines={1}>{firstName(e.coach_name) || '–'}</Text>
@@ -1185,6 +1237,7 @@ function PhoneSheet({ groups, office, entries, colors, isDark, styles, showMc, w
                     accessibilityRole="link" accessibilityLabel={`Open ${e.user_name}`}>
                     <Text style={styles.lName} numberOfLines={1}>{e.user_name}</Text>
                   </TouchableOpacity>
+                  <RecruitBadge e={e} colors={colors} />
                   <TouchableOpacity onPress={() => onRowPress?.(e)} activeOpacity={0.6} hitSlop={6}
                     accessibilityLabel={`${e.user_name}: goal ${e.weekly_goal ?? 'not set'}. Tap to change`} testID={`bells-goal-${e.user_id || idx}`}>
                     <Text style={[styles.lGoal, gLook && { color: gLook.fg, backgroundColor: gLook.bg, paddingHorizontal: 3, borderRadius: 4 }]}>/{e.weekly_goal ?? '–'}</Text>

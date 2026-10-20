@@ -72,6 +72,8 @@ type Entry = {
   user_id?: string | null;
   user_name: string;
   role?: string;
+  /** 'PR' personal recruit, 'OR' office recruitment. */
+  recruit_badge?: 'PR' | 'OR' | null;
   days: Day[];
   total_sales: number;
   total_over30: number;
@@ -535,6 +537,11 @@ function TableView({ entries }: { entries: Entry[] }) {
                       style={[tvStyles.nameText, isLeader && { fontWeight: '900' }]}
                       numberOfLines={1}
                     >{e.user_name}</Text>
+                    {!!e.recruit_badge && (
+                      <Text style={{ fontSize: 9, fontWeight: '800', marginLeft: 4, paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4, overflow: 'hidden',
+                        color: e.recruit_badge === 'PR' ? colors.onPrimary : colors.textSecondary,
+                        backgroundColor: e.recruit_badge === 'PR' ? colors.primary : colors.surfaceAlt }}>{e.recruit_badge}</Text>
+                    )}
                   </View>
                   <Text style={tvStyles.roleText}>
                     {isLeader ? 'Coach' : (e.role === 'trainee' ? 'BA' : (e.role === 'leader' ? 'Coach' : ''))}

@@ -147,6 +147,11 @@ export type Entry = {
    *  their days read red; from the next week they're off the sheet. */
   left_on?: string | null;
   user_active?: boolean;
+  /** 'PR' personal recruit (by the Owner or a BA/Coach), 'OR' office recruitment. */
+  recruit_badge?: 'PR' | 'OR' | null;
+  /** Inside the app only: 'office' or the recruiter's user id, and their name. */
+  recruited_by?: string | null;
+  recruited_by_name?: string;
 };
 
 /** Has this person exited by day `dayIdx` (0 = Mon) of the week ending `weekEnding`? */
