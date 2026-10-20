@@ -24,7 +24,11 @@ def _run(coro):
 
 
 def test_every_quiz_is_for_a_real_item_and_well_formed():
-    items = {f"{i['stage']}|{i['topic']}" for i in sheet_items()}
+    # Questions are filed under the original COD's names or, for those
+    # written while the COD sheet was live, the sheet's names (mapped back).
+    from core.module_seed import all_seed_modules
+    items = {f"{i['stage']}|{i['topic']}" for i in sheet_items()} | \
+        {f"{m['stage']}|{m['topic']}" for m in all_seed_modules()}
     assert len(QUIZZES) > 200
     for key, qs in QUIZZES.items():
         assert key in items, key
@@ -89,3 +93,11 @@ def test_pass_needs_all_but_one_right_and_ticks_know(monkeypatch):
     assert res["passed"] is True
     row = _run(db.module_progress.find_one({"module_id": "m1"}))
     assert row["ladder"] == 1
+
+
+
+def test_every_original_cod_item_has_a_written_quiz():
+    from core.module_seed import all_seed_modules
+    modules._AUTHORED_QUIZZES = None
+    missing = [m["topic"] for m in all_seed_modules() if not modules.authored_quiz_questions(m["stage"], m["topic"])]
+    assert missing == []
