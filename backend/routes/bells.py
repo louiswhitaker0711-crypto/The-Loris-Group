@@ -379,6 +379,16 @@ async def _enrich_entries_with_teams(entries: list) -> None:
         if parent:
             children_of.setdefault(str(parent), []).append(uid)
 
+    # Someone who's exited (deleted / inactive) still sits in their own team
+    # for the weeks they show on Bells: load their own record so the walk up
+    # to their Coach works. They're not added to children_of, so they never
+    # make anyone a section leader.
+    gone = [x for x in uids_for_teams if x not in cache and ObjectId.is_valid(x)]
+    if gone:
+        async for u in db.users.find({"_id": {"$in": [ObjectId(x) for x in gone]}},
+                                     {"_id": 1, "team_name": 1, "reports_to": 1, "role": 1, "name": 1}):
+            cache[str(u["_id"])] = u
+
     async def _load(uid: str):
         if uid in cache:
             return cache[uid]
