@@ -50,7 +50,10 @@ from database import db
 router = APIRouter()
 
 # Mon=0 .. Sat=5 — same convention as the weekly planner and the office agenda.
-DAYS = list(range(0, 6))
+# Primetime runs Monday to Friday (the Owner, 20 Oct 2026): Saturday mornings
+# are sectors, so there's no Saturday Primetime and Friday's breakdown plans
+# Monday's.
+DAYS = list(range(0, 5))
 DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 DAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
@@ -101,7 +104,7 @@ def _planning_day(now: Optional[datetime] = None) -> date:
     start = FIELD_START_SAT if now.weekday() == 5 else FIELD_START
     if (now.hour, now.minute) >= start:
         target += timedelta(days=1)
-    if target.weekday() == 6:  # Sunday
+    while target.weekday() >= 5:  # no Primetime Saturday or Sunday
         target += timedelta(days=1)
     return target
 
@@ -734,7 +737,7 @@ async def _guard_write(request: Request, office_param: Optional[str], subject_us
     if not wk or wk != week_ending:
         raise HTTPException(status_code=400, detail="week_ending must be the Sunday that ends the week")
     if day_index not in DAYS:
-        raise HTTPException(status_code=400, detail="day_index must be 0 (Mon) through 5 (Sat)")
+        raise HTTPException(status_code=400, detail="day_index must be 0 (Mon) through 4 (Fri)")
 
     editable = await _editable_ids(me, office_id)
     if editable is not None and subject_user_id not in editable:
@@ -1090,7 +1093,9 @@ async def clear_primetime_entry(request: Request, week_ending: str, day_index: i
 
 def _next_primetime_day(after: date) -> date:
     d = after + timedelta(days=1)
-    return d + timedelta(days=1) if d.weekday() == 6 else d
+    while d.weekday() >= 5:  # Friday's breakdown plans Monday's
+        d += timedelta(days=1)
+    return d
 
 
 async def _sector_people(me: dict, sector_date: str) -> tuple[list[dict], bool]:

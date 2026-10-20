@@ -241,8 +241,8 @@ def test_from_field_start_the_plan_rolls_to_tomorrow():
     # 13:30 (field start) is already tomorrow: today's Primetime is done.
     assert pt._planning_day(_at_hm("2026-08-04", 13, 30)).isoformat() == "2026-08-05"
     assert pt._planning_day(_at("2026-08-04", 23)).isoformat() == "2026-08-05"
-    # Saturday's field starts at 10:00.
-    assert pt._planning_day(_at("2026-08-08", 9)).isoformat() == "2026-08-08"
+    # No Primetime on Saturday: all of Saturday looks ahead to Monday.
+    assert pt._planning_day(_at("2026-08-08", 9)).isoformat() == "2026-08-10"
     assert pt._planning_day(_at("2026-08-08", 10)).isoformat() == "2026-08-10"
 
 
@@ -264,9 +264,9 @@ def test_sunday_daytime_looks_ahead_to_monday():
     assert pt._planning_day(_at("2026-08-09", 10)).isoformat() == "2026-08-10"
 
 
-def test_friday_evening_is_saturday_not_monday():
-    # Saturday is a working day here, so no skipping.
-    assert pt._planning_day(_at("2026-08-07", 20)).isoformat() == "2026-08-08"
+def test_friday_evening_is_monday():
+    # No Primetime on Saturday mornings (sectors): Friday plans Monday.
+    assert pt._planning_day(_at("2026-08-07", 20)).isoformat() == "2026-08-10"
 
 
 # --------------------------------------------------------------------------
