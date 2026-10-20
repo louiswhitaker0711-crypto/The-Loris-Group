@@ -21,7 +21,7 @@ import { useKeyboardInset } from '../src/hooks/useKeyboardInset';
 import SectorRecap from '../src/components/sector/SectorRecap';
 import PostcodeMiniMap from '../src/components/sector/PostcodeMiniMap';
 
-type Person = { user_id: string; name: string; role: string; sector_leader_id?: string | null; in_today?: boolean; no_show?: boolean };
+type Person = { user_id: string; name: string; role: string; sector_leader_id?: string | null; in_today?: boolean; no_show?: boolean; not_scheduled?: boolean };
 type Sector = { leader_id: string; leader_name: string; postcode: string; goal: number | null; member_ids: string[]; can_delete: boolean };
 type Draft = { leader_id: string; postcode: string; goal: string; member_ids: string[] };
 type BoardSec = { leader_id: string; leader_name: string; postcode: string; goal: string; member_ids: string[] };
@@ -207,7 +207,7 @@ export default function SectorPlanScreen() {
             </View>
             <Text style={s.label}>Who's in it{locked ? ' (fixed now the field\u2019s started)' : ''}</Text>
             <View style={s.chips}>
-              {people.filter((p) => p.user_id !== sec.leader_id && !otherLeaders.has(p.user_id) && !p.no_show
+              {people.filter((p) => p.user_id !== sec.leader_id && !otherLeaders.has(p.user_id) && !p.no_show && !p.not_scheduled
                                     && (canPlace(p) || sec.member_ids.includes(p.user_id))).map((p) => {
                 const on = sec.member_ids.includes(p.user_id);
                 const elsewhere = board.find((x) => x.leader_id !== sec.leader_id && x.member_ids.includes(p.user_id));
@@ -229,7 +229,7 @@ export default function SectorPlanScreen() {
         <View style={s.card}>
           <Text style={s.label}>Who's leading the new sector?</Text>
           <View style={s.chips}>
-            {people.filter((p) => canPlace(p) && !p.no_show && !board.some((x) => x.leader_id === p.user_id)).map((p) => (
+            {people.filter((p) => canPlace(p) && !p.no_show && !p.not_scheduled && !board.some((x) => x.leader_id === p.user_id)).map((p) => (
               <Pressable key={p.user_id} onPress={() => addSector(p.user_id)} style={s.chip}><Text style={s.chipText}>{p.name}</Text></Pressable>
             ))}
           </View>
@@ -260,7 +260,7 @@ export default function SectorPlanScreen() {
       {!sent && board.length > 0 && dirty && <Text style={s.small}>Save all first, then you can confirm.</Text>}
 
       {(() => {
-        const unplaced = people.filter((p) => canPlace(p) && !p.no_show && p.role !== 'admin' && !board.some((x) => x.member_ids.includes(p.user_id)));
+        const unplaced = people.filter((p) => canPlace(p) && !p.no_show && !p.not_scheduled && p.role !== 'admin' && !board.some((x) => x.member_ids.includes(p.user_id)));
         return unplaced.length > 0 && board.length > 0 ? (
           <Text style={s.muted}>Not in a sector: {unplaced.map((p) => first(p.name)).join(', ')}</Text>
         ) : null;
