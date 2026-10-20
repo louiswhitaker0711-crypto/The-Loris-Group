@@ -49,6 +49,9 @@ export default function AdminScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const isSuperAdmin = user?.is_super_admin;
+  // OwnerIQ is switched off for this office: its screens don't show.
+  const oiqOn = !!useQuery({ queryKey: ['owneriq-switch'], queryFn: () => apiService.getOwnerIQSwitch().then((r) => r.data),
+    staleTime: 10 * 60 * 1000, retry: false }).data?.on;
   const [tab, setTab] = useState<'users' | 'offices'>('users');
   const [selectedOffice, setSelectedOffice] = useState<string | undefined>(undefined);
   const [roleFilter, setRoleFilter] = useState<'all' | 'admin' | 'leader' | 'trainee'>('all');
@@ -397,7 +400,7 @@ export default function AdminScreen() {
     usesExternalBadgeMaker
       ? { key: 'badges', icon: 'ribbon-outline', title: 'Badges', sub: 'Opens your badge maker in a new tab', testID: 'admin-badges', onPress: openBadgeMaker }
       : { key: 'badges', icon: 'ribbon-outline', title: 'Badges', sub: 'Make, edit and print ID badges', testID: 'admin-badges', onPress: () => router.push('/badges' as any) },
-    ...(isSuperAdmin ? [{ key: 'owneriq', icon: 'flash-outline' as const, title: 'OwnerIQ', sub: 'Reconnect the OwnerIQ data feed', onPress: () => router.push('/owneriq-connect' as any) }] : []),
+    ...(isSuperAdmin && oiqOn ? [{ key: 'owneriq', icon: 'flash-outline' as const, title: 'OwnerIQ', sub: 'Reconnect the OwnerIQ data feed', onPress: () => router.push('/owneriq-connect' as any) }] : []),
     ...(isSuperAdmin ? [{ key: 'restore', icon: 'library-outline' as const, title: 'Restore Manual + Modules', sub: 'Put back anything missing', onPress: restoreBundle }] : []),
   ];
 
@@ -527,10 +530,10 @@ export default function AdminScreen() {
                 <Ionicons name="person-add" size={15} color={colors.onPrimary} />
                 <Text style={styles.addBtnText}>Add Coach / BA</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.addBtn} onPress={() => router.push('/owneriq-import' as any)} accessibilityRole="button" testID="admin-add-owneriq">
+              {oiqOn && <TouchableOpacity style={styles.addBtn} onPress={() => router.push('/owneriq-import' as any)} accessibilityRole="button" testID="admin-add-owneriq">
                 <Ionicons name="git-network-outline" size={15} color={colors.onPrimary} />
                 <Text style={styles.addBtnText}>Add from OwnerIQ</Text>
-              </TouchableOpacity>
+              </TouchableOpacity>}
               <TouchableOpacity style={styles.addBtn} onPress={() => router.push('/rollcall-import' as any)} accessibilityRole="button" testID="admin-rollcall-import">
                 <Ionicons name="document-attach-outline" size={15} color={colors.onPrimary} />
                 <Text style={styles.addBtnText}>Import roll call</Text>

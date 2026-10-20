@@ -52,6 +52,13 @@ _TRANSIENT_BACKOFF_SECONDS = 300  # 5xx / 429 / network: wait before the next tr
 # The relay pulls once a day at 20:00 (userscript v2.0), so one pull keeps the
 # app on the relay's data until the next evening: the server never reaches
 # OwnerIQ itself in between.
+def disabled() -> bool:
+    """OwnerIQ is switched off for good (the Owner, 20 Oct 2026): the app never
+    contacts OwnerIQ and takes nothing from it. Bells and the numbers come from
+    the sector breakdowns. Set OWNERIQ_ENABLED=true to bring it back."""
+    return (os.getenv("OWNERIQ_ENABLED") or "").strip().lower() not in ("1", "true", "yes")
+
+
 RELAY_TTL_S = int((os.getenv("OWNERIQ_RELAY_TTL_MIN") or str(26 * 60))) * 60
 RELAY = "relay"
 _lock = asyncio.Lock()
@@ -150,7 +157,7 @@ async def relay_stall_tick() -> int:
     stops (laptop asleep, tab closed, session expired), tell the Owner once so
     they can reopen it. Only when a relay secret is set and the relay has run at
     least once; silent if OwnerIQ was switched off. Returns 1 if alerted."""
-    if len((os.getenv("OWNERIQ_RELAY_SECRET") or "").strip()) < 16:
+    if disabled() or len((os.getenv("OWNERIQ_RELAY_SECRET") or "").strip()) < 16:
         return 0
     doc = await _read()
     if doc.get("state") == OFF or not doc.get("relay_at"):
@@ -220,6 +227,8 @@ def _creds() -> tuple[str, str]:
 async def available() -> bool:
     """Is OwnerIQ usable right now? False once it needs a reconnect, or when
     there's neither a saved token nor a password to sign in with."""
+    if disabled():
+        return False
     doc = await _read()
     if _relay_is_fresh(doc):
         return True
@@ -234,6 +243,9 @@ async def available() -> bool:
 async def status() -> dict:
     """For the Reconnect screen. Never includes the token."""
     doc = await _read()
+    if disabled():
+        return {"state": OFF, "source": None, "reason": "OwnerIQ is switched off.", "disabled": True,
+                "relay": {"active": False, "at": doc.get("relay_at")}, "relay_log": []}
     email, password = _creds()
     if _relay_is_fresh(doc):
         # The browser relay is feeding the app; show it as connected so the
@@ -341,6 +353,8 @@ def _raise_reconnect(reason: str):
 
 async def get_token(client: httpx.AsyncClient) -> str:
     """The one token source. Every OwnerIQ call uses this."""
+    if disabled():
+        raise OwnerIQNeedsReconnect("OwnerIQ is switched off.")
     doc = await _read()
     if _relay_is_fresh(doc):
         # The browser relay is live: the server must not reach OwnerIQ itself

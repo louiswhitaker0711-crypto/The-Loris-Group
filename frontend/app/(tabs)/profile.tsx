@@ -128,6 +128,8 @@ export default function ProfileScreen() {
   const router = useRouter();
   const { user, setUser, realUser, isPreviewing, startPreview, logout } = useAuth();
   const isAdmin = user?.role === 'admin';
+  const oiqOn = !!useQuery({ queryKey: ['owneriq-switch'], queryFn: () => apiService.getOwnerIQSwitch().then((r) => r.data),
+    staleTime: 10 * 60 * 1000, retry: false }).data?.on;
   const queryClient = useQueryClient();
   const { officeId } = useActiveOffice();
   const [showPreviewPicker, setShowPreviewPicker] = useState(false);
@@ -516,7 +518,7 @@ export default function ProfileScreen() {
                 <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
               </TouchableOpacity>
             )}
-            {isAdmin && !!user?.is_super_admin && (
+            {isAdmin && !!user?.is_super_admin && oiqOn && (
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={() => router.navigate('/owneriq-admin' as any)}
