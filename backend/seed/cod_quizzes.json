@@ -10758,5 +10758,421 @@
    ],
    "answer": 3
   }
+ ],
+ "1|Stage 1 — The Foundation Standard": [
+  {
+   "question": "How do you move up from Stage 1?",
+   "choices": [
+    "On evidence, signed off by your coach",
+    "After a set number of weeks",
+    "Once you've sat every training session",
+    "When you ask to move up"
+   ],
+   "answer": 0
+  },
+  {
+   "question": "Where do you prove the Stage 1 skills?",
+   "choices": [
+    "By watching other BAs",
+    "In roleplay and in a live environment",
+    "By telling your coach you know them",
+    "In a written test only"
+   ],
+   "answer": 1
+  },
+  {
+   "question": "Which of these is evidence for Stage 1?",
+   "choices": [
+    "Being in the office the longest",
+    "Reading the coaching booklet once",
+    "Three days in a row with great time ownership and effort",
+    "One good day in the field"
+   ],
+   "answer": 2
+  }
+ ],
+ "1|5-Step Sign-Up Process": [
+  {
+   "question": "What are the 5 Steps, in order?",
+   "choices": [
+    "Introduction, Close, Short Story, Presentation, Rehash",
+    "Presentation, Introduction, Close, Short Story, Rehash",
+    "Close, Introduction, Presentation, Rehash, Short Story",
+    "Introduction, Presentation, Short Story, Close, Rehash"
+   ],
+   "answer": 3
+  },
+  {
+   "question": "A close falls flat. What's the most likely reason?",
+   "choices": [
+    "The weather was bad",
+    "The customer wasn't interested in milk",
+    "You spoke too slowly",
+    "A step got skipped"
+   ],
+   "answer": 3
+  },
+  {
+   "question": "How should the 5 Steps sound at the door?",
+   "choices": [
+    "Word for word like a script",
+    "Different every time, in any order",
+    "As fast as possible",
+    "Confident and natural, never like a script"
+   ],
+   "answer": 3
+  }
+ ],
+ "1|Impulses": [
+  {
+   "question": "What does G.I.F.T.S stand for?",
+   "choices": [
+    "Greeting, Introduction, Facts, Trust, Signature",
+    "Gold, Incentive, Fees, The Round, Silver",
+    "Generosity, Indifference, Feel Good Factor, Tone of Voice / Body Language, Support",
+    "Goals, Ideas, Focus, Timing, Sales"
+   ],
+   "answer": 2
+  },
+  {
+   "question": "What are impulses for?",
+   "choices": [
+    "Making the pitch longer",
+    "Filling in Field IQ",
+    "Choosing which doors to knock",
+    "Giving people reasons to act now instead of maybe later"
+   ],
+   "answer": 3
+  },
+  {
+   "question": "How should you use impulses?",
+   "choices": [
+    "Naturally, where each one fits in the conversation",
+    "Forced in, to add pressure",
+    "All at once at the start",
+    "Only after the customer says no"
+   ],
+   "answer": 0
+  }
+ ],
+ "2|Stage 2 — The Self Management Standard": [
+  {
+   "question": "What changes at Stage 2?",
+   "choices": [
+    "You only work in the office",
+    "You start running a team",
+    "You stop needing a coach to walk you through every day",
+    "You no longer need Stage 1 skills"
+   ],
+   "answer": 2
+  },
+  {
+   "question": "Which is evidence for Stage 2?",
+   "choices": [
+    "Knowing the names of the team",
+    "Signing up one customer",
+    "Turning up on time once",
+    "A weekly plan with one education goal and one financial goal"
+   ],
+   "answer": 3
+  },
+  {
+   "question": "Do the Stage 1 standards still count at Stage 2?",
+   "choices": [
+    "No, they're replaced",
+    "Only if your coach asks",
+    "Only on Saturdays",
+    "Yes, Stage 2 sits on top of Stage 1"
+   ],
+   "answer": 3
+  }
+ ],
+ "2|The 8 Steps": [
+  {
+   "question": "What are the 8 Steps for?",
+   "choices": [
+    "How to set up a sector",
+    "How a pro runs their day",
+    "How to fill in Bells",
+    "How to close a sign-up"
+   ],
+   "answer": 1
+  },
+  {
+   "question": "Which of these is one of the 8 Steps?",
+   "choices": [
+    "Bunny hops",
+    "Safeguarding your attitude",
+    "The Rehash",
+    "Silver sign-ups"
+   ],
+   "answer": 1
+  },
+  {
+   "question": "What does Stage 2 mean for the 8 Steps?",
+   "choices": [
+    "Your coach checks each one every day",
+    "They run on their own, with no one watching over you",
+    "You use them only on bad days",
+    "You only need to know their names"
+   ],
+   "answer": 1
+  }
+ ],
+ "2|Leading by Example": [
+  {
+   "question": "How do you lead by example?",
+   "choices": [
+    "Only once you have a team",
+    "By telling others what to do",
+    "By working the longest hours",
+    "In how you act and in what you produce"
+   ],
+   "answer": 3
+  },
+  {
+   "question": "Why does leading by example matter?",
+   "choices": [
+    "It gets you a team faster",
+    "It's the only way to earn fees",
+    "Coaches don't give feedback otherwise",
+    "People copy what they see long before they follow what they're told"
+   ],
+   "answer": 3
+  },
+  {
+   "question": "When does the standard need to hold?",
+   "choices": [
+    "Only when the coach is watching",
+    "On bad days as well as good ones",
+    "Only on good days",
+    "Only in the office"
+   ],
+   "answer": 1
+  }
+ ],
+ "3|Stage 3 — The Leader Standard": [
+  {
+   "question": "What do your results include at Stage 3?",
+   "choices": [
+    "Only your sector's doors",
+    "Only your own sign-ups",
+    "Only the office's total",
+    "Everyone you coach: their skills, quality and independence"
+   ],
+   "answer": 3
+  },
+  {
+   "question": "What's the real test of a Stage 3 leader?",
+   "choices": [
+    "How many hours you work",
+    "Does the team hold the standard when you're not there?",
+    "How loud the huddle is",
+    "How many people you recruit in a day"
+   ],
+   "answer": 1
+  },
+  {
+   "question": "What happens to your own numbers at Stage 3?",
+   "choices": [
+    "They still have to hold: leadership is added on top of production",
+    "Your coach covers them",
+    "They only count on Saturdays",
+    "They don't matter any more"
+   ],
+   "answer": 0
+  }
+ ],
+ "3|Sector Expertise": [
+  {
+   "question": "Which of these is part of the sector standard?",
+   "choices": [
+    "Writing the coaching booklet",
+    "End-of-day breakdowns",
+    "Setting fees",
+    "Choosing the office playlist"
+   ],
+   "answer": 1
+  },
+  {
+   "question": "Where does the full sector standard sit?",
+   "choices": [
+    "In the Sector/Site Leader (SL) stage",
+    "In Bells",
+    "In Stage 1",
+    "In the Earnings Calculator"
+   ],
+   "answer": 0
+  },
+  {
+   "question": "When working in someone else's sector, what do you do?",
+   "choices": [
+    "Back the sector leader's plan",
+    "Change the territory",
+    "Run your own plan",
+    "Leave early to plan your own"
+   ],
+   "answer": 0
+  }
+ ],
+ "4|Stage 4 — The Team Builder Standard": [
+  {
+   "question": "What does Stage 4 come down to?",
+   "choices": [
+    "How many sign-ups you get yourself",
+    "How many sectors you lead each day",
+    "Does your team run to the standard when you're not in the room?",
+    "How long your meetings are"
+   ],
+   "answer": 2
+  },
+  {
+   "question": "What must every standard have at Stage 4?",
+   "choices": [
+    "A poster on the wall",
+    "A team vote",
+    "A reward only",
+    "A number attached and a consequence when it's missed"
+   ],
+   "answer": 3
+  },
+  {
+   "question": "Which is evidence for Stage 4?",
+   "choices": [
+    "You lead every sector yourself",
+    "You're in the office every day",
+    "You sign up the most customers",
+    "A full day runs start to finish without you there"
+   ],
+   "answer": 3
+  }
+ ],
+ "5|Stage SL — The Sector Leader Standard": [
+  {
+   "question": "What does a Sector/Site Leader own?",
+   "choices": [
+    "The office's finances",
+    "The coaching booklet",
+    "Performance on the ground: territory, targets, quality and belief",
+    "Recruitment adverts"
+   ],
+   "answer": 2
+  },
+  {
+   "question": "What's the SL standard?",
+   "choices": [
+    "The leader gets the most sign-ups",
+    "The sector finishes early",
+    "Every BA works the same streets",
+    "The sector performs on target and on quality without the owner stepping in"
+   ],
+   "answer": 3
+  },
+  {
+   "question": "Which is evidence for SL?",
+   "choices": [
+    "Sector target hit or beaten four days out of the week",
+    "One great day a month",
+    "The longest sector meeting",
+    "Every BA on the same KPI"
+   ],
+   "answer": 0
+  }
+ ],
+ "5|High-Level Planning & Organization": [
+  {
+   "question": "When should the week's plan be set?",
+   "choices": [
+    "On Wednesday",
+    "Before Monday",
+    "After the week ends",
+    "Each morning"
+   ],
+   "answer": 1
+  },
+  {
+   "question": "What goes into the weekly plan?",
+   "choices": [
+    "Impacts, rotations and focus skills",
+    "Holiday dates",
+    "Only the sector postcodes",
+    "Only the goal"
+   ],
+   "answer": 0
+  },
+  {
+   "question": "The day calls for a different coaching move. What do you do?",
+   "choices": [
+    "Pivot: the plan serves the sector",
+    "Stick to the plan no matter what",
+    "Cancel the day",
+    "Wait until next week"
+   ],
+   "answer": 0
+  }
+ ],
+ "5|Emotional Control When Results Are Down": [
+  {
+   "question": "Results are down. What does the sector need from you?",
+   "choices": [
+    "Urgency and belief, not blame and gloom",
+    "Silence until it picks up",
+    "A long talk about the numbers",
+    "Your frustration, so they know it matters"
+   ],
+   "answer": 0
+  },
+  {
+   "question": "How do you call out poor performance?",
+   "choices": [
+    "Only by message",
+    "In front of everyone, loudly",
+    "Without souring the room",
+    "Not at all on a bad day"
+   ],
+   "answer": 2
+  },
+  {
+   "question": "Whose job is your frustration?",
+   "choices": [
+    "Nobody's: let it show",
+    "The owner's to sort",
+    "The team's to share",
+    "Yours to carry: the team gets what they need from you"
+   ],
+   "answer": 3
+  }
+ ],
+ "5|Performance Conversations": [
+  {
+   "question": "How should a performance conversation start?",
+   "choices": [
+    "With your conclusion",
+    "With a warning",
+    "With the data, asking why before deciding why",
+    "With last month's results"
+   ],
+   "answer": 2
+  },
+  {
+   "question": "What can change from person to person?",
+   "choices": [
+    "How you say it, never the standard",
+    "The standard itself",
+    "Nothing at all",
+    "The office KPIs"
+   ],
+   "answer": 0
+  },
+  {
+   "question": "How should the BA leave the conversation?",
+   "choices": [
+    "Upset, so it sticks",
+    "With no next step",
+    "Clear on the problem, owning it, and believing they can fix it",
+    "Thinking it's someone else's fault"
+   ],
+   "answer": 2
+  }
  ]
 }
