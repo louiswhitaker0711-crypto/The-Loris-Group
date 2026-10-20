@@ -397,8 +397,8 @@ def test_an_absent_day_is_read_off_the_bells_sheet(monkeypatch):
                  {"status": "in"}, {"status": "in"}, {"status": "off"}, {"status": "off"}],
     }]
     out = _statuses(rows, monkeypatch)
-    assert out["u1"] == ["in", "in", "ab", "in", "in", "off"]
-    assert [d for d in range(6) if out["u1"][d] == "ab"] == [2]
+    assert out["u1"] == ["in", "in", "ab", "in", "in"]          # Mon–Fri: no Saturday Primetime
+    assert [d for d in range(5) if out["u1"][d] == "ab"] == [2]
 
 
 def test_a_missing_bells_row_is_not_an_absence(monkeypatch):
@@ -419,9 +419,9 @@ def test_a_short_or_ragged_days_array_does_not_crash(monkeypatch):
         {"user_id": "u3", "office_id": "office-boston", "week_ending": WEEK},  # no days at all
     ]
     out = _statuses(rows, monkeypatch, ids=("u1", "u2", "u3"))
-    assert out["u1"] == ["in", "", "", "", "", ""]
+    assert out["u1"] == ["in", "", "", "", ""]
     assert out["u2"][2] == "ab" and out["u2"][0] == ""
-    assert out["u3"] == ["", "", "", "", "", ""]
+    assert out["u3"] == ["", "", "", "", ""]
 
 
 def test_no_ids_means_no_query(monkeypatch):
