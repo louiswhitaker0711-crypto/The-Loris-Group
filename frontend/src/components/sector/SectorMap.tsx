@@ -590,7 +590,7 @@ function HopsEditor({ date, data, onSaved, s, c }: any) {
     const hops = HOP_COLOURS.map((h) => ({ colour: h.key, member_ids: Object.keys(pick).filter((id) => pick[id] === h.key) }))
       .filter((h) => h.member_ids.length);
     setBusy(true);
-    try { await apiService.saveHops(date, hops); toast.success('Bunny hops saved'); onSaved(); }
+    try { await apiService.saveHops(date, hops, data?.sector?.leader_id || null); toast.success('Bunny hops saved'); onSaved(); }
     catch (e: any) { showAlert('Could not save', e?.response?.data?.detail || 'Try again.'); }
     finally { setBusy(false); }
   };

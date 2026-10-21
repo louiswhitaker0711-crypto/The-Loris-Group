@@ -1040,7 +1040,9 @@ export const apiService = {
   lookupArea: (postcode: string) => api.get('/areas/lookup', { params: { postcode } }),
   getCoverage: (b: { south: number; west: number; north: number; east: number }) => api.get('/coverage', { params: b }),
   saveCoverage: (body: { date: string; postcode?: string; lines: number[][][]; note?: string; leader_id?: string; kind?: 'plan' | 'done' | 'request'; colour?: string }) => api.post('/coverage', body),
-  saveHops: (date: string, hops: { colour: string; member_ids: string[] }[]) => api.put('/sector/hops', { hops }, { params: { date } }),
+  // The sector on screen (its leader's id), not always the caller's own.
+  saveHops: (date: string, hops: { colour: string; member_ids: string[] }[], leaderId?: string | null) =>
+    api.put('/sector/hops', { hops }, { params: leaderId ? { date, leader: leaderId } : { date } }),
   deleteCoverage: (id: string) => api.delete(`/coverage/${id}`),
   approveStreets: (id: string) => api.post(`/coverage/${id}/approve`, {}),
   declineStreets: (id: string) => api.post(`/coverage/${id}/decline`, {}),
