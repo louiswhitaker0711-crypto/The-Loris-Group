@@ -1383,13 +1383,21 @@ def district_of(pc: str) -> str:
 
 
 @router.put("/sector/hops")
-async def save_hops(request: Request, date: Optional[str] = None):
-    """The sector leader's bunny hops: a colour each and who's in it. Only
-    people in the sector; someone is in one hop at a time."""
+async def save_hops(request: Request, date: Optional[str] = None, leader: Optional[str] = None):
+    """A sector's bunny hops: a colour each and who's in it. Only people in the
+    sector; someone is in one hop at a time. The sector is the one on screen:
+    `leader`'s (its leader, or an Admin, as the map allows), else the caller's own."""
     from routes.coverage import HOP_COLOURS
     user = await get_current_user(request)
     iso = _clean_date(date)
-    sec = await _sector_of_leader(str(user["id"]), iso)
+    me = str(user["id"])
+    is_admin = (user.get("role") or "").lower() == "admin"
+    if leader and leader != me:
+        if not is_admin:
+            raise HTTPException(status_code=403, detail="Only the sector's leader or an Admin can set its bunny hops")
+        sec = await db.sectors.find_one({"office_id": user.get("office_id"), "date": iso, "leader_id": str(leader)}, {"_id": 0})
+    else:
+        sec = await _sector_of_leader(me, iso)
     if not sec:
         raise HTTPException(status_code=400, detail="Pick who's in your sector first")
     body = await request.json()
@@ -1403,7 +1411,7 @@ async def save_hops(request: Request, date: Optional[str] = None):
         ids = [i for i in dict.fromkeys(str(x) for x in (h.get("member_ids") or [])) if i in members and i not in seen]
         seen.update(ids)
         hops.append({"colour": colour, "member_ids": ids})
-    await db.sectors.update_one({"leader_id": str(user["id"]), "date": iso}, {"$set": {"hops": hops}})
+    await db.sectors.update_one({"leader_id": sec["leader_id"], "date": iso}, {"$set": {"hops": hops}})
     return {"hops": hops}
 
 

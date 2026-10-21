@@ -319,3 +319,18 @@ def test_someone_who_exited_stays_in_their_past_sectors(monkeypatch):
     ]))
     rows = run(sec._users_by_ids([str(here), str(gone)]))
     assert [r["user_name"] for r in rows] == ["Here Example", "Gone Example"]
+
+
+def test_bunny_hops_save_to_the_sector_on_screen(monkeypatch):
+    """An Admin saving another leader's hops changes that sector, not their own."""
+    db, run = _setup_db(monkeypatch, {"id": "admin1", "role": "admin", "office_id": "o1", "name": "Owner Example"})
+    run(db.sectors.insert_many([
+        {"office_id": "o1", "date": "2026-10-21", "leader_id": "admin1", "member_ids": ["admin1", "b1"],
+         "hops": [{"colour": "blue", "member_ids": ["b1"]}]},
+        {"office_id": "o1", "date": "2026-10-21", "leader_id": "lead2", "member_ids": ["lead2", "t1", "h1"]},
+    ]))
+    body = {"hops": [{"colour": "green", "member_ids": ["t1", "h1"]}]}
+    out = run(sec.save_hops(_Req(body), date="2026-10-21", leader="lead2"))
+    assert out["hops"] == [{"colour": "green", "member_ids": ["t1", "h1"]}]
+    assert run(db.sectors.find_one({"leader_id": "lead2"}))["hops"] == out["hops"]
+    assert run(db.sectors.find_one({"leader_id": "admin1"}))["hops"] == [{"colour": "blue", "member_ids": ["b1"]}]   # untouched
