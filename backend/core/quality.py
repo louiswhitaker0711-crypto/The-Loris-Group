@@ -62,6 +62,8 @@ HEADER_KEYS = [
 ]
 
 ROLLUP_LABELS = {"total", "grand total"}
+# Header of the column holding the person in an Excel export (spaces and _ ignored).
+NAME_HEADERS = {"namebadge", "name", "ba", "rep", "badge"}
 BADGE_RE = re.compile(r"\s([A-Z]{0,4}\d{3,})$")
 # Sane limits, so a misread number can't land as something silly.
 LIMITS = {"sales": (0, 1000), "aov": (0, 500), "drops": (0, 7), "the_round": (0, 100),
@@ -146,6 +148,7 @@ def from_tables(tables: list[list[list]]) -> dict:
     week = None
     for grid in tables:
         cols: dict[int, str] = {}
+        label_col = 0
         for r in grid:
             cells = ["" if c is None else c for c in r]
             if not cells:
@@ -153,13 +156,32 @@ def from_tables(tables: list[list[list]]) -> dict:
             first = str(cells[0]).strip()
             if not week:
                 for c in cells:
-                    if isinstance(c, (date, datetime)) or (isinstance(c, str) and re.search(r"\bWE\b|week ending", c, re.I)):
+                    if isinstance(c, (date, datetime)) or (isinstance(c, str) and re.search(r"\bWE\b|week\s*_?\s*ending", c, re.I)):
                         week = parse_week(c) or week
             if first.upper() == "MC":
-                cols = {i: k for i, c in enumerate(cells) if (k := header_key(str(c)))}
+                # The person can be in the MC column ("Example P MMC1234") or, in
+                # an Excel export, a "NameBadge" column next to the office.
+                label_col = next((i for i, c in enumerate(cells)
+                                  if re.sub(r"[\s_]", "", str(c)).lower() in NAME_HEADERS), 0)
+                cols = {}
+                for i, c in enumerate(cells):
+                    k = header_key(str(c)) if i != label_col else None
+                    if not k:
+                        continue
+                    prev = next((j for j, kk in cols.items() if kk == k), None)
+                    if prev is not None:
+                        # One measure twice (e.g. Memberships, and Membership %): keep the %.
+                        if "%" in str(c) and "%" not in str(cells[prev]):
+                            del cols[prev]
+                        else:
+                            continue
+                    cols[i] = k
                 continue
+            first = str(cells[label_col]).strip() if label_col < len(cells) else ""
             if not cols or not first:
                 continue
+            if "\n" in first or first.lower().startswith("applied filters"):
+                continue   # Power BI's note of the filters under an export
             vals = {k: cells[i] for i, k in cols.items() if i < len(cells)}
             if first.lower() in ROLLUP_LABELS:
                 total.update(clean_metrics(vals))
