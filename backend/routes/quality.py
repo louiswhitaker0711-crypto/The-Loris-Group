@@ -46,9 +46,11 @@ WEEK_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 async def _office_people(office_id: str) -> list[dict]:
+    """Everyone in the office, including people who've exited: a report can
+    still have their last weeks, and their history stays with them."""
     return [u async for u in db.users.find(
-        {"office_id": office_id, "deleted": {"$ne": True}, "is_demo": {"$ne": True}},
-        {"name": 1, "amplifi_codes": 1, "is_active": 1})]
+        {"office_id": office_id, "is_demo": {"$ne": True}},
+        {"name": 1, "amplifi_codes": 1, "is_active": 1, "deleted": 1})]
 
 
 async def _badge_index(office_id: str, users: list[dict]) -> tuple[dict, dict]:
@@ -79,7 +81,9 @@ async def _badge_index(office_id: str, users: list[dict]) -> tuple[dict, dict]:
 
 
 def _first_l(label: str, badge: str) -> str:
-    parts = label.replace(badge, "").split()
+    """'Haider M - MMC9974' / 'Haider M MMC9974' → 'haider m'. Separators like
+    the report's ' - ' before the badge are not part of the name."""
+    parts = [p for p in re.split(r"[\s\-\u2013\u2014,]+", label.replace(badge, "")) if any(ch.isalpha() for ch in p)]
     return f"{parts[0].lower()} {parts[-1][0].lower()}" if len(parts) >= 2 else ""
 
 
@@ -146,7 +150,8 @@ async def read_quality(request: Request):
                      "matched_by": how if uid else None})
     existing = bool(week and await db.quality_weeks.find_one({"office_id": office_id, "week_ending": week}, {"_id": 1}))
     newest = await db.quality_weeks.find_one({"office_id": office_id}, {"week_ending": 1}, sort=[("week_ending", -1)])
-    people = sorted(({"id": str(u["_id"]), "name": u.get("name") or ""} for u in users if u.get("is_active") is not False),
+    people = sorted(({"id": str(u["_id"]), "name": u.get("name") or ""} for u in users
+                     if u.get("is_active") is not False and not u.get("deleted")),
                     key=lambda p: p["name"].lower())
     return {"week_ending": week, "rows": rows, "total": rep.get("total") or {},
             "fourth_week_due": rep.get("fourth_week_due", True), "existing": existing, "people": people,
@@ -193,7 +198,8 @@ async def import_quality(request: Request):
         {"$set": {"office_id": office_id, "week_ending": week, "bas": bas, "total": total,
                   "imported_at": datetime.now(timezone.utc).isoformat(), "imported_by": admin.get("id")}},
         upsert=True)
-    sent = await _tell_the_team(bas, week) if body.get("notify") else 0
+    gone = {str(u["_id"]) for u in users if u.get("deleted") or u.get("is_active") is False}
+    sent = await _tell_the_team(bas, week, gone) if body.get("notify") else 0
     alerts = []
     try:
         from core import quality_alerts
@@ -217,7 +223,7 @@ def _headline(m: dict) -> str:
     return " · ".join(bits)
 
 
-async def _tell_the_team(bas: list[dict], week: str) -> int:
+async def _tell_the_team(bas: list[dict], week: str, gone: set | None = None) -> int:
     """'Quality report added' to everyone on it who's in the app, with their
     own headline numbers. The Admin chooses at save (on by default for a new
     newest week, so back-filling old weeks doesn't flood phones)."""
@@ -225,8 +231,8 @@ async def _tell_the_team(bas: list[dict], week: str) -> int:
     label = week_label(week).rsplit(" ", 1)[0]
     sent = 0
     for b in bas:
-        if not b.get("user_id"):
-            continue
+        if not b.get("user_id") or b["user_id"] in (gone or set()):
+            continue   # not linked, or they've exited
         line = _headline(b.get("metrics") or {})
         try:
             await send_push_to_user(b["user_id"], "📊 Quality report added",
