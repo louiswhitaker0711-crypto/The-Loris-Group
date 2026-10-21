@@ -858,6 +858,12 @@ async def list_bells(
     user = await get_current_user(request)
     if user.get("role") not in ("leader", "admin"):
         raise HTTPException(status_code=403, detail="Coach or admin access required")
+    return await bells_week_for(user, week, office)
+
+
+async def bells_week_for(user: dict, week: Optional[str] = None, office: Optional[str] = None) -> dict:
+    """The Bells sheet for a week as `user` sees it (the in-app table). The
+    public link calls this as an Admin of its office, so it looks the same."""
 
     # Determine week_ending — be lenient: if caller sends a non-Sunday date
     # (timezone quirk on the client), roll forward to the next Sunday.
@@ -2598,6 +2604,11 @@ async def public_bells(office_slug: str, request: Request):
     week = request.query_params.get("week")
     office, week_ending, enriched, totals = await _public_bells_payload(office_slug, week, code, request)
     prev_week = _prev_sunday_iso(week_ending)
+    # The same sheet the app shows, as an Admin of this office sees it (the
+    # Owner chose to include fees, MC fees too), minus rows hidden from the link.
+    sheet = await bells_week_for({"id": "public-link", "role": "admin", "office_id": office["id"]}, week_ending, None)
+    sheet["entries"] = [e for e in sheet.get("entries") or [] if not e.get("public_hidden")]
+    sheet.pop("previous_week_ending", None)
 
     # Aggregate teams for the "Teams" tab on the public page
     prev_rows_by_key: dict = {}
@@ -2632,6 +2643,7 @@ async def public_bells(office_slug: str, request: Request):
         "entries": enriched,
         "office_totals": totals,
         "teams": teams_agg,
+        "sheet": sheet,
     }
 
 

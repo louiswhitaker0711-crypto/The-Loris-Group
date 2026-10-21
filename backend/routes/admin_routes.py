@@ -1382,6 +1382,11 @@ async def delete_user(user_id: str, request: Request):
             "left_on": now.astimezone(APP_TZ).date().isoformat(),
         }},
     )
+    # Out of any sector planned after today; past sectors stay exactly as they were.
+    await db.sectors.update_many(
+        {"office_id": user.get("office_id"), "date": {"$gt": now.astimezone(APP_TZ).date().isoformat()},
+         "member_ids": user_id},
+        {"$pull": {"member_ids": user_id}})
     # OwnerIQ — a binned rep keeps their ghost record here but should be
     # deactivated on OwnerIQ. Fire-and-forget; gated by OWNERIQ_WRITES_ENABLED.
     try:

@@ -356,8 +356,10 @@ function cellForDay(d: Day, c: typeof colors, dark: boolean, exited: false | 'fi
   return { text: String(tot), fg: look.fg, bg: look.bg };
 }
 
-export default function TableView({ entries, weekEnding, onRefresh, miniGoal, officeId, onShowWeek }: {
+export default function TableView({ entries, weekEnding, onRefresh, miniGoal, officeId, onShowWeek, readOnly = false }: {
   entries: Entry[]; weekEnding?: string; onRefresh?: () => void;
+  /** The public share link: the same sheet, but nothing opens or edits. */
+  readOnly?: boolean;
   /** Switch the sheet to a week (the This week | Last week tabs). */
   onShowWeek?: (weekEnding: string) => void;
   /** Mini Vertex's goal for the week (it has no Coach's row to live on). */
@@ -382,6 +384,7 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
   const [goalInput, setGoalInput] = useState('');
   const [goalSaving, setGoalSaving] = useState(false);
   const openGoalEdit = (g: Group) => {
+    if (readOnly) return;
     if (!g.leader_id && g.key !== MINI_KEY) return;
     setGoalInput(g.crew_goal != null ? String(g.crew_goal) : '');
     setGoalEdit({ leader_id: g.leader_id || MINI_KEY, team_name: g.team_name });
@@ -419,6 +422,7 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
     return true;
   };
   const openRowEdit = (e: Entry) => {
+    if (readOnly) return;
     if (!weekEnding || viewOnly(e)) return;
     setRowGoal(e.weekly_goal != null ? String(e.weekly_goal) : '');
     setRowBe(e.break_even != null ? String(e.break_even) : '');
@@ -470,6 +474,7 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
   // Approved-absence context for the day being viewed, if any.
   const abDetail = cellEdit ? cellEdit.entry.absence_details?.[String(cellEdit.dayIdx)] : undefined;
   const openCellEdit = (entry: Entry, dayIdx: number) => {
+    if (readOnly) return;
     if (!weekEnding || viewOnly(entry)) return;
     const d = entry.days?.[dayIdx] || { over30: null, under30: null, memberships: null, status: 'off' };
     setCellO30(d.over30 != null ? String(d.over30) : '');
@@ -548,6 +553,7 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
   };
 
   const handleClearDay = (dayIndex: number, dayName: string) => {
+    if (readOnly) return;
     if (!weekEnding) return;
     Alert.alert(
       `Clear ${dayName}?`,
@@ -665,15 +671,15 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
       {phone ? (
         <PhoneSheet
           groups={groups} office={office} entries={entries} colors={colors} isDark={isDark} styles={styles} showMc={showMc} weekEnding={weekEnding}
-          onShowWeek={onShowWeek} order={order} onOrder={setOrder}
-          canEditGoal={canEditCrewGoal} onEditGoal={openGoalEdit} onCellPress={openCellEdit} onRowPress={openRowEdit}
+          onShowWeek={onShowWeek} order={order} onOrder={setOrder} readOnly={readOnly}
+          canEditGoal={readOnly ? () => false : canEditCrewGoal} onEditGoal={openGoalEdit} onCellPress={openCellEdit} onRowPress={openRowEdit}
         />
       ) : (
       <>
       {/* Toolbar: what a tap does, and the zoom. */}
       <View style={styles.zoomBar}>
         <Text style={styles.zoomHint} numberOfLines={2}>
-          Tap a day to edit it · tap a Goal to change it{isWeb ? '' : ' · pinch to zoom'}
+          {readOnly ? 'View only · updates every minute' : 'Tap a day to edit it · tap a Goal to change it'}{isWeb ? '' : ' · pinch to zoom'}
         </Text>
         {onShowWeek ? <WeekSwitch weekEnding={weekEnding} onShowWeek={onShowWeek} styles={styles} colors={colors} /> : null}
         <OrderSwitch order={order} onOrder={setOrder} styles={styles} colors={colors} />
@@ -1193,7 +1199,7 @@ function WeekSwitch({ weekEnding, onShowWeek, styles, colors }: { weekEnding?: s
 }
 
 // ── The phone's Bells: the same sections as a list ───────────────────────────
-function PhoneSheet({ groups, office, entries, colors, isDark, styles, showMc, weekEnding, onShowWeek, order, onOrder, canEditGoal, onEditGoal, onCellPress, onRowPress }: any) {
+function PhoneSheet({ groups, office, entries, colors, isDark, styles, showMc, weekEnding, onShowWeek, readOnly, order, onOrder, canEditGoal, onEditGoal, onCellPress, onRowPress }: any) {
   const openPerson = useOpenPerson();
   // A label and seven cells, lined up under the day letters.
   const statRow = (label: string, vals: (string | number)[], strong?: boolean) => (
@@ -1231,7 +1237,7 @@ function PhoneSheet({ groups, office, entries, colors, isDark, styles, showMc, w
         {onShowWeek ? <WeekSwitch weekEnding={weekEnding} onShowWeek={onShowWeek} styles={styles} colors={colors} /> : null}
         <OrderSwitch order={order || 'team'} onOrder={onOrder} styles={styles} colors={colors} />
       </View>
-      <Text style={styles.pHint}>Names are coloured by last week's result. Tap a day to edit it, a goal to change it.</Text>
+      <Text style={styles.pHint}>Names are coloured by last week's result. {readOnly ? 'View only · updates every minute.' : 'Tap a day to edit it, a goal to change it.'}</Text>
       {everyone.length > 0 && (
         <View style={styles.pSection}>
           <View style={styles.lRow}>

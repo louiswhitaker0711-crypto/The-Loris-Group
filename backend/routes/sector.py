@@ -273,7 +273,9 @@ async def _my_sector(user_id: str, iso: str) -> Optional[dict]:
 async def _users_by_ids(ids: list[str]) -> list[dict]:
     oids = [ObjectId(i) for i in ids if ObjectId.is_valid(str(i))]
     rows = []
-    async for u in db.users.find({"_id": {"$in": oids}, "deleted": {"$ne": True}}, {"_id": 1, "name": 1, "role": 1}):
+    # People who've exited stay in the sectors they were in: a sector is a
+    # record of that day (exiting takes them out of later sectors only).
+    async for u in db.users.find({"_id": {"$in": oids}}, {"_id": 1, "name": 1, "role": 1}):
         rows.append({"user_id": str(u["_id"]), "user_name": u.get("name") or "", "role": u.get("role")})
     order = {str(i): n for n, i in enumerate(ids)}
     rows.sort(key=lambda r: order.get(r["user_id"], 999))

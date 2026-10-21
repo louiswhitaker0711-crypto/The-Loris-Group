@@ -18,6 +18,7 @@ import { APP_LOCALE, formatMoney } from '../../../src/utils/appTime';
 import { APP_NAME } from '../../../src/theme/brand';
 import { SUPER_GREEN_WEEK_MIN, GREEN_WEEK_MIN, AMBER_WEEK_MIN, RED_WEEK_MAX } from '../../../src/utils/weekBands';
 import { dayBandText } from '../../../src/utils/dayBands';
+import SheetTable from '../../../src/components/bells/TableView';
 
 // ─────────────────────────── helpers ───────────────────────────
 function currentWeekEndingISO(): string {
@@ -89,6 +90,8 @@ type Entry = {
 };
 
 type Payload = {
+  /** The same sheet the app shows (as an Admin of the office sees it). */
+  sheet?: { entries: any[]; week_ending?: string; mini_team_goal?: number | null };
   office_name: string;
   office_slug: string;
   week_ending: string;
@@ -187,6 +190,13 @@ export default function PublicBellsScreen() {
   }, [code, weekEnding, officeSlug]);
 
   useEffect(() => { if (code && codeLoaded) fetchData(); }, [fetchData, code, codeLoaded]);
+  // Kept up to date: reload every minute while the page is open (quietly: the
+  // sheet stays on screen while it fetches).
+  useEffect(() => {
+    if (!code || !codeLoaded) return;
+    const t = setInterval(() => { fetchData(); }, 60 * 1000);
+    return () => clearInterval(t);
+  }, [fetchData, code, codeLoaded]);
 
   const submitCode = async () => {
     const trimmed = codeDraft.trim();
@@ -346,11 +356,17 @@ export default function PublicBellsScreen() {
               <Text style={styles.emptyText}>No entries for this week yet.</Text>
             </View>
           ) : (
-            <TableView entries={entries} />
+            data?.sheet ? (
+              // The same sheet as in the app (src/components/bells/TableView), view only.
+              <SheetTable entries={data.sheet.entries || []} weekEnding={data.sheet.week_ending || weekEnding}
+                miniGoal={data.sheet.mini_team_goal ?? null} onShowWeek={setWeekEnding} readOnly />
+            ) : (
+              <TableView entries={entries} />
+            )
           )}
 
           <Text style={styles.footer}>
-            Data refreshes live. Shared via {APP_NAME}.  ·  Last loaded at {new Date().toLocaleTimeString(APP_LOCALE, { hour: 'numeric', minute: '2-digit', hour12: true })}
+            Updates every minute. Shared via {APP_NAME}.  ·  Last updated {new Date().toLocaleTimeString(APP_LOCALE, { hour: '2-digit', minute: '2-digit', hour12: false })}
           </Text>
         </>
       )}
