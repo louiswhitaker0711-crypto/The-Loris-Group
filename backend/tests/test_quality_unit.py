@@ -177,3 +177,20 @@ def test_retrain_alert_for_high_fails_two_weeks_running():
             {"user_id": "u3", "metrics": {"sales": 1, "fail_rate": 50.0}}]
     assert [r["user_id"] for r in fail_runs(this, prev)] == ["u1"]
     assert is_current("2026-10-11", date(2026, 10, 13)) and not is_current("2026-09-06", date(2026, 10, 13))
+
+
+def test_excel_export_with_a_namebadge_column_and_two_membership_columns():
+    """Power BI's Excel export: office in MC, the person in NameBadge, a
+    membership count and a membership %, and the filters (with the week) under it."""
+    grid = [
+        ["MC", "NameBadge", "Sales Volume", "AOV", "Drops", "Doors Knocked", "Memberships on signup", "Membership on signup %"],
+        ["Example Office", "Total", 10, 11.5, 2.4, 900, 3, 0.3],
+        ["Example Office", "Example P - MMC1234", 6, 12.0, 2.5, 500, 2, 0.3333],
+        ["Example Office", "Sample Q - MMC5678", 4, 10.75, 2.25, 400, 1, 0.25],
+        ["Applied filters:\nNameBadge is not (Blank)\nWeekEnding_Date is 11 October 2026"],
+    ]
+    rep = excel_percent_fix(from_tables([grid]))
+    assert rep["week_ending"] == "2026-10-11"
+    assert [r["badge"] for r in rep["rows"]] == ["MMC1234", "MMC5678"]
+    assert rep["rows"][0]["metrics"]["the_round"] == 33.33 and rep["rows"][0]["metrics"]["sales"] == 6
+    assert rep["total"]["the_round"] == 30.0 and rep["total"]["sales"] == 10
