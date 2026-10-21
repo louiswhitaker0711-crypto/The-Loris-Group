@@ -211,6 +211,12 @@ export default function HomeScreen() {
   }, []);
   const queryClient = useQueryClient();
   useBadgeWatcher();
+  // In a sector today? Then Home leads with it (set-up, then the map) as soon
+  // as the sector exists, not only once the field starts at 13:30.
+  const sectorStatusQ = useQuery({ queryKey: ['sector-status'], queryFn: () => apiService.getSectorStatus().then((r) => r.data),
+    refetchInterval: 5 * 60 * 1000, retry: false });
+  const sectorToday = !!(sectorStatusQ.data?.in_sector || sectorStatusQ.data?.has_sector);
+  const fieldLayout = inField || (sectorToday && !inBreakdown);
 
   // Leader's CREW goal — the Team pulse shows the whole crew's sales, so the
   // number it's measured against is the crew goal (team_weekly_goal on the
@@ -1378,11 +1384,11 @@ export default function HomeScreen() {
   const coachField = (
     <>
       <ResetBoardCard />
+      {pSectorPrompt}
       <HomeAreaMap />
       <MyDayCard />
       <MyWeekCard hideWhenEmpty={isAdmin} />
       <SectorSetupsCard />
-      {pSectorPrompt}
       <LiveOpsCard />
     </>
   );
@@ -1408,7 +1414,8 @@ export default function HomeScreen() {
       <MyWeekCard hideWhenEmpty={isAdmin} />
     </>
   );
-  const todayCoach = inField ? coachField : inBreakdown ? coachBreakdown : (
+  // Before the field with a sector today: the sector first, the day's planning under it.
+  const todayCoach = fieldLayout ? <>{coachField}{!inField && coachPlanning}</> : inBreakdown ? coachBreakdown : (
     <>
       {pSectorPrompt}
       {coachPlanning}
@@ -1436,11 +1443,11 @@ export default function HomeScreen() {
     <>
       {/* From 18:00 the 6pm reset, then their map. */}
       <ResetBoardCard />
+      {pSectorPrompt}
       <HomeAreaMap />
       <MyDayCard />
       <MyWeekCard />
       <SectorSetupsCard />
-      {pSectorPrompt}
     </>
   );
   const baPlanning = (
@@ -1460,7 +1467,7 @@ export default function HomeScreen() {
       <MyWeekCard />
     </>
   );
-  const todayBA = inField ? baField : inBreakdown ? baBreakdown : (
+  const todayBA = fieldLayout ? <>{baField}{!inField && baPlanning}</> : inBreakdown ? baBreakdown : (
     <>
       {pSectorPrompt}
       {baPlanning}

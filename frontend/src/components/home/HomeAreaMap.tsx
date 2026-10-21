@@ -27,8 +27,12 @@ export default function HomeAreaMap() {
   const d = q.data;
   const marks: any[] = d?.marks || [];
   const mine: string | null = d?.my_colour || null;
-  const plans = marks.filter((m) => !m.other && m.status === 'plan' && (!mine || m.colour === mine));
-  const show = Platform.OS === 'web' && !!d?.sector && plans.length > 0;
+  // Their own colour's streets; if none are drawn in it yet, the sector's whole plan.
+  const ownPlans = marks.filter((m) => !m.other && m.status === 'plan' && (!mine || m.colour === mine));
+  const plans = ownPlans.length ? ownPlans : marks.filter((m) => !m.other && m.status === 'plan');
+  const hasShape = !!d?.shape?.geometry;
+  // Anyone in a sector today gets the preview: their streets, the plan, or at least the sector's outline.
+  const show = Platform.OS === 'web' && !!d?.sector && (plans.length > 0 || hasShape);
 
   const box = useRef<View>(null);
   const map = useRef<any>(null);
@@ -48,17 +52,20 @@ export default function HomeAreaMap() {
       // Place the map on their area FIRST: Leaflet can't draw lines on a map
       // that doesn't know where it's looking yet.
       const pts = plans.flatMap((p) => p.lines || []).flat();
-      m.fitBounds(L.latLngBounds(pts), { padding: [18, 18], maxZoom: 17 });
+      const outline = d?.shape?.geometry ? L.geoJSON(d.shape.geometry, { interactive: false, style: { color: c.primary, weight: 1.5, fillOpacity: 0.04 } }) : null;
+      // Their streets if there are any; otherwise the sector's outline.
+      const bounds = () => (pts.length ? L.latLngBounds(pts) : outline ? outline.getBounds() : null);
+      const b0 = bounds();
+      if (!b0) return;
+      m.fitBounds(b0, { padding: [18, 18], maxZoom: 17 });
       L.tileLayer(OSM_TILES, { maxZoom: 19, attribution: OSM_ATTRIBUTION }).addTo(m);
-      if (d?.shape?.geometry) {
-        L.geoJSON(d.shape.geometry, { interactive: false, style: { color: c.primary, weight: 1.5, fillOpacity: 0.04 } }).addTo(m);
-      }
+      if (outline) outline.addTo(m);
       const order = (mk: any) => (mk.other ? -1 : mk.status === 'plan' ? 0 : mk.status === 'requested' ? 1 : mk.status === 'draft' ? 2 : 3);
       for (const mk of marks.slice().sort((a, b) => order(a) - order(b))) {
         const style = mk.other
           ? { color: '#6b7280', weight: mk.status === 'plan' ? 7 : 3.5, opacity: mk.status === 'plan' ? 0.2 : 0.55 }
           : mk.status === 'plan'
-          ? { color: hopHex(mk.colour), weight: 7, opacity: mine && mk.colour !== mine ? 0.15 : 0.55 }
+          ? { color: hopHex(mk.colour), weight: 7, opacity: mine && mk.colour !== mine && ownPlans.length ? 0.15 : 0.55 }
           : mk.status === 'requested'
             ? { color: hopHex(mk.colour, c.primary), weight: 4, opacity: 0.8, dashArray: '8 8' }
           : mk.status === 'draft'
@@ -74,7 +81,8 @@ export default function HomeAreaMap() {
       const refit = () => {
         if (!map.current || map.current !== m) return;
         m.invalidateSize();
-        m.fitBounds(L.latLngBounds(pts), { padding: [18, 18], maxZoom: 17 });
+        const b = bounds();
+        if (b) m.fitBounds(b, { padding: [18, 18], maxZoom: 17 });
       };
       [150, 600, 1500].forEach((t) => setTimeout(refit, t));
       if (typeof ResizeObserver !== 'undefined') {
