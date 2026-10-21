@@ -307,3 +307,15 @@ def test_set_up_cod_pick_and_breakdown_seen_in_the_field(monkeypatch):
 
     run(sec.mark_cod_observed(str(ba), _Req({"done": False}), date="2026-10-16"))
     assert run(db.cod_observations.count_documents({})) == 0
+
+
+def test_someone_who_exited_stays_in_their_past_sectors(monkeypatch):
+    from bson import ObjectId
+    db, run = _setup_db(monkeypatch, {"id": "x", "role": "admin", "office_id": "o1"})
+    here, gone = ObjectId(), ObjectId()
+    run(db.users.insert_many([
+        {"_id": here, "name": "Here Example", "office_id": "o1"},
+        {"_id": gone, "name": "Gone Example", "office_id": "o1", "deleted": True, "left_on": "2026-10-20"},
+    ]))
+    rows = run(sec._users_by_ids([str(here), str(gone)]))
+    assert [r["user_name"] for r in rows] == ["Here Example", "Gone Example"]
