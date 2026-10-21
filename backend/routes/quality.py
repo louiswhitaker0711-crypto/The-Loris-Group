@@ -40,7 +40,7 @@ from owneriq_sync import ID_LINKED
 
 router = APIRouter()
 
-MAX_FILES = 6
+MAX_FILES = 10
 MAX_FILE_BYTES = 12 * 1024 * 1024
 WEEK_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 

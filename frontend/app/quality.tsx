@@ -285,6 +285,8 @@ function FitTable({ children }: { children: React.ReactNode }) {
 // ── Admin: add a week's report ────────────────────────────────────────────
 type Picked = { name: string; b64: string };
 
+const MAX_FILES = 10;
+
 function Upload({ onSaved }: { onSaved: (week: string) => void }) {
   const c = useColors();
   const s = useMemo(() => styles(c), [c]);
@@ -295,19 +297,23 @@ function Upload({ onSaved }: { onSaved: (week: string) => void }) {
   const [links, setLinks] = useState<Record<string, string | null>>({});
   const [choosing, setChoosing] = useState<string | null>(null);
   const [notify, setNotify] = useState(true);
+  // Every file in this upload, so "Add another file" reads them all together.
+  const [added, setAdded] = useState<{ name: string; blob: Blob }[]>([]);
 
   const toB64 = (blob: Blob) => new Promise<string>((resolve) => {
     const r = new FileReader();
     r.onloadend = () => resolve(String(r.result || '').split(',')[1] || '');
     r.readAsDataURL(blob);
   });
-  const read = async (files: { name: string; blob: Blob }[]) => {
-    if (!files.length) return;
+  const read = async (incoming: { name: string; blob: Blob }[], keep = false) => {
+    if (!incoming.length) return;
+    const files = (keep ? [...added, ...incoming] : incoming).slice(0, MAX_FILES);
     setBusy('read');
     try {
       const picked: Picked[] = [];
-      for (const f of files.slice(0, 6)) picked.push({ name: f.name, b64: await toB64(f.blob) });
+      for (const f of files) picked.push({ name: f.name, b64: await toB64(f.blob) });
       const r = await apiService.readQuality({ files: picked.map((p) => ({ filename: p.name, data_b64: p.b64 })) });
+      setAdded(files);
       setPreview(r.data);
       setWeekText(r.data.week_ending ? ukDate(r.data.week_ending) : '');
             // Tell the team only for this week's report; never when loading old weeks.
@@ -321,11 +327,24 @@ function Upload({ onSaved }: { onSaved: (week: string) => void }) {
   const readRef = useRef(read);
   readRef.current = read;
 
-  const pick = async () => {
+  const pick = async (keep = false) => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      // The browser's own chooser: several files at once (⌘ / Ctrl-click, or Shift).
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.multiple = true;
+      input.accept = 'image/png,image/jpeg,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      input.onchange = () => {
+        const files = Array.from(input.files || []).map((f) => ({ name: f.name || 'report', blob: f as Blob }));
+        if (files.length) readRef.current(files, keep);
+      };
+      input.click();
+      return;
+    }
     const res = await DocumentPicker.getDocumentAsync({ type: ['image/*', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'], multiple: true, copyToCacheDirectory: true });
     if (res.canceled) return;
     const files = await Promise.all(res.assets.map(async (a) => ({ name: a.name || 'report.png', blob: await (await fetch(a.uri)).blob() })));
-    read(files);
+    read(files, keep);
   };
 
   // Drop or paste (a screenshot straight from the clipboard works too).
@@ -336,7 +355,7 @@ function Upload({ onSaved }: { onSaved: (week: string) => void }) {
     const el = drop.current as unknown as HTMLElement | null;
     const take = (list?: FileList | null) => {
       const files = Array.from(list || []).map((f) => ({ name: f.name || 'screenshot.png', blob: f as Blob }));
-      if (files.length) readRef.current(files);
+      if (files.length) readRef.current(files, true);   // adds to anything already in this upload
       return files.length > 0;
     };
     const onOver = (e: DragEvent) => { e.preventDefault(); setOver(true); };
@@ -368,7 +387,7 @@ function Upload({ onSaved }: { onSaved: (week: string) => void }) {
       const rows = (preview.rows || []).map((r: any) => ({ label: r.label, badge: r.badge, metrics: r.metrics, user_id: links[r.badge] || null }));
       const r = await apiService.importQuality({ week_ending: iso, rows, total: preview.total || {}, notify });
       toast.success(`${r.data.added_to_saved_week ? 'Added to' : 'Saved'} WE ${ukDate(iso)}${r.data.notified ? ` · ${r.data.notified} told` : ''}${r.data.retrain_alerts ? ` · ${r.data.retrain_alerts} retrain alert${r.data.retrain_alerts === 1 ? '' : 's'}` : ''}`);
-      setPreview(null);
+      setPreview(null); setAdded([]);
       qc.invalidateQueries({ queryKey: ['quality'] });
       qc.invalidateQueries({ queryKey: ['coach-suggestions'] });
       onSaved(iso);
@@ -397,9 +416,10 @@ function Upload({ onSaved }: { onSaved: (week: string) => void }) {
               <>
                 <Ionicons name="image-outline" size={26} color={c.primary} />
                 <Text style={s.muted}>{over ? 'Drop it' : 'Drag the screenshot here, or paste it'}</Text>
-                <Pressable onPress={pick} style={s.btn} accessibilityRole="button">
-                  <Text style={s.btnText}>Choose screenshot</Text>
+                <Pressable onPress={() => pick(false)} style={s.btn} accessibilityRole="button">
+                  <Text style={s.btnText}>Choose files</Text>
                 </Pressable>
+                <Text style={s.muted}>Pick several at once: screenshots or Excel exports, up to {MAX_FILES}.</Text>
               </>
             )}
           </View>
@@ -407,6 +427,14 @@ function Upload({ onSaved }: { onSaved: (week: string) => void }) {
       ) : (
         <>
           <Text style={s.muted}>Check the numbers and who each row is, then save.{preview.existing ? ' This week is already saved: these numbers are added to it, and anything not in this upload stays as it was.' : ''}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <Text style={s.muted}>{added.length} file{added.length === 1 ? '' : 's'}: {added.map((f) => f.name).join(', ')}</Text>
+            {added.length < MAX_FILES && (
+              <Pressable onPress={() => pick(true)} disabled={busy === 'read'} accessibilityRole="button" testID="quality-add-file">
+                <Text style={[s.muted, { color: c.primary }]}>{busy === 'read' ? 'Reading…' : '+ Add another file'}</Text>
+              </Pressable>
+            )}
+          </View>
           <View style={s.weekRow}>
             <Text style={s.label}>Week ending</Text>
             <TextInput value={weekText} onChangeText={setWeekText} placeholder="DD/MM/YYYY" placeholderTextColor={c.textMuted}
@@ -449,7 +477,7 @@ function Upload({ onSaved }: { onSaved: (week: string) => void }) {
           </Pressable>
           {!notify && <Text style={s.note}>Off for older weeks, so loading old reports doesn't send anything.</Text>}
           <View style={s.actions}>
-            <Pressable onPress={() => setPreview(null)} style={[s.btn, s.btnGhost]} accessibilityRole="button">
+            <Pressable onPress={() => { setPreview(null); setAdded([]); }} style={[s.btn, s.btnGhost]} accessibilityRole="button">
               <Text style={[s.btnText, { color: c.text }]}>Cancel</Text>
             </Pressable>
             <Pressable onPress={save} disabled={busy === 'save'} style={s.btn} accessibilityRole="button" testID="quality-save">
