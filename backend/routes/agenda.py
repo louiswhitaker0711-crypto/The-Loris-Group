@@ -1374,6 +1374,11 @@ async def scan_agenda_image(request: Request, file: UploadFile = File(...), offi
     # enough to cut end-to-end time ~30-40%.
     try:
         from PIL import Image
+        try:  # iPhone photos can arrive as HEIC
+            import pillow_heif
+            pillow_heif.register_heif_opener()
+        except Exception:
+            pass
         import io
         img = Image.open(io.BytesIO(raw))
         # HEIC support is registered via pillow_heif side-effects; fall back

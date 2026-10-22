@@ -15,6 +15,26 @@ import {
 // In deployment, frontend and backend share the same domain
 // Use relative URL '' so requests go to the same origin
 const API_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+// Attach a picked/taken photo to a multipart form. On a phone (native) the
+// form takes {uri, name, type}. In the browser (the installed web app) that
+// object would be sent as the text "[object Object]", so the server got no
+// image and every photo scan failed: fetch the blob:/data: URI into a real
+// Blob first.
+async function appendPhoto(
+  form: FormData,
+  data: { uri: string; name?: string; type?: string },
+  fallbackName: string,
+): Promise<void> {
+  const name = data.name || fallbackName;
+  if (Platform.OS === 'web') {
+    const blob = await (await fetch(data.uri)).blob();
+    form.append('file', blob, name);
+    return;
+  }
+  // @ts-ignore — RN FormData accepts {uri,name,type}
+  form.append('file', { uri: data.uri, name, type: data.type || 'image/jpeg' });
+}
+
 const USE_WEB_COOKIE_SESSION = Platform.OS === 'web' && !usesWebTokenFallback();
 
 export const api = axios.create({
@@ -829,10 +849,9 @@ export const apiService = {
   // Upload a photo of the handwritten weekly planner. Backend runs Gemini
   // Vision and returns a parsed { themes, stats, rows } shape ready for the
   // editor's per-field review modal. NOTE: does NOT save anything.
-  scanAgendaImage: (data: { uri: string; name?: string; type?: string }, office?: string) => {
+  scanAgendaImage: async (data: { uri: string; name?: string; type?: string }, office?: string) => {
     const form = new FormData();
-    // @ts-ignore — RN FormData accepts {uri,name,type}
-    form.append('file', { uri: data.uri, name: data.name || 'sheet.jpg', type: data.type || 'image/jpeg' });
+    await appendPhoto(form, data, 'sheet.jpg');
     // Office rides as a query param, not a form field — the endpoint is
     // multipart and the row labels the OCR is allowed to match against come
     // from the office being viewed, not the uploader's home office.
@@ -1061,10 +1080,9 @@ export const apiService = {
   applyBellsBulk: (body: { date: string; office_id: string; reps: Array<{ user_id: string | null; user_name: string; raw_name?: string; over30: number; under30: number; memberships: number }> }) =>
     api.post('/bells/apply-bulk', body),
   bellsParseRoster: (officeId?: string) => api.get('/bells/parse-roster', { params: officeId ? { office_id: officeId } : {} }),
-  scanWeeklyNotes: (data: { uri: string; name?: string; type?: string }) => {
+  scanWeeklyNotes: async (data: { uri: string; name?: string; type?: string }) => {
     const form = new FormData();
-    // @ts-ignore — RN FormData accepts {uri,name,type}
-    form.append('file', { uri: data.uri, name: data.name || 'notes.jpg', type: data.type || 'image/jpeg' });
+    await appendPhoto(form, data, 'notes.jpg');
     return api.post('/weekly-planners/scan-notes', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 120_000,

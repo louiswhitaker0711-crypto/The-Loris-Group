@@ -957,6 +957,11 @@ async def scan_notes_image(request: Request, file: UploadFile = File(...)):
     # under the ~60s deployed ingress timeout).
     try:
         from PIL import Image
+        try:  # iPhone photos can arrive as HEIC
+            import pillow_heif
+            pillow_heif.register_heif_opener()
+        except Exception:
+            pass
         import io
         img = Image.open(io.BytesIO(raw))
         if img.mode not in ("RGB", "L"):
