@@ -334,3 +334,40 @@ def test_bunny_hops_save_to_the_sector_on_screen(monkeypatch):
     assert out["hops"] == [{"colour": "green", "member_ids": ["t1", "h1"]}]
     assert run(db.sectors.find_one({"leader_id": "lead2"}))["hops"] == out["hops"]
     assert run(db.sectors.find_one({"leader_id": "admin1"}))["hops"] == [{"colour": "blue", "member_ids": ["b1"]}]   # untouched
+
+
+def test_two_joined_postcodes():
+    # A sector can cover two joined maps: kept in order, joined with " + ".
+    assert sec.clean_postcode("dn4 1 + dn4 2") == "DN4 1 + DN4 2"
+    assert sec.clean_postcode("DN4 1, DN4 2") == "DN4 1 + DN4 2"
+    assert sec.postcode_parts("DN4 1 + DN4 2 + DN4 3") == ["DN4 1", "DN4 2"]   # at most two
+    assert sec.postcode_parts("DN4 1 + dn4 1") == ["DN4 1"]                    # no repeats
+    assert sec.postcode_parts("") == []
+
+
+def test_joined_shape_carries_both_outlines(monkeypatch):
+    import asyncio
+    import routes.territory as terr
+
+    def poly(x):
+        return {"type": "Polygon", "coordinates": [[[x, 53.5], [x + 0.01, 53.5], [x + 0.01, 53.51], [x, 53.5]]]}
+
+    shapes = {
+        "DN4 1": {"code": "DN4 1", "kind": "active", "households": 900, "weeks_since": 3,
+                  "geometry": poly(-1.10), "bbox": {"s": 53.50, "n": 53.51, "w": -1.10, "e": -1.09}},
+        "DN4 2": {"code": "DN4 2", "kind": "active", "households": 600, "weeks_since": 8,
+                  "geometry": poly(-1.09), "bbox": {"s": 53.49, "n": 53.51, "w": -1.09, "e": -1.08}},
+    }
+
+    async def fake(office_id, pc, with_shape=False):
+        return dict(shapes[pc]) if pc in shapes else None
+
+    monkeypatch.setattr(terr, "sector_for_postcode", fake)
+    one = asyncio.run(sec._joined_shape("off", "DN4 1"))
+    assert one["code"] == "DN4 1" and one["geometry"]["type"] == "Polygon"
+    both = asyncio.run(sec._joined_shape("off", "DN4 1 + DN4 2"))
+    assert both["code"] == "DN4 1 + DN4 2"
+    assert both["geometry"]["type"] == "GeometryCollection" and len(both["geometry"]["geometries"]) == 2
+    assert both["bbox"] == {"s": 53.49, "n": 53.51, "w": -1.10, "e": -1.08}
+    assert both["households"] == 1500 and both["weeks_since"] == 8
+    assert asyncio.run(sec._joined_shape("off", "ZZ9 9")) is None

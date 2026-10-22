@@ -3,6 +3,7 @@
 // do; anyone else's (a Coach looking) shows everyone's set-up and breakdown.
 // The map is for the people in the sector and Admins.
 import React, { useMemo } from 'react';
+import PostcodePair from '../src/components/sector/PostcodePair';
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -115,8 +116,8 @@ export default function SectorDayScreen() {
           </Pressable>
         ) : (
           <View style={s.pcRow}>
-            <TextInput value={pcEdit} onChangeText={setPcEdit} autoCapitalize="characters" autoFocus placeholder="e.g. LS6 2"
-              placeholderTextColor={c.textMuted} style={s.pcInput} testID="sector-postcode-input" />
+            <PostcodePair value={pcEdit} onChange={setPcEdit} autoFocus placeholder="e.g. LS6 2" inputStyle={s.pcInput}
+              style={{ flex: 1 }} testID="sector-postcode-input" />
             <Pressable onPress={savePostcode} disabled={pcBusy} style={s.pcSave} accessibilityRole="button" testID="sector-postcode-save">
               <Text style={s.pcSaveText}>{pcBusy ? 'Saving…' : 'Save'}</Text>
             </Pressable>
@@ -183,7 +184,7 @@ const styles = (c: any) => StyleSheet.create({
   askText: { fontFamily: fonts.bodySemibold, fontSize: 13, color: c.primary },
   pcBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start', paddingVertical: 6, marginTop: 4 },
   pcBtnText: { fontFamily: fonts.bodySemibold, fontSize: 14, color: c.primary },
-  pcRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
+  pcRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginTop: 8 },
   pcInput: { flex: 1, borderWidth: 1, borderColor: c.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, fontFamily: fonts.body, fontSize: 15, color: c.text, backgroundColor: c.background },
   pcSave: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, backgroundColor: c.primary },
   pcSaveText: { fontFamily: fonts.bodyBold, fontSize: 14, color: c.onPrimary },

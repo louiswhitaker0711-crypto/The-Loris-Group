@@ -141,7 +141,10 @@ async def save_coverage(request: Request):
         colour = my_hop_colour(sec, str(user["id"])) or ""
     if colour not in HOP_COLOURS:
         colour = ""
-    pc = clean_pc(body.get("postcode") or (sec or {}).get("postcode"))
+    # A sector with two joined postcodes files its lines under the first one;
+    # the map finds them by where they're drawn (bbox), not by postcode.
+    from routes.sector import postcode_parts
+    pc = clean_pc(body.get("postcode") or (postcode_parts((sec or {}).get("postcode")) or [""])[0])
     name = user.get("name") or ""
     doc = {"id": str(uuid.uuid4()), "office_id": user.get("office_id"), "date": d.isoformat(),
            "sector_leader_id": (sec or {}).get("leader_id"),
