@@ -21,12 +21,13 @@ import { useKeyboardInset } from '../src/hooks/useKeyboardInset';
 import SectorRecap from '../src/components/sector/SectorRecap';
 import PostcodeMiniMap from '../src/components/sector/PostcodeMiniMap';
 import PostcodePair from '../src/components/sector/PostcodePair';
+import HopLines, { type HopLine } from '../src/components/sector/HopLines';
 import { splitPostcodes } from '../src/utils/postcodes';
 
 type Person = { user_id: string; name: string; role: string; sector_leader_id?: string | null; in_today?: boolean; no_show?: boolean; not_scheduled?: boolean };
-type Sector = { leader_id: string; leader_name: string; postcode: string; goal: number | null; member_ids: string[]; can_delete: boolean };
+type Sector = { leader_id: string; leader_name: string; postcode: string; goal: number | null; member_ids: string[]; can_delete: boolean; hops?: HopLine[] };
 type Draft = { leader_id: string; postcode: string; goal: string; member_ids: string[] };
-type BoardSec = { leader_id: string; leader_name: string; postcode: string; goal: string; member_ids: string[] };
+type BoardSec = { leader_id: string; leader_name: string; postcode: string; goal: string; member_ids: string[]; hops: HopLine[] };
 
 const first = (n: string) => (n || '').trim().split(' ')[0] || 'Someone';
 const err = (e: any, f = 'Try again.') => e?.response?.data?.detail || f;
@@ -64,7 +65,8 @@ export default function SectorPlanScreen() {
     if (!d || dirty) return;
     setBoard((d.sectors || []).map((x: Sector) => ({
       leader_id: x.leader_id, leader_name: x.leader_name, postcode: x.postcode || '',
-      goal: x.goal != null ? String(x.goal) : '', member_ids: x.member_ids || [] })));
+      goal: x.goal != null ? String(x.goal) : '', member_ids: x.member_ids || [],
+      hops: (x.hops || []).map((h) => ({ member_ids: h.member_ids || [], shadow_ids: h.shadow_ids || [] })) })));
   }, [d, dirty]);
 
   if (q.isLoading) return <View style={[s.page, s.center]}><ActivityIndicator color={c.primary} /></View>;
@@ -76,7 +78,14 @@ export default function SectorPlanScreen() {
   const locked = !!d.people_locked;
 
   // Local board edits — nothing saved until Save all.
-  const edit = (fn: (b: BoardSec[]) => BoardSec[]) => { setBoard((b) => fn(b.map((x) => ({ ...x, member_ids: [...x.member_ids] })))); setDirty(true); };
+  const edit = (fn: (b: BoardSec[]) => BoardSec[]) => {
+    setBoard((b) => fn(b.map((x) => ({ ...x, member_ids: [...x.member_ids] })))
+      // Someone out of a sector is off its hop lines too.
+      .map((x) => ({ ...x, hops: x.hops.map((h) => ({ member_ids: h.member_ids.filter((m) => x.member_ids.includes(m)),
+        shadow_ids: h.shadow_ids.filter((m) => x.member_ids.includes(m)) })).filter((h) => h.member_ids.length) })));
+    setDirty(true);
+  };
+  const setHops = (leader: string, hops: HopLine[]) => edit((b) => b.map((x) => (x.leader_id === leader ? { ...x, hops } : x)));
   const setField = (leader: string, k: 'postcode' | 'goal', v: string) =>
     edit((b) => b.map((x) => (x.leader_id === leader ? { ...x, [k]: v } : x)));
   // Tick a person into a sector: they leave every other sector on the board.
@@ -91,14 +100,14 @@ export default function SectorPlanScreen() {
     const p = people.find((x) => x.user_id === leaderId);
     if (!p) return;
     setAddingLeader(false);
-    edit((b) => [...b, { leader_id: leaderId, leader_name: p.name, postcode: '', goal: '', member_ids: [leaderId] }]);
+    edit((b) => [...b, { leader_id: leaderId, leader_name: p.name, postcode: '', goal: '', member_ids: [leaderId], hops: [] }]);
   };
   const removeSector = (leader: string) => edit((b) => b.filter((x) => x.leader_id !== leader));
   const saveAll = async () => {
     setBusy('saveall');
     try {
       const r = await apiService.saveSectorPlanBulk(date, board.map((x) => ({
-        leader_id: x.leader_id, postcode: x.postcode, goal: x.goal.trim() === '' ? null : Number(x.goal), member_ids: x.member_ids })));
+        leader_id: x.leader_id, postcode: x.postcode, goal: x.goal.trim() === '' ? null : Number(x.goal), member_ids: x.member_ids, hops: x.hops })));
       setDirty(false);
       refresh(r.data);
       toast.success(sent ? 'Saved — the people affected have been told' : 'Sectors saved');
@@ -223,6 +232,13 @@ export default function SectorPlanScreen() {
                 );
               })}
             </View>
+            {sec.member_ids.length > 0 && (
+              <>
+                <Text style={s.label}>Bunny hops · solos · shadows</Text>
+                <HopLines members={sec.member_ids} lines={sec.hops} nameOf={nameOf} disabled={locked}
+                  onChange={(h) => setHops(sec.leader_id, h)} />
+              </>
+            )}
           </View>
         );
       })}

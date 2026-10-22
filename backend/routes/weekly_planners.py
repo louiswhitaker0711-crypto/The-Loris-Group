@@ -1713,7 +1713,7 @@ async def weekly_planner_stats(week: str, request: Request, user_id: Optional[st
         for i in range(6):
             d = pdays[i] if i < len(pdays) and isinstance(pdays[i], dict) else {}
             s = str(d.get("status") or "off").lower()
-            statuses.append(s if s in ("in", "off", "rt", "nc", "ab", "pc", "ns") else "off")
+            statuses.append(s if s in ("in", "off", "rt", "nc", "ab", "pc", "ns", "sd") else "off")
         preq = pending_req_by_user.get(uid)
         dreq = decided_req_by_user.get(uid)
         crew.append({

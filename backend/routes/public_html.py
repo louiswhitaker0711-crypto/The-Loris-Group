@@ -439,6 +439,7 @@ _BELLS_PAGE_HTML = r"""<!DOCTYPE html>
                 if (day.status === 'pc') return { text: 'pc', cls: 'cell-pc' };
                 const tot = (day.over30 || 0) + (day.under30 || 0);
                 if (day.status === 'rt') return { text: tot > 0 ? `rt ${tot}` : 'rt', cls: 'cell-rt' };
+                if (day.status === 'sd') return { text: 'SD', cls: 'cell-rt' };
                 return { text: String(tot), cls: tot > 0 ? '' : 'cell-muted' };
             };
 
@@ -761,7 +762,7 @@ _BELLS_PAGE_HTML = r"""<!DOCTYPE html>
                 const u = Number(d.under30 || 0);
                 const m = Number(d.memberships || 0);
                 const tot = o + u;
-                const isWorking = d.status === 'in' || d.status === 'rt' || tot > 0 || m > 0;
+                const isWorking = d.status === 'in' || d.status === 'rt' || d.status === 'sd' || tot > 0 || m > 0;
                 if (isWorking) working++;
                 over30 += o; under30 += u;
                 if (tot > 0) reps.push({ name: e.user_name, over30: o, under30: u });

@@ -137,7 +137,10 @@ async def get_plan(request: Request, date: Optional[str] = None):
             where[m] = s["leader_id"]
         sectors.append({"leader_id": s["leader_id"], "leader_name": names.get(s["leader_id"]) or s.get("leader_name") or "",
                         "postcode": s.get("postcode") or "", "goal": s.get("goal"),
-                        "member_ids": members, "can_delete": await _deletable(s)})
+                        "member_ids": members, "can_delete": await _deletable(s),
+                        "hops": [{"colour": h.get("colour"), "member_ids": [m for m in h.get("member_ids") or [] if m in names],
+                                  "shadow_ids": [m for m in h.get("shadow_ids") or [] if m in names]}
+                                 for h in s.get("hops") or []]})
     # Who's scheduled In today (from Bells, set at the start of the week), and
     # who's been marked a No Show.
     d0 = datetime.fromisoformat(iso).date()
@@ -245,7 +248,9 @@ async def save_plan_bulk(request: Request, date: Optional[str] = None):
         raw = r.get("goal")
         cleaned.append({"leader_id": leader, "member_ids": members,
                         "postcode": clean_postcode(r.get("postcode")),
-                        "goal": None if raw in (None, "") else _int(raw, 0, 200)})
+                        "goal": None if raw in (None, "") else _int(raw, 0, 200),
+                        # Bunny hops, solos and shadows (core/hops.py); absent = leave as they are.
+                        "hops": r.get("hops") if isinstance(r.get("hops"), list) else None})
         leader_ids.append(leader)
 
     # Every leader and member must be in the office and active.
@@ -253,8 +258,17 @@ async def save_plan_bulk(request: Request, date: Optional[str] = None):
     valid = {str(u["_id"]): u async for u in db.users.find(
         {"_id": {"$in": [ObjectId(i) for i in all_ids]}, "office_id": office_id, **_ACTIVE}, {"name": 1})}
     cleaned = [r for r in cleaned if r["leader_id"] in valid]
+    from core.hops import clean_lines
     for r in cleaned:
         r["member_ids"] = [i for i in r["member_ids"] if i in valid]
+        if r["hops"] is not None:
+            r["hops"] = clean_lines(r["hops"], r["member_ids"])
+        else:
+            # Unchanged hops still lose anyone no longer in the sector.
+            old = (before.get(r["leader_id"]) or {}).get("hops") or []
+            r["hops"] = [h for h in ({**h, "member_ids": [i for i in h.get("member_ids") or [] if i in r["member_ids"]],
+                                      "shadow_ids": [i for i in h.get("shadow_ids") or [] if i in r["member_ids"]]} for h in old)
+                         if h["member_ids"]]
 
     # After the field's started, who's in each sector is fixed.
     if sent and sent.get("at"):
@@ -276,15 +290,21 @@ async def save_plan_bulk(request: Request, date: Optional[str] = None):
     for r in cleaned:
         await db.sectors.update_one({"office_id": office_id, "leader_id": r["leader_id"], "date": iso}, {
             "$set": {"leader_name": valid[r["leader_id"]].get("name") or "", "member_ids": r["member_ids"],
-                     "postcode": r["postcode"], "goal": r["goal"],
+                     "postcode": r["postcode"], "goal": r["goal"], "hops": r["hops"],
                      "planned_by": user.get("name") or "", "updated_at": now_iso},
             "$setOnInsert": {"id": str(uuid.uuid4()), "created_at": now_iso}}, upsert=True)
+
+    # Shadows read SD on Bells for the day; someone no longer shadowing goes back to In.
+    from core.hops import sync_shadow_days
+    await sync_shadow_days(office_id, iso, before.values(),
+                           [x async for x in db.sectors.find({"office_id": office_id, "date": iso}, {"_id": 0})])
 
     if sent and sent.get("at"):
         after = {x["leader_id"]: x async for x in db.sectors.find({"office_id": office_id, "date": iso}, {"_id": 0})}
         changed = [k for k in set(before) | set(after)
                    if set((before.get(k) or {}).get("member_ids") or []) != set((after.get(k) or {}).get("member_ids") or [])
-                   or (before.get(k) or {}).get("postcode") != (after.get(k) or {}).get("postcode")]
+                   or (before.get(k) or {}).get("postcode") != (after.get(k) or {}).get("postcode")
+                   or ((before.get(k) or {}).get("hops") or []) != ((after.get(k) or {}).get("hops") or [])]
         if changed:
             await _tell(office_id, iso, changed, "🔄 Sectors have changed")
     return await get_plan(request, iso)
@@ -340,13 +360,17 @@ def plan_messages(sectors: list[dict], names: dict, everyone: list[str]) -> dict
         placed.update([leader, *crew])
         with_names = ", ".join(_first(names.get(m, "")) for m in crew)
         goal = f" · sector goal {s['goal']}" if s.get("goal") is not None else ""
+        from core.hops import describe
+        mine = describe(s, leader, names)
         out[leader] = ("🗺️ Your sector's ready · " + code,
                        f"You're leading {code} today{f' with {with_names}' if with_names else ''}{goal}. "
-                       "Draw your map and do the set-ups.")
+                       + (f"{mine}. " if mine else "") + "Draw your map and do the set-ups.")
         for m in crew:
             others = ", ".join(_first(names.get(x, "")) for x in crew if x != m)
+            hop = describe(s, m, names)
             out[m] = (f"📍 You're in {_first(names.get(leader, ''))}'s sector today · {code}",
-                      f"{f'With {others}. ' if others else ''}Your set-up and map will follow from your sector leader.")
+                      (f"{hop}. " if hop else f"{f'With {others}. ' if others else ''}")
+                      + "Your set-up and map will follow from your sector leader.")
     for uid in everyone:
         if uid not in placed:
             out[uid] = ("You're not in a sector yet today", "Find the sector planner or your Coach.")

@@ -355,6 +355,7 @@ function cellForDay(d: Day, c: typeof colors, dark: boolean, exited: false | 'fi
   if (sq) return { text: DAY_STATUS_SHORT[d.status], fg: sq.fg, bg: sq.bg };
   if (d.status === 'nc') return { text: 'NC', fg: c.textMuted };
   if (d.status === 'pc') return { text: DAY_STATUS_SHORT.pc, fg: dark ? '#67e8f9' : '#0e7490' };
+  if (d.status === 'sd') return { text: DAY_STATUS_SHORT.sd, fg: dark ? '#c4b5fd' : '#6d28d9' };
   const tot = (d.over30 || 0) + (d.under30 || 0);
   if (d.status === 'rt') return { text: tot > 0 ? `RT ${tot}` : 'RT', fg: amber };
   // 0–1 red, 2 amber, 3 light green, 4+ dark green (utils/dayBands).
@@ -860,13 +861,13 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
                   ))}
                 </View>
                 <View style={styles.ceStatusRow}>
-                  {(['in', 'off', 'ab', 'ns', 'rt', 'nc', 'pc'] as string[]).map((s) => (
+                  {(['in', 'off', 'ab', 'ns', 'rt', 'nc', 'pc', 'sd'] as string[]).map((s) => (
                     <TouchableOpacity
                       key={s}
                       style={[styles.ceStatusChip, cellStatus === s && styles.ceStatusChipActive]}
                       onPress={() => setCellStatus(s)}
                     >
-                      <Text style={[styles.ceStatusChipText, cellStatus === s && { color: colors.onPrimary }]}>{s === 'ab' || s === 'ns' || s === 'pc' ? DAY_STATUS_LABEL[s] : s.toUpperCase()}</Text>
+                      <Text style={[styles.ceStatusChipText, cellStatus === s && { color: colors.onPrimary }]}>{s === 'ab' || s === 'ns' || s === 'pc' || s === 'sd' ? DAY_STATUS_LABEL[s] : s.toUpperCase()}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>

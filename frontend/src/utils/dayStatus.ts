@@ -6,6 +6,8 @@
  *   • ns = No show — planned in but didn't go out (black square).
  *   • pc = In office — product coaching or office work, not in the field.
  *     Never an absence; left out of reliability and scoring.
+ *   • sd = Shadow day — out in the field watching a bunny hop (a new start's
+ *     first field day): no sales goal, left out of scoring and piece average.
  * Codes stay as they are in the data (`ab`, `ns`, …).
  */
 export const DAY_STATUS_LABEL: Record<string, string> = {
@@ -16,6 +18,7 @@ export const DAY_STATUS_LABEL: Record<string, string> = {
   rt: 'Retrain',
   nc: 'Not counted',
   pc: 'In office',
+  sd: 'Shadow day',
 };
 
 export const DAY_STATUS_SHORT: Record<string, string> = {
@@ -26,6 +29,7 @@ export const DAY_STATUS_SHORT: Record<string, string> = {
   rt: 'RT',
   nc: 'NC',
   pc: 'IO',
+  sd: 'SD',
 };
 
 /** The grey and black squares (fill + text), in both themes. */
@@ -40,4 +44,4 @@ export function statusSquare(status: string, dark: boolean): { bg: string; fg: s
 }
 
 /** Statuses that clear a day's numbers. */
-export const NO_NUMBER_STATUSES = ['off', 'nc', 'ab', 'pc', 'ns'];
+export const NO_NUMBER_STATUSES = ['off', 'nc', 'ab', 'pc', 'ns', 'sd'];

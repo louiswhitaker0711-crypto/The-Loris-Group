@@ -329,9 +329,9 @@ def test_bunny_hops_save_to_the_sector_on_screen(monkeypatch):
          "hops": [{"colour": "blue", "member_ids": ["b1"]}]},
         {"office_id": "o1", "date": "2026-10-21", "leader_id": "lead2", "member_ids": ["lead2", "t1", "h1"]},
     ]))
-    body = {"hops": [{"colour": "green", "member_ids": ["t1", "h1"]}]}
+    body = {"hops": [{"colour": "green", "member_ids": ["t1", "h1"], "shadow_ids": []}]}
     out = run(sec.save_hops(_Req(body), date="2026-10-21", leader="lead2"))
-    assert out["hops"] == [{"colour": "green", "member_ids": ["t1", "h1"]}]
+    assert out["hops"] == [{"colour": "green", "member_ids": ["t1", "h1"], "shadow_ids": []}]
     assert run(db.sectors.find_one({"leader_id": "lead2"}))["hops"] == out["hops"]
     assert run(db.sectors.find_one({"leader_id": "admin1"}))["hops"] == [{"colour": "blue", "member_ids": ["b1"]}]   # untouched
 

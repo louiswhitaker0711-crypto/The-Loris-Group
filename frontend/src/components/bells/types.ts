@@ -168,7 +168,7 @@ export function emptyDay(): Day {
 }
 
 /**
- * Status helpers — only 'in' counts as a working day. 'off', 'rt', 'nc', and
+ * Status helpers — only 'in' counts as a working day. 'off', 'rt', 'nc', 'sd' (shadow day) and
  * legacy 'normal' are all excluded from piece_average / scoring denominators.
  * A day counts toward piece_average / scoring ONLY when it's 'in'. RT / NC / Off are excluded.
  */

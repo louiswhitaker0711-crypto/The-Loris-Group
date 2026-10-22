@@ -18,7 +18,7 @@ from datetime import date, timedelta
 from core.week_bands import week_band
 
 DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-STATUS = {"ab": "NS", "ns": "X", "pc": "IO", "rt": "RT", "nc": "NC"}
+STATUS = {"ab": "NS", "ns": "X", "pc": "IO", "rt": "RT", "nc": "NC", "sd": "SD"}
 
 # Fill / text colours, matching the app's light theme.
 DAY_LOOK = {"red": ("FDE2E2", "B91C1C"), "amber": ("FCEBD0", "B45309"),

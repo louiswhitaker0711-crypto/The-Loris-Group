@@ -35,7 +35,9 @@ type Person = { user_id: string; user_name: string; setup: Setup | null; breakdo
   yesterday: { change: string; proud: string; goal: number | null; kpi: { kpi_metric: string; kpi_target: number } | null };
   cod?: CodDay;
   /** Stage 3+: "What I'm being an example of" instead of learning. */
-  example_mode?: boolean; week_focus?: WeekFocus; teacher_name?: string; example?: string };
+  example_mode?: boolean; week_focus?: WeekFocus; teacher_name?: string; example?: string;
+  /** Shadow day: watching a hop, no sales goal or KPI. `hop` says who with. */
+  shadow?: boolean; hop?: string | null };
 type Mode = 'setup' | 'breakdown';
 const errText = (e: any, f: string) => (typeof e?.response?.data?.detail === 'string' ? e.response.data.detail : f);
 
@@ -367,6 +369,8 @@ function SetupCard({ p, date, opts, codOptions, sectorPeople, open, onToggle, on
   const stages: number[] = p.cod?.stages || [];
   const canPickCod = stages.length > 0;
   const exampleMode = !!p.example_mode;
+  // A shadow day (set in Plan sectors): learning and focus only, no goal or KPI.
+  const shadow = !!p.shadow;
   // This week's COD focus fills a new set-up (never one already saved).
   const wf: WeekFocus = p.week_focus || null;
   const wfLearn = wf && canPickCod && stages.includes(wf.stage) ? wf.module_id : '';
@@ -383,7 +387,7 @@ function SetupCard({ p, date, opts, codOptions, sectorPeople, open, onToggle, on
   const [busy, setBusy] = useState(false);
   const y = p.yesterday || {};
   const metrics: Array<{ key: string; label: string; loa: number | null }> = opts?.kpi_metrics || [];
-  const summary = p.setup ? [cur.goal != null ? `Goal ${cur.goal}` : '', cur.kpi_metric ? `${cur.kpi_target ?? ''} ${metrics.find((m) => m.key === cur.kpi_metric)?.label || ''}`.trim() : '', cur.focus,
+  const summary = p.setup ? [shadow ? 'Shadow day' : '', cur.goal != null && !shadow ? `Goal ${cur.goal}` : '', cur.kpi_metric ? `${cur.kpi_target ?? ''} ${metrics.find((m) => m.key === cur.kpi_metric)?.label || ''}`.trim() : '', cur.focus,
     p.cod?.pick ? `COD: ${p.cod.pick.topic}` : '', p.teacher_name ? `Taught by ${p.teacher_name.split(' ')[0]}` : '',
     p.example ? `Example of ${p.example}` : ''].filter(Boolean).join(' · ') : 'Not set';
 
@@ -396,7 +400,8 @@ function SetupCard({ p, date, opts, codOptions, sectorPeople, open, onToggle, on
   const save = async () => {
     setBusy(true);
     try {
-      await apiService.saveSectorDay(p.user_id, date, { setup: { goal: num(goal), kpi_metric: metric || null, kpi_target: num(target), focus, positive,
+      await apiService.saveSectorDay(p.user_id, date, { setup: { goal: shadow ? null : num(goal), kpi_metric: shadow ? null : (metric || null),
+        kpi_target: shadow ? null : num(target), focus, positive,
         cod_module_id: canPickCod ? (cod || null) : (cur.cod_module_id || null),
         teacher_id: canPickCod ? (teacher || null) : null,
         example_module_id: exampleMode ? (exMod || null) : null,
@@ -410,14 +415,17 @@ function SetupCard({ p, date, opts, codOptions, sectorPeople, open, onToggle, on
     <View style={s.card}>
       <Pressable onPress={onToggle} style={s.cardHead} accessibilityRole="button">
         <View style={{ flex: 1 }}>
-          <Text style={s.name}>{p.user_name}</Text>
-          <Text style={s.muted} numberOfLines={1}>{summary}</Text>
+          <Text style={s.name}>{p.user_name}{shadow ? ' · shadow day' : ''}</Text>
+          <Text style={s.muted} numberOfLines={1}>{p.setup ? summary : shadow && p.hop ? p.hop : summary}</Text>
         </View>
         <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={18} color={c.textMuted} />
       </Pressable>
       {open && (
         <View style={{ gap: 10 }}>
-          {(y.goal != null || y.kpi) && (
+          {shadow && (
+            <Text style={s.muted}>{p.hop || 'Shadow day'}. No sales goal or KPI today: set what they're learning and their focus.</Text>
+          )}
+          {!shadow && (y.goal != null || y.kpi) && (
             <Pressable onPress={useYesterday} style={s.hint} accessibilityRole="button">
               <Ionicons name="arrow-undo-outline" size={15} color={c.primary} />
               <Text style={[s.ghostText, { flex: 1 }]}>
@@ -425,6 +433,7 @@ function SetupCard({ p, date, opts, codOptions, sectorPeople, open, onToggle, on
               </Text>
             </Pressable>
           )}
+          {!shadow && <>
           <Text style={s.label}>Goal (sign-ups)</Text>
           <TextInput value={goal} onChangeText={setGoal} keyboardType="number-pad" placeholder="4" placeholderTextColor={c.textMuted} style={[s.input, s.small]} />
           <Text style={s.label}>KPI</Text>
@@ -437,6 +446,7 @@ function SetupCard({ p, date, opts, codOptions, sectorPeople, open, onToggle, on
             ))}
           </View>
           {!!metric && <TextInput value={target} onChangeText={setTarget} keyboardType="number-pad" placeholder="Target" placeholderTextColor={c.textMuted} style={[s.input, s.small]} />}
+          </>}
           <Text style={s.label}>Focus</Text>
           {!!y.change && y.change !== focus && (
             <Pressable onPress={() => setFocus(y.change)} style={s.hint} accessibilityRole="button">

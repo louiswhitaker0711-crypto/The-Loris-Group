@@ -428,6 +428,7 @@ function TableView({ entries }: { entries: Entry[] }) {
     if (d.status === 'pc') return { text: 'io', color: '#0891b2' };
     const tot = (d.over30 || 0) + (d.under30 || 0);
     if (d.status === 'rt') return { text: tot > 0 ? `rt ${tot}` : 'rt', color: '#d97706' };
+    if (d.status === 'sd') return { text: 'SD', color: '#6d28d9' };
     if (d.status !== 'in' && tot === 0) return { text: '0', color: '#8ea8c8' };
     // 0–1 red, 2 amber, 3 light green, 4+ dark green (utils/dayBands).
     return { text: String(tot), color: dayBandText(tot) };
@@ -735,7 +736,7 @@ function PublicDayBreakdownModal({ dayIdx, entries, weekEnding, onClose }: {
       const tot = o + u;
       if (d.status === 'off') off++;
       else if (d.status === 'rt') rt++;
-      const isWorking = d.status === 'in' || d.status === 'rt' || tot > 0 || m > 0;
+      const isWorking = d.status === 'in' || d.status === 'rt' || d.status === 'sd' || tot > 0 || m > 0;
       if (isWorking) working++;
       over30 += o; under30 += u; memberships += m;
       if (tot > 0 || m > 0) reps.push({ name: e.user_name, over30: o, under30: u, memberships: m, status: d.status });
