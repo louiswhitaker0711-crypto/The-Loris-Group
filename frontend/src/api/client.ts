@@ -1041,6 +1041,8 @@ export const apiService = {
   getCoverage: (b: { south: number; west: number; north: number; east: number }) => api.get('/coverage', { params: b }),
   saveCoverage: (body: { date: string; postcode?: string; lines: number[][][]; note?: string; leader_id?: string; kind?: 'plan' | 'done' | 'request'; colour?: string }) => api.post('/coverage', body),
   // The sector on screen (its leader's id), not always the caller's own.
+  // Every Bells week as one Excel file (a tab per week). Admins only.
+  exportBells: (office?: string) => api.get('/bells/export', { params: office ? { office } : {}, responseType: 'blob', timeout: 120000 }),
   saveHops: (date: string, hops: { colour: string; member_ids: string[] }[], leaderId?: string | null) =>
     api.put('/sector/hops', { hops }, { params: leaderId ? { date, leader: leaderId } : { date } }),
   deleteCoverage: (id: string) => api.delete(`/coverage/${id}`),
