@@ -538,7 +538,7 @@ export default function LeadershipScreen() {
                 <Text style={styles.lockedTitle}>Stage {codStageLabel(stage)} — preview</Text>
                 <Text style={styles.lockedBody}>
                   {stage === 5
-                    ? 'Stage SL (Sector/Site Leader) opens when OwnerIQ has you at Stage 3+, or when you have a Stage 3 on your team. You can preview the items meanwhile.'
+                    ? 'Stage SL (Sector/Site Leader) opens when you're at Stage SL, or when you have a Stage 3 on your team. You can preview the items meanwhile.'
                     : `Stage ${codStageLabel(stage)} opens when OwnerIQ has you at Stage ${codStageLabel(stage)}. You can preview the items meanwhile.`}
                 </Text>
               </View>

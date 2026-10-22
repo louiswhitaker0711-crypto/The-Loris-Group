@@ -33,6 +33,8 @@ export function getDayLabel(dbDay: number): string {
  *  Display only — the stored grade value is never changed. */
 const GRADE_DISPLAY: Record<string, string> = {
   Promote: 'Advance',
+  // The Owner's word (22 Oct 2026): "Below Average" read too negative.
+  'Below Average': 'Needs Work',
 };
 export function displayGrade(grade: string | null | undefined): string {
   const g = grade || '';

@@ -37,6 +37,7 @@ import { ConfettiCelebration, ConfettiCelebrationHandle } from '../src/component
 import OfficeToggle from '../src/components/ui/OfficeToggle';
 import { useTabBarClearance } from '../src/customization/CustomTabBar';
 import { Breathe } from '../src/components/ui/Breathe';
+import { displayGrade } from '../src/manual/utils';
 import { APP_LOCALE, APP_TZ } from '../src/utils/appTime';
 
 // Same field names as the single grader (app/assessment/[id].tsx).
@@ -604,7 +605,7 @@ export default function OrientationGradingScreen() {
                                       onPress={() => { haptics.light(); setSheetGrades((p) => ({ ...p, [row.id]: g })); }}
                                     >
                                       <Text style={[styles.gradeBtnText, selected && { color: gc.text, fontWeight: '700' }]} numberOfLines={1}>
-                                        {g}
+                                        {displayGrade(g)}
                                       </Text>
                                     </TouchableOpacity>
                                   );

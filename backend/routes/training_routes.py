@@ -23,6 +23,7 @@ from scoring import calculate_scores, calculate_checklist_grade, GRADE_PRESETS, 
 from seed_data import DAY_TARGETS, TRAINING_MANUAL
 from core.email_utils import send_new_hire_email, send_promotion_email
 from core.push import send_push_to_user
+from core.app_time import APP_TZ
 from core.office_helpers import resolve_office_id, try_get_user, get_office_filter
 from core.achievements import award, award_stage1_milestones, award_upline_core_leader
 from core.trainee_records import build_new_hire_doc, coach_hire_filter, create_assessment_skeleton
@@ -299,7 +300,41 @@ async def get_assessment(assessment_id: str, request: Request):
         if prev and prev.get("completed"):
             out["prev_day_focus"] = prev.get("focus_tomorrow") or None
             out["prev_day_acknowledged"] = bool(prev.get("acknowledged") or prev.get("passed_off"))
+    out["day_kpis"] = await _day_kpis(a)
     return out
+
+
+# The Daily Assessment's KPI steppers ← that day's breakdown (the Owner,
+# 22 Oct 2026). Prefilled on screen and still editable.
+_DAY_KPI_FIELDS = {
+    "kpi_introductions": "spoken_to",
+    "kpi_presentations": "pitches_commenced",
+    "kpi_closes": "pitches_closed",
+    "kpi_sales": "sales",
+}
+
+
+async def _day_kpis(a: dict) -> Optional[dict]:
+    """The BA's numbers for the assessment's day: the day it was completed,
+    or today (UK time) while it's still open. None when there's no row."""
+    if int(a.get("day_number") or 1) < 3:
+        return None
+    hire = await db.new_hires.find_one({"id": a.get("new_hire_id")}, {"_id": 0, "trainee_user_id": 1})
+    uid = (hire or {}).get("trainee_user_id")
+    if not uid:
+        return None
+    when = a.get("assessment_date") if a.get("completed") else None
+    try:
+        day = datetime.fromisoformat(when).astimezone(APP_TZ).date() if when else datetime.now(APP_TZ).date()
+    except (TypeError, ValueError):
+        day = datetime.now(APP_TZ).date()
+    iso = day.isoformat()
+    rows = await db.owneriq_kpis.find({"cg1_user_id": uid, "date": iso}, {"_id": 0}).to_list(10)
+    if not rows:
+        return None
+    row = next((r for r in rows if r.get("source") == "breakdown"), rows[0])
+    vals = {f: row.get(k) for f, k in _DAY_KPI_FIELDS.items() if row.get(k) is not None}
+    return {"date": iso, "doors": row.get("doors_knocked"), **vals} if vals else None
 
 @router.put("/assessment/{assessment_id}")
 async def update_assessment(assessment_id: str, update: DailyAssessmentUpdate, request: Request):
