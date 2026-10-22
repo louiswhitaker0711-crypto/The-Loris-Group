@@ -176,7 +176,7 @@ def _normalize_days(raw) -> list:
         # 'ab' = Not scheduled (planned a day off: grey, never counts against
         # them). 'ns' = No show (planned in, didn't go out: black, counts
         # against reliability like an unplanned day off).
-        if raw_status not in ("in", "nc", "rt", "off", "ab", "pc", "ns"):
+        if raw_status not in ("in", "nc", "rt", "off", "ab", "pc", "ns", "sd"):
             raw_status = "off"
         # Auto-promote: typing any number > 0 flips 'off' -> 'in'.
         # AB is left as-is — admin must explicitly toggle to In if data is added.
@@ -334,7 +334,7 @@ def compute_totals(entry: dict, fees: Optional[dict]) -> dict:
     # AB (not scheduled) / RT / PC = excluded from the denominator.
     # "off" / "nc" / "ns" (no show) on a non-Sunday count against.
     # Sunday (index 6) is always excluded.
-    _auth_off = {"ab", "rt", "pc"}
+    _auth_off = {"ab", "rt", "pc", "sd"}
     mon_sat = days[:6]
     expected_days = sum(1 for d in mon_sat if (d.get("status") or "off") not in _auth_off)
     rel_worked = sum(1 for d in mon_sat if d.get("status") == "in")
@@ -2707,6 +2707,8 @@ async def public_bells_csv(office_slug: str, request: Request):
                 day_cells.append("nc")
             elif status == "rt":
                 day_cells.append(f"rt {tot}" if tot > 0 else "rt")
+            elif status == "sd":
+                day_cells.append("SD")
             else:
                 day_cells.append(str(tot))
         w.writerow([

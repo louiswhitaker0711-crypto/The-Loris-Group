@@ -66,6 +66,12 @@ async def apply_breakdown(user: dict, iso: str, bd: dict) -> None:
     from owneriq_sync import owneriq_on
     if await owneriq_on():
         return
+    # A shadow day isn't scored: no KPI row, and Bells stays SD (core/hops.py).
+    from core.hops import shadow_ids
+    uid = str(user["_id"])
+    sec = await db.sectors.find_one({"date": iso, "office_id": user.get("office_id"), "member_ids": uid}, {"hops": 1})
+    if uid in shadow_ids(sec):
+        return
     from owneriq_config import office_pin
     pin = await office_pin(user.get("office_id"), db)
     row = kpi_row(user, iso, bd, pin)

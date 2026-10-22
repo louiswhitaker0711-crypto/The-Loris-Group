@@ -286,7 +286,7 @@ def _day_sales(day: dict) -> float:
     return max(0.0, _num((day or {}).get("over30")) + _num((day or {}).get("under30")))
 
 
-AUTH_OFF = {"ab", "rt", "pc"}  # same excused set as bells reliability_pct
+AUTH_OFF = {"ab", "rt", "pc", "sd"}  # same excused set as bells reliability_pct
 
 
 async def _resolve_user(user_id: str) -> dict | None:

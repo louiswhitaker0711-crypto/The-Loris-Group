@@ -205,7 +205,8 @@ def sector_stats(rows: list, sector_goal: Optional[int] = None) -> dict:
     """From the people with a breakdown: sign-ups, goal, PA (sign-ups per
     person in) and scoring (% of people in with at least one sign-up)."""
     inn = [r.get("breakdown") or {} for r in rows
-           if any((r.get("breakdown") or {}).get(k) is not None for k in ("doors", "spoken", "pitched", "closed", "hit"))]
+           if not r.get("shadow")   # a shadow day isn't scored
+           and any((r.get("breakdown") or {}).get(k) is not None for k in ("doors", "spoken", "pitched", "closed", "hit"))]
     hits = [int(b.get("hit") or 0) for b in inn]
     goals = [b.get("goal") for b in inn if b.get("goal") is not None]
     hit = sum(hits)
@@ -224,12 +225,14 @@ def setup_text(rows: list, iso: str, sector_goal: Optional[int] = None, postcode
         out.append(f"Sector goal: {sector_goal}")
     for r in rows:
         s = r.get("setup") or {}
-        if not any([s.get("goal") is not None, s.get("kpi_metric"), s.get("focus")]):
+        if not any([s.get("goal") is not None, s.get("kpi_metric"), s.get("focus"), r.get("shadow")]):
             continue
         out += ["", f"*{_first(r.get('user_name'))}*"]
-        if s.get("goal") is not None:
+        if r.get("shadow"):
+            out.append(f"Shadow day{(' · ' + r['hop'].split(' · ')[0]) if r.get('hop') else ''}")
+        elif s.get("goal") is not None:
             out.append(f"Goal: {s['goal']}")
-        if s.get("kpi_metric"):
+        if s.get("kpi_metric") and not r.get("shadow"):
             out.append(f"KPI: {kpi_text(s)}")
         if s.get("focus"):
             out += ["", f"Focus: {s['focus']}"]
@@ -396,6 +399,8 @@ async def sector_day(request: Request, date: Optional[str] = None):
     missing = [t for t in missing if t and t not in names]
     if missing:
         names.update({u["user_id"]: u["user_name"] for u in await _users_by_ids(missing)})
+    from core.hops import shadow_ids as _shadows, describe as _hop_text
+    shadows = _shadows(sector)
     rows = []
     for p in people:
         doc = docs.get(p["user_id"]) or {}
@@ -407,6 +412,9 @@ async def sector_day(request: Request, date: Optional[str] = None):
         example = (by_id.get(st.get("example_module_id") or "") or {}).get("topic") or st.get("example_text") or ""
         rows.append({
             **p,
+            # A shadow day: watching a hop, no sales goal or KPI (core/hops.py).
+            "shadow": p["user_id"] in shadows,
+            "hop": _hop_text(sector, p["user_id"], names) if sector else None,
             "cod": {"stages": stages,
                     "pick": picked, "observed": doc.get("cod_observed")},
             # Stage 3+ (no learning pick): "what I'm being an example of".
@@ -1366,6 +1374,7 @@ async def sector_map(request: Request, date: Optional[str] = None, leader: Optio
     leads = sec["leader_id"] == me
     from routes.coverage import HOP_COLOURS, my_hop_colour
     hops = [{"colour": h.get("colour"), "member_ids": h.get("member_ids") or [],
+             "shadow_ids": h.get("shadow_ids") or [],
              "members": [names.get(i, "") for i in h.get("member_ids") or [] if i in names]}
             for h in sec.get("hops") or [] if h.get("colour") in HOP_COLOURS]
     if shape:
@@ -1460,7 +1469,11 @@ async def save_hops(request: Request, date: Optional[str] = None, leader: Option
         ids = [i for i in dict.fromkeys(str(x) for x in (h.get("member_ids") or [])) if i in members and i not in seen]
         seen.update(ids)
         hops.append({"colour": colour, "member_ids": ids})
+    # The map doesn't set shadows (Plan sectors does): keep anyone who was one.
+    from core.hops import keep_shadows, sync_shadow_days
+    hops = keep_shadows(hops, sec.get("hops") or [])
     await db.sectors.update_one({"leader_id": sec["leader_id"], "date": iso}, {"$set": {"hops": hops}})
+    await sync_shadow_days(sec.get("office_id") or user.get("office_id"), iso, [sec], [{**sec, "hops": hops}])
     return {"hops": hops}
 
 

@@ -6,7 +6,8 @@ with them, all day.
 
 Who: any new start (an active hire on Days 1-8) in the caller's bunny hop
 today; if the caller isn't in a hop (or hops aren't set), anyone in the
-caller's sector today. Nobody else is ever listed.
+caller's sector today. On BA Academy days (Days 1-2, in the office) an
+Admin gets every new start on those days: the Owner runs the Academy.
 
     GET /api/coaching/today
       → {"date", "people": [{hire_id, name, day_number, day_label,
@@ -32,6 +33,7 @@ from database import db
 router = APIRouter()
 
 FIRST_DAYS = 8
+ACADEMY_DAYS = 2
 
 
 def _today() -> str:
@@ -83,12 +85,19 @@ async def coaching_today(request: Request):
     if (user.get("role") or "").lower() not in ("leader", "admin"):
         return {"date": iso, "people": []}
     ids = people_with(await _my_sector(user, iso), str(user["id"]))
-    if not ids:
-        return {"date": iso, "people": []}
+    proj = {"_id": 0, "id": 1, "name": 1, "current_day": 1, "office_id": 1}
     hires = await db.new_hires.find(
-        {"active": True, "office_id": user.get("office_id"), "trainee_user_id": {"$in": ids}},
-        {"_id": 0, "id": 1, "name": 1, "current_day": 1, "office_id": 1},
-    ).to_list(50)
+        {"active": True, "office_id": user.get("office_id"), "trainee_user_id": {"$in": ids}}, proj,
+    ).to_list(50) if ids else []
+    # The BA Academy (Days 1-2) is in the office, run by the Owner: an Admin
+    # gets everyone on an Academy day to tick off, sector or not.
+    if (user.get("role") or "").lower() == "admin":
+        seen = {h["id"] for h in hires}
+        hires += [h for h in await db.new_hires.find(
+            {"active": True, "office_id": user.get("office_id"), "current_day": {"$lte": ACADEMY_DAYS}}, proj,
+        ).to_list(50) if h["id"] not in seen]
+    if not hires:
+        return {"date": iso, "people": []}
     out = []
     for h in hires:
         day = int(h.get("current_day") or 1)
