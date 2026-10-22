@@ -1190,7 +1190,8 @@ async def sector_status(request: Request):
     mins = now.hour * 60 + now.minute
     sat = now.weekday() == 5
     sun = now.weekday() == 6
-    start_win = (9 * 60 + 30, 12 * 60) if sat else (13 * 60, 16 * 60)
+    # Set-ups open at 12:15 on weekdays, straight after the morning meeting (the Owner, 22 Oct 2026).
+    start_win = (9 * 60 + 30, 12 * 60) if sat else (12 * 60 + 15, 16 * 60)
     end_win = (0, 0) if sat else (19 * 60 + 30, 22 * 60)   # no breakdown on a Saturday
     phase = None if sun else "setup" if start_win[0] <= mins < start_win[1] else "breakdown" if end_win[0] <= mins < end_win[1] else None
     is_coach = (user.get("role") or "").lower() in ("leader", "admin")

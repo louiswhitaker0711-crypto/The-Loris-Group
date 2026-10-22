@@ -25,7 +25,7 @@ export default function SectorPromptCard() {
   if (!data) return null;
 
   let icon: any = null, title = '', sub = '', url = '';
-  // Planning shows until set-up time; from then (13:00, Saturday 09:30), once
+  // Planning shows until set-up time; from then (12:15, Saturday 09:30), once
   // the sectors are out, the set-up prompt comes first.
   if (data.planning && !(data.phase === 'setup' && data.plan_sent)) {
     const sat = new Date(`${data.date}T12:00:00Z`).getUTCDay() === 6;
