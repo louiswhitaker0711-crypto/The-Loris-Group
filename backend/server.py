@@ -60,6 +60,7 @@ from routes.manual_editor import router as manual_editor_router
 from routes.modules import router as modules_router
 from routes.onboarding import router as onboarding_router
 from routes.leader_today import router as leader_today_router
+from routes.coaching_today import router as coaching_today_router
 from routes.orientation import router as orientation_router
 from routes.streak import router as streak_router
 from routes.achievements import router as achievements_router
@@ -165,6 +166,7 @@ api_router.include_router(manual_editor_router)
 api_router.include_router(modules_router)
 api_router.include_router(onboarding_router)
 api_router.include_router(leader_today_router)
+api_router.include_router(coaching_today_router)
 api_router.include_router(orientation_router)
 api_router.include_router(achievements_router)
 api_router.include_router(owneriq_router)

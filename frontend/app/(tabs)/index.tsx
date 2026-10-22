@@ -49,6 +49,7 @@ import MoreSection from '../../src/components/home/today/MoreSection';
 import SuggestionsCard from '../../src/components/home/today/SuggestionsCard';
 import { dayTargetChips } from '../../src/utils/dayTargets';
 import PrimetimeCard from '../../src/components/home/PrimetimeCard';
+import CoachingTodayCard from '../../src/components/home/CoachingTodayCard';
 import SectorPromptCard from '../../src/components/home/SectorPromptCard';
 import ResetBoardCard from '../../src/components/home/ResetBoardCard';
 import OwnerIQBanner from '../../src/components/home/OwnerIQBanner';
@@ -1381,8 +1382,11 @@ export default function HomeScreen() {
   // Home leads with what matters right now. In field hours that's the field:
   // the map, your live numbers, the week's goal and focus, the sector
   // set-ups. Out of the field it's planning: the day, Primetime, coaching.
+  // In the field (the Owner's order, 22 Oct 2026): who you're coaching, then
+  // your sector map, your day and week, every sector's set-ups, then the rest.
   const coachField = (
     <>
+      <CoachingTodayCard />
       <ResetBoardCard />
       {pSectorPrompt}
       <HomeAreaMap />
@@ -1407,6 +1411,7 @@ export default function HomeScreen() {
   // sector's), then tomorrow's planning.
   const coachBreakdown = (
     <>
+      <CoachingTodayCard />
       {pSectorPrompt}
       <SectorSetupsCard mode="breakdowns" />
       <HomeAreaMap />
@@ -1417,6 +1422,7 @@ export default function HomeScreen() {
   // Before the field with a sector today: the sector first, the day's planning under it.
   const todayCoach = fieldLayout ? <>{coachField}{!inField && coachPlanning}</> : inBreakdown ? coachBreakdown : (
     <>
+      <CoachingTodayCard />
       {pSectorPrompt}
       {coachPlanning}
       <HomeAreaMap />
