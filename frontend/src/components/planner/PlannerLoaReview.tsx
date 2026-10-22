@@ -10,6 +10,7 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
+import { KpiCoverageNote } from '../kpi/KpiCoverageNote';
 import { useColors, fonts } from '../../theme/ThemeContext';
 
 const shiftISO = (iso: string, days: number) => {
@@ -90,6 +91,7 @@ export default function PlannerLoaReview({ weekEnding, ownerUserId }: Props) {
         ))}
         <Text style={styles.weekTag}>Wk {from.slice(5)}–{to.slice(5)}</Text>
       </View>
+      {!showMe ? <KpiCoverageNote coverage={data?.coverage} style={{ marginBottom: 6 }} /> : null}
 
       {q.isLoading ? (
         <ActivityIndicator style={{ marginVertical: 14 }} color={colors.primary} />

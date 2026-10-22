@@ -35,6 +35,7 @@ import { usePullToRefresh } from '../src/components/ui/PullRefresh';
 import { PillTabs, Kicker } from '../src/components/ui/PillTabs';
 import { useParallaxScroll } from '../src/components/ui/Parallax';
 import { APP_LOCALE } from '../src/utils/appTime';
+import { KpiCoverageNote } from '../src/components/kpi/KpiCoverageNote';
 
 // ── date helpers (local calendar day) ──────────────────────────────────────
 const ymd = (d: Date) =>
@@ -291,6 +292,8 @@ export default function FieldKpisScreen() {
   const totals = view.totals;
   const avgDay = view.avgDay;
   const ratios = view.ratios;
+  // Bells' count leads, but only for the whole view (not a picked few).
+  const coverage = repFilter.size === 0 ? data?.coverage : null;
 
   const lastSync = statusQ.data?.synced_at
     ? new Date(statusQ.data.synced_at).toLocaleString(APP_LOCALE, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
@@ -432,11 +435,13 @@ export default function FieldKpisScreen() {
                         <Ionicons name={m.icon} size={14} color={lead ? colors.onPrimary : colors.primary} />
                         <Text style={[styles.tileLbl, lead && { color: colors.onPrimary }]} numberOfLines={1}>{m.label}</Text>
                       </View>
-                      <Text style={[styles.tileNum, lead && { color: colors.onPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{fmt(totals[m.key])}</Text>
+                      <Text style={[styles.tileNum, lead && { color: colors.onPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{fmt(lead && coverage ? coverage.bells_sales : totals[m.key])}</Text>
                     </View>
                   );
                 })}
               </View>
+              {/* Sign-ups come from Bells; the KPIs only cover who posted. */}
+              <KpiCoverageNote coverage={coverage} style={{ marginHorizontal: 2, marginBottom: 6 }} />
 
               <View style={[styles.pair, wide && { flexDirection: 'row', alignItems: 'flex-start' }]}>
                 {/* Average per BA per day (collapsible) */}

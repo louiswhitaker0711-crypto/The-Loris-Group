@@ -301,6 +301,12 @@ function everyoneList(groups: Group[], order: EveryoneOrder): EveryoneItem[] {
   return out;
 }
 
+/** The team totals under the sheet: the Owner's Mini team goes last (the
+ *  Office total sits above them all). Everything else keeps its order. */
+function totalsOrder(groups: Group[]): Group[] {
+  return [...groups.filter((g) => g.key !== MINI_KEY), ...groups.filter((g) => g.key === MINI_KEY)];
+}
+
 /** A team header in the Everyone list. The people with no named team are the
  *  Owner's own team, so it reads as the office ("The Loris Group"), led by the
  *  Owner; elsewhere (the Teams totals) it stays "Mini …". */
@@ -1093,7 +1099,23 @@ function BodyContent({ groups, office, colors, isDark, styles, z, w, totalW, sho
             </View>
           )}
           {everyone.map((it: EveryoneItem, idx: number) => (it.kind === 'team' ? teamRow(it.g) : personRow(it.e, idx, it.g)))}
-          {groups.map((g: Group) => {
+          {/* The whole office */}
+          {entries.length > 0 && (
+            <View>
+              <View style={[styles.teamHeader, stickyTeam, styles.officeBand, { width: totalW }]}>
+                <View style={[styles.teamHeaderLeft, isWebSticky(stickyNameCol) && ({ position: 'sticky', left: 10 } as any)]}>
+                  <Text style={[styles.teamHeaderText, { color: colors.onPrimary, fontSize: 12.5 * z }]}>Office</Text>
+                  <Text style={[styles.teamHeaderLeader, { color: colors.onPrimary, fontSize: 11 * z }]}>{entries.length} people on the sheet</Text>
+                </View>
+              </View>
+              {totalRow('Office total', office, <Text style={[styles.softText, { fontSize: cellFont }]}>–</Text>, 'total-office')}
+              {slim('BAs in', office.ins, office.peopleIn, office.daysIn, 'in-office')}
+              {slim('Scoring BAs', office.scoring, office.peopleScoring, office.daysScoring, 'sc-office')}
+              {slim('Scoring ratio', office.ins.map((n: number, i: number) => pct(office.scoring[i], n)), pct(office.daysScoring, office.daysIn), '', 'ratio-office')}
+              {slim('Piece average', office.ins.map((n: number, i: number) => (n > 0 ? one(office.sales[i] / n) : '–')), '', '', 'pa-office', office.daysIn > 0 ? one(office.total / office.daysIn) : '–')}
+            </View>
+          )}
+          {totalsOrder(groups).map((g: Group) => {
             const tint = g.key === '__no_team__' ? NO_TEAM_TINT : teamColor(g.leader_id || g.team_name);
             // Dark theme: the pastel pill would read as a paper island floating on
             // the ink sheet, so the band becomes a tinted ink bar and the pale tone
@@ -1141,22 +1163,6 @@ function BodyContent({ groups, office, colors, isDark, styles, z, w, totalW, sho
             );
           })}
 
-          {/* The whole office */}
-          {entries.length > 0 && (
-            <View>
-              <View style={[styles.teamHeader, stickyTeam, styles.officeBand, { width: totalW }]}>
-                <View style={[styles.teamHeaderLeft, isWebSticky(stickyNameCol) && ({ position: 'sticky', left: 10 } as any)]}>
-                  <Text style={[styles.teamHeaderText, { color: colors.onPrimary, fontSize: 12.5 * z }]}>Office</Text>
-                  <Text style={[styles.teamHeaderLeader, { color: colors.onPrimary, fontSize: 11 * z }]}>{entries.length} people on the sheet</Text>
-                </View>
-              </View>
-              {totalRow('Office total', office, <Text style={[styles.softText, { fontSize: cellFont }]}>–</Text>, 'total-office')}
-              {slim('BAs in', office.ins, office.peopleIn, office.daysIn, 'in-office')}
-              {slim('Scoring BAs', office.scoring, office.peopleScoring, office.daysScoring, 'sc-office')}
-              {slim('Scoring ratio', office.ins.map((n: number, i: number) => pct(office.scoring[i], n)), pct(office.daysScoring, office.daysIn), '', 'ratio-office')}
-              {slim('Piece average', office.ins.map((n: number, i: number) => (n > 0 ? one(office.sales[i] / n) : '–')), '', '', 'pa-office', office.daysIn > 0 ? one(office.total / office.daysIn) : '–')}
-            </View>
-          )}
           {entries.length === 0 && (
             <View style={styles.emptyRow}>
               <Text style={styles.emptyText}>No entries this week.</Text>
@@ -1294,8 +1300,20 @@ function PhoneSheet({ groups, office, entries, colors, isDark, styles, showMc, w
           })}
         </View>
       )}
+      {entries.length > 0 ? (
+        <View style={styles.pSection}>
+          <View style={[styles.pBand, styles.officeBand]}>
+            <Text style={[styles.teamHeaderText, { color: colors.onPrimary, fontSize: 12.5, flex: 1 }]}>Office</Text>
+            <Text style={[styles.teamHeaderLeader, { color: colors.onPrimary, fontSize: 11 }]}>{entries.length} people</Text>
+          </View>
+          {summary('Office total', office, null,
+            statRow('Piece average', office.ins.map((n: number, i: number) => (n > 0 ? one(office.sales[i] / n) : '–'))))}
+        </View>
+      ) : (
+        <View style={styles.emptyRow}><Text style={styles.emptyText}>No entries this week.</Text></View>
+      )}
       {groups.length > 0 && <Text style={styles.lTeamsHead}>Teams</Text>}
-      {groups.map((g: Group) => {
+      {totalsOrder(groups).map((g: Group) => {
         const tint = g.key === '__no_team__' ? NO_TEAM_TINT : teamColor(g.leader_id || g.team_name);
         const bandBg = isDark ? tint.border + '26' : tint.pill;
         const bandText = isDark ? tint.pill : tint.text;
@@ -1328,18 +1346,6 @@ function PhoneSheet({ groups, office, entries, colors, isDark, styles, showMc, w
           </View>
         );
       })}
-      {entries.length > 0 ? (
-        <View style={styles.pSection}>
-          <View style={[styles.pBand, styles.officeBand]}>
-            <Text style={[styles.teamHeaderText, { color: colors.onPrimary, fontSize: 12.5, flex: 1 }]}>Office</Text>
-            <Text style={[styles.teamHeaderLeader, { color: colors.onPrimary, fontSize: 11 }]}>{entries.length} people</Text>
-          </View>
-          {summary('Office total', office, null,
-            statRow('Piece average', office.ins.map((n: number, i: number) => (n > 0 ? one(office.sales[i] / n) : '–'))))}
-        </View>
-      ) : (
-        <View style={styles.emptyRow}><Text style={styles.emptyText}>No entries this week.</Text></View>
-      )}
     </View>
   );
 }
