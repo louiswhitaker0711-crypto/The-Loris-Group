@@ -2221,6 +2221,34 @@ async def set_bell_visibility(entry_id: str, request: Request):
     return {"ok": True, "hidden": hidden}
 
 
+EXPORT_MAX_WEEKS = 156   # three years of weeks in one file
+
+
+@router.get("/bells/export")
+async def export_bells(request: Request, office: Optional[str] = None):
+    """Every Bells week so far as one Excel file, a tab per week (newest
+    first), laid out like the sheet in the app. Admins only, their own office
+    (the super-admin may pick one). core/bells_export.py builds the file."""
+    from fastapi.responses import Response as FastResponse
+    from core.bells_export import build_workbook
+    from core.brand import ORG_NAME
+    user = await get_current_user(request)
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admins export Bells")
+    office_id = office if (office and user.get("is_super_admin")) else user.get("office_id")
+    if not office_id:
+        raise HTTPException(status_code=400, detail="No office")
+    weeks = sorted({w for w in await db.bells_entries.distinct("week_ending", {"office_id": office_id})
+                    if isinstance(w, str) and _is_valid_sunday(w)}, reverse=True)[:EXPORT_MAX_WEEKS]
+    payloads = [await bells_week_for(user, w, office_id) for w in weeks]
+    office_doc = await db.offices.find_one({"id": office_id}, {"_id": 0, "name": 1}) or {}
+    data = build_workbook(payloads, office_doc.get("name") or "", ORG_NAME)
+    stamp = datetime.now(APP_TZ).strftime("%Y-%m-%d")
+    return FastResponse(content=data,
+                        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        headers={"Content-Disposition": f'attachment; filename="bells-{stamp}.xlsx"'})
+
+
 @router.get("/bells/weeks")
 async def list_bells_weeks(request: Request, office: Optional[str] = None):
     """Return a sorted list of weeks that have at least one entry (for prev-week picker)."""

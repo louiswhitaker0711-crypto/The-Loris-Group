@@ -102,6 +102,31 @@ function BellsScreen() {
   // pinned to their own. `officeId` is threaded into every bells query so the
   // whole screen follows the toggle.
   const { officeId } = useActiveOffice();
+  // Every week so far as one Excel file (a tab per week). Admins only.
+  const [exporting, setExporting] = useState(false);
+  const exportExcel = async () => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') {
+      toast.info('Export from the app in a browser or the installed web app.');
+      return;
+    }
+    setExporting(true);
+    try {
+      const r = await apiService.exportBells(officeId || undefined);
+      const url = URL.createObjectURL(r.data as Blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `bells-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      toast.success('Bells exported');
+    } catch (e: any) {
+      toast.error('Could not export Bells. Try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
   const { scrollY, onScroll } = useParallaxScroll();
 
   const list = useQuery({
@@ -214,6 +239,10 @@ function BellsScreen() {
                 <TouchableOpacity style={styles.ghostBtn} onPress={() => router.push('/bulletin' as any)} testID="bells-bulletin-btn">
                   <Ionicons name="trophy-outline" size={14} color={colors.text} />
                   <Text style={styles.ghostBtnText}>Weekly Bulletin</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.ghostBtn} onPress={exportExcel} disabled={exporting} testID="bells-export-btn">
+                  <Ionicons name="download-outline" size={14} color={colors.text} />
+                  <Text style={styles.ghostBtnText}>{exporting ? 'Exporting…' : 'Export to Excel'}</Text>
                 </TouchableOpacity>
               </View>
             )}
