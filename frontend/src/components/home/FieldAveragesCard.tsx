@@ -35,6 +35,7 @@ import { DepthCard } from '../ui/DepthCard';
 import { AnimatedNumber, formatAnimatedNumber } from '../ui/AnimatedNumber';
 import { SlidingSegments } from '../ui/SlidingSegments';
 import { APP_LOCALE } from '../../utils/appTime';
+import { KpiCoverageNote } from '../kpi/KpiCoverageNote';
 
 const ymd = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -213,6 +214,8 @@ export default function FieldAveragesCard({ variant, day: fixedDay, defaultExpan
             <Ionicons name={collapsed ? 'chevron-down' : 'chevron-up'} size={16} color={colors.textMuted} />
           </View>
           <Text style={styles.sub}>{subtitle}</Text>
+          {/* Bells is the sign-ups count; this says who the KPIs leave out. */}
+          <KpiCoverageNote coverage={isAdmin ? office?.coverage : leaderQ.data?.coverage} style={{ marginTop: 2 }} />
         </TouchableOpacity>
       </View>
       {!collapsed && !fixedDay && (

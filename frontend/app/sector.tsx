@@ -10,6 +10,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors, fonts } from '../src/theme/ThemeContext';
 import { apiService } from '../src/api/client';
+import PostcodePair from '../src/components/sector/PostcodePair';
+import { splitPostcodes } from '../src/utils/postcodes';
 import { toast } from '../src/utils/toast';
 import { showAlert } from '../src/utils/showAlert';
 import { useKeyboardInset } from '../src/hooks/useKeyboardInset';
@@ -230,9 +232,8 @@ function SectorGoal({ date, current, currentPostcode, planned, suggested, onSave
       <Text style={s.label}>Postcode</Text>
       {planned
         ? <Text style={s.h}>{currentPostcode || 'No postcode yet'}</Text>
-        : <TextInput value={postcode} onChangeText={(v) => setPostcode(v.toUpperCase())} autoCapitalize="characters" maxLength={10}
-            placeholder="LS6 1AB" placeholderTextColor={c.textMuted} style={[s.input, { width: 160 }]} accessibilityLabel="Postcode" />}
-      {!planned && <AreaCheck postcode={postcode} s={s} c={c} />}
+        : <PostcodePair value={postcode} onChange={setPostcode} placeholder="LS6 1AB" inputStyle={[s.input, { width: 160 }]} />}
+      {!planned && splitPostcodes(postcode).map((pc) => <AreaCheck key={pc} postcode={pc} s={s} c={c} />)}
       {currentPostcode
         ? <SectorMap key={currentPostcode} date={date} />
         : <Text style={s.muted}>Save the postcode to open the sector map.</Text>}

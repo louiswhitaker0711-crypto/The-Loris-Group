@@ -103,6 +103,39 @@ async def _scoped_rows(caller: dict, from_date: str, to_date: str, own_office: b
 
 
 
+async def _bells_scope(caller: dict, own_office: bool = False, team_of: Optional[str] = None) -> dict | None:
+    """The Bells rows the caller may compare against: the same people
+    _scoped_rows lets them see, narrowed by team_of like the summary."""
+    role = caller.get("role")
+    if caller.get("is_super_admin") and not own_office and not team_of:
+        q: dict | None = {}
+    elif sees_whole_office(caller):
+        q = {"office_id": caller.get("office_id")} if caller.get("office_id") else None
+    elif role == "leader":
+        q = {"user_id": {"$in": await get_subtree_ids(caller["id"])}}
+    else:
+        q = {"user_id": {"$in": [caller["id"]]}}
+    if q is None or not team_of:
+        return q
+    try:
+        tgt = await db.users.find_one({"_id": ObjectId(team_of)}, {"role": 1, "office_id": 1})
+    except Exception:
+        tgt = None
+    if tgt and tgt.get("role") == "admin" and tgt.get("office_id"):
+        if q.get("office_id") not in (None, tgt["office_id"]):
+            return None
+        return {**q, "office_id": tgt["office_id"]}
+    ids = set(await get_subtree_ids(team_of))
+    if "user_id" in q:
+        ids &= set(q["user_id"]["$in"])
+    return {**q, "user_id": {"$in": sorted(ids)}}
+
+
+def _shows_names(caller: dict) -> bool:
+    """Coaches and Admins see who's missing from the KPIs; a BA sees a count."""
+    return caller.get("role") in ("leader", "admin")
+
+
 @router.get("/owneriq/connect")
 async def owneriq_connect_status(request: Request):
     """The Reconnect screen's state (never the token). Owner only."""
@@ -767,10 +800,17 @@ async def owneriq_summary(
             rows = [r for r in rows if r.get("cg1_user_id") in team_ids]
     exclude_keys = {b.strip().upper() for b in (exclude or "").split(",") if b.strip()}
     agg = aggregate_rows(rows, exclude_keys=exclude_keys, include_zero=include_zero)
+    # Bells is the true count of sign-ups; the KPIs only cover who posted.
+    from core.kpi_coverage import coverage
+    bells_q = await _bells_scope(caller, own_office=own_office, team_of=team_of)
+    # A cross-office view filtered by a pin has no office to read Bells for.
+    cov = None if (bells_q is None or (mc_pin and not bells_q.get("office_id") and "user_id" not in bells_q)) \
+        else await coverage(db, bells_q, rows, from_date, to_date, _shows_names(caller))
     return {
         "range": {"from": from_date, "to": to_date},
         "single_day": from_date == to_date,
         **agg,
+        "coverage": cov,
     }
 
 
@@ -1083,8 +1123,11 @@ async def owneriq_averages(
     own_agg = aggregate_rows(own_rows, include_zero=True)
     own = own_agg["reps"][0]["avg_per_day"] if own_agg["reps"] else {m: 0 for m in team_agg["group_totals"]}
 
+    from core.kpi_coverage import coverage
+    cov = await coverage(db, await _bells_scope(caller), team_rows, from_date, to_date, _shows_names(caller))
     return {
         "range": {"from": from_date, "to": to_date},
+        "coverage": cov,
         "user_id": target_id,
         "own_avg_per_day": own,
         "team_avg_per_day": team_agg["avg_per_rep_day"],

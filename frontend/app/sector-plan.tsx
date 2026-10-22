@@ -20,6 +20,8 @@ import { toast } from '../src/utils/toast';
 import { useKeyboardInset } from '../src/hooks/useKeyboardInset';
 import SectorRecap from '../src/components/sector/SectorRecap';
 import PostcodeMiniMap from '../src/components/sector/PostcodeMiniMap';
+import PostcodePair from '../src/components/sector/PostcodePair';
+import { splitPostcodes } from '../src/utils/postcodes';
 
 type Person = { user_id: string; name: string; role: string; sector_leader_id?: string | null; in_today?: boolean; no_show?: boolean; not_scheduled?: boolean };
 type Sector = { leader_id: string; leader_name: string; postcode: string; goal: number | null; member_ids: string[]; can_delete: boolean };
@@ -195,9 +197,9 @@ export default function SectorPlanScreen() {
             <View style={s.twoCol}>
               <View style={{ flex: 2 }}>
                 <Text style={s.label}>Postcode</Text>
-                <TextInput value={sec.postcode} onChangeText={(v) => setField(sec.leader_id, 'postcode', v.toUpperCase())} placeholder="e.g. WF4 2"
-                  autoCapitalize="characters" maxLength={10} placeholderTextColor={c.textMuted} style={s.input} />
-                <PostcodeMiniMap postcode={sec.postcode} />
+                <PostcodePair key={`pc-${sec.leader_id}`} value={sec.postcode} onChange={(v) => setField(sec.leader_id, 'postcode', v)}
+                  placeholder="e.g. WF4 2" inputStyle={s.input} />
+                {splitPostcodes(sec.postcode).map((pc) => <PostcodeMiniMap key={pc} postcode={pc} />)}
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.label}>Goal</Text>

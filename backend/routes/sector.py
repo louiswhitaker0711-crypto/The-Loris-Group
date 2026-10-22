@@ -177,10 +177,28 @@ def _label(iso: str) -> str:
     return f"{d.strftime('%a')} {d.day} {d.strftime('%b')}"
 
 
+MAX_POSTCODES = 2   # a sector can cover two joined maps (the Owner's call, 22 Oct 2026)
+
+
+def _clean_one(v) -> str:
+    return " ".join("".join(ch for ch in str(v or "").upper() if ch.isalnum() or ch == " ").split())[:10]
+
+
+def postcode_parts(v) -> list[str]:
+    """The sector's postcodes, in order: 'dn4 1 + dn4 2' → ['DN4 1', 'DN4 2'].
+    Split on + , & or /; at most MAX_POSTCODES; repeats dropped."""
+    out: list[str] = []
+    for bit in str(v or "").replace(",", "+").replace("&", "+").replace("/", "+").split("+"):
+        pc = _clean_one(bit)
+        if pc and pc not in out:
+            out.append(pc)
+    return out[:MAX_POSTCODES]
+
+
 def clean_postcode(v) -> str:
     """A postcode or district as typed ('ls6 1ab' → 'LS6 1AB'), letters,
-    digits and spaces only."""
-    return " ".join("".join(ch for ch in str(v or "").upper() if ch.isalnum() or ch == " ").split())[:10]
+    digits and spaces only. Two joined postcodes read 'DN4 1 + DN4 2'."""
+    return " + ".join(postcode_parts(v))
 
 
 def sector_stats(rows: list, sector_goal: Optional[int] = None) -> dict:
@@ -1302,7 +1320,7 @@ async def sector_map(request: Request, date: Optional[str] = None, leader: Optio
         sec = await sector_of(me, iso, user.get("office_id"))
     if not sec:
         return {"date": iso, "sector": None}
-    shape = await sector_for_postcode(user.get("office_id"), sec.get("postcode") or "", with_shape=True)
+    shape = await _joined_shape(user.get("office_id"), sec.get("postcode") or "")
     box = (shape or {}).get("bbox")
     since = (Date.fromisoformat(iso) - timedelta(days=KEEP_DAYS)).isoformat()
     q: dict = {"office_id": user.get("office_id")}
@@ -1314,7 +1332,8 @@ async def sector_map(request: Request, date: Optional[str] = None, leader: Optio
                     "bbox.s": {"$lte": box["n"] + pad}, "bbox.n": {"$gte": box["s"] - pad},
                     "bbox.w": {"$lte": box["e"] + pad}, "bbox.e": {"$gte": box["w"] - pad}})
     elif sec.get("postcode"):
-        ors.append({"date": {"$gte": since}, "status": {"$nin": ["draft", "plan", "requested"]}, "district": district_of(sec["postcode"])})
+        ors.append({"date": {"$gte": since}, "status": {"$nin": ["draft", "plan", "requested"]},
+                    "district": {"$in": [district_of(p) for p in postcode_parts(sec["postcode"])]}})
     # Other sectors working the same area that day: their plan and what
     # they've marked done so far, shown faintly and view-only.
     if box:
@@ -1323,7 +1342,7 @@ async def sector_map(request: Request, date: Optional[str] = None, leader: Optio
                     "bbox.w": {"$lte": box["e"]}, "bbox.e": {"$gte": box["w"]}})
     elif sec.get("postcode"):
         ors.append({"date": iso, "sector_leader_id": {"$nin": [sec["leader_id"], None]}, "status": {"$in": ["plan", "draft"]},
-                    "district": district_of(sec["postcode"])})
+                    "district": {"$in": [district_of(p) for p in postcode_parts(sec["postcode"])]}})
     q["$or"] = ors
     marks = await db.coverage_marks.find(q, {"_id": 0, "office_id": 0}).sort("date", -1).to_list(800)
     today = Date.fromisoformat(today_iso())
@@ -1377,6 +1396,35 @@ async def sector_map(request: Request, date: Optional[str] = None, leader: Optio
     }
 
 
+async def _joined_shape(office_id, postcode: str) -> Optional[dict]:
+    """The territory outline for the sector's postcode(s). With two joined
+    postcodes, both outlines travel as one GeoJSON GeometryCollection (each
+    keeps its own border, so the line where they meet still shows), with
+    one box around both: every map draws and fits them unchanged."""
+    from routes.territory import sector_for_postcode
+    shapes: list[dict] = []
+    for pc in postcode_parts(postcode):
+        sh = await sector_for_postcode(office_id, pc, with_shape=True)
+        if sh and sh.get("code") not in {x.get("code") for x in shapes}:
+            shapes.append(sh)
+    if len(shapes) <= 1:
+        return shapes[0] if shapes else None
+    boxes = [x["bbox"] for x in shapes if x.get("bbox")]
+    first = dict(shapes[0])
+    first.update({
+        "code": " + ".join(x.get("code") or "" for x in shapes),
+        "geometry": {"type": "GeometryCollection", "geometries": [x["geometry"] for x in shapes if x.get("geometry")]},
+        "bbox": {"s": min(b["s"] for b in boxes), "n": max(b["n"] for b in boxes),
+                 "w": min(b["w"] for b in boxes), "e": max(b["e"] for b in boxes)} if boxes else None,
+        "households": sum(int(x.get("households") or 0) for x in shapes) or None,
+        # Inactive if either part is; the longest gap since Acwyre worked it.
+        "kind": "not_active" if any(x.get("kind") == "not_active" for x in shapes) else first.get("kind"),
+        "weeks_since": max((x["weeks_since"] for x in shapes if x.get("weeks_since") is not None), default=None),
+        "parts": [{k: x.get(k) for k in ("code", "kind", "households", "last_worked", "weeks_since")} for x in shapes],
+    })
+    return first
+
+
 def district_of(pc: str) -> str:
     from core.areas import district
     return district(pc)
@@ -1425,7 +1473,7 @@ async def share_sector_map(request: Request, date: Optional[str] = None):
     sec = await _sector_of_leader(str(user["id"]), iso)
     if not sec:
         raise HTTPException(status_code=400, detail="Pick who's in your sector first")
-    code = postcode_to_sector(sec.get("postcode") or "")
+    code = " + ".join(c for c in (postcode_to_sector(p) for p in postcode_parts(sec.get("postcode") or "")) if c)
     from routes.coverage import my_hop_colour
     # Once it's sent the map is set: it opens in "move" for everyone and
     # BAs only draw by pressing a button (Mark done / Request more streets).
