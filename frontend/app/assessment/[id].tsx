@@ -94,6 +94,24 @@ const kpiShown = (field: string, target: unknown): boolean =>
 
 type Scores = Record<string, number | null>;
 
+// The 5 Steps checklist (field days) grades the same steps as the Skills
+// chips, so a step graded there is not asked again in Skills (the Owner,
+// 22 Oct 2026): its 0–10 skill number comes from the grade instead.
+// Values mirror GRADE_VALUES in backend/scoring.py.
+const STEP_SKILL: Record<string, string> = {
+  introduction: 'skill_intro',
+  intro: 'skill_intro',
+  presentation: 'skill_presentation',
+  'short story': 'skill_short_story',
+  close: 'skill_close',
+  rehash: 'skill_rehash',
+};
+const STEP_GRADE_VALUE: Record<string, number> = {
+  Excellent: 10, Average: 7, 'Below Average': 4,
+  Competent: 10, Learnt: 7, 'Not Learnt': 4,
+};
+const isFiveSteps = (category?: string | null) => (category || '').trim().toLowerCase() === '5 steps';
+
 export default function AssessmentScreen() {
   const colors = useColors();
   const { effective } = useTheme();
@@ -148,7 +166,9 @@ export default function AssessmentScreen() {
       const s: Scores = {};
       const a: any = assessment;
       for (const [f] of [...BEHAVIOURS, ...SKILLS]) s[f] = a[f] ?? null;
-      for (const [f] of KPIS) s[f] = a[f] ?? null;
+      // KPIs not yet saved start from that day's breakdown; still editable.
+      const dk = a.day_kpis || {};
+      for (const [f] of KPIS) s[f] = a[f] ?? (dk[f] != null ? Number(dk[f]) : null);
       setScores(s);
       setNotes({
         coaching_actions: assessment.coaching_actions || '',
@@ -170,6 +190,22 @@ export default function AssessmentScreen() {
       return next;
     });
   };
+
+  // Skills the 5 Steps checklist covers today, and the number each grade gives.
+  const { stepSkills, stepScores } = useMemo(() => {
+    const covered = new Set<string>();
+    const vals: Scores = {};
+    for (const item of checklistItems || []) {
+      if (!isFiveSteps(item.category)) continue;
+      const f = STEP_SKILL[(item.topic || '').trim().toLowerCase()];
+      if (!f) continue;
+      covered.add(f);
+      if (item.grade && STEP_GRADE_VALUE[item.grade] != null) vals[f] = STEP_GRADE_VALUE[item.grade];
+    }
+    return { stepSkills: covered, stepScores: vals };
+  }, [checklistItems]);
+  const effScores: Scores = useMemo(() => ({ ...scores, ...stepScores }), [scores, stepScores]);
+  const shownSkills = useMemo(() => SKILLS.filter(([f]) => !stepSkills.has(f)), [stepSkills]);
 
   // ── Checklist grading ──────────────────────────────────────────────────────
   const gradeMutation = useMutation({
@@ -227,7 +263,7 @@ export default function AssessmentScreen() {
     const payload: any = { completed: markComplete };
     for (const [f] of BEHAVIOURS) if (scores[f] != null) payload[f] = scores[f];
     if (assessment && assessment.day_number >= 2) {
-      for (const [f] of SKILLS) if (scores[f] != null) payload[f] = scores[f];
+      for (const [f] of SKILLS) if (effScores[f] != null) payload[f] = effScores[f];
     }
     if (assessment && assessment.day_number >= 3) {
       for (const [f] of KPIS) if (scores[f] != null) payload[f] = Math.round(Number(scores[f]));
@@ -246,7 +282,7 @@ export default function AssessmentScreen() {
     if (!assessment) return null;
     const day = assessment.day_number;
     const vals = (fields: ReadonlyArray<readonly [string, string]>) =>
-      fields.map(([f]) => scores[f]).filter((v): v is number => v != null);
+      fields.map(([f]) => effScores[f]).filter((v): v is number => v != null);
 
     const bVals = vals(behavioursForDay(day));
     const behaviour = bVals.length ? bVals.reduce((a, b) => a + b, 0) / bVals.length : null;
@@ -255,7 +291,7 @@ export default function AssessmentScreen() {
     if (day >= 2) {
       const parts: number[] = [];
       for (const [f, , ] of SKILLS.map(([f, l]) => [f, l, `target_${f.replace('skill_', '')}`] as const)) {
-        const v = scores[f];
+        const v = effScores[f];
         const t = dayTarget?.[`target_${f.replace('skill_', '')}`];
         if (v != null && t) parts.push(Math.min((v / t) * 10, 10));
         else if (v != null && !t) parts.push(v);
@@ -286,7 +322,7 @@ export default function AssessmentScreen() {
     const status = overall == null ? 'Pending'
       : overall >= 10 ? 'S-GREEN' : overall >= 9 ? 'Green' : overall >= 7 ? 'Yellow' : 'Red';
     return { behaviour, skill, kpi, overall, status };
-  }, [assessment, scores, dayTarget]);
+  }, [assessment, scores, effScores, dayTarget]);
 
   const getWeightText = (dayNumber: number) => {
     if (dayNumber === 1) return 'Behaviours 100%';
@@ -432,7 +468,7 @@ export default function AssessmentScreen() {
         </ScrollReveal>
 
         {/* ── Skills (Day 2+) ── */}
-        {day >= 2 && (
+        {day >= 2 && shownSkills.length > 0 && (
           <ScrollReveal scrollY={scrollY}>
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
@@ -442,16 +478,16 @@ export default function AssessmentScreen() {
             </View>
             {!isReadOnly && (
               <View style={styles.quickRow}>
-                <TouchableOpacity style={styles.quickChip} onPress={() => setAll(SKILLS, 8)}>
+                <TouchableOpacity style={styles.quickChip} onPress={() => setAll(shownSkills, 8)}>
                   <Text style={styles.quickChipText}>Set all: Good</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.quickChip} onPress={() => setAll(SKILLS, 10)}>
+                <TouchableOpacity style={styles.quickChip} onPress={() => setAll(shownSkills, 10)}>
                   <Text style={styles.quickChipText}>Set all: Excellent</Text>
                 </TouchableOpacity>
               </View>
             )}
             <View style={styles.card}>
-              {SKILLS.map(([field, label]) => (
+              {shownSkills.map(([field, label]) => (
                 <RatingChips
                   key={field}
                   label={label}
@@ -474,6 +510,11 @@ export default function AssessmentScreen() {
               <Text style={styles.sectionTitle}>KPIs</Text>
               {live?.kpi != null && <Text style={styles.sectionScore}>{live.kpi.toFixed(1)}</Text>}
             </View>
+            {!isReadOnly && (assessment as any)?.day_kpis && (
+              <Text style={styles.kpiSourceNote}>
+                From their breakdown{(assessment as any).day_kpis.doors != null ? ` · ${(assessment as any).day_kpis.doors} doors` : ''}. Change any number if it's wrong.
+              </Text>
+            )}
             <View style={styles.card}>
               {KPIS.filter(([field, , targetField]) => kpiShown(field, dayTarget?.[targetField])).map(([field, label, targetField, max]) => (
                 <KpiStepper
@@ -779,6 +820,7 @@ const createStyles2 = (colors: any) => StyleSheet.create({
     flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingTop: 12,
     backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border,
   },
+  kpiSourceNote: { color: colors.textMuted, fontSize: 12, marginBottom: 8, marginTop: -4 },
   saveButton: {
     flex: 1, paddingVertical: 14, borderRadius: 12, borderWidth: 1.5, borderColor: colors.primary,
     alignItems: 'center', justifyContent: 'center',

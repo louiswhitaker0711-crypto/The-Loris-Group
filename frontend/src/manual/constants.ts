@@ -12,7 +12,7 @@ export const PRESET_LABELS: Record<string, string> = {
   '10,9,8,7,6,5,4,3,2,1': '1-10',
   'Competent,Learnt,Not Learnt': 'Competent / Learnt / Not Learnt',
   'Learnt,Not Learnt': 'Learnt / Not Learnt',
-  'Excellent,Average,Below Average': 'Excellent / Average / Below Average',
+  'Excellent,Average,Below Average': 'Excellent / Average / Needs Work',
 };
 
 /* Visual colour for each preset label (badge dot + chip border). Falls back
@@ -21,7 +21,7 @@ export const PRESET_COLORS: Record<string, string> = {
   '1-10': '#225bc3',
   'Competent / Learnt / Not Learnt': '#059669',
   'Learnt / Not Learnt': '#2563EB',
-  'Excellent / Average / Below Average': '#D97706',
+  'Excellent / Average / Needs Work': '#D97706',
 };
 
 export const PRESET_FALLBACK_COLOR = colors.textSecondary;

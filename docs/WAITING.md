@@ -4,15 +4,13 @@ Agreed changes that aren't built yet. Add a line when something is agreed; remov
 
 ## Agreed, not built
 
-1. **Daily Assessment: "Below Average" → "Needs Work"** (22 Oct). Label only; saved ratings stay as they are.
-2. **Intro / Presentation / Close answered once** (22 Oct). The Daily Assessment 5 Steps fill the matching CoD items, so the BA isn't asked twice.
-3. **That day's KPIs on the Daily Assessment** (22 Oct). From the BA's breakdown for the same date.
+- Nothing right now. Anything agreed in another chat thread goes here before it's built.
 
 ## Needs a decision
 
-- KPIs on the Daily Assessment: locked as a record, or editable?
-- Sector-Site Leader label: keep "3+" or change to "SL"?
+- Nothing right now.
 
-## Built, waiting to go live
+## Recently shipped
 
-- Everything merged 21–22 Oct (shadows/solos/Academy days #141, Coaching today #140, set-ups at 12:15, KPIs from Bells #139, photo scans, Bells Excel export #138, public Bells #135, Quality upload #134, sector hops #137, Home sector first #136). Redeploy pushed 22 Oct 22:23.
+- 22 Oct: Daily Assessment "Below Average" reads "Needs Work" (stored value unchanged); Intro/Presentation/Short Story/Close/Rehash graded once in the 5 Steps and no longer asked again in Skills; KPIs prefilled from that day's breakdown and editable; OwnerIQ's Stage 3+ reads "SL".
+- 21–22 Oct: shadows/solos/Academy days (#141), Coaching today (#140), set-ups at 12:15, KPIs from Bells (#139), photo scans, Bells Excel export (#138), public Bells (#135), Quality upload (#134), sector hops (#137), Home sector first (#136).

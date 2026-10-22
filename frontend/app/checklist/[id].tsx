@@ -22,6 +22,7 @@ import { BrandLoader } from '../../src/components/ui/BrandLoader';
 import { useTabBarClearance } from '../../src/customization/CustomTabBar';
 import { DepthCard } from '../../src/components/ui/DepthCard';
 import { XPBar } from '../../src/components/ui/XPBar';
+import { displayGrade } from '../../src/manual/utils';
 
 const GRADES = ['Excellent', 'Average', 'Below Average'] as const;
 const gradeColor = (g: string | null) => {
@@ -201,7 +202,7 @@ export default function ChecklistScreen() {
                             styles.gradeButtonText,
                             isSelected && { color: gc2.text, fontFamily: fonts.bodyBold }
                           ]}>
-                            {grade}
+                            {displayGrade(grade)}
                           </Text>
                         </TouchableOpacity>
                       );

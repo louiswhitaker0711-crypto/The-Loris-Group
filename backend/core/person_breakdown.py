@@ -38,7 +38,10 @@ def stage_label(value) -> Optional[str]:
     digits = "".join(ch for ch in text if ch.isdigit())
     if not digits or not 1 <= int(digits) <= 9:
         return None
-    return f"{int(digits)}+" if text.endswith("plus") or text.endswith("+") else str(int(digits))
+    if text.endswith("plus") or text.endswith("+"):
+        # The Owner's label for 3+ (Sector/Site Leader), 22 Oct 2026.
+        return "SL" if int(digits) == 3 else f"{int(digits)}+"
+    return str(int(digits))
 
 
 def _pct(part: float, whole: float) -> Optional[int]:

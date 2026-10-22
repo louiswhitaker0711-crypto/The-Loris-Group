@@ -54,6 +54,6 @@ def test_cod_position_caps_at_the_total_and_drops_empty_stages():
 
 def test_stage_label_reads_owneriq_and_plain_values():
     assert stage_label("stage_3") == "3"
-    assert stage_label("stage_3_plus") == "3+"
+    assert stage_label("stage_3_plus") == "SL"  # the Owner's label, 22 Oct 2026
     assert stage_label(2) == "2"
     assert stage_label(None) is None and stage_label("leader") is None and stage_label("stage_0") is None

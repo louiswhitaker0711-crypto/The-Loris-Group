@@ -75,7 +75,10 @@ const HOLD_MS = 220;         // touch: hold a person this long, then drag
 export function stageLabel(s?: string | null): string | null {
   if (!s) return null;
   const m = /^stage_(\d+)(_plus)?$/.exec(s);
-  return m ? `${m[1]}${m[2] ? '+' : ''}` : null;
+  if (!m) return null;
+  // The Owner's label for 3+ (Sector/Site Leader), 22 Oct 2026.
+  if (m[2] && m[1] === '3') return 'SL';
+  return `${m[1]}${m[2] ? '+' : ''}`;
 }
 const stageRank = (s?: string | null) => {
   const m = s ? /^stage_(\d+)(_plus)?$/.exec(s) : null;
