@@ -15,7 +15,7 @@ import { lightColors } from '../../../src/theme/ThemeContext';
 import { useColors } from '../../../src/theme/ThemeContext';
 import { teamColor, NO_TEAM_TINT } from '../../../src/utils/teamColors';
 import { APP_LOCALE, formatMoney } from '../../../src/utils/appTime';
-import { APP_NAME } from '../../../src/theme/brand';
+import { APP_NAME, APP_SHORT_NAME } from '../../../src/theme/brand';
 import { SUPER_GREEN_WEEK_MIN, GREEN_WEEK_MIN, AMBER_WEEK_MIN, RED_WEEK_MAX } from '../../../src/utils/weekBands';
 import { dayBandText } from '../../../src/utils/dayBands';
 import SheetTable from '../../../src/components/bells/TableView';
@@ -448,7 +448,7 @@ function TableView({ entries }: { entries: Entry[] }) {
       if (!map.has(key)) {
         map.set(key, {
           key,
-          team_name: pt?.team_name || 'Unassigned',
+          team_name: pt?.team_name || APP_SHORT_NAME,
           leader_id: pt?.leader_id || null,
           leader_name: pt?.leader_name || null,
           members: [],

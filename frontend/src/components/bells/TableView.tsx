@@ -13,8 +13,8 @@ import { useAuth } from '../../auth/AuthContext';
 import { teamColor, NO_TEAM_TINT } from '../../utils/teamColors';
 import { toast } from '../../utils/toast';
 import { Day, Entry, MIN_AB_REASON, TIER, isInDay, dayTotal, exitedBy, appWeekEndingISO } from './types';
-import { DAY_STATUS_LABEL, DAY_STATUS_SHORT, NO_NUMBER_STATUSES, statusSquare } from '../../utils/dayStatus';
-import { dayBandLook } from '../../utils/dayBands';
+import { DAY_STATUS_LABEL, NO_NUMBER_STATUSES } from '../../utils/dayStatus';
+import { dayBand, dayBandLook } from '../../utils/dayBands';
 import { APP_LOCALE, APP_TZ, formatMoney } from '../../utils/appTime';
 import { centerNotice } from '../../utils/centerNotice';
 import { APP_SHORT_NAME } from '../../theme/brand';
@@ -37,9 +37,15 @@ import { SUPER_GREEN_WEEK_MIN, GREEN_WEEK_MIN, AMBER_WEEK_MIN, RED_WEEK_MAX, wee
 //
 // Goal and LW sit in their own ruled-off block, each tinted by its weekly zone
 // (Red under 8, Amber 8–14, Green 15–19, Super Green 20+: utils/weekBands).
-// A day cell is tinted the way the sheet colours it: 2 or more green, 1 amber,
-// 0 red; a day off is a dash. Tap a day to edit it, a Goal or B/E to change
-// it, a team's goal to set it.
+// A day reads like the Owner's Roll Call sheet (24 Oct 2026): Gold and Silver
+// side by side on gold and silver, a bar under them in the day's colour
+// (1 red, 2 amber, 3 light green, 4+ dark green); a day not in the field is a
+// plain colour block with no letters (grey Not scheduled, black No show,
+// yellow In office, red not current, purple Shadow day). Heavy lines between
+// days, a line between Goal and LW, and P/A straight after the Total, which is
+// coloured by the weekly zone. On a phone a day is one number on its colour
+// with a tally under it (a gold or silver mark per sign-up). Tap a day to edit
+// it, a Goal or B/E to change it, a team's goal to set it.
 //
 // Everyone is one list, a line each, in one of two orders (a switch above it,
 // remembered on the device):
@@ -74,8 +80,9 @@ function exitState(e: Entry, weekEnding: string, i: number): false | 'first' | '
   return i > 0 && exitedBy(e, weekEnding, i - 1) ? 'after' : 'first';
 }
 
-/** The team for people who aren't in a named team yet (the Owner's own). */
-const MINI_TEAM = `Mini ${APP_SHORT_NAME}`;
+/** The team for people who aren't in a named team yet (the Owner's own first
+ *  generation): it reads as the office, "The Loris Group", never "Unassigned". */
+const MINI_TEAM = APP_SHORT_NAME;
 const MINI_KEY = '__no_team__';
 const firstName = (n?: string | null) => (n || '').trim().split(/\s+/)[0] || '';
 
@@ -85,7 +92,7 @@ const DAYS_LONG = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Satu
 // Column widths at 100% zoom.
 // Name is wide enough for most full names on one line (a long one wraps to
 // two); Coach holds a first name.
-const W = { name: 176, coach: 100, stage: 42, goal: 48, lw: 44, be: 44, day: 46, tot: 52, days: 48, pa: 50, money: 80 };
+const W = { name: 176, coach: 100, stage: 42, goal: 48, lw: 44, be: 44, day: 58, tot: 56, days: 46, pa: 50, money: 80 };
 const tableWidth = (showMc: boolean) =>
   W.name + W.coach + W.stage + W.goal + W.lw + W.be + W.day * 7 + W.tot + W.days + W.pa + W.money * (showMc ? 2 : 1);
 
@@ -113,6 +120,9 @@ function trafficLight(e: Entry): { color: string; label: string } | undefined {
 const BLOCK_RULE = 2;
 const blockLeft = (c: any) => ({ borderLeftWidth: BLOCK_RULE, borderLeftColor: c.text });
 const blockRight = (c: any) => ({ borderRightWidth: BLOCK_RULE, borderRightColor: c.text });
+// A clear line between Goal and LW, and a heavier one between days.
+const goalLwRule = (c: any) => ({ borderLeftWidth: 1.5, borderLeftColor: c.textMuted });
+const dayRule = (c: any, dark: boolean, z = 1) => ({ borderLeftWidth: Math.max(2, 2.5 * z), borderLeftColor: dark ? '#3d5a85' : '#9fb3cc' });
 
 /** A team's (or the office's) week, summed from its rows. */
 type Tally = {
@@ -340,27 +350,46 @@ function absDateTime(iso?: string | null): string {
     + ', ' + t.toLocaleTimeString(APP_LOCALE, { hour: '2-digit', minute: '2-digit', timeZone: APP_TZ });
 }
 
-// A day cell the way the sheet colours it: in with 2+ sign-ups green, 1 amber,
-// 0 red; off is a dash; the absence codes keep their letters.
-type DayLook = { text: string; fg: string; bg?: string };
-function cellForDay(d: Day, c: typeof colors, dark: boolean, exited: false | 'first' | 'after' = false): DayLook {
-  const red = dark ? '#fca5a5' : '#b91c1c';
-  // Exited (removed by an Admin): EX on the day they left, then a soft red.
-  if (exited === 'first') return { text: 'EX', fg: '#ffffff', bg: dark ? '#b91c1c' : '#dc2626' };
-  if (exited === 'after') return { text: '', fg: red, bg: dark ? 'rgba(239,68,68,0.18)' : 'rgba(239,68,68,0.12)' };
-  const amber = dark ? '#fcd34d' : '#b45309';
-  const green = dark ? '#86efac' : '#166534';
-  if (d.status === 'off') return { text: '–', fg: c.textMuted };
-  const sq = statusSquare(d.status, dark);
-  if (sq) return { text: DAY_STATUS_SHORT[d.status], fg: sq.fg, bg: sq.bg };
-  if (d.status === 'nc') return { text: 'NC', fg: c.textMuted };
-  if (d.status === 'pc') return { text: DAY_STATUS_SHORT.pc, fg: dark ? '#67e8f9' : '#0e7490' };
-  if (d.status === 'sd') return { text: DAY_STATUS_SHORT.sd, fg: dark ? '#c4b5fd' : '#6d28d9' };
-  const tot = (d.over30 || 0) + (d.under30 || 0);
-  if (d.status === 'rt') return { text: tot > 0 ? `RT ${tot}` : 'RT', fg: amber };
-  // 0–1 red, 2 amber, 3 light green, 4+ dark green (utils/dayBands).
-  const look = dayBandLook(tot, dark);
-  return { text: String(tot), fg: look.fg, bg: look.bg };
+// ── The Roll Call look (the Owner's sheet, 24 Oct 2026) ──────────────────────
+// A day in the field shows its Gold and Silver sign-ups side by side on gold
+// and silver, with a bar under them in the day's colour (1 red, 2 amber,
+// 3 light green, 4+ dark green). A day not in the field is a plain block of
+// the sheet's colour, no letters: grey Not scheduled, black No show, yellow
+// In office, red not current (exited), purple Shadow day. On a phone the day
+// is one number on its colour, with a tally under it: a gold mark per Gold
+// sign-up and a silver mark per Silver.
+const GOLD = { bg: '#f6e3a9', fg: '#4a3608', darkBg: 'rgba(234,179,8,0.28)', darkFg: '#fde68a', strip: '#e8c25a', mark: '#c99a1e', markOnDark: '#fcd34d' };
+const SILVER = { bg: '#e9ecf0', fg: '#2f3a48', darkBg: 'rgba(148,163,184,0.25)', darkFg: '#e2e8f0', strip: '#c3cad3', mark: '#8b95a3', markOnDark: '#e5e7eb' };
+const BAR = { red: '#ef4444', amber: '#f59e0b', light_green: '#4ade80', dark_green: '#15803d' } as const;
+const MAX_MARKS = 8;
+
+type SheetDay =
+  | { kind: 'off'; label: string }
+  | { kind: 'block'; bg: string; label: string }
+  | { kind: 'nums'; gold: number; silver: number; n: number; bar: string; label: string };
+
+function sheetDay(d: Day | undefined, dark: boolean, exited: false | 'first' | 'after' = false): SheetDay {
+  if (exited) return { kind: 'block', bg: exited === 'first' ? '#dc2626' : (dark ? 'rgba(220,38,38,0.55)' : 'rgba(220,38,38,0.6)'), label: 'Not current' };
+  const st = d?.status || 'off';
+  const gold = Number(d?.over30 || 0), silver = Number(d?.under30 || 0), n = gold + silver;
+  const label = DAY_STATUS_LABEL[st] || st;
+  switch (st) {
+    case 'ab': return { kind: 'block', bg: dark ? '#6b7280' : '#9aa1aa', label };
+    case 'ns': return { kind: 'block', bg: dark ? '#000000' : '#111111', label };
+    case 'pc': return { kind: 'block', bg: '#fde047', label };
+    case 'sd': return { kind: 'block', bg: '#c4b5fd', label };
+    case 'nc': return { kind: 'block', bg: dark ? '#374151' : '#e5e7eb', label };
+    case 'in': return { kind: 'nums', gold, silver, n, bar: BAR[dayBand(n)], label: `${n} sign-up${n === 1 ? '' : 's'}` };
+    case 'rt': return { kind: 'nums', gold, silver, n, bar: dark ? '#4b5563' : '#cbd5e1', label: `Retrain${n ? `, ${n} (not scored)` : ''}` };
+    default: return { kind: 'off', label: 'Off' };
+  }
+}
+
+/** The tally under a phone day: a gold mark per Gold, a silver per Silver. */
+function tallyMarks(gold: number, silver: number, onDark: boolean): string[] {
+  const g = onDark ? GOLD.markOnDark : GOLD.mark;
+  const sv = onDark ? SILVER.markOnDark : SILVER.mark;
+  return [...Array(gold).fill(g), ...Array(silver).fill(sv)];
 }
 
 export default function TableView({ entries, weekEnding, onRefresh, miniGoal, officeId, onShowWeek, readOnly = false }: {
@@ -651,16 +680,21 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
       {head('Coach', w.coach, { alignItems: 'flex-start', paddingHorizontal: 8 * z })}
       {head('Stage', w.stage)}
       {head('Goal', w.goal, blockLeft(colors))}
-      {head('LW', w.lw, blockRight(colors))}
+      {head('LW', w.lw, [blockRight(colors), goalLwRule(colors)])}
       {head('B/E', w.be)}
       {DAYS.map((d, i) => (
-        <TouchableOpacity key={i} style={[styles.headerCell, { width: w.day, height: HEAD_H }]} onLongPress={() => handleClearDay(i, d)} delayLongPress={600}>
-          <Text style={[styles.headerText, { fontSize: headerFont }]}>{d}</Text>
+        <TouchableOpacity key={i} style={[styles.headerCell, dayRule(colors, isDark, z), { width: w.day, height: HEAD_H, justifyContent: 'flex-end' }]} onLongPress={() => handleClearDay(i, d)} delayLongPress={600}>
+          <View style={{ flex: 1, justifyContent: 'center' }}><Text style={[styles.headerText, { fontSize: headerFont }]}>{d}</Text></View>
+          {/* Gold | Silver, as the sheet has it */}
+          <View style={{ flexDirection: 'row', alignSelf: 'stretch', height: 4 * z }}>
+            <View style={{ flex: 1, backgroundColor: GOLD.strip }} />
+            <View style={{ flex: 1, backgroundColor: SILVER.strip }} />
+          </View>
         </TouchableOpacity>
       ))}
-      {head('Total', w.tot)}
-      {head('Days', w.days)}
+      {head('Total', w.tot, dayRule(colors, isDark, z))}
       {head('P/A', w.pa)}
+      {head('Days', w.days)}
       {head('BA fees', w.money)}
       {showMc ? head('MC fees', w.money) : null}
     </View>
@@ -989,11 +1023,11 @@ function BodyContent({ groups, office, colors, isDark, styles, z, w, totalW, sho
       <View style={[{ width: w.goal + w.lw, height: slimH }, blockLeft(colors), blockRight(colors)]} />
       <View style={{ width: w.be }} />
       {days.map((v, i) => (
-        <View key={i} style={[styles.cell, { width: w.day, height: slimH }]}><Text style={[styles.slimText, { fontSize: small }]}>{v}</Text></View>
+        <View key={i} style={[styles.cell, dayRule(colors, isDark, z), { width: w.day, height: slimH }]}><Text style={[styles.slimText, { fontSize: small }]}>{v}</Text></View>
       ))}
-      <View style={[styles.cell, { width: w.tot, height: slimH }]}><Text style={[styles.slimText, { fontSize: small }]}>{tot}</Text></View>
+      <View style={[styles.cell, dayRule(colors, isDark, z), { width: w.tot, height: slimH }]}><Text style={[styles.slimText, { fontSize: small }]}>{tot}</Text></View>
+      <View style={[styles.cell, { width: w.pa, height: slimH }]}><Text style={[styles.slimText, { fontSize: small, fontFamily: fonts.bodySemibold }]}>{pa ?? ''}</Text></View>
       <View style={[styles.cell, { width: w.days, height: slimH }]}><Text style={[styles.slimText, { fontSize: small }]}>{daysCell}</Text></View>
-      <View style={[styles.cell, { width: w.pa, height: slimH }]}><Text style={[styles.slimText, { fontSize: small }]}>{pa ?? ''}</Text></View>
     </View>
   );
   const totalRow = (label: string, t: Tally, goal: React.ReactNode, key: string) => (
@@ -1003,14 +1037,20 @@ function BodyContent({ groups, office, colors, isDark, styles, z, w, totalW, sho
       </View>
       <View style={{ width: w.coach + w.stage }} />
       <View style={[styles.cell, { width: w.goal, height: rowH }, blockLeft(colors)]}>{goal}</View>
-      <View style={[styles.cell, { width: w.lw, height: rowH }, blockRight(colors)]}>
+      <View style={[styles.cell, { width: w.lw, height: rowH }, blockRight(colors), goalLwRule(colors)]}>
         <Text style={[styles.cellText, { fontSize: cellFont }, styles.totalText]} numberOfLines={1}>{t.lastWeek ?? '–'}</Text>
       </View>
       <View style={{ width: w.be }} />
-      {t.sales.map((v, i) => <React.Fragment key={i}>{num(v, w.day, styles.totalText)}</React.Fragment>)}
-      {num(t.total, w.tot, styles.totalBig)}
-      {num(t.daysIn, w.days, styles.totalText)}
+      {t.sales.map((v, i) => (
+        <View key={i} style={[styles.cell, dayRule(colors, isDark, z), { width: w.day, height: rowH }]}>
+          <Text style={[styles.cellText, { fontSize: cellFont }, styles.totalText]} numberOfLines={1}>{v}</Text>
+        </View>
+      ))}
+      <View style={[styles.cell, dayRule(colors, isDark, z), { width: w.tot, height: rowH }]}>
+        <Text style={[styles.cellText, { fontSize: cellFont }, styles.totalBig]} numberOfLines={1}>{t.total}</Text>
+      </View>
       {num(t.daysIn > 0 ? one(t.total / t.daysIn) : '–', w.pa, styles.totalText)}
+      {num(t.daysIn, w.days, styles.totalText)}
       {num(formatMoney(t.fees), w.money, styles.totalText)}
       {showMc ? num(formatMoney(t.mc), w.money, styles.totalText) : null}
     </View>
@@ -1045,7 +1085,7 @@ function BodyContent({ groups, office, colors, isDark, styles, z, w, totalW, sho
                         accessibilityLabel={`${e.user_name}'s goal: ${e.weekly_goal ?? 'not set'}. Tap to change`} testID={`bells-goal-${e.user_id || idx}`}>
                         <Text style={[styles.cellText, { fontSize: cellFont }, e.weekly_goal == null && styles.softText, goalLook && { color: goalLook.fg }]}>{e.weekly_goal != null ? String(e.weekly_goal) : '–'}</Text>
                       </TouchableOpacity>
-                      <View style={[styles.cell, { width: w.lw, height: rowH }, blockRight(colors), lwLook && { backgroundColor: lwLook.bg }]}
+                      <View style={[styles.cell, { width: w.lw, height: rowH }, blockRight(colors), goalLwRule(colors), lwLook && { backgroundColor: lwLook.bg }]}
                         accessibilityLabel={`Last week: ${e.last_week_total ?? 'none'}`}>
                         <Text style={[styles.cellText, { fontSize: cellFont }, lwLook ? { color: lwLook.fg } : styles.softText]} numberOfLines={1}>
                           {e.last_week_total != null ? String(e.last_week_total) : '–'}
@@ -1055,19 +1095,44 @@ function BodyContent({ groups, office, colors, isDark, styles, z, w, totalW, sho
                         accessibilityLabel={`${e.user_name}'s break-even: ${e.break_even ?? 'not set'}. Tap to change`}>
                         <Text style={[styles.cellText, styles.softText, { fontSize: cellFont }]}>{e.break_even != null ? String(e.break_even) : '–'}</Text>
                       </TouchableOpacity>
-                      {(e.days || []).slice(0, 7).map((d: Day, i: number) => {
-                        const look = cellForDay(d, colors, !!isDark, exitState(e, weekEnding, i));
+                      {Array.from({ length: 7 }, (_, i) => (e.days || [])[i]).map((d: Day | undefined, i: number) => {
+                        const sd = sheetDay(d, !!isDark, exitState(e, weekEnding, i));
+                        const gBg = isDark ? GOLD.darkBg : GOLD.bg, gFg = isDark ? GOLD.darkFg : GOLD.fg;
+                        const sBg = isDark ? SILVER.darkBg : SILVER.bg, sFg = isDark ? SILVER.darkFg : SILVER.fg;
                         return (
-                          <TouchableOpacity key={i} style={[styles.cell, { width: w.day, height: rowH }]} onPress={() => onCellPress?.(e, i)} activeOpacity={0.6}>
-                            <View style={[styles.dayPill, { minWidth: 30 * z, height: 24 * z, borderRadius: 7 * z }, look.bg ? { backgroundColor: look.bg } : null]}>
-                              <Text style={[styles.dayText, { fontSize: look.bg ? cellFont : 11.5 * z, color: look.fg }]}>{look.text}</Text>
-                            </View>
+                          <TouchableOpacity key={i} style={[styles.cell, dayRule(colors, isDark, z), { width: w.day, height: rowH, alignItems: 'stretch' }]}
+                            onPress={() => onCellPress?.(e, i)} activeOpacity={0.6}
+                            accessibilityLabel={`${e.user_name}, ${DAYS_LONG[i]}: ${sd.kind === 'nums' ? `${sd.gold} Gold, ${sd.silver} Silver` : sd.label}. Tap to edit`}>
+                            {sd.kind === 'block' ? <View style={{ flex: 1, backgroundColor: sd.bg }} /> : null}
+                            {sd.kind === 'nums' ? (
+                              <View style={{ flex: 1 }}>
+                                <View style={{ flex: 1, flexDirection: 'row' }}>
+                                  {sd.n === 0 ? (
+                                    <View style={[styles.gsHalf, { backgroundColor: sBg }]}><Text style={[styles.dayText, { fontSize: cellFont, color: sFg }]}>0</Text></View>
+                                  ) : (
+                                    <>
+                                      <View style={[styles.gsHalf, { backgroundColor: gBg }]}><Text style={[styles.dayText, { fontSize: cellFont, color: gFg }]}>{sd.gold || ''}</Text></View>
+                                      <View style={[styles.gsHalf, { backgroundColor: sBg, borderLeftWidth: 1, borderLeftColor: colors.background }]}><Text style={[styles.dayText, { fontSize: cellFont, color: sFg }]}>{sd.silver || ''}</Text></View>
+                                    </>
+                                  )}
+                                </View>
+                                <View style={{ height: 4 * z, backgroundColor: sd.bar }} />
+                              </View>
+                            ) : null}
                           </TouchableOpacity>
                         );
                       })}
-                      {num(e.total_sales, w.tot, styles.strongText)}
-                      {num(e.days_worked, w.days)}
-                      {num(e.piece_average.toFixed(1), w.pa)}
+                      {(() => {
+                        const tl = weekBandLook(Number(e.total_sales) || 0, !!isDark);
+                        return (
+                          <View style={[styles.cell, dayRule(colors, isDark, z), { width: w.tot, height: rowH }]}>
+                            <Text style={[styles.totChip, { fontSize: cellFont, color: tl.fg, backgroundColor: tl.bg, borderRadius: 6 * z, paddingHorizontal: 6 * z }]}
+                              numberOfLines={1}>{e.total_sales}</Text>
+                          </View>
+                        );
+                      })()}
+                      {num(e.piece_average.toFixed(1), w.pa, { fontFamily: fonts.bodySemibold })}
+                      {num(e.days_worked, w.days, styles.softText)}
                       {num(formatMoney(e.earnings || 0), w.money)}
                       {showMc ? num(formatMoney(e.mc_fees || 0), w.money, styles.softText) : null}
                     </View>
@@ -1215,7 +1280,7 @@ function PhoneSheet({ groups, office, entries, colors, isDark, styles, showMc, w
       {vals.map((v, i) => <Text key={i} style={[styles.pStat, strong && styles.pStatStrong]}>{v}</Text>)}
     </View>
   );
-  const summary = (label: string, t: Tally, goal: React.ReactNode, extra?: React.ReactNode) => (
+  const summary = (label: string, t: Tally, goal: React.ReactNode, extra?: React.ReactNode, afterSales?: React.ReactNode) => (
     <View style={styles.pTotal}>
       <View style={styles.pHead}>
         <Text style={styles.pTotalLabel}>{label}</Text>
@@ -1226,6 +1291,7 @@ function PhoneSheet({ groups, office, entries, colors, isDark, styles, showMc, w
       </View>
       {statRow('', DAYS.map((d) => d.charAt(0)))}
       {statRow('Sign-ups', t.sales, true)}
+      {afterSales}
       {statRow('BAs in', t.ins)}
       {statRow('Scoring BAs', t.scoring)}
       {statRow('Scoring ratio', t.ins.map((n: number, i: number) => pct(t.scoring[i], n)))}
@@ -1286,16 +1352,38 @@ function PhoneSheet({ groups, office, entries, colors, isDark, styles, showMc, w
                     <Text style={[styles.lGoal, gLook && { color: gLook.fg, fontFamily: fonts.bodySemibold }]}>/{e.weekly_goal ?? '–'}</Text>
                   </TouchableOpacity>
                 </View>
-                {(e.days || []).slice(0, 7).map((d: Day, i: number) => {
-                  const look = cellForDay(d, colors, !!isDark, exitState(e, weekEnding, i));
+                {Array.from({ length: 7 }, (_, i) => (e.days || [])[i]).map((d: Day | undefined, i: number) => {
+                  const sd = sheetDay(d, !!isDark, exitState(e, weekEnding, i));
+                  const look = sd.kind === 'nums' ? dayBandLook(sd.n, !!isDark) : null;
+                  const bg = sd.kind === 'block' ? sd.bg : look ? look.bg : undefined;
+                  // Tally marks: light on the dark-green 4+ day, gold/silver otherwise.
+                  const marks = sd.kind === 'nums' ? tallyMarks(sd.gold, sd.silver, sd.n >= 4 || !!isDark) : [];
                   return (
-                    <TouchableOpacity key={i} style={[styles.lDay, styles.lDayW, look.bg ? { backgroundColor: look.bg } : null]} onPress={() => onCellPress?.(e, i)} activeOpacity={0.6}
-                      accessibilityLabel={`${e.user_name}, ${DAYS_LONG[i]}: ${look.text}. Tap to edit`}>
-                      <Text style={[styles.lDayText, { color: look.fg }]}>{look.text}</Text>
+                    <TouchableOpacity key={i} style={[styles.lDay, styles.lDayW, { borderLeftColor: isDark ? '#3d5a85' : '#c9d6e5' }, bg ? { backgroundColor: bg } : null]}
+                      onPress={() => onCellPress?.(e, i)} activeOpacity={0.6}
+                      accessibilityLabel={`${e.user_name}, ${DAYS_LONG[i]}: ${sd.kind === 'nums' ? `${sd.gold} Gold, ${sd.silver} Silver` : sd.label}. Tap to edit`}>
+                      {sd.kind === 'nums' ? (
+                        <>
+                          <Text style={[styles.lDayText, { color: look!.fg }]}>{sd.n}</Text>
+                          {marks.length > 0 ? (
+                            <View style={styles.marks}>
+                              {marks.slice(0, MAX_MARKS).map((m, k) => <View key={k} style={[styles.mark, { backgroundColor: m }]} />)}
+                              {marks.length > MAX_MARKS ? <Text style={[styles.markMore, { color: look!.fg }]}>+</Text> : null}
+                            </View>
+                          ) : null}
+                        </>
+                      ) : null}
                     </TouchableOpacity>
                   );
                 })}
-                <Text style={[styles.lTot, styles.lTotW]}>{e.total_sales}</Text>
+                {(() => {
+                  const tl = weekBandLook(Number(e.total_sales) || 0, !!isDark);
+                  return (
+                    <View style={[styles.lTotW, { alignItems: 'center', justifyContent: 'center' }]}>
+                      <Text style={[styles.lTot, { color: tl.fg, backgroundColor: tl.bg, borderRadius: 5, overflow: 'hidden', paddingHorizontal: 4, minWidth: 22 }]}>{e.total_sales}</Text>
+                    </View>
+                  );
+                })()}
               </View>
             );
           })}
@@ -1307,8 +1395,8 @@ function PhoneSheet({ groups, office, entries, colors, isDark, styles, showMc, w
             <Text style={[styles.teamHeaderText, { color: colors.onPrimary, fontSize: 12.5, flex: 1 }]}>Office</Text>
             <Text style={[styles.teamHeaderLeader, { color: colors.onPrimary, fontSize: 11 }]}>{entries.length} people</Text>
           </View>
-          {summary('Office total', office, null,
-            statRow('Piece average', office.ins.map((n: number, i: number) => (n > 0 ? one(office.sales[i] / n) : '–'))))}
+          {summary('Office total', office, null, null,
+            statRow('Piece average', office.ins.map((n: number, i: number) => (n > 0 ? one(office.sales[i] / n) : '–')), true))}
         </View>
       ) : (
         <View style={styles.emptyRow}><Text style={styles.emptyText}>No entries this week.</Text></View>
@@ -1405,6 +1493,11 @@ const createStyles = (colors: any) => StyleSheet.create({
   softText: { fontFamily: fonts.body, color: colors.textMuted, fontVariant: ['tabular-nums'] as any },
   strongText: { fontFamily: fonts.bodyBold, color: colors.text },
   dayPill: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+  gsHalf: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  totChip: { fontFamily: fonts.bodyBold, fontVariant: ['tabular-nums'] as any, minWidth: 26, textAlign: 'center', paddingVertical: 2, overflow: 'hidden' },
+  marks: { flexDirection: 'row', alignItems: 'stretch', height: 6, gap: 1.5, marginTop: 2 },
+  mark: { width: 2, borderRadius: 1 },
+  markMore: { fontFamily: fonts.bodyBold, fontSize: 8, lineHeight: 8, marginLeft: 1 },
   dayText: { fontFamily: fonts.bodyBold, fontVariant: ['tabular-nums'] as any },
 
   // Team band
@@ -1436,9 +1529,9 @@ const createStyles = (colors: any) => StyleSheet.create({
   lPill: { fontFamily: fonts.bodySemibold, fontSize: 10, paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4, overflow: 'hidden' },
   lName: { flexShrink: 1, fontFamily: fonts.bodySemibold, fontSize: 12.5, color: colors.text },
   lGoal: { fontFamily: fonts.body, fontSize: 11, color: colors.textMuted, marginLeft: 2 },
-  lDayW: { width: 25 },
-  lTotW: { width: 28 },
-  lDay: { height: 24, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
+  lDayW: { width: 30 },
+  lTotW: { width: 32 },
+  lDay: { height: 34, alignItems: 'center', justifyContent: 'center', borderLeftWidth: 2 },
   lDayText: { fontFamily: fonts.bodyBold, fontSize: 11.5 },
   lTot: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.text, textAlign: 'center' },
   lTeamsHead: { fontFamily: fonts.bodyBold, fontSize: 12, letterSpacing: 0.6, textTransform: 'uppercase', color: colors.textMuted, marginTop: 14, marginBottom: 4, paddingHorizontal: 4 },

@@ -451,7 +451,7 @@ _BELLS_PAGE_HTML = r"""<!DOCTYPE html>
                 if (!groupsMap.has(key)) {
                     groupsMap.set(key, {
                         key,
-                        team_name: pt ? pt.team_name : 'Unassigned',
+                        team_name: pt ? pt.team_name : 'The Loris Group',
                         leader_id: pt ? pt.leader_id : null,
                         leader_name: pt ? pt.leader_name : null,
                         members: [],
@@ -841,12 +841,33 @@ _BELLS_PAGE_HTML = r"""<!DOCTYPE html>
 """
 
 
+def _app_bells_page():
+    """The app's exported page for the shared Bells link, else its index.html
+    (the app routes itself from the address), else None."""
+    import os
+    from pathlib import Path
+    dist = Path(os.environ.get("WEB_DIST_PATH") or "/app/web-dist")
+    for candidate in (dist / "public" / "bells" / "[office].html", dist / "index.html"):
+        try:
+            return candidate.read_text(encoding="utf-8")
+        except OSError:
+            continue
+    return None
+
+
 @router.get("/public/bells/{office_slug}", response_class=HTMLResponse)
 async def public_bells_html(office_slug: str):
     """Serves a self-contained HTML page that fetches weekly bells data from
     /api/public/bells/{office_slug}. Access is protected by the office's share code
     (either in the URL as ?code=... or entered on the unlock screen)."""
     safe_slug = "".join(c for c in (office_slug or "") if c.isalnum() or c in "-_")[:60]
+    # The shared link is the app's own sheet (app/public/bells/[office].tsx),
+    # the same as Bells in the app. This server-drawn page was in front of it,
+    # so the link showed an older layout ("Unassigned" and all); it now only
+    # answers when the app's web build isn't there (local runs, tests).
+    app_page = _app_bells_page()
+    if app_page is not None:
+        return HTMLResponse(content=app_page, status_code=200, headers={"Cache-Control": "no-cache"})
     html = (
         _BELLS_PAGE_HTML.replace("__SLUG__", safe_slug or "")
         .replace("__OFFICE__", safe_slug.capitalize() or "Bells")
