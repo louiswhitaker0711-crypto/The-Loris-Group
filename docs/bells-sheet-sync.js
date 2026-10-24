@@ -133,14 +133,14 @@ function clean(s) {
   return String(s || '').toLowerCase().replace(/[^a-z ]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-/** The tab for a week: "WE 25102026", with or without the space or zero padding. */
+/** The tab for a week: "WE 25/10/2026", "W/E 13/9/2026" or "WE 25102026": spaces, slashes and zero padding don't matter. */
 function findWeekTab(book, sunday) {
   const d = sunday.getDate(), m = sunday.getMonth() + 1, y = sunday.getFullYear();
   const pad = function (x) { return (x < 10 ? '0' : '') + x; };
   const wanted = [d + '' + m + y, pad(d) + pad(m) + y, d + pad(m) + y, pad(d) + m + y];
   const tabs = book.getSheets();
   for (let i = 0; i < tabs.length; i++) {
-    const name = tabs[i].getName().replace(/\s+/g, '').toUpperCase();
+    const name = tabs[i].getName().replace(/[\s\/.\-]/g, '').toUpperCase();   // 'WE 25/10/2026', 'W/E 13/9/2026'
     if (name.indexOf('WE') !== 0) continue;
     if (wanted.indexOf(name.slice(2)) >= 0) return tabs[i];
   }
