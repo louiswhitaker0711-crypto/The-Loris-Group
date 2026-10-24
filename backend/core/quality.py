@@ -110,6 +110,13 @@ def clean_metrics(m: dict | None) -> dict:
     return out
 
 
+def is_filter_note(label) -> bool:
+    """Power BI's note of the filters under a table ("Applied filters: …"),
+    never a person, though it can end in a year that looks like a badge."""
+    t = str(label or "")
+    return "\n" in t.strip() or t.strip().lower().startswith("applied filter")
+
+
 def badge_of(label: str) -> str | None:
     m = BADGE_RE.search((label or "").strip())
     return m.group(1).upper() if m else None
@@ -180,7 +187,7 @@ def from_tables(tables: list[list[list]]) -> dict:
             first = str(cells[label_col]).strip() if label_col < len(cells) else ""
             if not cols or not first:
                 continue
-            if "\n" in first or first.lower().startswith("applied filters"):
+            if is_filter_note(first):
                 continue   # Power BI's note of the filters under an export
             vals = {k: cells[i] for i, k in cols.items() if i < len(cells)}
             if first.lower() in ROLLUP_LABELS:
@@ -204,7 +211,7 @@ def from_ai(text: str) -> dict:
     for r in data.get("rows") or []:
         label = re.sub(r"\s+", " ", str(r.get("label") or "")).strip()
         badge = badge_of(label) or (str(r.get("badge") or "").strip().upper() or None)
-        if not badge or label.lower() in ROLLUP_LABELS:
+        if not badge or label.lower() in ROLLUP_LABELS or is_filter_note(r.get("label")):
             continue
         if not badge_of(label):
             label = f"{label} {badge}".strip()

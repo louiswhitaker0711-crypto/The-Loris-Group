@@ -249,7 +249,8 @@ def test_saved_weeks_with_fractions_are_corrected_once():
             d.update(upd["$set"])
 
     weeks = Coll([
-        {"_id": 1, "bas": [{"badge": "MMC1234", "metrics": {"the_round": 0.3, "fourth_week": 0.75, "aov": 12.5}}],
+        {"_id": 1, "bas": [{"badge": "MMC1234", "metrics": {"the_round": 0.3, "fourth_week": 0.75, "aov": 12.5}},
+                           {"badge": "2026", "label": "Applied filters: CampaignName is Modern Milkman 2026", "metrics": {}}],
          "total": {"the_round": 0.3}},
         {"_id": 2, "bas": [{"badge": "MMC1234", "metrics": {"the_round": 40}}], "total": {}},
     ])
@@ -259,7 +260,19 @@ def test_saved_weeks_with_fractions_are_corrected_once():
 
     assert asyncio.run(_fix_quality_percents(DB())) == 2
     a, b = weeks.docs
+    assert len(a["bas"]) == 1              # the filter note is gone
     assert a["bas"][0]["metrics"] == {"the_round": 30.0, "fourth_week": 75.0, "aov": 12.5}
     assert a["total"]["the_round"] == 30.0 and a["pct_ok"] is True
     assert b["bas"][0]["metrics"]["the_round"] == 40
     assert asyncio.run(_fix_quality_percents(DB())) == 0   # never twice
+
+
+def test_power_bis_filter_note_is_never_a_ba():
+    rep = from_ai(json.dumps({"rows": [
+        {"label": "Example A MMC1234", "sales": 5},
+        {"label": "Applied filters: CampaignName is Modern Milkman, WeekEnding is 11 October 2026", "sales": 0},
+    ]}))
+    assert [r["badge"] for r in rep["rows"]] == ["MMC1234"]
+    grid = [["MC", "Sales Volume"], ["Example A MMC1234", 5],
+            ["Applied filters: WeekEnding_Date is 11 October 2026", None]]
+    assert [r["badge"] for r in from_tables([grid])["rows"]] == ["MMC1234"]

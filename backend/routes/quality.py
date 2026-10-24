@@ -30,7 +30,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from auth import get_current_user, get_subtree_ids, require_admin, sees_whole_office
 from core.quality import (AI_PROMPT, merge_week, LABELS, MEASURES, TARGETS, VIEWS, aggregate, clean_metrics,
-                          percent_fix, from_ai, from_tables, merge, month_label, parse_week,
+                          is_filter_note, percent_fix, from_ai, from_tables, merge, month_label, parse_week,
                           pick_weeks, rag, week_label, xlsx_tables)
 from core.app_time import APP_TZ
 from core.quality_alerts import is_current
@@ -174,7 +174,7 @@ async def import_quality(request: Request):
     bas = []
     for r in body.get("rows") or []:
         badge = str(r.get("badge") or "").strip().upper()
-        if not badge:
+        if not badge or is_filter_note(r.get("label")):
             continue
         uid = r.get("user_id") if r.get("user_id") in ids else None
         bas.append({"label": str(r.get("label") or badge)[:80], "badge": badge, "user_id": uid,

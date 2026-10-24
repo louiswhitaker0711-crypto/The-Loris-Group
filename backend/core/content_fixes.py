@@ -250,12 +250,14 @@ async def _fix_gifts(db) -> int:
 
 async def _fix_quality_percents(db) -> int:
     """Quality weeks saved before the percent fix can hold The Round, 4th week
-    or Fails as fractions (0.3 for 30%). Once per saved week, scale them up
-    the same way a new upload is read, and mark the week done."""
-    from core.quality import percent_fix
+    or Fails as fractions (0.3 for 30%), and Power BI's filter note as a BA.
+    Once per saved week, drop the note, scale the fractions up the same way a
+    new upload is read, and mark the week done."""
+    from core.quality import is_filter_note, percent_fix
     fixed = 0
     async for doc in db.quality_weeks.find({"pct_ok": {"$ne": True}}, {"bas": 1, "total": 1}):
-        bas = doc.get("bas") or []
+        # Power BI's "Applied filters: …" note, once saved as if it were a BA.
+        bas = [b for b in (doc.get("bas") or []) if not is_filter_note(b.get("label"))]
         total = dict(doc.get("total") or {})
         percent_fix({"rows": bas, "total": total})
         await db.quality_weeks.update_one({"_id": doc["_id"]},
