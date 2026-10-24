@@ -23,6 +23,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from auth import can_use_badges, get_subtree_ids, require_admin_or_leader, sees_whole_office
 from core.app_time import APP_TZ
+from core.grading_time import ready_to_grade
 from core.module_seed import LADDER_COMPLETED_AT
 from core.person_breakdown import COD_STAGE_NAME, cod_position, law_of_averages, stage_label
 from core.vertex_pay import sign_up_fees
@@ -105,7 +106,7 @@ async def _cod(person: dict, uid: str) -> dict:
         ).to_list(50)
         rows.sort(key=lambda a: int(a.get("day_number") or 99))
         current_day = int(hire.get("current_day") or 1)
-        pending = [a for a in rows if not a.get("completed") and int(a.get("day_number") or 99) <= current_day]
+        pending = [a for a in rows if not a.get("completed") and ready_to_grade(a.get("day_number"), current_day)]
         out["new_start"] = {
             "hire_id": hire["id"],
             "active": hire.get("active", True) is not False,

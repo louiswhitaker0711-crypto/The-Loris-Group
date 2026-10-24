@@ -28,6 +28,7 @@ from bson import ObjectId
 
 from database import db
 from core.app_time import APP_TZ
+from core.grading_time import ready_to_grade
 from core.push import send_push_to_user
 
 logger = logging.getLogger(__name__)
@@ -156,7 +157,7 @@ async def assessment_reminder_tick(dry_run: bool = False, force: bool = False) -
         if worked_on is None:
             continue
         current_day = int(h.get("current_day") or 1)
-        pend = sorted(n for n in pending_by_hire.get(h["id"], []) if n <= current_day)
+        pend = sorted(n for n in pending_by_hire.get(h["id"], []) if ready_to_grade(n, current_day))
         if not pend:
             continue
         leader_id = await _resolve_leader_id(h["trainee_user_id"], h.get("leader") or "")
