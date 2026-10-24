@@ -87,6 +87,34 @@ def _first_l(label: str, badge: str) -> str:
     return f"{parts[0].lower()} {parts[-1][0].lower()}" if len(parts) >= 2 else ""
 
 
+async def relink_saved(office_id: str, users: list[dict] | None = None) -> int:
+    """Saved quality rows nobody was linked to when they were uploaded (no
+    badge on the profile yet, or the name didn't match) link themselves as
+    soon as the app can tell who they are: by badge, a link the Admin made by
+    hand, or 'first name + initial'. Returns how many rows were linked."""
+    found = [d async for d in db.quality_weeks.find(
+        {"office_id": office_id, "bas": {"$elemMatch": {"user_id": None}}}, {"bas": 1})]
+    if not found:
+        return 0
+    users = users if users is not None else await _office_people(office_id)
+    by_badge, by_name = await _badge_index(office_id, users)
+    linked = 0
+    for d in found:
+        changed = False
+        for b in d.get("bas") or []:
+            if b.get("user_id") or is_filter_note(b.get("label")):
+                continue
+            badge = str(b.get("badge") or "").strip().upper()
+            uid = by_badge.get(badge) or by_name.get(_first_l(str(b.get("label") or ""), badge))
+            if uid:
+                b["user_id"] = uid
+                changed = True
+                linked += 1
+        if changed:
+            await db.quality_weeks.update_one({"_id": d["_id"]}, {"$set": {"bas": d["bas"]}})
+    return linked
+
+
 async def _read_image(user: dict, raw: bytes, media: str) -> dict:
     from core.llm_keys import anthropic_api_key
     if not anthropic_api_key():
@@ -199,6 +227,10 @@ async def import_quality(request: Request):
         {"$set": {"office_id": office_id, "week_ending": week, "bas": bas, "total": total, "pct_ok": True,
                   "imported_at": datetime.now(timezone.utc).isoformat(), "imported_by": admin.get("id")}},
         upsert=True)
+    try:
+        await relink_saved(office_id, users)
+    except Exception as ex:  # linking older weeks must never stop a save
+        print(f"[quality] relinking saved weeks failed: {ex}")
     gone = {str(u["_id"]) for u in users if u.get("deleted") or u.get("is_active") is False}
     sent = await _tell_the_team(bas, week, gone) if body.get("notify") else 0
     alerts = []
@@ -264,6 +296,10 @@ async def get_quality(request: Request, view: str = "week", week: Optional[str] 
             "measures": [{"key": k, "label": LABELS[k], "target": (TARGETS.get(k) or {}).get("text")} for k, _, _ in MEASURES]}
     if not weeks:
         return {**base, "week_ending": None, "me": None, "team": [], "total": None}
+    try:
+        await relink_saved(office_id)
+    except Exception as ex:
+        print(f"[quality] relinking saved weeks failed: {ex}")
     now, before, label = pick_weeks(weeks, view, week, month)
     docs = {d["week_ending"]: d async for d in db.quality_weeks.find(
         {"office_id": office_id, "week_ending": {"$in": now + before}}, {"_id": 0, "week_ending": 1, "bas": 1, "total": 1})}
