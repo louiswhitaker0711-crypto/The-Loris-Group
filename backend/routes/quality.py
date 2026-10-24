@@ -30,7 +30,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from auth import get_current_user, get_subtree_ids, require_admin, sees_whole_office
 from core.quality import (AI_PROMPT, merge_week, LABELS, MEASURES, TARGETS, VIEWS, aggregate, clean_metrics,
-                          excel_percent_fix, from_ai, from_tables, merge, month_label, parse_week,
+                          percent_fix, from_ai, from_tables, merge, month_label, parse_week,
                           pick_weeks, rag, week_label, xlsx_tables)
 from core.app_time import APP_TZ
 from core.quality_alerts import is_current
@@ -126,13 +126,13 @@ async def read_quality(request: Request):
             raise HTTPException(status_code=400, detail=f"{f.get('filename') or 'A file'} is empty or too big")
         if name.endswith(".xlsx") or raw[:2] == b"PK":
             try:
-                parts.append(excel_percent_fix(from_tables(xlsx_tables(raw))))
+                parts.append(percent_fix(from_tables(xlsx_tables(raw))))
             except Exception:
                 raise HTTPException(status_code=400, detail=f"Couldn't open {f.get('filename')} as an Excel file")
         elif raw[:8] == b"\x89PNG\r\n\x1a\n":
-            parts.append(await _read_image(admin, raw, "image/png"))
+            parts.append(percent_fix(await _read_image(admin, raw, "image/png")))
         elif raw[:3] == b"\xff\xd8\xff":
-            parts.append(await _read_image(admin, raw, "image/jpeg"))
+            parts.append(percent_fix(await _read_image(admin, raw, "image/jpeg")))
         else:
             raise HTTPException(status_code=400, detail=f"{f.get('filename') or 'That file'}: send a screenshot (PNG or JPG) or an Excel export")
     rep = merge(parts)
@@ -193,9 +193,10 @@ async def import_quality(request: Request):
     total = clean_metrics(body.get("total"))
     if existing:
         bas, total = merge_week(existing.get("bas") or [], existing.get("total") or {}, bas, total)
+    percent_fix({"rows": bas, "total": total})
     await db.quality_weeks.update_one(
         {"office_id": office_id, "week_ending": week},
-        {"$set": {"office_id": office_id, "week_ending": week, "bas": bas, "total": total,
+        {"$set": {"office_id": office_id, "week_ending": week, "bas": bas, "total": total, "pct_ok": True,
                   "imported_at": datetime.now(timezone.utc).isoformat(), "imported_by": admin.get("id")}},
         upsert=True)
     gone = {str(u["_id"]) for u in users if u.get("deleted") or u.get("is_active") is False}

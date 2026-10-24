@@ -402,19 +402,32 @@ def xlsx_tables(data: bytes) -> list[list[list]]:
     return out
 
 
-def excel_percent_fix(rep: dict) -> dict:
-    """Excel keeps 13.10% as 0.131: a % measure whose values are all at most 1
-    across the file is scaled up."""
-    for key in ("the_round", "fourth_week", "fail_rate"):
-        vals = [r["metrics"][key] for r in rep["rows"] if key in r["metrics"]]
-        tot = (rep.get("total") or {}).get(key)
-        if vals and max(vals + ([tot] if tot is not None else [])) <= 1:
-            for r in rep["rows"]:
-                if key in r["metrics"]:
-                    r["metrics"][key] = round(r["metrics"][key] * 100, 2)
-            if tot is not None:
-                rep["total"][key] = round(tot * 100, 2)
+PCT_KEYS = ("the_round", "fourth_week", "fail_rate")
+
+
+def percent_fix(rep: dict) -> dict:
+    """The Round, 4th week and Fails are percentages, but Excel (and sometimes
+    the screenshot reader) gives 30% as 0.3. A real figure under 1% would need
+    100+ sign-ups in a week, so any value between 0 and 1 is a fraction. When a
+    measure has any such fraction, or every value is 1 or less, each value of
+    1 or less is scaled up (1 → 100%); values already over 1 are left alone,
+    so a file mixing 0.3 and 30 reads 30 for both."""
+    rows = rep.get("rows") or rep.get("bas") or []
+    total = rep.get("total") or {}
+    for key in PCT_KEYS:
+        vals = [r["metrics"][key] for r in rows if (r.get("metrics") or {}).get(key) is not None]
+        if total.get(key) is not None:
+            vals.append(total[key])
+        if not vals or not (any(0 < v < 1 for v in vals) or max(vals) <= 1):
+            continue
+        for m in [r["metrics"] for r in rows if r.get("metrics")] + [total]:
+            v = m.get(key)
+            if v is not None and v <= 1:
+                m[key] = round(v * 100, 2)
     return rep
+
+
+excel_percent_fix = percent_fix  # the old name, kept for older callers
 
 
 AI_PROMPT = """This is a screenshot of a weekly quality report (Power BI) for a door-to-door sales office.

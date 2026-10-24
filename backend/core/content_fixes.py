@@ -248,11 +248,33 @@ async def _fix_gifts(db) -> int:
     return fixed
 
 
+async def _fix_quality_percents(db) -> int:
+    """Quality weeks saved before the percent fix can hold The Round, 4th week
+    or Fails as fractions (0.3 for 30%). Once per saved week, scale them up
+    the same way a new upload is read, and mark the week done."""
+    from core.quality import percent_fix
+    fixed = 0
+    async for doc in db.quality_weeks.find({"pct_ok": {"$ne": True}}, {"bas": 1, "total": 1}):
+        bas = doc.get("bas") or []
+        total = dict(doc.get("total") or {})
+        percent_fix({"rows": bas, "total": total})
+        await db.quality_weeks.update_one({"_id": doc["_id"]},
+                                          {"$set": {"bas": bas, "total": total, "pct_ok": True}})
+        fixed += 1
+    if fixed:
+        logger.info(f"content_fixes: quality percentages checked on {fixed} saved weeks")
+    return fixed
+
+
 async def run_content_fixes(db) -> dict:
     """Run every fix. Each step is individually guarded so one failure never
     blocks the rest (or the app boot — server.py wraps the call as well)."""
     result = {"fixed": 0, "skipped_edited": 0, "orphan_modules_deleted": 0,
               "checklist_office_backfilled": 0, "gifts_fixed": 0}
+    try:
+        result["quality_weeks_checked"] = await _fix_quality_percents(db)
+    except Exception as e:
+        logger.warning(f"content_fixes: quality percent fix failed: {e}")
     try:
         result["gifts_fixed"] = await _fix_gifts(db)
     except Exception as e:
