@@ -12,6 +12,7 @@ Agreed changes that aren't built yet. Add a line when something is agreed; remov
 
 ## Recently shipped
 
+- 24 Oct: Quality: The Round, 4th week and Fails read as percentages whatever the file (0.3 → 30%, 1 → 100%), Excel and screenshots alike; weeks already saved corrected once on the next start, and Power BI's "Applied filters" note no longer saved as a BA (removed from saved weeks too); saved rows nobody was linked to link themselves to the BA once their badge or name is in the app.
 - 24 Oct: G.I.F.T.S now the Modern Milkman booklet's (Greed, Indifference, Fear of loss, The Jones theory, Sense of urgency) on the CoD Impulses item, its quiz and the Day 5 checklist; live content updated on the next start.
 
 - 22 Oct: Daily Assessment "Below Average" reads "Needs Work" (stored value unchanged); Intro/Presentation/Short Story/Close/Rehash graded once in the 5 Steps and no longer asked again in Skills; KPIs prefilled from that day's breakdown and editable; OwnerIQ's Stage 3+ reads "SL".

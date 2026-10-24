@@ -194,3 +194,85 @@ def test_excel_export_with_a_namebadge_column_and_two_membership_columns():
     assert [r["badge"] for r in rep["rows"]] == ["MMC1234", "MMC5678"]
     assert rep["rows"][0]["metrics"]["the_round"] == 33.33 and rep["rows"][0]["metrics"]["sales"] == 6
     assert rep["total"]["the_round"] == 30.0 and rep["total"]["sales"] == 10
+
+
+def test_round_as_a_fraction_reads_as_a_percentage_even_mixed_in_one_file():
+    """0.3 is 30%; a 100% Round (1.0) next to 0.3 is 100%, and a value already
+    written as 30 stays 30, so one odd cell can't leave the rest as 0.3."""
+    from core.quality import percent_fix
+    grid = [
+        ["MC", "NameBadge", "Sales Volume", "Membership on signup %", "4th Delivery %", "Fail Rate"],
+        ["Example Office", "Total", 10, 0.3, "75.00 %", 0.1],
+        ["Example Office", "Example P - MMC1234", 6, 0.3333, "80.00 %", 0],
+        ["Example Office", "Sample Q - MMC5678", 3, 1, "70.00 %", 0.25],
+        ["Example Office", "Other R - MMC9012", 1, "30.00 %", "75.00 %", 0],
+    ]
+    rep = percent_fix(from_tables([grid]))
+    by = {r["badge"]: r["metrics"] for r in rep["rows"]}
+    assert by["MMC1234"]["the_round"] == 33.33
+    assert by["MMC5678"]["the_round"] == 100.0
+    assert by["MMC9012"]["the_round"] == 30.0
+    assert by["MMC1234"]["fourth_week"] == 80.0          # already a percentage
+    assert by["MMC5678"]["fail_rate"] == 25.0 and by["MMC1234"]["fail_rate"] == 0
+    assert rep["total"]["the_round"] == 30.0 and rep["total"]["fail_rate"] == 10.0
+
+
+def test_a_screenshot_read_as_fractions_is_fixed_too():
+    from core.quality import percent_fix
+    rep = percent_fix(from_ai(json.dumps({"rows": [
+        {"label": "Example A MMC1234", "sales": 5, "aov": 0.5, "drops": 0.8, "the_round": 0.3, "fail_rate": 20},
+    ], "total": {"the_round": 0.3}})))
+    m = rep["rows"][0]["metrics"]
+    assert m["the_round"] == 30.0 and rep["total"]["the_round"] == 30.0
+    assert m["fail_rate"] == 20            # already a percentage
+    assert m["aov"] == 0.5 and m["drops"] == 0.8   # not percentages, never scaled
+
+
+def test_saved_weeks_with_fractions_are_corrected_once():
+    import asyncio
+    from core.content_fixes import _fix_quality_percents
+
+    class Coll:
+        def __init__(self, docs):
+            self.docs = docs
+
+        def find(self, q, proj=None):
+            docs = [d for d in self.docs if d.get("pct_ok") is not True]
+
+            async def gen():
+                for d in docs:
+                    yield d
+            return gen()
+
+        async def update_one(self, q, upd):
+            d = next(d for d in self.docs if d["_id"] == q["_id"])
+            d.update(upd["$set"])
+
+    weeks = Coll([
+        {"_id": 1, "bas": [{"badge": "MMC1234", "metrics": {"the_round": 0.3, "fourth_week": 0.75, "aov": 12.5}},
+                           {"badge": "2026", "label": "Applied filters: CampaignName is Modern Milkman 2026", "metrics": {}}],
+         "total": {"the_round": 0.3}},
+        {"_id": 2, "bas": [{"badge": "MMC1234", "metrics": {"the_round": 40}}], "total": {}},
+    ])
+
+    class DB:
+        quality_weeks = weeks
+
+    assert asyncio.run(_fix_quality_percents(DB())) == 2
+    a, b = weeks.docs
+    assert len(a["bas"]) == 1              # the filter note is gone
+    assert a["bas"][0]["metrics"] == {"the_round": 30.0, "fourth_week": 75.0, "aov": 12.5}
+    assert a["total"]["the_round"] == 30.0 and a["pct_ok"] is True
+    assert b["bas"][0]["metrics"]["the_round"] == 40
+    assert asyncio.run(_fix_quality_percents(DB())) == 0   # never twice
+
+
+def test_power_bis_filter_note_is_never_a_ba():
+    rep = from_ai(json.dumps({"rows": [
+        {"label": "Example A MMC1234", "sales": 5},
+        {"label": "Applied filters: CampaignName is Modern Milkman, WeekEnding is 11 October 2026", "sales": 0},
+    ]}))
+    assert [r["badge"] for r in rep["rows"]] == ["MMC1234"]
+    grid = [["MC", "Sales Volume"], ["Example A MMC1234", 5],
+            ["Applied filters: WeekEnding_Date is 11 October 2026", None]]
+    assert [r["badge"] for r in from_tables([grid])["rows"]] == ["MMC1234"]

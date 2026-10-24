@@ -30,7 +30,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from auth import get_current_user, get_subtree_ids, require_admin, sees_whole_office
 from core.quality import (AI_PROMPT, merge_week, LABELS, MEASURES, TARGETS, VIEWS, aggregate, clean_metrics,
-                          excel_percent_fix, from_ai, from_tables, merge, month_label, parse_week,
+                          is_filter_note, percent_fix, from_ai, from_tables, merge, month_label, parse_week,
                           pick_weeks, rag, week_label, xlsx_tables)
 from core.app_time import APP_TZ
 from core.quality_alerts import is_current
@@ -87,6 +87,34 @@ def _first_l(label: str, badge: str) -> str:
     return f"{parts[0].lower()} {parts[-1][0].lower()}" if len(parts) >= 2 else ""
 
 
+async def relink_saved(office_id: str, users: list[dict] | None = None) -> int:
+    """Saved quality rows nobody was linked to when they were uploaded (no
+    badge on the profile yet, or the name didn't match) link themselves as
+    soon as the app can tell who they are: by badge, a link the Admin made by
+    hand, or 'first name + initial'. Returns how many rows were linked."""
+    found = [d async for d in db.quality_weeks.find(
+        {"office_id": office_id, "bas": {"$elemMatch": {"user_id": None}}}, {"bas": 1})]
+    if not found:
+        return 0
+    users = users if users is not None else await _office_people(office_id)
+    by_badge, by_name = await _badge_index(office_id, users)
+    linked = 0
+    for d in found:
+        changed = False
+        for b in d.get("bas") or []:
+            if b.get("user_id") or is_filter_note(b.get("label")):
+                continue
+            badge = str(b.get("badge") or "").strip().upper()
+            uid = by_badge.get(badge) or by_name.get(_first_l(str(b.get("label") or ""), badge))
+            if uid:
+                b["user_id"] = uid
+                changed = True
+                linked += 1
+        if changed:
+            await db.quality_weeks.update_one({"_id": d["_id"]}, {"$set": {"bas": d["bas"]}})
+    return linked
+
+
 async def _read_image(user: dict, raw: bytes, media: str) -> dict:
     from core.llm_keys import anthropic_api_key
     if not anthropic_api_key():
@@ -126,13 +154,13 @@ async def read_quality(request: Request):
             raise HTTPException(status_code=400, detail=f"{f.get('filename') or 'A file'} is empty or too big")
         if name.endswith(".xlsx") or raw[:2] == b"PK":
             try:
-                parts.append(excel_percent_fix(from_tables(xlsx_tables(raw))))
+                parts.append(percent_fix(from_tables(xlsx_tables(raw))))
             except Exception:
                 raise HTTPException(status_code=400, detail=f"Couldn't open {f.get('filename')} as an Excel file")
         elif raw[:8] == b"\x89PNG\r\n\x1a\n":
-            parts.append(await _read_image(admin, raw, "image/png"))
+            parts.append(percent_fix(await _read_image(admin, raw, "image/png")))
         elif raw[:3] == b"\xff\xd8\xff":
-            parts.append(await _read_image(admin, raw, "image/jpeg"))
+            parts.append(percent_fix(await _read_image(admin, raw, "image/jpeg")))
         else:
             raise HTTPException(status_code=400, detail=f"{f.get('filename') or 'That file'}: send a screenshot (PNG or JPG) or an Excel export")
     rep = merge(parts)
@@ -174,7 +202,7 @@ async def import_quality(request: Request):
     bas = []
     for r in body.get("rows") or []:
         badge = str(r.get("badge") or "").strip().upper()
-        if not badge:
+        if not badge or is_filter_note(r.get("label")):
             continue
         uid = r.get("user_id") if r.get("user_id") in ids else None
         bas.append({"label": str(r.get("label") or badge)[:80], "badge": badge, "user_id": uid,
@@ -193,11 +221,16 @@ async def import_quality(request: Request):
     total = clean_metrics(body.get("total"))
     if existing:
         bas, total = merge_week(existing.get("bas") or [], existing.get("total") or {}, bas, total)
+    percent_fix({"rows": bas, "total": total})
     await db.quality_weeks.update_one(
         {"office_id": office_id, "week_ending": week},
-        {"$set": {"office_id": office_id, "week_ending": week, "bas": bas, "total": total,
+        {"$set": {"office_id": office_id, "week_ending": week, "bas": bas, "total": total, "pct_ok": True,
                   "imported_at": datetime.now(timezone.utc).isoformat(), "imported_by": admin.get("id")}},
         upsert=True)
+    try:
+        await relink_saved(office_id, users)
+    except Exception as ex:  # linking older weeks must never stop a save
+        print(f"[quality] relinking saved weeks failed: {ex}")
     gone = {str(u["_id"]) for u in users if u.get("deleted") or u.get("is_active") is False}
     sent = await _tell_the_team(bas, week, gone) if body.get("notify") else 0
     alerts = []
@@ -263,6 +296,10 @@ async def get_quality(request: Request, view: str = "week", week: Optional[str] 
             "measures": [{"key": k, "label": LABELS[k], "target": (TARGETS.get(k) or {}).get("text")} for k, _, _ in MEASURES]}
     if not weeks:
         return {**base, "week_ending": None, "me": None, "team": [], "total": None}
+    try:
+        await relink_saved(office_id)
+    except Exception as ex:
+        print(f"[quality] relinking saved weeks failed: {ex}")
     now, before, label = pick_weeks(weeks, view, week, month)
     docs = {d["week_ending"]: d async for d in db.quality_weeks.find(
         {"office_id": office_id, "week_ending": {"$in": now + before}}, {"_id": 0, "week_ending": 1, "bas": 1, "total": 1})}
