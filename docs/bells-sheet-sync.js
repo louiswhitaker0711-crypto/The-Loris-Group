@@ -9,13 +9,15 @@
  *
  * BELLS holds the shared Bells link's address, office and code. Everything
  * else is docs/bells-to-google-sheet.gs (the same logic, kept in step):
- * Gold/Silver on the week's tab, day colours, names matched, a "Bells sync"
- * log tab. A fix pushed here reaches the sheet on its next run.
+ * Gold/Silver on the week's tab, day colours, names matched, new people's
+ * rows, next week's tab on Sunday night, a "Bells sync" log tab. A fix pushed here reaches the sheet on its next run.
  */
+
 // ── The sheet's layout (from the Roll Call tab) ──────────────────────────────
 const NAME_COLUMN = 2;        // B
 const FIRST_ROW = 3;          // first person
 const MONDAY_GOLD_COLUMN = 12; // L (Monday Gold); M Silver, N/O Tuesday … X/Y Sunday
+const COL = { st: 3, pr: 4, breakEven: 5, lastWeek: 6, goal: 7, focusFrom: 8, focusTo: 11 };  // C D E F G, H–K
 const LOG_TAB = 'Bells sync';
 
 // ── The sheet's colours ──────────────────────────────────────────────────────
@@ -30,21 +32,156 @@ const COLOURS = {
 
 function updateBells() {
   const book = SpreadsheetApp.getActiveSpreadsheet();
-  const thisWeek = sundayOf(new Date());
-  const lastWeek = new Date(thisWeek.getTime() - 7 * 86400000);
+  const now = new Date();
+  const thisWeek = sundayOf(now);
+  const lastWeek = addDays(thisWeek, -7);
+  const nextWeek = addDays(thisWeek, 7);
   const log = [];
   [lastWeek, thisWeek].forEach(function (sunday) {
-    const tab = findWeekTab(book, sunday);
+    let tab = findWeekTab(book, sunday);
+    // This week's tab missing (Sunday's run didn't happen): make it now.
+    if (!tab && sunday === thisWeek) {
+      try { tab = makeWeekTab(book, sunday, log); } catch (e) { log.push([weekLabel(sunday), 'Could not make the tab: ' + e.message, '']); }
+    }
     if (!tab) { log.push([weekLabel(sunday), 'No tab for this week yet: skipped', '']); return; }
     try {
       const people = fetchWeek(sunday);
+      const added = sunday === thisWeek ? addNewPeople(tab, people) : [];
       const r = fillTab(tab, people, sunday);
-      log.push([tab.getName(), 'Filled ' + r.filled + ' people', r.unmatched.length ? 'Not matched: ' + r.unmatched.join(', ') : '']);
+      log.push([tab.getName(), 'Filled ' + r.filled + ' people' + (added.length ? ' · added ' + added.join(', ') : ''),
+        r.unmatched.length ? 'Not matched: ' + r.unmatched.join(', ') : '']);
     } catch (e) {
       log.push([tab.getName(), 'Failed: ' + e.message, '']);
     }
   });
+  // Sunday from 21:00: next week's tab, ready for Monday.
+  if (isSundayEvening(now) && !findWeekTab(book, nextWeek)) {
+    try { makeWeekTab(book, nextWeek, log); } catch (e) { log.push([weekLabel(nextWeek), 'Could not make the tab: ' + e.message, '']); }
+  }
   writeLog(book, log);
+}
+
+// ── Next week's tab ──────────────────────────────────────────────────────────
+/** A copy of the week before's tab for `sunday`, set up for the new week. */
+function makeWeekTab(book, sunday, log) {
+  const before = addDays(sunday, -7);
+  const from = findWeekTab(book, before);
+  if (!from) throw new Error('no tab for the week before (' + weekLabel(before) + ') to copy');
+  const finished = fetchWeek(before);            // the week that's ending: totals and who exited
+  let coming = [];
+  try { coming = fetchWeek(sunday); } catch (e) { coming = []; }   // goals already set for next week
+  const tab = from.copyTo(book).setName(weekLabel(sunday));
+  book.setActiveSheet(tab);
+  book.moveActiveSheet(1);
+  const monday = isoDate(addDays(sunday, -6));
+  const removed = [];
+  // Bottom up, so deleting a row doesn't move the ones still to check.
+  const rows = personRows(tab);
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const r = rows[i];
+    const p = matchPerson(r.name, finished);
+    if (p && p.leftOn && p.leftOn < monday) { tab.deleteRow(r.row); removed.push(r.name); }
+  }
+  personRows(tab).forEach(function (r) {
+    const p = matchPerson(r.name, finished);
+    const next = matchPerson(r.name, coming);
+    tab.getRange(r.row, COL.lastWeek).setValue(p ? p.total : '');
+    tab.getRange(r.row, COL.goal).setValue(next && next.goal != null ? next.goal : '');
+    tab.getRange(r.row, COL.focusFrom, 1, COL.focusTo - COL.focusFrom + 1).clearContent();
+    const days = tab.getRange(r.row, MONDAY_GOLD_COLUMN, 1, 14);
+    days.clearContent();
+    days.setBackgrounds([[0, 1, 2, 3, 4, 5, 6].reduce(function (a) { return a.concat([COLOURS.gold, COLOURS.silver]); }, [])]);
+  });
+  log.push([tab.getName(), 'New week made from ' + from.getName() + (removed.length ? ' · taken off (exited): ' + removed.join(', ') : ''), '']);
+  return tab;
+}
+
+// ── New people ───────────────────────────────────────────────────────────────
+/** Anyone on Bells who isn't on the tab gets a row under their Coach's name. */
+function addNewPeople(tab, people) {
+  const added = [];
+  const live = people.filter(function (p) { return p.live && !(p.leftOn); });
+  live.forEach(function (p) {
+    const rows = personRows(tab);
+    const onSheet = rows.some(function (r) { return matchPerson(r.name, people) === p; });
+    if (onSheet) return;
+    const coachRow = p.coach ? rows.filter(function (r) { return matchPerson(r.name, people) && clean(matchPerson(r.name, people).name) === clean(p.coach); })[0] : null;
+    const at = coachRow || rows[0];
+    if (!at) return;
+    const row = insertPersonRow(tab, at.row);
+    const name = sheetNameFor(p, live);
+    tab.getRange(row, NAME_COLUMN).setValue(name);
+    tab.getRange(row, COL.st).setValue(stageText(p.stage));
+    tab.getRange(row, COL.pr).setValue(p.badge === 'OR' ? 'O' : p.badge || '');
+    tab.getRange(row, COL.breakEven).setValue(p.breakEven != null ? p.breakEven : '');
+    tab.getRange(row, COL.lastWeek).setValue('');
+    tab.getRange(row, COL.goal).setValue(p.goal != null ? p.goal : '');
+    added.push(name);
+  });
+  return added;
+}
+
+/** A new row straight under `row`, inside the same block so the sheet's
+ *  totals stretch to include it, carrying that row's formats and formulas;
+ *  its name, details and days start empty. Returns the new row's number. */
+function insertPersonRow(tab, row) {
+  const width = tab.getLastColumn();
+  const below = String(tab.getRange(row + 1, NAME_COLUMN).getDisplayValue() || '').trim();
+  let target;
+  if (below) {
+    tab.insertRowAfter(row);
+    target = row + 1;
+    tab.getRange(row, 1, 1, width).copyTo(tab.getRange(target, 1, 1, width));
+  } else {
+    // `row` is the last in its block: add the row above it (inside the
+    // totals' ranges), move `row` up into it, and use the old row.
+    tab.insertRowBefore(row);
+    tab.getRange(row + 1, 1, 1, width).copyTo(tab.getRange(row, 1, 1, width));
+    target = row + 1;
+  }
+  tab.getRange(target, NAME_COLUMN, 1, COL.focusTo - NAME_COLUMN + 1).clearContent();
+  const days = tab.getRange(target, MONDAY_GOLD_COLUMN, 1, 14);
+  days.clearContent();
+  days.setBackgrounds([[0, 1, 2, 3, 4, 5, 6].reduce(function (a) { return a.concat([COLOURS.gold, COLOURS.silver]); }, [])]);
+  return target;
+}
+
+/** First name, or "First L" when someone else on Bells has the same first name. */
+function sheetNameFor(p, people) {
+  const words = String(p.name).trim().split(/\s+/);
+  const first = words[0];
+  const twin = people.some(function (q) { return q !== p && clean(q.name).split(' ')[0] === clean(first); });
+  return twin && words.length > 1 ? first + ' ' + words[words.length - 1].charAt(0).toUpperCase() : first;
+}
+
+/** The app's stage as the sheet writes it: "3" → "s3", "SL" → "s3+". */
+function stageText(stage) {
+  const s = String(stage || '').trim();
+  if (!s) return '';
+  if (s.toUpperCase() === 'SL') return 's3+';
+  return 's' + s;
+}
+
+/** The person rows on a tab: [{row, name}], from the first person to the totals. */
+function personRows(tab) {
+  const last = tab.getLastRow();
+  if (last < FIRST_ROW) return [];
+  const names = tab.getRange(FIRST_ROW, NAME_COLUMN, last - FIRST_ROW + 1, 1).getDisplayValues();
+  const labels = tab.getRange(FIRST_ROW, 1, last - FIRST_ROW + 1, 2).getDisplayValues();
+  const out = [];
+  for (let i = 0; i < names.length; i++) {
+    if (/\btotal\b/.test((labels[i][0] + ' ' + labels[i][1]).toLowerCase())) break;
+    const name = String(names[i][0] || '').trim();
+    if (name) out.push({ row: FIRST_ROW + i, name: name });
+  }
+  return out;
+}
+
+function addDays(d, n) { return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n); }
+
+function isSundayEvening(date) {
+  const uk = Utilities.formatDate(date, 'Europe/London', 'u HH').split(' ');   // u: 7 = Sunday
+  return uk[0] === '7' && Number(uk[1]) >= 21;
 }
 
 // ── The app ──────────────────────────────────────────────────────────────────
@@ -59,24 +196,21 @@ function fetchWeek(sunday) {
   const rows = (data.sheet && data.sheet.entries) || data.entries || [];
   return rows.map(function (e) {
     return { name: String(e.user_name || '').trim(), days: (e.days || []).slice(0, 7), leftOn: e.left_on ? String(e.left_on).slice(0, 10) : '',
-      live: !!e.user_id && !e.archived };   // a real profile, not an old Roll Call import row
+      live: !!e.user_id && !e.archived,   // a real profile, not an old Roll Call import row
+      coach: String(e.coach_name || '').trim(), role: e.role || '',
+      stage: e.stage_label || '', badge: e.recruit_badge || '', breakEven: e.break_even,
+      goal: e.weekly_goal, total: Number(e.total_sales || 0) };
   }).filter(function (p) { return p.name; });
 }
 
 // ── The sheet ────────────────────────────────────────────────────────────────
 function fillTab(tab, people, sunday) {
-  const last = tab.getLastRow();
-  if (last < FIRST_ROW) return { filled: 0, unmatched: [] };
-  const names = tab.getRange(FIRST_ROW, NAME_COLUMN, last - FIRST_ROW + 1, 1).getDisplayValues();
-  const labels = tab.getRange(FIRST_ROW, 1, last - FIRST_ROW + 1, 2).getDisplayValues();
   let filled = 0;
   const unmatched = [];
-  for (let i = 0; i < names.length; i++) {
-    const row = FIRST_ROW + i;
-    const label = (labels[i][0] + ' ' + labels[i][1]).toLowerCase();
-    if (/\btotal\b/.test(label)) break;           // the totals block: stop
-    const sheetName = String(names[i][0] || '').trim();
-    if (!sheetName) continue;
+  const rows = personRows(tab);
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i].row;
+    const sheetName = rows[i].name;
     const person = matchPerson(sheetName, people);
     if (!person) { unmatched.push(sheetName); continue; }
     const values = [], fills = [];
@@ -173,7 +307,8 @@ function isoDate(d) {
   return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
 }
 
-function weekLabel(d) { return 'WE ' + d.getDate() + (d.getMonth() + 1) + d.getFullYear(); }
+/** A tab name in the sheet's style: "WE 01/11/2026". */
+function weekLabel(d) { return 'WE ' + (d.getDate() < 10 ? '0' : '') + d.getDate() + '/' + (d.getMonth() + 1) + '/' + d.getFullYear(); }
 
 function writeLog(book, rows) {
   let tab = book.getSheetByName(LOG_TAB);
