@@ -3,7 +3,7 @@
  * Apps Script (for setting up from a phone, where pasting doesn't work):
  *
  *   var BELLS={app:'https://ADDRESS',office:'OFFICE',code:'CODE'}
- *   function setUp(){ScriptApp.newTrigger('run').timeBased().everyMinutes(15).create();run()}
+ *   function setUp(){ScriptApp.getProjectTriggers().forEach(function(t){ScriptApp.deleteTrigger(t)});ScriptApp.newTrigger('run').timeBased().everyMinutes(15).create();run()}
  *   function run(){eval(UrlFetchApp.fetch(
  *   'https://raw.githubusercontent.com/louiswhitaker0711-crypto/The-Loris-Group/main/docs/bells-sheet-sync.js').getContentText());updateBells()}
  *
@@ -58,7 +58,8 @@ function fetchWeek(sunday) {
   const data = JSON.parse(resp.getContentText());
   const rows = (data.sheet && data.sheet.entries) || data.entries || [];
   return rows.map(function (e) {
-    return { name: String(e.user_name || '').trim(), days: (e.days || []).slice(0, 7), leftOn: e.left_on ? String(e.left_on).slice(0, 10) : '' };
+    return { name: String(e.user_name || '').trim(), days: (e.days || []).slice(0, 7), leftOn: e.left_on ? String(e.left_on).slice(0, 10) : '',
+      live: !!e.user_id && !e.archived };   // a real profile, not an old Roll Call import row
   }).filter(function (p) { return p.name; });
 }
 
@@ -99,8 +100,14 @@ function fillTab(tab, people, sunday) {
   return { filled: filled, unmatched: unmatched };
 }
 
-/** The person on Bells for a name on the sheet, or null when it's not clear. */
+/** The person on Bells for a name on the sheet, or null when it's not clear.
+ *  Real profiles first; an old Roll Call import row only when nobody real fits. */
 function matchPerson(sheetName, people) {
+  const live = people.filter(function (p) { return p.live; });
+  return matchIn(sheetName, live) || matchIn(sheetName, people.filter(function (p) { return !p.live; }));
+}
+
+function matchIn(sheetName, people) {
   const n = clean(sheetName);
   const parts = n.split(' ');
   const one = function (list) { return list.length === 1 ? list[0] : null; };
@@ -126,7 +133,13 @@ function matchPerson(sheetName, people) {
     if (hit) return hit;
   }
   // 4. First name alone, when only one person has it.
-  return one(people.filter(function (p) { return clean(p.name).split(' ')[0] === parts[0]; }));
+  hit = one(people.filter(function (p) { return clean(p.name).split(' ')[0] === parts[0]; }));
+  if (hit) return hit;
+  // 5. A shortened first name: "Alex" = Alexander, when only one fits.
+  if (parts.length === 1 && parts[0].length >= 3) {
+    return one(people.filter(function (p) { return clean(p.name).split(' ')[0].indexOf(parts[0]) === 0; }));
+  }
+  return null;
 }
 
 function clean(s) {
