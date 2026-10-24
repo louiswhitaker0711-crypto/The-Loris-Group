@@ -197,11 +197,66 @@ async def _backfill_checklist_office_ids(db) -> int:
     return stamped
 
 
+# ── G.I.F.T.S: the charity version → the Modern Milkman booklet's (24 Oct 2026)
+#    The CoD "Impulses" item and the Day 5 checklist still taught the
+#    fundraising G.I.F.T.S. The booklet's (Campaign Knowledge → G.I.F.T.S):
+#    Greed, Indifference, Fear of loss, The Jones theory, Sense of urgency.
+
+OLD_GIFTS = "Generosity, Indifference, Feel Good Factor, Tone of Voice / Body Language, Support"
+NEW_GIFTS = "Greed, Indifference, Fear of loss, The Jones theory, Sense of urgency"
+GIFTS_MANUAL_TOPICS = ("Impulse Factors", "Identify the G.I.F.T.S Impulse")
+
+
+def _swap_gifts(v):
+    """The old letters wherever they appear in a field (a string or list of strings)."""
+    if isinstance(v, str):
+        return v.replace(OLD_GIFTS, NEW_GIFTS)
+    if isinstance(v, list):
+        return [_swap_gifts(x) for x in v]
+    return v
+
+
+def _charity_gifts(text) -> bool:
+    t = text if isinstance(text, str) else " ".join(x for x in (text or []) if isinstance(x, str))
+    return "Generosity" in t or "Feel Good Factor" in t or "supporter" in t
+
+
+async def _fix_gifts(db) -> int:
+    fixed = 0
+    async for doc in db.training_modules.find({"topic": "Impulses"}):
+        upd = {}
+        for k, v in doc.items():
+            if k in ("_id", "id"):
+                continue
+            nv = _swap_gifts(v)
+            if nv != v:
+                upd[k] = nv
+        if upd:
+            await db.training_modules.update_one({"_id": doc["_id"]}, {"$set": upd})
+            fixed += 1
+    good = {m["topic"]: m for m in TRAINING_MANUAL if m["day_number"] == 5 and m["topic"] in GIFTS_MANUAL_TOPICS}
+    async for doc in db.training_manual.find({"day_number": 5, "topic": {"$in": list(GIFTS_MANUAL_TOPICS)}}):
+        if not any(_charity_gifts(doc.get(k)) for k in ("what_good_looks_like", "expected_outcome")):
+            continue
+        g = good.get(doc["topic"])
+        if g:
+            await db.training_manual.update_one({"_id": doc["_id"]}, {"$set": {
+                "what_good_looks_like": g["what_good_looks_like"], "expected_outcome": g["expected_outcome"]}})
+            fixed += 1
+    if fixed:
+        logger.info(f"content_fixes: G.I.F.T.S updated to the booklet's on {fixed} live docs")
+    return fixed
+
+
 async def run_content_fixes(db) -> dict:
     """Run every fix. Each step is individually guarded so one failure never
     blocks the rest (or the app boot — server.py wraps the call as well)."""
     result = {"fixed": 0, "skipped_edited": 0, "orphan_modules_deleted": 0,
-              "checklist_office_backfilled": 0}
+              "checklist_office_backfilled": 0, "gifts_fixed": 0}
+    try:
+        result["gifts_fixed"] = await _fix_gifts(db)
+    except Exception as e:
+        logger.warning(f"content_fixes: G.I.F.T.S fix failed: {e}")
     try:
         f, s = await _fix_training_modules(db)
         result["fixed"] += f

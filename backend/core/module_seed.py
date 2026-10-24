@@ -164,8 +164,8 @@ STAGE_1_MODULES = [
          "Drill the objection cycle on each of the common objections",
          "Coach listening — most BAs answer the wrong question"]),
     _s1("Commercial Craft", "Impulses",
-        "The impulses are why people act now rather than later — G.I.F.T.S: Generosity, Indifference, Feel Good "
-        "Factor, Tone of Voice / Body Language, Support. You can articulate each impulse and use it "
+        "The impulses are why people act now rather than later — G.I.F.T.S: Greed, Indifference, Fear of loss, "
+        "The Jones theory, Sense of urgency. You can articulate each impulse and use it "
         "naturally throughout the conversation — and you know where and how each one should be used. Used "
         "naturally they create momentum; forced, they create pressure.",
         ["Can articulate the impulses and what each one does",
