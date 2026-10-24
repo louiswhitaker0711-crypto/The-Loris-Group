@@ -251,3 +251,25 @@ def test_checklist_backfill_stamps_office_via_assessment_hire_join():
     assert by_id["c3"]["office_id"] == "newhaven"
     assert "office_id" not in by_id["c4"]
     assert result["checklist_office_backfilled"] == 2
+
+
+def test_gifts_charity_version_becomes_the_booklets():
+    """The CoD Impulses item and the Day 5 checklist move from the fundraising
+    G.I.F.T.S to the Modern Milkman booklet's (24 Oct 2026)."""
+    from mongomock_motor import AsyncMongoMockClient
+    from core.content_fixes import OLD_GIFTS, NEW_GIFTS
+    db = AsyncMongoMockClient()["gifts_test"]
+    asyncio.run(db.training_modules.insert_one({
+        "id": "m1", "stage": 1, "topic": "Impulses", "office_id": "o1",
+        "trainee_content": f"Ours are G.I.F.T.S: {OLD_GIFTS}.", "what_good_looks_like": ["Names them"]}))
+    asyncio.run(db.training_manual.insert_one({
+        "day_number": 5, "topic": "Identify the G.I.F.T.S Impulse", "office_id": "o1",
+        "what_good_looks_like": "Which of the G.I.F.T.S did that supporter sign up on?", "expected_outcome": "x"}))
+    result = asyncio.run(run_content_fixes(db))
+    assert result["gifts_fixed"] == 2
+    m = asyncio.run(db.training_modules.find_one({"id": "m1"}))
+    assert NEW_GIFTS in m["trainee_content"] and "Generosity" not in m["trainee_content"]
+    d5 = asyncio.run(db.training_manual.find_one({"day_number": 5}))
+    assert "customer" in d5["what_good_looks_like"] and "supporter" not in d5["what_good_looks_like"]
+    # Running again changes nothing.
+    assert asyncio.run(run_content_fixes(db))["gifts_fixed"] == 0
