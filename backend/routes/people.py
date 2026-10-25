@@ -166,8 +166,13 @@ async def list_people(request: Request):
     whole office, a Coach their own team. Grouped by team on screen: a
     person's team is the nearest Coach above them (or themselves) with a
     team name."""
-    from core.brand import role_label
     user = await require_admin_or_leader(request)
+    return {"people": await people_for(user)}
+
+
+async def people_for(user: dict) -> list[dict]:
+    """The people list as `user` sees it (also used by the Claude connector)."""
+    from core.brand import role_label
     office = user.get("office_id")
     q: dict = {"office_id": office, "deleted": {"$ne": True}, "is_active": {"$ne": False}, "is_demo": {"$ne": True},
                "role": {"$in": ["trainee", "leader", "admin"]}}
@@ -198,12 +203,17 @@ async def list_people(request: Request):
                     "role_label": role_label(u.get("role")), "team": team_of(i),
                     "coach": coach.get("name") or "", "badge_number": u.get("badge_number") or ""})
     out.sort(key=lambda r: (r["team"] == "", r["team"].lower(), r["name"].lower()))
-    return {"people": out}
+    return out
 
 
 @router.get("/people/{user_id}/breakdown")
 async def person_breakdown(user_id: str, request: Request):
     viewer = await require_admin_or_leader(request)
+    return await person_breakdown_for(viewer, user_id)
+
+
+async def person_breakdown_for(viewer: dict, user_id: str) -> dict:
+    """One person's page as `viewer` sees it (also used by the Claude connector)."""
     person, limited = await _load_person(viewer, user_id)
     uid = str(person["_id"])
     today = datetime.now(APP_TZ).date()

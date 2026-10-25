@@ -351,6 +351,7 @@ Full comments in [`backend/.env.example`](../backend/.env.example). **Secret** =
 | `OWNERIQ_PASSWORD` | With OwnerIQ. **Secret** | Its password | Your OwnerIQ account |
 | `OWNERIQ_API_BASE`, `OWNERIQ_MC_PINS`, `OWNERIQ_OFFICE_PINS`, `OWNERIQ_ROOT_USER_IDS`, `OWNERIQ_WRITES_ENABLED`, `OWNERIQ_LIVE_TTL` | Optional | OwnerIQ host, companies, office mapping, owner detection, write-back switch, cache time | [OWNERIQ.md](OWNERIQ.md) |
 | `ROSTER_SHARE_TOKEN` | Optional. **Secret** | Turns on `/public/roster/<token>`. At least 32 characters, or the page stays off | Mac `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`, Windows `py -3 -c "import secrets; print(secrets.token_urlsafe(32))"` |
+| `CLAUDE_CONNECTOR_TOKEN` | Optional. **Secret** | Turns on the read-only Claude connector at `/mcp/<token>` ([CLAUDE_CONNECTOR.md](CLAUDE_CONNECTOR.md)). At least 32 characters, or it stays off | Same as `ROSTER_SHARE_TOKEN` |
 | `ANTHROPIC_API_KEY` | Optional. **Secret** | AI features (`EMERGENT_LLM_KEY` also read) | Anthropic Console → API Keys |
 | `ANTHROPIC_MODEL` | Optional (default `claude-sonnet-5-5`) | The model every AI feature uses. The only place a model is chosen | Anthropic's models page |
 | `ANTHROPIC_VISION_MODEL` | Optional | A different model just for reading photos and sheets (falls back to `ANTHROPIC_MODEL`) | — |

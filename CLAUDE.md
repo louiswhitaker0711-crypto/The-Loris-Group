@@ -17,7 +17,7 @@ The docs in `docs/` are the source of truth for those tasks. If code and docs di
 ## Safety rules (always)
 
 - **Secrets never leave their place.** Real values live only in the host's variables (Railway → Variables) and in a local `backend/.env` / `frontend/.env`, which git ignores. Never commit a `.env` file: run `git status` before every commit and check none appears. Never write a real value into a tracked file, a doc, a test, a commit message or an issue.
-- **Never print a secret.** When you must refer to one, show at most its first 4 characters. Don't `cat` `.env` files or run `railway variables` into the conversation; check that a variable is *set*, not what it is. Secrets include `MONGO_URL`, `JWT_SECRET`, `ADMIN_PASSWORD`, `SENDGRID_API_KEY`, `OWNERIQ_PASSWORD`, `ANTHROPIC_API_KEY`, `VAPID_PRIVATE_KEY`, `CI_S3_SECRET_ACCESS_KEY`, `REPLICATE_API_TOKEN`, `ROSTER_SHARE_TOKEN`, `MANUAL_EDITOR_PASSWORD`.
+- **Never print a secret.** When you must refer to one, show at most its first 4 characters. Don't `cat` `.env` files or run `railway variables` into the conversation; check that a variable is *set*, not what it is. Secrets include `MONGO_URL`, `JWT_SECRET`, `ADMIN_PASSWORD`, `SENDGRID_API_KEY`, `OWNERIQ_PASSWORD`, `ANTHROPIC_API_KEY`, `VAPID_PRIVATE_KEY`, `CI_S3_SECRET_ACCESS_KEY`, `REPLICATE_API_TOKEN`, `ROSTER_SHARE_TOKEN`, `CLAUDE_CONNECTOR_TOKEN`, `MANUAL_EDITOR_PASSWORD`.
 - **OwnerIQ writes stay off until the owner says so.** Don't set `OWNERIQ_WRITES_ENABLED`, and don't call `/api/owneriq/rep-action` without `dry_run`, `/api/owneriq/reconcile?dry_run=false`, or anything in `backend/owneriq_write.py` for real, unless the owner has explicitly asked in this conversation. Dry runs are fine.
 - **Local runs never touch production.** Locally use a separate database (`DB_NAME=<name>_dev`) and leave SendGrid, OwnerIQ and VAPID keys out of `backend/.env`. A local server starts the same scheduled jobs as production (pushes, nudges, OwnerIQ sync): pointed at the live database it would message the team.
 - **Ask before anything that sends, deletes or costs money**: emails, pushes, deploys, database writes on the live database, deleting data, upgrading a paid plan.
@@ -56,7 +56,8 @@ The docs in `docs/` are the source of truth for those tasks. If code and docs di
 | `frontend/src/` | API client (`api/client.ts`), theme (`theme/`), nav (`nav/`, `customization/tabRegistry.ts`), components, hooks, utils |
 | `frontend/public/` | PWA manifest, service worker (`sw.js`), icons |
 | `tests/` | Repo-level tests (app config, office scoping) |
-| `docs/` | Owner guides: SETUP, OWNERIQ, BRANDING, SERVICES |
+| `docs/` | Owner guides: SETUP, OWNERIQ, BRANDING, SERVICES, CLAUDE_CONNECTOR |
+| `backend/routes/claude_connector.py` | Read-only Claude connector (`/mcp/<token>`): team, Bells, recent weeks, person, field numbers, sectors, quality. No contact details |
 
 ## Business rules worth knowing
 

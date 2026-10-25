@@ -864,9 +864,12 @@ async def list_bells(
     return await bells_week_for(user, week, office)
 
 
-async def bells_week_for(user: dict, week: Optional[str] = None, office: Optional[str] = None) -> dict:
+async def bells_week_for(user: dict, week: Optional[str] = None, office: Optional[str] = None,
+                         adopt_plan_goal: bool = True) -> dict:
     """The Bells sheet for a week as `user` sees it (the in-app table). The
-    public link calls this as an Admin of its office, so it looks the same."""
+    public link calls this as an Admin of its office, so it looks the same.
+    `adopt_plan_goal=False` (the read-only Claude connector) shows a planned
+    goal without saving it onto the sheet."""
 
     # Determine week_ending — be lenient: if caller sends a non-Sunday date
     # (timezone quirk on the client), roll forward to the next Sunday.
@@ -1004,7 +1007,7 @@ async def bells_week_for(user: dict, week: Optional[str] = None, office: Optiona
                 for e in entries:
                     if e.get("user_id") in _admin_ids and e.get("team_weekly_goal") is None:
                         e["team_weekly_goal"] = float(_plan_goal)
-                        if e.get("id"):
+                        if e.get("id") and adopt_plan_goal:
                             await db.bells_entries.update_one(
                                 {"id": e["id"]}, {"$set": {"team_weekly_goal": float(_plan_goal)}}
                             )
