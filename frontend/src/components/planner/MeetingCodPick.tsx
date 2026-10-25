@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '../../theme/ThemeContext';
 import { fonts } from '../../theme/brand';
 import { apiService } from '../../api/client';
+import { codStageRank, codStageLabel, sortCodStages } from '../cod/stageOrder';
 
 type Item = { id: string; stage: number; topic: string };
 
@@ -40,9 +41,10 @@ export default function MeetingCodPick({ moduleId, canEdit, hint, minStage, onPi
     enabled: canEdit || !!moduleId,
   });
   const all = q.data || [];
-  const items = useMemo(() => all.filter((i) => !minStage || (i.stage || 0) >= minStage), [all, minStage]);
+  // SL is stored as 5 but sits between 3 and 4, so compare by COD order, not number.
+  const items = useMemo(() => all.filter((i) => !minStage || codStageRank(i.stage) >= codStageRank(minStage)), [all, minStage]);
   const picked = moduleId ? all.find((i) => i.id === moduleId) : undefined;
-  const stages = useMemo(() => Array.from(new Set(items.map((i) => i.stage))).sort((a, b) => a - b), [items]);
+  const stages = useMemo(() => sortCodStages(Array.from(new Set(items.map((i) => i.stage)))), [items]);
   const curStage = stage ?? (picked && stages.includes(picked.stage) ? picked.stage : undefined) ?? stages[0] ?? null;
 
   if (!canEdit && !moduleId) return null;
@@ -54,7 +56,7 @@ export default function MeetingCodPick({ moduleId, canEdit, hint, minStage, onPi
           <TouchableOpacity style={s.chip} onPress={() => router.push(`/module/${moduleId}` as any)} testID="meeting-cod-open">
             <Ionicons name="school-outline" size={14} color={colors.onPrimary} />
             <Text style={s.chipTxt} numberOfLines={1}>
-              {picked ? `${picked.topic} · Stage ${picked.stage}` : 'COD item'}
+              {picked ? `${picked.topic} · Stage ${codStageLabel(picked.stage)}` : 'COD item'}
             </Text>
           </TouchableOpacity>
           {canEdit && (
@@ -79,7 +81,7 @@ export default function MeetingCodPick({ moduleId, canEdit, hint, minStage, onPi
             <View style={s.stageRow}>
               {stages.map((st) => (
                 <TouchableOpacity key={st} onPress={() => setStage(st)} style={[s.stageChip, curStage === st && s.stageChipOn]}>
-                  <Text style={[s.stageTxt, curStage === st && s.stageTxtOn]}>Stage {st}</Text>
+                  <Text style={[s.stageTxt, curStage === st && s.stageTxtOn]}>Stage {codStageLabel(st)}</Text>
                 </TouchableOpacity>
               ))}
             </View>
