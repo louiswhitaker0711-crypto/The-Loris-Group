@@ -1,5 +1,5 @@
 """This week's COD focus (routes/cod_focus.py): a Coach picks their own and
-their BAs'; an Admin anyone in the office; a BA never sets their own.
+their BAs'; an Admin anyone in the office; a BA their own.
 
 Pure in-memory: mongomock_motor.
 """
@@ -53,7 +53,8 @@ def test_who_can_set(monkeypatch):
     assert run(cf.can_set(coach, run(_t(db, COACH))))            # a Coach picks their own
     assert run(cf.can_set(coach, run(_t(db, BA))))               # …and their BAs'
     assert not run(cf.can_set(coach, run(_t(db, OTHER_BA))))     # not someone else's BA
-    assert not run(cf.can_set(ba, run(_t(db, BA))))              # a BA's is picked for them
+    assert run(cf.can_set(ba, run(_t(db, BA))))                  # a BA picks their own
+    assert not run(cf.can_set(ba, run(_t(db, OTHER_BA))))        # …but nobody else's
     assert run(cf.can_set(admin, run(_t(db, OTHER_BA))))         # an Admin: anyone in the office
     assert not run(cf.can_set(admin, run(_t(db, AWAY))))         # …not another office
 

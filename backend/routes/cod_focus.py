@@ -1,6 +1,7 @@
 """This week's COD focus: one COD item each person works on for the week.
 
-The Owner's rule (20 Oct 2026): a Coach picks their own; Coaches pick for
+The Owner's rule (20 Oct 2026, BAs added 25 Oct): everyone picks their own (a BA in
+their weekly plan); Coaches pick for
 their BAs (an Admin for anyone in the office). It shows on the COD screen and
 in Coaching, and fills the sector set-up: a Stage 1-2's "Learning from the
 COD", a Stage 3+'s "What I'm being an example of".
@@ -59,12 +60,13 @@ async def focus_for(user_ids: list[str], week_ending: str) -> dict[str, dict]:
 
 
 async def can_set(caller: dict, target: dict) -> bool:
-    """Who may set someone's focus: a Coach their own; an Admin anyone in their
-    office; a Coach anyone under them. Nobody sets a BA's own from their side."""
+    """Who may set someone's focus: anyone their own (a BA picks theirs in
+    their weekly plan, the Owner's call, Oct 2026); an Admin anyone in their
+    office; a Coach anyone under them."""
     cid, tid = str(caller["id"]), str(target["_id"])
     role = (caller.get("role") or "").lower()
     if cid == tid:
-        return role in ("leader", "admin")
+        return role in ("trainee", "leader", "admin")
     if target.get("deleted") or target.get("is_active") is False:
         return False
     if role == "admin":
@@ -97,7 +99,7 @@ async def my_focus(request: Request, week: Optional[str] = None):
     we = _week(week)
     uid = str(user["id"])
     mine = (await focus_for([uid], we)).get(uid)
-    setter = (user.get("role") or "").lower() in ("leader", "admin")
+    setter = (user.get("role") or "").lower() in ("trainee", "leader", "admin")
     return {"week_ending": we, "user_id": uid, "focus": mine, "can_set": setter,
             "options": await cod_items(user.get("office_id")) if setter else []}
 
@@ -128,7 +130,7 @@ async def set_focus(user_id: str, request: Request, week: Optional[str] = None):
     user = await get_current_user(request)
     target = await _user(user_id)
     if not await can_set(user, target):
-        raise HTTPException(status_code=403, detail="Coaches pick their BAs' COD focus, and their own")
+        raise HTTPException(status_code=403, detail="You can pick your own COD focus, or your BAs' if you coach them")
     body = await request.json()
     we = _week(week or body.get("week"))
     module_id = str(body.get("module_id") or "").strip()[:64]

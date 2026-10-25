@@ -185,7 +185,9 @@ export default function TeamPlannersScreen() {
             <TouchableOpacity
               key={u.id}
               style={s.row}
-              onPress={() => router.push(`/weekly-planner?user_id=${u.id}&week=${weeklyQ.data?.week_ending || week}`)}
+              onPress={() => router.push(u.role === 'trainee'
+                ? `/ba-week?user_id=${u.id}&week=${weeklyQ.data?.week_ending || week}`
+                : `/weekly-planner?user_id=${u.id}&week=${weeklyQ.data?.week_ending || week}`)}
             >
               <View style={[s.statusDot, { backgroundColor: u.has_planner ? '#dcfce7' : u.steps_done > 0 ? '#fef3c7' : colors.surfaceAlt }]}>
                 <Ionicons
@@ -197,8 +199,10 @@ export default function TeamPlannersScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={s.rowName}>{u.name}</Text>
                 <Text style={s.rowMeta}>
-                  {u.role === 'admin' ? 'Admin · ' : ''}
-                  {u.has_planner
+                  {u.role === 'admin' ? 'Admin · ' : u.role === 'trainee' ? 'BA · ' : ''}
+                  {u.role === 'trainee'
+                    ? (u.has_planner ? `Submitted ${prettyDate(u.updated_at)}` : u.steps_done > 0 ? 'Goal set, not submitted' : 'Not started yet')
+                    : u.has_planner
                     ? `Filled in · last edited ${prettyDate(u.updated_at)}`
                     : u.steps_done > 0
                     ? `${u.steps_done}/${u.steps_total || 5} parts filled · ${prettyDate(u.updated_at)}`

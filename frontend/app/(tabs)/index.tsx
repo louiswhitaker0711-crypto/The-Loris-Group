@@ -368,6 +368,14 @@ export default function HomeScreen() {
     staleTime: 5 * 60 * 1000,
     retry: false,
   });
+  // BA: their one-page weekly plan for the week being planned (ba-week).
+  const baWeekQ = useQuery({
+    queryKey: ['ba-week', 'me', ''],
+    queryFn: () => apiService.getBaWeek({}).then((r) => r.data),
+    enabled: isTrainee,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
   // Admin: who's written TODAY's daily plan — trainees + leaders + admins
   // alike. Only people who HAVE planned come back (nothing on Sundays).
   const dailyRosterQ = useQuery({
@@ -1041,6 +1049,22 @@ export default function HomeScreen() {
 
     </>
   );
+  // BA: "My week" — on Sundays, and any day until it's submitted.
+  const pBaWeek = isTrainee && baWeekQ.data && (isPlanningSunday || !baWeekQ.data.submitted_at) ? (
+    <DepthCard style={styles.card}>
+      <TouchableOpacity style={styles.cardHeaderRow} onPress={() => router.push('/ba-week' as any)} activeOpacity={0.7} testID="home-ba-week">
+        <Text style={styles.cardTitle}>My week · WE {(() => {
+          const [y, m, dd] = String(baWeekQ.data.week_ending || '').split('-').map(Number);
+          return y ? new Date(y, m - 1, dd).toLocaleDateString(APP_LOCALE, { month: 'short', day: 'numeric' }) : '';
+        })()}</Text>
+        <View style={styles.collapseHeaderRight}>
+          <Text style={styles.planRosterMeta}>{baWeekQ.data.submitted_at ? 'Submitted' : 'Plan your week'}</Text>
+          <Ionicons name={baWeekQ.data.submitted_at ? 'checkmark-circle' : 'chevron-forward'} size={18}
+            color={baWeekQ.data.submitted_at ? colors.green : colors.textMuted} />
+        </View>
+      </TouchableOpacity>
+    </DepthCard>
+  ) : null;
   const pWeeklyPlans = (
     <>
       {/* ── Admin: weekly-plan completion — who's submitted, tap to read ── */}
@@ -1083,7 +1107,7 @@ export default function HomeScreen() {
               <TouchableOpacity
                 key={u.id}
                 style={styles.planRosterRow}
-                onPress={() => router.push(`/weekly-planner?user_id=${u.id}` as any)}
+                onPress={() => router.push((u.role === 'trainee' ? `/ba-week?user_id=${u.id}` : `/weekly-planner?user_id=${u.id}`) as any)}
                 testID={`home-plan-roster-${u.id}`}
               >
                 <Ionicons
@@ -1093,8 +1117,11 @@ export default function HomeScreen() {
                 />
                 <Text style={styles.planRosterName} numberOfLines={1}>{u.id === user?.id ? `You (${u.name})` : u.name}</Text>
                 <Text style={styles.planRosterMeta}>
+                  {u.role === 'trainee' ? 'BA · ' : ''}
                   {u.has_planner
                     ? (u.updated_at ? new Date(u.updated_at).toLocaleDateString(APP_LOCALE, { month: 'short', day: 'numeric' }) : 'Filled in')
+                    : u.role === 'trainee'
+                    ? (u.steps_done > 0 ? 'Not submitted' : 'Not started')
                     : u.steps_done > 0
                     ? `${u.steps_done}/${u.steps_total || 5} parts`
                     : 'Not started'}
@@ -1569,12 +1596,13 @@ export default function HomeScreen() {
           folds away under "More". */}
       {wide ? (
         <View style={styles.cols}>
-          <View style={styles.colMain}>{isAdmin && isPlanningSunday && pWeeklyPlans}{todayBlock}</View>
+          <View style={styles.colMain}>{isAdmin && isPlanningSunday && pWeeklyPlans}{pBaWeek}{todayBlock}</View>
           <View style={styles.colSide}>{moreBlock}</View>
         </View>
       ) : (
         <>
           {isAdmin && isPlanningSunday && pWeeklyPlans}
+          {pBaWeek}
           {todayBlock}
           <MoreSection>{moreBlock}</MoreSection>
         </>
