@@ -31,7 +31,7 @@ import { usePullToRefresh } from '../src/components/ui/PullRefresh';
 import { useTabBarClearance } from '../src/customization/CustomTabBar';
 import { useKeyboardInset } from '../src/hooks/useKeyboardInset';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { APP_LOCALE } from '../src/utils/appTime';
+import { APP_LOCALE, formatMoney } from '../src/utils/appTime';
 
 // ──────────────────────────────────────────────────────────────────────────
 // Leaders' Weekly Planner — the printed weekly-planner book + the WhatsApp
@@ -209,7 +209,7 @@ function buildShareText(p: Planner, stats: any, name: string, teamName: string):
       `📈 P/A: ${fmt(t.piece_avg)}`,
       `📉 Scoring: ${fmt(t.scoring_pct, '%')}`,
     ];
-    if (r.owners_profit) lines.push(`💰 Owner's Profit: ${r.owners_profit}`);
+    if (stats?.owners_profit?.team != null) lines.push(`💰 Owner's Profit: ${formatMoney(stats.owners_profit.team)}`);
     if (qk && (qk.gold_pct != null || qk.mem_pct != null)) {
       let qline = `🥇 Gold: ${fmt(qk.gold_pct, '%')} · ⭕️ Memberships: ${fmt(qk.mem_pct, '%')}`;
       if (qk.fails_pct != null) qline += ` · Fails: ${qk.fails_pct}%`;
@@ -228,7 +228,7 @@ function buildShareText(p: Planner, stats: any, name: string, teamName: string):
       `Daily average: ${fmt(dailyAvg)}`,
       `Scoring: ${fmt(pe.scoring_pct, '%')}`,
     ];
-    if (r.personal.loas) lines.push(`LOAs per sign-up: ${r.personal.loas}`);
+    if (stats?.owners_profit?.personal != null) lines.push(`💰 Owner's Profit: ${formatMoney(stats.owners_profit.personal)}`);
     S.push(sep, "📊 PERSONAL KPI'S", lines.join('\n'));
   }
 
@@ -945,12 +945,17 @@ export default function WeeklyPlannerScreen() {
                   )}
                 </View>
               )}
-              <View style={styles.fieldRow}>
-                <SmallField label="Owner's profit" value={r.owners_profit} editable={canEdit}
-                  onChange={(v) => setReview({ owners_profit: v })} placeholder="£" />
-                <SmallField label="LOAs / sign-up" value={r.personal.loas} editable={canEdit}
-                  onChange={(v) => setReview({ personal: { ...r.personal, loas: v } })} placeholder="" />
-              </View>
+              {/* Owner's profit — auto from Bells: Silver × the office's Silver
+                  fee + Gold × its Gold fee (Earnings → Rates), for the review week. */}
+              {statsQ.data?.owners_profit && (
+                <>
+                  <Text style={styles.subHead}>Owner's profit</Text>
+                  <View style={styles.statChips}>
+                    <StatChip label="Team" value={formatMoney(statsQ.data.owners_profit.team ?? 0)} />
+                    <StatChip label="Personal" value={formatMoney(statsQ.data.owners_profit.personal ?? 0)} />
+                  </View>
+                </>
+              )}
               {/* Auto-filled from OwnerIQ: team + this leader's own LOA for the
                   review week — the week just gone (plan week − 7), not the
                   upcoming week being planned (Team / Me tabs). */}
