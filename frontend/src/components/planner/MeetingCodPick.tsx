@@ -3,7 +3,8 @@
  * Morning Meeting · Topic). Picking an item links it to that day's box
  * (tap the chip to open the item) and puts its name in the box. A Coaches
  * Meeting pick also nudges that team's BAs who are in that day to do the
- * item's quiz at 10:58 (backend cod_meeting_quiz_tick).
+ * item's quiz at 10:58 (backend cod_meeting_quiz_tick). The Coaches
+ * Meeting only offers COD Stage 3 on (minStage, the Owner's call, 25 Oct 2026).
  */
 import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, Pressable, ScrollView } from 'react-native';
@@ -17,8 +18,9 @@ import { apiService } from '../../api/client';
 
 type Item = { id: string; stage: number; topic: string };
 
-export default function MeetingCodPick({ moduleId, canEdit, hint, onPick, onClear }: {
+export default function MeetingCodPick({ moduleId, canEdit, hint, minStage, onPick, onClear }: {
   moduleId?: string;
+  minStage?: number;
   canEdit: boolean;
   hint?: string;
   onPick: (id: string, topic: string) => void;
@@ -37,10 +39,11 @@ export default function MeetingCodPick({ moduleId, canEdit, hint, onPick, onClea
     staleTime: 30 * 60 * 1000,
     enabled: canEdit || !!moduleId,
   });
-  const items = q.data || [];
-  const picked = moduleId ? items.find((i) => i.id === moduleId) : undefined;
-  const stages = useMemo(() => Array.from(new Set(items.map((i) => i.stage))).sort(), [items]);
-  const curStage = stage ?? picked?.stage ?? stages[0] ?? null;
+  const all = q.data || [];
+  const items = useMemo(() => all.filter((i) => !minStage || (i.stage || 0) >= minStage), [all, minStage]);
+  const picked = moduleId ? all.find((i) => i.id === moduleId) : undefined;
+  const stages = useMemo(() => Array.from(new Set(items.map((i) => i.stage))).sort((a, b) => a - b), [items]);
+  const curStage = stage ?? (picked && stages.includes(picked.stage) ? picked.stage : undefined) ?? stages[0] ?? null;
 
   if (!canEdit && !moduleId) return null;
 
