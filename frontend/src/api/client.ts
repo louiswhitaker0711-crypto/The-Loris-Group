@@ -927,6 +927,9 @@ export const apiService = {
     api.get(`/weekly-planners/bells-readout/${week}`, { params: { day } }),
   searchWeeklyPlanners: (q: string, user_id?: string) =>
     api.get('/weekly-planners/search', { params: { q, ...(user_id ? { user_id } : {}) } }),
+  // BA one-page weekly plan (schedule + goal go through setCrewMemberPlan).
+  getBaWeek: (params?: { week?: string; user_id?: string }) => api.get('/weekly-planners/ba-week', { params: params || {} }),
+  submitBaWeek: (week_ending: string) => api.put('/weekly-planners/ba-week/submit', { week_ending }),
   setCrewMemberPlan: (member_id: string, body: { week_ending: string; weekly_goal?: string | number | null; day_statuses?: string[]; absence_reason?: string }) =>
     api.put(`/weekly-planners/crew/${member_id}`, body),
   // ── Absence requests — leader requests, office admin approves/denies ──
@@ -1027,8 +1030,9 @@ export const apiService = {
   // the field (a record of the day; never a tick on the COD).
   markCodObserved: (userId: string, date: string, done: boolean) =>
     api.put(`/sector/day/${userId}/cod-observed`, { done }, { params: { date } }),
-  // This week's COD focus: a Coach picks their own and their BAs'.
+  // This week's COD focus: everyone picks their own; a Coach also their BAs'.
   getCodFocusMe: (week?: string) => api.get('/cod-focus/me', { params: week ? { week } : {} }),
+  getCodFocusPerson: (userId: string, week?: string) => api.get(`/cod-focus/${userId}`, { params: week ? { week } : {} }),
   getCodFocusTeam: (week?: string) => api.get('/cod-focus/team', { params: week ? { week } : {} }),
   setCodFocus: (userId: string, moduleId: string | null, week?: string) =>
     api.put(`/cod-focus/${userId}`, { module_id: moduleId }, { params: week ? { week } : {} }),

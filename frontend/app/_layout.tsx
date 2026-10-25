@@ -263,6 +263,7 @@ function RootNavigator() {
       <Stack.Screen name="monthly-planner" options={{ headerShown: true, title: 'Monthly Planner', headerLeft: () => null, headerBackVisible: false, animation: 'none', ...MASTHEAD_COMPACT }} />
       <Stack.Screen name="monthly-planner-team" options={{ headerShown: true, title: 'Team Planner', headerBackTitle: 'Back', ...MASTHEAD_COMPACT }} />
       <Stack.Screen name="weekly-planner" options={{ headerShown: true, title: 'Weekly Planner', headerBackTitle: 'Back', ...MASTHEAD_COMPACT }} />
+      <Stack.Screen name="ba-week" options={{ headerShown: true, title: 'My Week', headerBackTitle: 'Back', ...MASTHEAD_COMPACT }} />
       <Stack.Screen name="absence-approvals" options={{ headerShown: true, title: 'Absence Approvals', headerBackTitle: 'Back', ...MASTHEAD_COMPACT }} />
       <Stack.Screen name="weekly-review" options={{ headerShown: true, title: 'Monday Review', headerBackTitle: 'Back' }} />
       <Stack.Screen name="coaching" options={{ headerShown: false, animation: 'none' }} />

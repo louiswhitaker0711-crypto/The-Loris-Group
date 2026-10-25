@@ -38,14 +38,16 @@ const fmt1 = (n: any) => (n === null || n === undefined ? '—' : Number(n).toFi
 type Props = {
   /** Sunday ISO that ends the planner week (q.data.week_ending). */
   weekEnding: string;
+  /** A BA's plan: just their own figures, no Team tab. */
+  meOnly?: boolean;
   /** The plan owner's CG1 user id (targetUserId || current user id). */
   ownerUserId?: string;
 };
 
-export default function PlannerLoaReview({ weekEnding, ownerUserId }: Props) {
+export default function PlannerLoaReview({ weekEnding, ownerUserId, meOnly }: Props) {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const [tab, setTab] = useState<'team' | 'me'>('team');
+  const [tab, setTab] = useState<'team' | 'me'>(meOnly ? 'me' : 'team');
 
   // Review week = Monday..Saturday of the week ending on `weekEnding` (Sunday).
   const valid = /^\d{4}-\d{2}-\d{2}$/.test(weekEnding || '');
@@ -84,7 +86,7 @@ export default function PlannerLoaReview({ weekEnding, ownerUserId }: Props) {
   return (
     <View style={styles.wrap}>
       <View style={styles.tabs}>
-        {(['team', 'me'] as const).map((t) => (
+        {(meOnly ? (['me'] as const) : (['team', 'me'] as const)).map((t) => (
           <TouchableOpacity key={t} onPress={() => setTab(t)} style={[styles.tab, tab === t && styles.tabOn]}>
             <Text style={[styles.tabTxt, tab === t && styles.tabTxtOn]}>{t === 'team' ? 'Team' : 'Me'}</Text>
           </TouchableOpacity>

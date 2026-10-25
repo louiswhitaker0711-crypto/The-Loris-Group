@@ -329,7 +329,7 @@ async def weekly_team_roster(request: Request, week: Optional[str] = None):
         offset = (6 - today.weekday()) % 7
         week_ending = (today + timedelta(days=offset if offset else 7)).isoformat()
 
-    base_filter = {"role": {"$in": ["leader", "admin"]}, "is_active": {"$ne": False}, "deleted": {"$ne": True}, "is_demo": {"$ne": True}}
+    base_filter = {"role": {"$in": ["trainee", "leader", "admin"]}, "is_active": {"$ne": False}, "deleted": {"$ne": True}, "is_demo": {"$ne": True}}
     if role == "admin":
         users = await db.users.find(
             {**base_filter, "office_id": me.get("office_id") or ""},
@@ -363,10 +363,24 @@ async def weekly_team_roster(request: Request, week: Optional[str] = None):
         {"_id": 0, "user_id": 1, "weekly_goal": 1, "team_weekly_goal": 1},
     ).to_list(500)
     goals_by_user = {r["user_id"]: r for r in goal_rows}
+    # BAs plan their week on one page (ba-week); it counts once submitted.
+    ba_plans = {p["user_id"]: p async for p in db.ba_week_plans.find(
+        {"user_id": {"$in": ids}, "week_ending": week_ending}, {"_id": 0})}
 
     items = []
     for u in users:
         uid = str(u["_id"])
+        if u.get("role") == "trainee":
+            bp = ba_plans.get(uid) or {}
+            goal_set = (goals_by_user.get(uid) or {}).get("weekly_goal") not in (None, "")
+            done = int(goal_set) + int(bool(bp.get("submitted_at")))
+            items.append({
+                "id": uid, "name": u.get("name") or u.get("email"), "role": "trainee",
+                "has_planner": bool(bp.get("submitted_at")), "started": done > 0,
+                "steps_done": done, "steps_total": 2,
+                "updated_at": bp.get("submitted_at"),
+            })
+            continue
         d = by_user.get(uid)
         done = _plan_steps_done(d, goals_by_user.get(uid))
         items.append({
@@ -383,7 +397,8 @@ async def weekly_team_roster(request: Request, week: Optional[str] = None):
         })
     # Leaders first, least-complete before complete within role, then name —
     # so the admin sees who still owes a plan at the top.
-    items.sort(key=lambda x: (0 if x["role"] == "leader" else 1, x["steps_done"], (x["name"] or "").lower()))
+    _order = {"leader": 0, "trainee": 1}
+    items.sort(key=lambda x: (_order.get(x["role"], 2), x["steps_done"], (x["name"] or "").lower()))
     return {"week_ending": week_ending, "items": items}
 
 
@@ -1045,9 +1060,14 @@ async def set_crew_member_plan(member_id: str, request: Request):
     """Leader sets a crew member's week: Mon–Sat schedule statuses and/or
     weekly goal. Written straight onto the member's bells row so Bells and
     the planner stay one source of truth. Day NUMBERS are never touched —
-    only `status` per day and `weekly_goal`."""
+    only `status` per day and `weekly_goal`. A BA may set their OWN week
+    (the ba-week page); the goal lock applies to them as to a Coach."""
     me = await get_current_user(request)
-    _require_planner_role(me)
+    if me.get("role") == "trainee":
+        if member_id != me["id"]:
+            raise HTTPException(status_code=403, detail="You can only plan your own week")
+    else:
+        _require_planner_role(me)
     body = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
     week_ending = _coerce_to_sunday((body.get("week_ending") or "").strip())
     if not week_ending:
@@ -1061,10 +1081,10 @@ async def set_crew_member_plan(member_id: str, request: Request):
         raise HTTPException(status_code=404, detail="User not found")
     target_id = str(target["_id"])
 
-    allowed = bool(me.get("is_super_admin"))
+    allowed = bool(me.get("is_super_admin")) or target_id == me["id"]
     if not allowed and me.get("role") == "admin":
         allowed = (target.get("office_id") or "") == (me.get("office_id") or "")
-    if not allowed:
+    if not allowed and me.get("role") != "trainee":
         subtree = await get_subtree_ids(me["id"])
         allowed = target_id in subtree
     if not allowed:
@@ -1226,6 +1246,90 @@ async def set_crew_member_plan(member_id: str, request: Request):
     return {"ok": True, "user_id": target_id, "week_ending": week_ending,
             "weekly_goal": goal_out, "day_statuses": [d.get("status") for d in days[:6]],
             "pending_request": pending_request}
+
+
+# ── BA weekly plan: one page ───────────────────────────────────────────────
+# A BA sets their own schedule (Not scheduled days) and weekly goal for the
+# week being planned (both on their Bells row, through the crew writer, so the
+# Coach sees and can change them until the Monday 10:30 lock), picks their COD
+# focus (routes/cod_focus.py), sees their own LOA, and submits. Submitting is
+# what ticks them on the Coach's Team Planners and the Owner's Sunday card.
+
+def _planning_week_ending() -> str:
+    """Mon–Sat: this week's Sunday. On Sunday: next week's (same as the roster)."""
+    today = datetime.now(APP_TZ).date()
+    offset = (6 - today.weekday()) % 7
+    return (today + timedelta(days=offset if offset else 7)).isoformat()
+
+
+async def _ba_week_target(me: dict, user_id: Optional[str]) -> dict:
+    if not user_id or user_id == me["id"]:
+        tgt = await db.users.find_one({"_id": ObjectId(me["id"])}, {"name": 1, "role": 1, "office_id": 1})
+        if not tgt:
+            raise HTTPException(status_code=404, detail="Person not found")
+        return tgt
+    try:
+        tgt = await db.users.find_one({"_id": ObjectId(user_id), "deleted": {"$ne": True}},
+                                      {"name": 1, "role": 1, "office_id": 1})
+    except Exception:
+        tgt = None
+    if not tgt:
+        raise HTTPException(status_code=404, detail="Person not found")
+    if me.get("is_super_admin"):
+        return tgt
+    if me.get("role") == "admin" and (tgt.get("office_id") or "") == (me.get("office_id") or ""):
+        return tgt
+    if me.get("role") == "leader" and user_id in set(await get_subtree_ids(me["id"])):
+        return tgt
+    raise HTTPException(status_code=403, detail="Not someone you coach")
+
+
+@router.get("/weekly-planners/ba-week")
+async def get_ba_week(request: Request, week: Optional[str] = None, user_id: Optional[str] = None):
+    me = await get_current_user(request)
+    tgt = await _ba_week_target(me, user_id)
+    tid = str(tgt["_id"])
+    week_ending = _coerce_to_sunday(week) if week else _planning_week_ending()
+    if not week_ending:
+        raise HTTPException(status_code=400, detail="week must be a valid YYYY-MM-DD date")
+    last_week = (date.fromisoformat(week_ending) - timedelta(days=7)).isoformat()
+    row = await db.bells_entries.find_one({"user_id": tid, "week_ending": week_ending},
+                                          {"_id": 0, "days": 1, "weekly_goal": 1}) or {}
+    last = await db.bells_entries.find_one({"user_id": tid, "week_ending": last_week},
+                                           {"_id": 0, "days": 1, "weekly_goal": 1})
+    days = row.get("days") or []
+    statuses = []
+    for i in range(6):
+        d = days[i] if i < len(days) and isinstance(days[i], dict) else {}
+        statuses.append(str(d.get("status") or "off").lower())
+    plan = await db.ba_week_plans.find_one({"user_id": tid, "week_ending": week_ending}, {"_id": 0}) or {}
+    deadline = _crew_lock_deadline(week_ending)
+    return {
+        "user_id": tid, "name": tgt.get("name") or "", "week_ending": week_ending,
+        "review_week_ending": last_week,
+        "day_statuses": statuses, "weekly_goal": row.get("weekly_goal"),
+        "last_week": ({"goal": last.get("weekly_goal"), "total": _row_stats(last)["total"]} if last else None),
+        "goal_locked": datetime.now(APP_TZ) > deadline, "lock_deadline": deadline.isoformat(),
+        "submitted_at": plan.get("submitted_at"),
+        "can_edit": tid == me["id"],
+    }
+
+
+@router.put("/weekly-planners/ba-week/submit")
+async def submit_ba_week(request: Request):
+    me = await get_current_user(request)
+    body = await request.json()
+    week_ending = _coerce_to_sunday((body.get("week_ending") or "").strip()) or _planning_week_ending()
+    row = await db.bells_entries.find_one({"user_id": me["id"], "week_ending": week_ending}, {"weekly_goal": 1})
+    if not row or row.get("weekly_goal") in (None, ""):
+        raise HTTPException(status_code=400, detail="Set your weekly goal first")
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.ba_week_plans.update_one(
+        {"user_id": me["id"], "week_ending": week_ending},
+        {"$set": {"user_id": me["id"], "office_id": me.get("office_id") or "",
+                  "week_ending": week_ending, "submitted_at": now_iso}},
+        upsert=True)
+    return {"week_ending": week_ending, "submitted_at": now_iso}
 
 
 @router.put("/weekly-planners/my-goals")
