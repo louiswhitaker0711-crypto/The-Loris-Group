@@ -1006,6 +1006,18 @@ async def _startup_work():
         scheduler.add_job(_plan_remind, "cron", day_of_week="sat", hour=9, minute=45,
                           id="sector_plan_remind_sat", replace_existing=True)
 
+        async def _cod_meeting_quiz():
+            try:
+                from routes.weekly_planners import cod_meeting_quiz_tick
+                logger.info(f"COD meeting quiz nudge: {await cod_meeting_quiz_tick()} sent")
+            except Exception as ex:
+                logger.error(f"COD meeting quiz nudge failed: {ex}")
+
+        # A COD item picked for today's Coaches Meeting → the BAs in today
+        # get a nudge at 10:58 to do its quiz and test.
+        scheduler.add_job(_cod_meeting_quiz, "cron", day_of_week="mon-sat", hour=10, minute=58,
+                          id="cod_meeting_quiz", replace_existing=True)
+
         async def _breakdown_prompt():
             try:
                 from routes.sector import breakdown_prompt_tick

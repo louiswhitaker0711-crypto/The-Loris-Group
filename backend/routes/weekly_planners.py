@@ -17,6 +17,7 @@ Visibility mirrors the Monthly Goal Planner: owner edits; upline
 (core leader / admin / super admin) may view read-only.
 """
 import os
+import logging
 import re
 import uuid
 import base64
@@ -39,6 +40,8 @@ load_dotenv()
 
 router = APIRouter()
 from database import db  # the shared client; one DB_NAME default (database.py)
+
+logger = logging.getLogger(__name__)
 
 # Mon=0..Sat=5 — same as the office agenda
 DAYS = list(range(0, 6))
@@ -65,6 +68,11 @@ DAY_FIELDS = [
     # The owner's printed weekly sheet adds these rows to each day.
     "stage1", "stage2", "sales_impact", "product_coaching", "appointments",
 ]
+
+# A COD item picked for a meeting box (its module id). The box text keeps the
+# item's name; this links it. A Coaches Meeting pick also sends the BAs in that
+# day a 10:58 nudge to do that item's quiz (cod_meeting_quiz_tick).
+COD_PICK_FIELDS = ["leaders_meeting_cod", "morning_topic_cod"]
 
 # Human labels for search results
 DAY_FIELD_LABELS = {
@@ -109,7 +117,7 @@ def _crew_lock_deadline(week_ending: str) -> datetime:
 
 
 def _empty_day() -> dict:
-    return {k: "" for k in DAY_FIELDS}
+    return {k: "" for k in DAY_FIELDS + COD_PICK_FIELDS}
 
 
 def _empty_review() -> dict:
@@ -238,6 +246,8 @@ def _normalize_days(raw) -> dict:
     for d in DAYS:
         day_raw = raw.get(str(d)) if isinstance(raw.get(str(d)), dict) else {}
         out[str(d)] = {k: _s(day_raw.get(k)) for k in DAY_FIELDS}
+        for k in COD_PICK_FIELDS:
+            out[str(d)][k] = _s(day_raw.get(k), 64)
     return out
 
 
@@ -2040,3 +2050,51 @@ async def bells_readout(request: Request, week: str, day: int):
         out["top5"] = totals[:5]
 
     return out
+
+
+# ── Coaches Meeting COD pick → 10:58 quiz nudge to the BAs in that day ─────
+async def cod_meeting_quiz_tick() -> int:
+    """Mon–Sat 10:58 (app time). For every weekly plan with a COD item picked
+    for TODAY's Coaches Meeting, each BA on that planner's team who is in today
+    (not Not scheduled on Bells) gets one push to do that item's quiz and test.
+    Once per BA per item per day, however many plans name it."""
+    from core.push import send_push_to_user
+    today = datetime.now(APP_TZ).date()
+    idx = today.weekday()
+    if idx > 5:
+        return 0
+    week_ending = (today + timedelta(days=6 - idx)).isoformat()
+    day_iso = today.isoformat()
+    sent = 0
+    async for plan in db.weekly_planners.find(
+            {"week_ending": week_ending, f"days.{idx}.leaders_meeting_cod": {"$nin": [None, ""]}},
+            {"_id": 0, "user_id": 1, "office_id": 1, "days": 1}):
+        module_id = ((plan.get("days") or {}).get(str(idx)) or {}).get("leaders_meeting_cod")
+        mod = await db.training_modules.find_one({"id": module_id}, {"_id": 0, "id": 1, "topic": 1, "office_id": 1})
+        if not mod:
+            continue
+        team = [i for i in await get_subtree_ids(plan["user_id"]) if i != plan["user_id"] and ObjectId.is_valid(i)]
+        if not team:
+            continue
+        bas = [str(u["_id"]) async for u in db.users.find(
+            {"_id": {"$in": [ObjectId(i) for i in team]}, "role": "trainee",
+             "deleted": {"$ne": True}, "is_active": {"$ne": False}}, {"_id": 1})]
+        for uid in bas:
+            row = await db.bells_entries.find_one({"user_id": uid, "week_ending": week_ending}, {"_id": 0, "days": 1})
+            days = (row or {}).get("days") or []
+            st = str((days[idx] if idx < len(days) and isinstance(days[idx], dict) else {}).get("status") or "off").lower()
+            if st in ("ab", "ex"):
+                continue
+            key = {"user_id": uid, "date": day_iso, "module_id": mod["id"]}
+            res = await db.cod_meeting_pushes.update_one(key, {"$setOnInsert": key}, upsert=True)
+            if not getattr(res, "upserted_id", None):
+                continue  # already nudged today for this item
+            try:
+                await send_push_to_user(
+                    uid, f"📚 Today's COD: {mod.get('topic') or 'COD item'}",
+                    "Do the quiz and test on it before the morning meeting.",
+                    {"type": "cod_meeting_quiz", "url": f"/module/{mod['id']}"})
+                sent += 1
+            except Exception as ex:
+                logger.warning("cod meeting quiz push failed for %s: %s", uid, ex)
+    return sent

@@ -16,6 +16,7 @@ import { BrandLoader } from '../src/components/ui/BrandLoader';
 import { Aurora } from '../src/components/ui/Aurora';
 import { Breathe } from '../src/components/ui/Breathe';
 import PressableScale from '../src/components/ui/PressableScale';
+import MeetingCodPick from '../src/components/planner/MeetingCodPick';
 import PlannerLoaReview from '../src/components/planner/PlannerLoaReview';
 import PrimetimeDayBlock from '../src/components/planner/PrimetimeDayBlock';
 import { RowEditor, dayOrder, DayTimeInput, type SheetRow } from '../src/components/planner/DayLayout';
@@ -1333,6 +1334,19 @@ export default function WeeklyPlannerScreen() {
                   >
                     {f.key === 'morning_bells' && isAdmin && !targetUserId && (
                       <BellsReadoutBlock week={week} dayIndex={tab} />
+                    )}
+                    {(f.key === 'leaders_meeting' || f.key === 'morning_topic') && showWeekTab && (
+                      <MeetingCodPick
+                        moduleId={draft.days[String(tab)]?.[`${f.key}_cod`] || undefined}
+                        canEdit={canEdit}
+                        hint={f.key === 'leaders_meeting' ? 'BAs on your team who are in that day get a nudge at 10:58 to do its quiz.' : undefined}
+                        onPick={(id, topic) => {
+                          setDayField(tab, `${f.key}_cod`, id);
+                          const text = draft.days[String(tab)]?.[f.key] || '';
+                          if (!text.includes(topic)) setDayField(tab, f.key, text ? `${topic}\n${text}` : topic);
+                        }}
+                        onClear={() => setDayField(tab, `${f.key}_cod`, '')}
+                      />
                     )}
                     <NoteBox
                       value={draft.days[String(tab)]?.[f.key] || ''}
