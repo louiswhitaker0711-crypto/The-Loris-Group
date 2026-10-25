@@ -42,6 +42,7 @@ from routes.sector import router as sector_router
 from routes.sector_plan import router as sector_plan_router
 from routes.public_html import router as public_html_router
 from routes.roster_share import router as roster_share_router
+from routes.claude_connector import router as claude_connector_router
 from routes.schedule import router as schedule_router
 from routes.agenda import router as agenda_router
 from routes.meeting_notes import router as meeting_notes_router
@@ -195,6 +196,7 @@ app.include_router(api_router)
 # static mount at "/" so it isn't swallowed by the catch-all.
 app.include_router(public_html_router)
 app.include_router(roster_share_router)
+app.include_router(claude_connector_router)  # /mcp/{token}: read-only Claude connector
 app.include_router(launch_router)
 
 @app.get("/health")
