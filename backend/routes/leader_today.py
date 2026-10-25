@@ -40,7 +40,7 @@ from core.assessment_reminders import MIN_GAP_HOURS
 from core.push import send_push_to_user
 from database import db
 from core.app_time import APP_TZ
-from core.grading_time import ready_to_grade
+from core.grading_time import ready_to_grade, last_graded_at
 from core.trainee_records import coach_hire_filter
 
 router = APIRouter()
@@ -316,9 +316,10 @@ async def leader_today(request: Request, office: str | None = None):
     grading = []
     for h in hires:
         current_day = int(h.get("current_day") or 1)
+        last = last_graded_at(by_hire.get(h["id"], []))
         pending = sorted(
             (a for a in by_hire.get(h["id"], [])
-             if not a.get("completed") and ready_to_grade(a.get("day_number"), current_day)),
+             if not a.get("completed") and ready_to_grade(a.get("day_number"), current_day, last_graded=last)),
             key=lambda a: int(a.get("day_number") or 99),
         )
         if not pending:
@@ -445,7 +446,8 @@ async def _new_starts(hires: list[dict], by_hire: dict[str, list]) -> list[dict]
             totals[oid] = await _cod_totals(oid)
         rows = by_hire.get(h["id"], [])
         current_day = int(h.get("current_day") or 1)
-        pending = sorted((a for a in rows if not a.get("completed") and ready_to_grade(a.get("day_number"), current_day)),
+        last = last_graded_at(rows)
+        pending = sorted((a for a in rows if not a.get("completed") and ready_to_grade(a.get("day_number"), current_day, last_graded=last)),
                          key=lambda a: int(a.get("day_number") or 99))
         uid = h.get("trainee_user_id")
         cod = {}

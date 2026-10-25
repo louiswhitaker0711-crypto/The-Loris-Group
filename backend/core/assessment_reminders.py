@@ -28,7 +28,7 @@ from bson import ObjectId
 
 from database import db
 from core.app_time import APP_TZ
-from core.grading_time import ready_to_grade
+from core.grading_time import ready_to_grade, last_graded_at
 from core.push import send_push_to_user
 
 logger = logging.getLogger(__name__)
@@ -140,12 +140,16 @@ async def assessment_reminder_tick(dry_run: bool = False, force: bool = False) -
 
     hire_ids = [h["id"] for h in hires]
     pending_by_hire: dict[str, list[int]] = {}
+    graded_rows: dict[str, list[dict]] = {}
     cur = db.daily_assessments.find(
-        {"new_hire_id": {"$in": hire_ids}, "completed": {"$ne": True}},
-        {"_id": 0, "new_hire_id": 1, "day_number": 1},
+        {"new_hire_id": {"$in": hire_ids}},
+        {"_id": 0, "new_hire_id": 1, "day_number": 1, "completed": 1, "assessment_date": 1},
     )
     async for a in cur:
-        pending_by_hire.setdefault(a["new_hire_id"], []).append(int(a.get("day_number") or 99))
+        if a.get("completed") is True:
+            graded_rows.setdefault(a["new_hire_id"], []).append(a)
+        else:
+            pending_by_hire.setdefault(a["new_hire_id"], []).append(int(a.get("day_number") or 99))
 
     # leader_id → [{name, day_number, worked_on}]
     by_leader: dict[str, list[dict]] = {}
@@ -157,7 +161,9 @@ async def assessment_reminder_tick(dry_run: bool = False, force: bool = False) -
         if worked_on is None:
             continue
         current_day = int(h.get("current_day") or 1)
-        pend = sorted(n for n in pending_by_hire.get(h["id"], []) if ready_to_grade(n, current_day))
+        last = last_graded_at(graded_rows.get(h["id"], []))
+        pend = sorted(n for n in pending_by_hire.get(h["id"], [])
+                      if ready_to_grade(n, current_day, last_graded=last))
         if not pend:
             continue
         leader_id = await _resolve_leader_id(h["trainee_user_id"], h.get("leader") or "")
