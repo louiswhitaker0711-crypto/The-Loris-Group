@@ -1115,6 +1115,9 @@ export const apiService = {
   setCoachPlus: (userId: string, enabled: boolean) =>
     api.put(`/admin/users/${userId}/coach-plus`, { enabled }),
   deleteUser: (userId: string) => api.delete(`/admin/users/${userId}`),
+  // Admin: give one person a temporary password; they choose their own on sign-in.
+  resetUserPassword: (userId: string, password: string) =>
+    api.post(`/admin/users/${userId}/reset-password`, { password }),
   // Who recruited someone (Bells PR / OR badge): 'office', a user id, or '' to clear. Admins only.
   setRecruitedBy: (userId: string, recruitedBy: string) => api.put(`/admin/users/${userId}/recruited-by`, { recruited_by: recruitedBy }),
 

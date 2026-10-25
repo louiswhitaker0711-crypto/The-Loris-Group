@@ -709,6 +709,51 @@ async def set_starter_password(body: StarterPasswordBody, request: Request):
     return out
 
 
+class ResetUserPasswordBody(BaseModel):
+    password: str
+    days: int = STARTER_PASSWORD_DAYS
+
+
+@router.post("/admin/users/{user_id}/reset-password")
+async def admin_reset_user_password(user_id: str, body: ResetUserPasswordBody, request: Request):
+    """Admin: give ONE person a temporary password (no email needed). It works
+    like the starter password: it expires, and the person must choose their own
+    the moment they sign in. Signs them out everywhere."""
+    admin = await require_admin(request)
+    if len(body.password) < MIN_PASSWORD_LENGTH:
+        raise HTTPException(status_code=400, detail=f"The temporary password must be at least {MIN_PASSWORD_LENGTH} characters")
+    try:
+        oid = ObjectId(user_id)
+    except (InvalidId, TypeError):
+        raise HTTPException(status_code=404, detail="Person not found")
+    target = await db.users.find_one({"_id": oid, "deleted": {"$ne": True}})
+    if not target:
+        raise HTTPException(status_code=404, detail="Person not found")
+    if str(target["_id"]) == admin["id"]:
+        raise HTTPException(status_code=400, detail="Change your own password from your Profile instead")
+    if not admin.get("is_super_admin"):
+        # Office admins stay in their office, and can't reset another admin.
+        if target.get("office_id") != admin.get("office_id"):
+            raise HTTPException(status_code=403, detail="That person isn't in your office")
+        if target.get("role") == "admin" or target.get("is_super_admin"):
+            raise HTTPException(status_code=403, detail="Only the Owner can reset an admin's password")
+    days = max(1, min(int(body.days or STARTER_PASSWORD_DAYS), 30))
+    now = datetime.now(timezone.utc)
+    expires = now + timedelta(days=days)
+    await db.users.update_one({"_id": oid}, {
+        "$set": {"password_hash": hash_password(body.password), "must_change_password": True,
+                 "starter_password_set_at": now.isoformat(),
+                 "starter_password_expires_at": expires.isoformat()},
+        "$inc": {"session_version": 1},
+    })
+    # Any half-used email reset code for them is now stale.
+    await db.password_resets.delete_many({"email": (target.get("email") or "").lower()})
+    logger.info(f"Admin {admin.get('email')} reset the password for user {user_id}")
+    return {"message": f"Temporary password set for {target.get('name') or 'them'}. "
+                       f"They'll choose their own when they sign in. It works for {days} days.",
+            "days": days, "expires_at": expires.isoformat()}
+
+
 @router.get("/admin/starter-password/status")
 async def starter_password_status(request: Request):
     """Admin: who is still on the starter password, and who has chosen their own."""
