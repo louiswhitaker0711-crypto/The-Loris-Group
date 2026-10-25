@@ -32,6 +32,7 @@ from auth import get_current_user, get_subtree_ids
 from core.rate_limit import take_ai_quota
 from core.app_time import APP_TZ
 from core.goal_audit import record_goal_change
+from core.vertex_pay import mc_fees
 from routes.monthly_planners import _resolve_target_user
 
 load_dotenv()
@@ -1625,6 +1626,31 @@ async def weekly_planner_stats(week: str, request: Request, user_id: Optional[st
 
     personal = _row_stats(by_user.get(target["id"]) or {})
 
+    # Owner's profit for the review week: the office's (MC's) fee per sign-up
+    # (Silver × fee_mc_standard + Gold × fee_mc_target, the office's Rates).
+    # Team = the whole subtree, the leader included; Personal = their own.
+    fees_doc = None
+    if target.get("office_id"):
+        fees_doc = await db.commission_fees.find_one({"office_id": target.get("office_id")}, {"_id": 0})
+    if not fees_doc:
+        fees_doc = await db.commission_fees.find_one({}, {"_id": 0})
+
+    def _tiers(row: dict) -> tuple:
+        days = [d for d in (row or {}).get("days") or [] if isinstance(d, dict)]
+        return (sum(float(d.get("under30") or 0) for d in days),
+                sum(float(d.get("over30") or 0) for d in days))
+
+    team_silver = team_gold = 0.0
+    for r in by_user.values():
+        s_, g_ = _tiers(r)
+        team_silver += s_
+        team_gold += g_
+    own_silver, own_gold = _tiers(by_user.get(target["id"]) or {})
+    owners_profit = {
+        "team": mc_fees(team_silver, team_gold, fees_doc),
+        "personal": mc_fees(own_silver, own_gold, fees_doc),
+    }
+
     members = []
     team_total = 0.0
     team_worked = 0
@@ -1759,6 +1785,7 @@ async def weekly_planner_stats(week: str, request: Request, user_id: Optional[st
             "highrollers": [{"name": m["name"], "total": m["total"]} for m in members[:3] if m["total"] > 0],
         },
         "crew": crew,
+        "owners_profit": owners_profit,
         "quality": quality,
         "personal_quality": personal_quality,
         "headcount": headcount,
