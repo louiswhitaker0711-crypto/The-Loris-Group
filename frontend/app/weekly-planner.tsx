@@ -1339,6 +1339,7 @@ export default function WeeklyPlannerScreen() {
                       <MeetingCodPick
                         moduleId={draft.days[String(tab)]?.[`${f.key}_cod`] || undefined}
                         canEdit={canEdit}
+                        minStage={f.key === 'leaders_meeting' ? 3 : undefined}
                         hint={f.key === 'leaders_meeting' ? 'BAs on your team who are in that day get a nudge at 10:58 to do its quiz.' : undefined}
                         onPick={(id, topic) => {
                           setDayField(tab, `${f.key}_cod`, id);
