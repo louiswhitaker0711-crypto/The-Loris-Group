@@ -138,6 +138,27 @@ export default function AdminScreen() {
     },
   });
 
+  const resetPasswordMut = useMutation({
+    mutationFn: ({ id, password }: { id: string; name: string; password: string }) => apiService.resetUserPassword(id, password),
+    onSuccess: (res: any, v) => {
+      const days = res?.data?.days ?? 7;
+      showAlert('Password reset',
+        `Send ${v.name.split(/\s+/)[0]} this (for example on WhatsApp):\n\n` +
+        `Log in with your email and this temporary password: ${v.password}\n` +
+        `You'll then choose your own. It works for ${days} days.`);
+    },
+    onError: (e: any) => showAlert('Error', e.response?.data?.detail || 'Failed'),
+  });
+
+  const askResetPassword = async (u: { id: string; name: string }) => {
+    const pw = await promptText('Reset password',
+      `Type a temporary password for ${u.name} (at least 8 characters). They'll choose their own the moment they sign in.`);
+    if (pw === null) return;
+    const password = pw.trim();
+    if (password.length < 8) { showAlert('Too short', 'The temporary password needs at least 8 characters.'); return; }
+    resetPasswordMut.mutate({ id: u.id, name: u.name, password });
+  };
+
   const renameMut = useMutation({
     mutationFn: ({ id, name }: { id: string; name: string }) => apiService.updateUserName(id, name),
     onSuccess: (res) => {
@@ -795,6 +816,12 @@ export default function AdminScreen() {
                                 ])}>
                                   <Ionicons name="arrow-down-circle-outline" size={15} color={colors.yellow} />
                                   <Text style={styles.actText}>Remove admin access</Text>
+                                </TouchableOpacity>
+                              )}
+                              {u.id !== user?.id && !u.is_super_admin && (isSuperAdmin || u.role !== 'admin') && (
+                                <TouchableOpacity style={styles.act} testID={`admin-reset-password-${u.id}`} onPress={() => askResetPassword(u)}>
+                                  <Ionicons name="key-outline" size={15} color={colors.primary} />
+                                  <Text style={styles.actText}>Reset password</Text>
                                 </TouchableOpacity>
                               )}
                               {u.profile_image && (
