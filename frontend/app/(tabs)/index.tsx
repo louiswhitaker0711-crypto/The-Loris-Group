@@ -73,7 +73,7 @@ import { toast } from '../../src/utils/toast';
 import { invalidateGoalQueries } from '../../src/utils/goalSync';
 import { codStageShortName, furthestCodStage } from '../../src/components/cod/stageOrder';
 import { roleTitle, heroRankTitle } from '../../src/utils/roleTitle';
-import { APP_LOCALE } from '../../src/utils/appTime';
+import { APP_LOCALE, APP_TZ } from '../../src/utils/appTime';
 
 type QuickAction = {
   label: string;
@@ -229,6 +229,16 @@ export default function HomeScreen() {
   // Default collapsed — admins expand them on demand.
   const [startsOpen, setStartsOpen] = useState(false);
   const [weeklyPlansOpen, setWeeklyPlansOpen] = useState(false);
+  // Sunday (UK time) is planning day: an Admin's Home leads with the weekly
+  // plans, open, their own first.
+  const isPlanningSunday = useMemo(() => {
+    try {
+      return new Intl.DateTimeFormat('en-GB', { weekday: 'short', timeZone: APP_TZ }).format(new Date()) === 'Sun';
+    } catch {
+      return new Date().getDay() === 0;
+    }
+  }, []);
+  const [sundayPlansClosed, setSundayPlansClosed] = useState(false);
   const [dailyPlansOpen, setDailyPlansOpen] = useState(false);
   const setGoalMut = useMutation({
     mutationFn: (goal: number) => apiService.setTeamWeeklyGoal({ team_weekly_goal: goal }),
@@ -1035,7 +1045,11 @@ export default function HomeScreen() {
     <>
       {/* ── Admin: weekly-plan completion — who's submitted, tap to read ── */}
       {isAdmin && (planRosterQ.data?.items || []).length > 0 && (() => {
-        const roster: any[] = planRosterQ.data?.items || [];
+        const sunday = isPlanningSunday;
+        // On a Sunday your own plan leads the list.
+        const roster: any[] = [...(planRosterQ.data?.items || [])].sort((a, b) =>
+          sunday ? Number(b.id === user?.id) - Number(a.id === user?.id) : 0);
+        const open = sunday ? !sundayPlansClosed : weeklyPlansOpen;
         const doneN = roster.filter((u) => u.has_planner).length;
         const we = (() => {
           const [y, m, dd] = String(planRosterQ.data?.week_ending || '').split('-').map(Number);
@@ -1045,11 +1059,11 @@ export default function HomeScreen() {
           <DepthCard style={styles.card}>
             <TouchableOpacity
               style={styles.cardHeaderRow}
-              onPress={() => setWeeklyPlansOpen((v) => !v)}
+              onPress={() => (sunday ? setSundayPlansClosed((v) => !v) : setWeeklyPlansOpen((v) => !v))}
               activeOpacity={0.7}
               testID="home-plan-roster-toggle"
             >
-              <Text style={styles.cardTitle}>Weekly plans · WE {we}</Text>
+              <Text style={styles.cardTitle}>{sunday ? `Next week's plans · WE ${we}` : `Weekly plans · WE ${we}`}</Text>
               <View style={styles.collapseHeaderRight}>
                 {/* The fraction is also a bar — the design language everywhere
                     else on Home renders progress, not plain text. */}
@@ -1062,10 +1076,10 @@ export default function HomeScreen() {
                   style={styles.headerBar}
                 />
                 <Text style={styles.planRosterCount}>{doneN}/{roster.length}</Text>
-                <Ionicons name={weeklyPlansOpen ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textMuted} />
+                <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textMuted} />
               </View>
             </TouchableOpacity>
-            {weeklyPlansOpen && roster.map((u) => (
+            {open && roster.map((u) => (
               <TouchableOpacity
                 key={u.id}
                 style={styles.planRosterRow}
@@ -1077,7 +1091,7 @@ export default function HomeScreen() {
                   size={18}
                   color={u.has_planner ? colors.green : '#f59e0b'}
                 />
-                <Text style={styles.planRosterName} numberOfLines={1}>{u.name}</Text>
+                <Text style={styles.planRosterName} numberOfLines={1}>{u.id === user?.id ? `You (${u.name})` : u.name}</Text>
                 <Text style={styles.planRosterMeta}>
                   {u.has_planner
                     ? (u.updated_at ? new Date(u.updated_at).toLocaleDateString(APP_LOCALE, { month: 'short', day: 'numeric' }) : 'Filled in')
@@ -1440,7 +1454,7 @@ export default function HomeScreen() {
       {pSalesPath}
       {pChecklist}
       {pPulse}
-      {pWeeklyPlans}
+      {!(isAdmin && isPlanningSunday) && pWeeklyPlans}
       {pBreakdown}
       {pBulletins}
     </>
@@ -1555,11 +1569,12 @@ export default function HomeScreen() {
           folds away under "More". */}
       {wide ? (
         <View style={styles.cols}>
-          <View style={styles.colMain}>{todayBlock}</View>
+          <View style={styles.colMain}>{isAdmin && isPlanningSunday && pWeeklyPlans}{todayBlock}</View>
           <View style={styles.colSide}>{moreBlock}</View>
         </View>
       ) : (
         <>
+          {isAdmin && isPlanningSunday && pWeeklyPlans}
           {todayBlock}
           <MoreSection>{moreBlock}</MoreSection>
         </>
