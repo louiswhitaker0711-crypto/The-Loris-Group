@@ -319,6 +319,8 @@ def _normalize_row(raw: dict) -> dict:
                 "time": (c.get("time") or "").strip()[:12],
                 # Merged into the cell above it (same day) on the plan.
                 "merge_up": bool(c.get("merge_up")),
+                # A COD item picked for this day (COD rows, e.g. "COD 3").
+                "cod": str(c.get("cod") or "").strip()[:64],
             }
     label = (raw.get("label") or "Topic").strip()
     for c in by_day.values():
@@ -328,7 +330,7 @@ def _normalize_row(raw: dict) -> dict:
         # A time typed into the topic box is the day's time.
         if c["topic"] and not c["time"] and re.search(r"[:.]|[ap]\.?m", c["topic"], re.I) and parse_time(c["topic"]):
             c["time"], c["topic"] = c["topic"], ""
-    cells_out = [by_day.get(d, {"day": d, "topic": "", "presenter": "", "time": "", "merge_up": False}) for d in DAYS_IN_AGENDA]
+    cells_out = [by_day.get(d, {"day": d, "topic": "", "presenter": "", "time": "", "merge_up": False, "cod": ""}) for d in DAYS_IN_AGENDA]
     days = sorted({int(d) for d in (raw.get("days") or []) if str(d).isdigit() and int(d) in DAYS_IN_AGENDA}) \
         if isinstance(raw.get("days"), list) else []
     return {

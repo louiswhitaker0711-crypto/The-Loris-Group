@@ -17,6 +17,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { useActiveOffice } from '../../office/ActiveOfficeContext';
 import { apiService } from '../../api/client';
 import WeeklyPlanGridView, { type MergeChange } from './WeeklyPlanGridView';
+import MeetingCodPick from '../planner/MeetingCodPick';
 import AgendaScanReviewSheet, { ScanInFlightOverlay, ApplyResult, ScanPayload } from './AgendaScanReviewSheet';
 import * as ImagePicker from 'expo-image-picker';
 import { APP_LOCALE } from '../../utils/appTime';
@@ -57,7 +58,32 @@ const STATS_FIELDS: { key: string; label: string; placeholder: string; icon: any
   { key: 'personal_recruits', label: 'Personal Recruits', placeholder: 'e.g. 2',   icon: 'person-add-outline', color: '#22c55e' },
 ];
 
-type Cell = { day: number; topic: string; presenter: string; time?: string; merge_up?: boolean };
+type Cell = { day: number; topic: string; presenter: string; time?: string; merge_up?: boolean; cod?: string };
+
+// A COD row ("COD 3", "CoD tie in"…) gets a From the COD picker on each day,
+// starting at the stage in its name (COD 3 → Stage 3 on), the Owner's call,
+// 25 Oct 2026.
+function codRowStage(label: string): number | null {
+  const m = /\bcod\b\s*(\d)?/i.exec(label || '');
+  if (!m) return null;
+  return m[1] ? Number(m[1]) : 1;
+}
+function CellCodPick({ row, cell, onPatch }: { row: Row; cell: Cell; onPatch: (p: Partial<Cell>) => void }) {
+  const min = codRowStage(row.label);
+  if (min == null) return null;
+  return (
+    <MeetingCodPick
+      moduleId={cell.cod || undefined}
+      canEdit
+      minStage={min > 1 ? min : undefined}
+      onPick={(id, name) => {
+        const t = (cell.topic || '').trim();
+        onPatch({ cod: id, topic: !t ? name : t.includes(name) ? t : `${name} · ${t}` });
+      }}
+      onClear={() => onPatch({ cod: '' })}
+    />
+  );
+}
 type Row = {
   id: string; label: string; time_label: string; schedule_match_title: string | null; cells: Cell[];
   /** Days this row's matched schedule block actually occurs on (from the
@@ -1219,6 +1245,7 @@ function FillRowCard({
                     placeholder="Topic (optional)"
                     placeholderTextColor={colors.textMuted}
                   />
+                  <CellCodPick row={row} cell={cell} onPatch={(p) => setCell(d, p)} />
                   <TextInput
                     value={cell.time || ''}
                     onChangeText={(v) => setCell(d, { time: v.slice(0, 12) })}
@@ -1315,6 +1342,7 @@ function DayFillList({
               placeholder="Topic (optional)"
               placeholderTextColor={colors.textMuted}
             />
+            <CellCodPick row={row} cell={cell} onPatch={setCell} />
             <TextInput
               value={cell.time || ''}
               onChangeText={(v) => setCell({ time: v.slice(0, 12) })}
