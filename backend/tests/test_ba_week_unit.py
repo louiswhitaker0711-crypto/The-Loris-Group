@@ -76,3 +76,9 @@ def test_reading_someone_elses_week_is_scoped(monkeypatch):
         _run(wp._ba_week_target(away_admin, str(ba["_id"])))
     office_admin = {"id": str(ObjectId()), "role": "admin", "office_id": "o1"}
     assert _run(wp._ba_week_target(office_admin, str(ba["_id"])))["_id"] == ba["_id"]
+
+
+def test_meeting_cod_pick_survives_a_save():
+    days = wp._normalize_days({"2": {"leaders_meeting": "Objection handling", "leaders_meeting_cod": "mod-123"}})
+    assert days["2"]["leaders_meeting_cod"] == "mod-123"
+    assert days["2"]["morning_topic_cod"] == ""
