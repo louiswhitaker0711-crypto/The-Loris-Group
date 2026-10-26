@@ -42,7 +42,7 @@ export default function NewStartsButton() {
       <View style={s.icon}><Ionicons name="qr-code" size={28} color={c.onPrimary} /></View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={s.title}>Set up today’s new starts</Text>
-        <Text style={s.sub}>Show the app’s QR code, add each new start and give them their login</Text>
+        <Text style={s.sub}>One QR code: they sign themselves up and add the app to their home screen</Text>
       </View>
       <Ionicons name="chevron-forward" size={22} color={c.onPrimary} />
     </Pressable>

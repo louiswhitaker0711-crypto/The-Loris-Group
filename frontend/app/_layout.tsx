@@ -282,6 +282,7 @@ function RootNavigator() {
       <Stack.Screen name="add-hire" options={{ title: 'Add New Starter', presentation: 'modal' }} />
       <Stack.Screen name="public/bells/[office]" options={{ headerShown: false }} />
       <Stack.Screen name="public/join" options={{ headerShown: false }} />
+      <Stack.Screen name="public/signup" options={{ headerShown: false }} />
       <Stack.Screen name="new-starts" options={{ headerShown: true, title: 'New starts', headerBackTitle: 'Back', ...MASTHEAD_COMPACT }} />
       </Stack>
       </NavThemeProvider>

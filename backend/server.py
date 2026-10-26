@@ -259,6 +259,8 @@ _CSRF_EXEMPT_PATHS = {
     # New-start join code (routes/new_starts.py): the code in the body is the credential.
     "/api/new-starts/join/check",
     "/api/new-starts/join",
+    "/api/new-starts/signup/check",
+    "/api/new-starts/signup",
 }
 
 
@@ -500,6 +502,7 @@ async def _startup_work():
     await db.academy_workbooks.create_index([("user_id", 1), ("day", 1)])
     # New-start join codes (routes/new_starts.py), looked up by their hash.
     await db.join_tokens.create_index("token_hash")
+    await db.room_codes.create_index([("code", 1), ("closed_at", 1)])
     # Bells rows are keyed by (office, week, person). UNIQUE since 2026-09-02:
     # the same check-then-insert race primetime had lived in all seven bells
     # writers (POST /bells, both goal PUTs, the planner goal sync + crew save,

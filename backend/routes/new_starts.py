@@ -226,3 +226,142 @@ async def join(body: JoinBody, request: Request, response: Response):
             "token": access, "refresh_token": refresh, "must_change_password": False,
             "profile_image": u.get("profile_image"), "office_id": u.get("office_id"),
             "is_super_admin": False, "accessible_offices": []}
+
+
+# ── One QR code for the room: new starts sign themselves up ──────────────────
+#
+# The Owner's call (26 Oct 2026): a single scan signs a new start up (name,
+# email, their own password), opens the app and shows them how to add it to
+# their home screen. Self-registration stays closed everywhere else: this
+# only works with today's room code, which the Owner's setup screen shows,
+# which ends at midnight UK time or when the Owner taps All done.
+#
+#     GET  /api/new-starts/room-code            Admin → {code, expires_at}
+#     POST /api/new-starts/room-code/close      Admin
+#     POST /api/new-starts/signup/check {code}  Public → {ok: true}
+#     POST /api/new-starts/signup {code, name, email, password}   Public
+#       → signed in (same reply as /auth/login)
+#     DELETE /api/new-starts/{user_id}          Admin
+#       Remove a sign-up made by mistake (a duplicate, a wrong email): only a
+#       new start added in the last 2 days on an Academy day.
+
+
+def _midnight_utc() -> str:
+    today = datetime.now(APP_TZ).date()
+    end_local = datetime.combine(today + timedelta(days=1), datetime.min.time(), tzinfo=APP_TZ)
+    return end_local.astimezone(timezone.utc).isoformat()
+
+
+@router.get("/new-starts/room-code")
+async def room_code(request: Request):
+    admin = await require_admin(request)
+    now = datetime.now(timezone.utc).isoformat()
+    row = await db.room_codes.find_one(
+        {"office_id": admin.get("office_id"), "closed_at": None, "expires_at": {"$gt": now}},
+        {"_id": 0, "code": 1, "expires_at": 1})
+    if row:
+        return row
+    code = secrets.token_urlsafe(16)
+    expires = _midnight_utc()
+    await db.room_codes.insert_one({"code": code, "office_id": admin.get("office_id"), "created_by": admin.get("id"),
+                                    "created_at": now, "expires_at": expires, "closed_at": None})
+    return {"code": code, "expires_at": expires}
+
+
+@router.post("/new-starts/room-code/close")
+async def close_room_code(request: Request):
+    admin = await require_admin(request)
+    now = datetime.now(timezone.utc).isoformat()
+    await db.room_codes.update_many({"office_id": admin.get("office_id"), "closed_at": None}, {"$set": {"closed_at": now}})
+    return {"ok": True}
+
+
+class SignupBody(BaseModel):
+    code: str
+    name: Optional[str] = None
+    email: Optional[str] = None
+    password: Optional[str] = None
+
+
+_CLOSED = "This sign-up code has finished. Ask the Owner to show today's QR code."
+
+
+async def _room(code: str, request: Request) -> dict:
+    key = _rate_key(request, "new-start-signup")
+    _enforce_rate(key, limit=40, window_seconds=15 * 60)
+    now = datetime.now(timezone.utc).isoformat()
+    row = await db.room_codes.find_one({"code": code, "closed_at": None, "expires_at": {"$gt": now}}) if code else None
+    if not row:
+        _record_rate(key)
+        raise HTTPException(status_code=404, detail=_CLOSED)
+    return row
+
+
+@router.post("/new-starts/signup/check")
+async def signup_check(body: SignupBody, request: Request):
+    await _room(body.code, request)
+    return {"ok": True}
+
+
+@router.post("/new-starts/signup")
+async def signup(body: SignupBody, request: Request, response: Response):
+    room = await _room(body.code, request)
+    # Each sign-up counts against the same limit, so one phone can't fill the office.
+    _record_rate(_rate_key(request, "new-start-signup"))
+    name = " ".join((body.name or "").split())
+    if not name or len(name) > 80 or " " not in name:
+        raise HTTPException(status_code=400, detail="Add your first and last name")
+    email = clean_email(body.email or "")
+    pw = body.password or ""
+    if len(pw) < MIN_PASSWORD_LENGTH:
+        raise HTTPException(status_code=400, detail=f"Your password needs at least {MIN_PASSWORD_LENGTH} characters")
+    if len(pw) > 200:
+        raise HTTPException(status_code=400, detail="That password is too long")
+    if await db.users.find_one({"email": email}, {"_id": 1}):
+        raise HTTPException(status_code=400, detail="There's already an account with that email. Ask the Owner to sort it out for you.")
+    office_id = room.get("office_id")
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        res = await db.users.insert_one({
+            "email": email, "password_hash": hash_password(pw), "name": name, "role": "trainee",
+            "office_id": office_id, "email_verified": True, "reports_to": None,
+            "created_at": now, "password_changed_at": now, "added_in_academy": True, "self_signed_up": True,
+        })
+    except Exception:
+        # The unique email index caught a second tap of the same form.
+        raise HTTPException(status_code=400, detail="There's already an account with that email. Ask the Owner to sort it out for you.")
+    user_id = str(res.inserted_id)
+    await create_training_record(db, name=name, office_id=office_id, trainee_user_id=user_id,
+                                 leader_name="Unassigned", start_date=datetime.now(APP_TZ).date().isoformat())
+    access = create_access_token(user_id, email, 0)
+    refresh = create_refresh_token(user_id, 0)
+    set_auth_cookies(response, access, refresh)
+    return {"id": user_id, "email": email, "name": name, "role": "trainee",
+            "token": access, "refresh_token": refresh, "must_change_password": False,
+            "profile_image": None, "office_id": office_id, "is_super_admin": False, "accessible_offices": []}
+
+
+@router.delete("/new-starts/{user_id}")
+async def remove_new_start(user_id: str, request: Request):
+    admin = await require_admin(request)
+    try:
+        oid = ObjectId(user_id)
+    except (InvalidId, TypeError):
+        raise HTTPException(status_code=404, detail="Person not found")
+    u = await db.users.find_one({"_id": oid})
+    if not u or (u.get("office_id") != admin.get("office_id") and not admin.get("is_super_admin")):
+        raise HTTPException(status_code=404, detail="Person not found")
+    since = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+    if u.get("role") != "trainee" or not u.get("added_in_academy") or (u.get("created_at") or "") < since:
+        raise HTTPException(status_code=400, detail="Only a new start added on an Academy day can be removed here. Use Admin for anyone else.")
+    hires = await db.new_hires.find({"trainee_user_id": user_id}, {"_id": 0, "id": 1}).to_list(10)
+    hire_ids = [h["id"] for h in hires]
+    if hire_ids:
+        assess = await db.daily_assessments.find({"new_hire_id": {"$in": hire_ids}}, {"_id": 0, "id": 1}).to_list(50)
+        await db.delivery_checklist.delete_many({"assessment_id": {"$in": [a["id"] for a in assess]}})
+        await db.daily_assessments.delete_many({"new_hire_id": {"$in": hire_ids}})
+        await db.new_hires.delete_many({"id": {"$in": hire_ids}})
+    await db.academy_workbooks.delete_many({"user_id": user_id})
+    await db.join_tokens.delete_many({"user_id": user_id})
+    await db.users.delete_one({"_id": oid})
+    return {"ok": True, "name": u.get("name") or ""}

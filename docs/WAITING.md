@@ -12,6 +12,7 @@ Agreed changes that aren't built yet. Add a line when something is agreed; remov
 
 ## Recently shipped
 
+- 26 Oct: New starts sign themselves up: one QR on the setup screen (today's room code, ends at midnight or All done) opens `/public/signup` (name, email, own password), signs them in and shows how to add the app to their home screen. Who's in gets Remove for a mistaken sign-up; adding someone yourself stays as a backup.
 - 26 Oct: Set up today's new starts (`/new-starts`, `routes/new_starts.py`): a big button on the Owner's Home Mon/Tue 13:30–16:00 (also Home quick actions). The app's QR code; add a new start by name + email (no Coach until Wednesday); shows a starter password to read out and a personal QR (`/public/join?t=`) that signs them straight in once they choose their own password; a live list of who's in, with Show login again.
 - 26 Oct: BA Academy Day 1 workbook (`/academy/1`, `routes/academy.py`): new starts fill in gaps, notes and 3 quizzes on their phone in the Owner's running order; saves to their account as they type; a card on their Home on Days 1–2; the Owner's Home shows the class's progress, quiz scores and questions, and opens anyone's workbook read-only. Pay figures come from Rates.
 - 25 Oct: read-only Claude connector (`/mcp/<token>`, docs/CLAUDE_CONNECTOR.md): Claude can read the team, Bells, recent weeks, person pages, field numbers, sectors and quality; no contact details. Off until `CLAUDE_CONNECTOR_TOKEN` is set on Railway.

@@ -34,3 +34,11 @@ def test_emails_are_tidied_and_checked():
     for bad in ["", "sam", "sam@", "sam@example", "two words@example.org"]:
         with pytest.raises(HTTPException):
             clean_email(bad)
+
+
+def test_room_code_ends_at_midnight_uk_time():
+    from datetime import datetime, timezone
+    from routes.new_starts import _midnight_utc
+    end = datetime.fromisoformat(_midnight_utc())
+    now = datetime.now(timezone.utc)
+    assert now < end and (end - now).total_seconds() <= 25 * 3600
