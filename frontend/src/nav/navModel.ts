@@ -62,7 +62,7 @@ const ROUTE_TITLES: Record<string, [string, IconName]> = {
   'monthly-planner-team': ['Team Planner', 'bar-chart-outline'],
   'weekly-planner': ['Weekly Planner', 'calendar-number-outline'],
   'absence-approvals': ['Absences', 'moon-outline'],
-  'weekly-review': ['Monday Review', 'stats-chart-outline'],
+  'weekly-review': ['Weekly Review', 'stats-chart-outline'],
   coaching: ['Coaching', 'school-outline'],
   'product-knowledge': ['Campaign Knowledge', 'library-outline'],
   'customize-tabs': ['Customise', 'options-outline'],

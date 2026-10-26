@@ -84,6 +84,12 @@ class _Collection:
                         ok = False
                     if "$ne" in v and r.get(k) == v["$ne"]:
                         ok = False
+                    if "$nin" in v and r.get(k) in v["$nin"]:
+                        ok = False
+                    if "$gte" in v and not (r.get(k) is not None and r.get(k) >= v["$gte"]):
+                        ok = False
+                    if "$lte" in v and not (r.get(k) is not None and r.get(k) <= v["$lte"]):
+                        ok = False
                 elif r.get(k) != v:
                     ok = False
             if ok:
@@ -105,6 +111,9 @@ class _DB:
         self.weekly_planners = _Collection(planners)
         self.offices = _Collection(offices)
         self.commission_fees = _Collection(fees)
+        self.cod_focus = _Collection([])
+        self.ba_week_plans = _Collection([])
+        self.quality_weeks = _Collection([])
 
 
 def _user(uid, name, role, reports_to=None):
@@ -356,3 +365,17 @@ def test_defaults_to_the_week_being_planned(patched):
     assert date.fromisoformat(r["week_ending"]) > date.today()
     assert (date.fromisoformat(r["week_ending"])
             - date.fromisoformat(r["review_week_ending"])).days == 7
+
+
+def test_everyone_one_by_one_and_the_office_week(patched):
+    r = _call()
+    by = {p["user_id"]: p for p in r["people"]}
+    tess = by["T3"]
+    assert tess["last_week"]["sales"] == 7 and tess["last_week"]["band"] == "red"
+    assert tess["flags"]["retrain"] is True          # 2, 2, 0 over the last 3 days in = 1.3
+    assert tess["trend"][-1] == {"week_ending": REVIEW_WEEK, "sales": 7}
+    assert by["L1"]["this_week"]["goal"] == 6
+    ow = r["office_week"]
+    assert ow["target"] == 25 and ow["goals_sum"] == 6
+    assert "Tia One" in ow["goals_missing"] and "Ada Admin" not in ow["goals_missing"]
+    assert r["totals"]["owners_profit"] is not None

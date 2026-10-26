@@ -565,7 +565,7 @@ async def office_weekly_review(request: Request, week: Optional[str] = None, off
     ).to_list(1000)
     plan_rows = await db.bells_entries.find(
         {"office_id": office_id, "week_ending": week_ending},
-        {"_id": 0, "user_id": 1, "weekly_goal": 1, "team_weekly_goal": 1},
+        {"_id": 0, "user_id": 1, "weekly_goal": 1, "team_weekly_goal": 1, "days": 1},
     ).to_list(1000)
     goals_by_user = {r.get("user_id"): r for r in plan_rows if r.get("user_id")}
     # Crew goals as they stood for the week under review — what each leader
@@ -649,6 +649,9 @@ async def office_weekly_review(request: Request, week: Optional[str] = None, off
     # office total disagree with the Bells sheet for that week.
     totals = _roll(list(perf.keys()))
     totals["reps"] = len(perf)
+    totals["round_pct"] = round(100 * min(totals["memberships"], totals["sales"]) / totals["sales"]) if totals["sales"] else None
+    totals["owners_profit"] = mc_fees(sum(p["under30"] for p in perf.values()),
+                                      sum(p["over30"] for p in perf.values()), fees)
 
     # Two different goals, and they are not the same question:
     #   `goal`   — bottom-up, the sum of every individual weekly_goal. Nobody
@@ -805,6 +808,8 @@ async def office_weekly_review(request: Request, week: Optional[str] = None, off
                 **crew_result,
                 "own": ({k: perf[uid][k] for k in ("sales", "earnings", "piece_avg", "scoring_pct", "days_worked", "goal")}
                         if uid in perf else None),
+                "owners_profit": mc_fees(sum(perf[c]["under30"] for c in crew if c in perf),
+                                         sum(perf[c]["over30"] for c in crew if c in perf), fees),
                 "team_goal": review_team_goals.get(uid),
                 "top": [
                     {"user_id": p["user_id"], "name": p["name"],
@@ -831,7 +836,13 @@ async def office_weekly_review(request: Request, week: Optional[str] = None, off
     )
 
     submitted = sum(1 for l in leaders if l["plan"]["submitted"])
+    people, office_week, quality_week = await _review_people(
+        office_id, users, name_by_id, upline_by_id, perf, plan_rows, planner_by_user,
+        week_ending, review_week, target_this_week=_office_target(office_doc, plan_rows, name_by_id, upline_by_id))
     return {
+        "people": people,
+        "office_week": office_week,
+        "quality_week": quality_week,
         "week_ending": week_ending,
         "review_week_ending": review_week,
         "office": {"id": office_id, "name": office_doc.get("name") or ""},
@@ -853,6 +864,146 @@ async def office_weekly_review(request: Request, week: Optional[str] = None, off
             for l in leaders if not l["plan"]["submitted"]
         ],
     }
+
+
+# ── Monday Review: everyone one by one, and the office's week ahead ───────
+def _office_target(office_doc: dict, rows: list, name_by_id: dict, upline_by_id: dict):
+    """The office's committed target for a week: an explicit office goal, else
+    the crew goals at the top of the tree (the same rule as the review week)."""
+    try:
+        explicit = office_doc.get("weekly_goal")
+        if explicit not in (None, "") and int(explicit) > 0:
+            return int(explicit)
+    except (TypeError, ValueError):
+        pass
+    tg = {r.get("user_id"): r.get("team_weekly_goal") for r in rows if r.get("user_id")}
+    roots = []
+    for uid in name_by_id:
+        if (upline_by_id.get(uid) or "") in name_by_id:
+            continue
+        try:
+            if tg.get(uid) not in (None, ""):
+                roots.append(int(tg[uid]))
+        except (TypeError, ValueError):
+            pass
+    return sum(roots) if roots else None
+
+
+async def _review_people(office_id, users, name_by_id, upline_by_id, perf, plan_rows,
+                         planner_by_user, week_ending, review_week, target_this_week):
+    """One line per person for the Monday Review, plus the office's week ahead
+    and the latest quality report's week."""
+    from core.coach_suggestions import bells_days, RETRAIN_PA
+    from core.week_bands import week_band
+    from core.zero_alerts import zero_run
+
+    through = date.fromisoformat(review_week)
+    ids = list(name_by_id)
+    first_week = (through - timedelta(days=21)).isoformat()
+    hist: dict = {}
+    async for e in db.bells_entries.find(
+            {"office_id": office_id, "user_id": {"$in": ids}, "week_ending": {"$gte": first_week, "$lte": review_week}},
+            {"_id": 0, "user_id": 1, "week_ending": 1, "days": 1, "weekly_goal": 1}):
+        hist.setdefault(e["user_id"], []).append(e)
+    weeks = [(through - timedelta(days=7 * k)).isoformat() for k in (3, 2, 1, 0)]
+
+    # This week's COD focus (routes/cod_focus.py), read through this module's db.
+    focus = {f["user_id"]: f async for f in db.cod_focus.find(
+        {"user_id": {"$in": ids}, "week_ending": week_ending}, {"_id": 0, "user_id": 1, "topic": 1})
+        if f.get("user_id")}
+    ba_plans = {p["user_id"]: p async for p in db.ba_week_plans.find(
+        {"user_id": {"$in": ids}, "week_ending": week_ending}, {"_id": 0, "user_id": 1, "submitted_at": 1})}
+    plan_by_user = {r.get("user_id"): r for r in plan_rows if r.get("user_id")}
+
+    qdoc = await db.quality_weeks.find_one(
+        {"office_id": office_id, "week_ending": {"$gte": (through - timedelta(days=21)).isoformat()}},
+        {"_id": 0, "week_ending": 1, "bas": 1, "total": 1}, sort=[("week_ending", -1)])
+    quality = {b["user_id"]: (b.get("metrics") or {}) for b in (qdoc or {}).get("bas") or [] if b.get("user_id")}
+
+    people = []
+    scheduled = [0] * 6
+    for u in users:
+        uid = str(u["_id"])
+        role = u.get("role") or ""
+        rows = hist.get(uid, [])
+        by_week = {}
+        for r in rows:
+            by_week[r["week_ending"]] = sum(float(d.get("over30") or 0) + float(d.get("under30") or 0)
+                                            for d in (r.get("days") or []) if isinstance(d, dict))
+        days = bells_days(rows)
+        ins = [d for d in days if d["date"] <= through and d["status"] == "in"]
+        last3 = ins[-3:]
+        last3_pa = round(sum(d["gold"] + d["silver"] for d in last3) / 3, 2) if len(last3) == 3 else None
+        p = perf.get(uid) or {}
+        sales = p.get("sales", 0)
+        goal = p.get("goal")
+        prow = plan_by_user.get(uid) or {}
+        pdays = prow.get("days") or []
+        statuses = []
+        for i in range(6):
+            st = str((pdays[i] if i < len(pdays) and isinstance(pdays[i], dict) else {}).get("status") or "off").lower()
+            statuses.append(st)
+            if st not in ("ab", "ex", "pc"):
+                scheduled[i] += 1
+        if role == "trainee":
+            plan_in = bool((ba_plans.get(uid) or {}).get("submitted_at"))
+        else:
+            doc = planner_by_user.get(uid)
+            plan_in = _plan_steps_done(doc, prow) >= PLAN_FILLED_AT
+        q = quality.get(uid) or {}
+        people.append({
+            "user_id": uid, "name": name_by_id.get(uid, "?"), "role": role,
+            "coach_name": name_by_id.get(upline_by_id.get(uid) or "", ""),
+            "last_week": {
+                "sales": sales, "goal": goal,
+                "goal_pct": round(100 * sales / float(goal)) if goal not in (None, "", 0) else None,
+                "piece_avg": p.get("piece_avg"), "scoring_pct": p.get("scoring_pct"),
+                "days_in": p.get("in_days", 0),
+                "gold_pct": round(100 * p["over30"] / sales) if sales else None,
+                "round_pct": round(100 * min(p["memberships"], sales) / sales) if sales else None,
+                "band": week_band(sales) if p else None,
+            },
+            "flags": {
+                "retrain": last3_pa is not None and last3_pa < RETRAIN_PA,
+                "last3_pa": last3_pa,
+                "two_zeroes": bool(zero_run(rows, through)),
+            },
+            "trend": [{"week_ending": w, "sales": int(by_week[w]) if w in by_week else None} for w in weeks],
+            "quality": {k: q.get(k) for k in ("sales", "aov", "drops", "fail_rate", "fourth_week", "the_round") if q.get(k) is not None},
+            "this_week": {
+                "goal": prow.get("weekly_goal"),
+                "cod_focus": (focus.get(uid) or {}).get("topic"),
+                "plan_in": plan_in,
+                "not_scheduled_days": [i for i, st in enumerate(statuses) if st == "ab"],
+            },
+        })
+    order = {"leader": 0, "trainee": 1, "admin": 2}
+    people.sort(key=lambda x: (order.get(x["role"], 3), -(x["last_week"]["sales"] or 0), x["name"].lower()))
+
+    goals_sum = 0
+    has = False
+    for r in plan_rows:
+        if r.get("user_id") in name_by_id and r.get("weekly_goal") not in (None, ""):
+            try:
+                goals_sum += int(float(r["weekly_goal"]))
+                has = True
+            except (TypeError, ValueError):
+                pass
+    office_week = {
+        "target": target_this_week,
+        "goals_sum": goals_sum if has else None,
+        "people": len(people),
+        "scheduled": scheduled,
+        "goals_missing": [x["name"] for x in people if x["role"] != "admin" and x["this_week"]["goal"] in (None, "")],
+        "plans_missing": [{"user_id": x["user_id"], "name": x["name"], "role": x["role"]}
+                          for x in people if x["role"] != "admin" and not x["this_week"]["plan_in"]],
+    }
+    quality_week = None
+    if qdoc:
+        quality_week = {"week_ending": qdoc["week_ending"],
+                        "total": {k: v for k, v in ((qdoc.get("total") or {}).items())
+                                  if k in ("sales", "aov", "drops", "fail_rate", "fourth_week", "the_round")}}
+    return people, office_week, quality_week
 
 
 @router.get("/weekly-planners/office/goal-audit")

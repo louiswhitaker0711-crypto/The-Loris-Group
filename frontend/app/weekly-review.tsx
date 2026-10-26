@@ -19,7 +19,8 @@ import { useRouter, Stack } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 
-import { useColors, fonts } from '../src/theme/ThemeContext';
+import { useColors, useTheme, fonts } from '../src/theme/ThemeContext';
+import { weekBandLook, WEEK_BAND_LABELS } from '../src/utils/weekBands';
 import { ScrollReveal } from '../src/components/ui/ScrollFx';
 import { useParallaxScroll } from '../src/components/ui/Parallax';
 import { usePullToRefresh } from '../src/components/ui/PullRefresh';
@@ -27,7 +28,7 @@ import { BrandLoader } from '../src/components/ui/BrandLoader';
 import OfficeToggle from '../src/components/ui/OfficeToggle';
 import { useActiveOffice } from '../src/office/ActiveOfficeContext';
 import { useAuth } from '../src/auth/AuthContext';
-import { apiService, OfficeReviewLeader, OfficeWeeklyReview } from '../src/api/client';
+import { apiService, OfficeReviewLeader, OfficeReviewPerson, OfficeWeeklyReview } from '../src/api/client';
 import { APP_LOCALE, formatMoney } from '../src/utils/appTime';
 
 // ── Dates ────────────────────────────────────────────────────────────────
@@ -73,6 +74,10 @@ export default function WeeklyReviewScreen() {
   const { scrollY, onScroll } = useParallaxScroll();
   const [week, setWeek] = useState<string>(planningSunday());
   const [open, setOpen] = useState<Record<string, boolean>>({});
+  const [personOpen, setPersonOpen] = useState<Record<string, boolean>>({});
+  const [filter, setFilter] = useState<'all' | 'flags' | 'red' | 'nogoal'>('all');
+  const { effective } = useTheme() as any;
+  const dark = effective === 'dark';
   const isAdmin = user?.role === 'admin';
 
   const q = useQuery({
@@ -86,7 +91,7 @@ export default function WeeklyReviewScreen() {
   if (!isAdmin) {
     return (
       <View style={s.center}>
-        <Stack.Screen options={{ title: 'Monday Review' }} />
+        <Stack.Screen options={{ title: 'Weekly Review' }} />
         <Ionicons name="lock-closed-outline" size={32} color={colors.textMuted} />
         <Text style={s.emptyTitle}>Admins only</Text>
         <Text style={s.emptyText}>
@@ -105,7 +110,7 @@ export default function WeeklyReviewScreen() {
   return (
     <View style={{ flex: 1 }}>
       {pullIndicator}
-      <Stack.Screen options={{ title: 'Monday Review' }} />
+      <Stack.Screen options={{ title: 'Weekly Review' }} />
       <ScrollView
         onScroll={onScroll}
         scrollEventThrottle={16}
@@ -215,7 +220,15 @@ export default function WeeklyReviewScreen() {
                   s={s}
                   colors={colors}
                 />
+                <Tile label="The Round" value={pct(d.totals.round_pct)} s={s} />
+                {d.totals.owners_profit != null && <Tile label="Owner's profit" value={money(d.totals.owners_profit)} s={s} />}
               </View>
+              {!!d.quality_week && Object.keys(d.quality_week.total || {}).length > 0 && (
+                <>
+                  <Text style={[s.cardHead, { marginTop: 12 }]}>Quality report · WE {shortDay(d.quality_week.week_ending)}</Text>
+                  <QualityTiles q={d.quality_week.total} s={s} colors={colors} />
+                </>
+              )}
             </View>
             </ScrollReveal>
 
@@ -311,8 +324,94 @@ export default function WeeklyReviewScreen() {
               ))
             )}
 
-            {/* ── 5 · This week ─────────────────────────────────────────── */}
-            <SectionHead n={5} icon="flag" title="This week" sub="Themes, focuses and what we're recruiting" colors={colors} s={s} />
+            {/* ── 5 · Everyone, one by one ──────────────────────────────── */}
+            {!!d.people?.length && (() => {
+              const list = d.people.filter((x) =>
+                filter === 'flags' ? x.flags.retrain || x.flags.two_zeroes
+                : filter === 'red' ? x.last_week.band === 'red' && x.last_week.days_in > 0
+                : filter === 'nogoal' ? x.role !== 'admin' && x.this_week.goal == null
+                : true);
+              const nFlags = d.people.filter((x) => x.flags.retrain || x.flags.two_zeroes).length;
+              const nRed = d.people.filter((x) => x.last_week.band === 'red' && x.last_week.days_in > 0).length;
+              const nNoGoal = d.people.filter((x) => x.role !== 'admin' && x.this_week.goal == null).length;
+              return (
+                <>
+                  <SectionHead n={5} icon="person" title="Everyone, one by one"
+                    sub="Last week, the 4-week trend, quality and this week's goal and focus" colors={colors} s={s} />
+                  <View style={s.filterRow}>
+                    {([['all', `All ${d.people.length}`], ['flags', `Retrain / zeroes ${nFlags}`], ['red', `Red ${nRed}`], ['nogoal', `No goal ${nNoGoal}`]] as const).map(([k, label]) => (
+                      <TouchableOpacity key={k} onPress={() => setFilter(k)} style={[s.filterChip, filter === k && s.filterChipOn]} testID={`review-filter-${k}`}>
+                        <Text style={[s.filterTxt, filter === k && s.filterTxtOn]}>{label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <View style={s.card}>
+                    {list.length === 0 ? <Text style={s.allGood}>Nobody here. 👏</Text> : list.map((x) => (
+                      <PersonRow key={x.user_id} x={x} dark={dark} expanded={!!personOpen[x.user_id]}
+                        onToggle={() => setPersonOpen((o) => ({ ...o, [x.user_id]: !o[x.user_id] }))}
+                        onOpen={() => router.push(`/person/${x.user_id}` as any)}
+                        colors={colors} s={s} />
+                    ))}
+                  </View>
+                </>
+              );
+            })()}
+
+            {/* ── 6 · The office this week ──────────────────────────────── */}
+            {!!d.office_week && (
+              <>
+                <SectionHead n={6} icon="calendar" title="The office this week" sub={weekRange(d.week_ending)} colors={colors} s={s} />
+                <View style={s.card}>
+                  <View style={s.heroRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.heroLabel}>Office target</Text>
+                      <Text style={s.heroValue}>{num(d.office_week.target)}</Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={s.heroLabel}>Everyone's goals add up to</Text>
+                      <Text style={s.heroValue}>{num(d.office_week.goals_sum)}</Text>
+                    </View>
+                  </View>
+                  {d.office_week.target != null && d.office_week.goals_sum != null && (
+                    <Text style={s.barSub}>
+                      {d.office_week.goals_sum >= d.office_week.target
+                        ? `Goals cover the target (${d.office_week.goals_sum - d.office_week.target} over)`
+                        : `Goals are ${d.office_week.target - d.office_week.goals_sum} short of the target`}
+                    </Text>
+                  )}
+                  <Text style={[s.cardHead, { marginTop: 12 }]}>In the field each day</Text>
+                  <View style={s.tileGrid}>
+                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((dn, i) => (
+                      <Tile key={dn} label={dn} value={`${d.office_week!.scheduled[i] ?? 0}`} s={s} />
+                    ))}
+                  </View>
+                  <Text style={s.barSub}>Out of {d.office_week.people}. Not scheduled and in-office days don't count.</Text>
+                  {d.office_week.goals_missing.length > 0 && (
+                    <>
+                      <Text style={[s.cardHead, { marginTop: 12 }]}>No goal set yet ({d.office_week.goals_missing.length})</Text>
+                      <Text style={s.winText}>{d.office_week.goals_missing.join(', ')}</Text>
+                    </>
+                  )}
+                  {d.office_week.plans_missing.length > 0 && (
+                    <>
+                      <Text style={[s.cardHead, { marginTop: 12 }]}>Plans not in yet ({d.office_week.plans_missing.length})</Text>
+                      {d.office_week.plans_missing.map((m) => (
+                        <TouchableOpacity key={m.user_id} style={s.missingRow}
+                          onPress={() => router.push((m.role === 'trainee' ? `/ba-week?user_id=${m.user_id}&week=${d.week_ending}` : `/weekly-planner?user_id=${m.user_id}&week=${d.week_ending}`) as any)}>
+                          <Ionicons name="time-outline" size={15} color={colors.yellow} />
+                          <Text style={s.missingName}>{m.name}</Text>
+                          <Text style={s.missingMeta}>{m.role === 'trainee' ? 'BA' : 'Coach'}</Text>
+                          <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
+                        </TouchableOpacity>
+                      ))}
+                    </>
+                  )}
+                </View>
+              </>
+            )}
+
+            {/* ── 7 · This week ─────────────────────────────────────────── */}
+            <SectionHead n={7} icon="flag" title="This week" sub="Themes, focuses and what we're recruiting" colors={colors} s={s} />
             {d.themes.length > 0 && (
               <View style={s.card}>
                 <Text style={s.cardHead}>Themes & concentration</Text>
@@ -363,7 +462,7 @@ export default function WeeklyReviewScreen() {
             </ScrollReveal>
 
             {/* ── 6 · Needs chasing ─────────────────────────────────────── */}
-            <SectionHead n={6} icon="alert-circle" title="Needs chasing" sub="Before we leave the room" colors={colors} s={s} />
+            <SectionHead n={8} icon="alert-circle" title="Needs chasing" sub="Before we leave the room" colors={colors} s={s} />
             <View style={s.card}>
               <Text style={s.cardHead}>Plans still outstanding</Text>
               {d.missing_plans.length === 0 ? (
@@ -427,6 +526,110 @@ export default function WeeklyReviewScreen() {
 }
 
 // ── Pieces ───────────────────────────────────────────────────────────────
+function shortDay(iso?: string | null): string {
+  if (!iso) return '';
+  const [y, m, dd] = iso.split('-').map(Number);
+  return y ? new Date(y, m - 1, dd).toLocaleDateString(APP_LOCALE, { day: 'numeric', month: 'short' }) : '';
+}
+
+const Q_LABELS: Array<[keyof OfficeReviewPerson['quality'], string, (v: number) => string, (v: number) => boolean]> = [
+  ['aov', 'Order value', (v) => formatMoney(v, 2), (v) => v >= 13],
+  ['drops', 'Drop days', (v) => v.toFixed(1), (v) => v >= 2.5],
+  ['fail_rate', 'Fails', (v) => `${Math.round(v)}%`, (v) => v < 10],
+  ['fourth_week', '4th week', (v) => `${Math.round(v)}%`, (v) => v >= 75],
+  ['the_round', 'The Round', (v) => `${Math.round(v)}%`, (v) => v >= 75],
+];
+
+function QualityTiles({ q, s, colors }: { q: OfficeReviewPerson['quality']; s: any; colors: any }) {
+  return (
+    <View style={s.tileGrid}>
+      {Q_LABELS.filter(([k]) => q[k] != null).map(([k, label, fmt, ok]) => (
+        <Tile key={k} label={label} value={fmt(q[k] as number)} tone={ok(q[k] as number) ? 'good' : 'bad'} s={s} colors={colors} />
+      ))}
+    </View>
+  );
+}
+
+const DAY3 = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function PersonRow({ x, dark, expanded, onToggle, onOpen, colors, s }: {
+  x: OfficeReviewPerson; dark: boolean; expanded: boolean; onToggle: () => void; onOpen: () => void; colors: any; s: any;
+}) {
+  const lw = x.last_week;
+  const look = weekBandLook(lw.sales || 0, dark);
+  const maxT = Math.max(1, ...x.trend.map((t) => t.sales || 0));
+  return (
+    <View style={s.personWrap}>
+      <TouchableOpacity style={s.personRow} onPress={onToggle} testID={`review-person-${x.user_id}`}>
+        <View style={[s.bandPill, { backgroundColor: look.bg }]}>
+          <Text style={[s.bandPillTxt, { color: look.fg }]}>{lw.sales}{lw.goal != null ? `/${lw.goal}` : ''}</Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={s.personName} numberOfLines={1}>{x.name}</Text>
+          <Text style={s.personMeta} numberOfLines={1}>
+            {x.role === 'trainee' ? 'BA' : x.role === 'leader' ? 'Coach' : 'Admin'}
+            {x.coach_name ? ` · ${x.coach_name}` : ''}
+            {' · PA '}{lw.piece_avg == null ? '—' : Number(lw.piece_avg).toFixed(1)}
+            {x.this_week.goal != null ? ` · Goal ${x.this_week.goal}` : ' · No goal'}
+          </Text>
+        </View>
+        {x.flags.retrain && <View style={[s.flag, { borderColor: colors.red }]}><Text style={[s.flagTxt, { color: colors.red }]}>Retrain</Text></View>}
+        {x.flags.two_zeroes && <View style={[s.flag, { borderColor: colors.red }]}><Text style={[s.flagTxt, { color: colors.red }]}>2 zeroes</Text></View>}
+        <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textMuted} />
+      </TouchableOpacity>
+      {expanded && (
+        <View style={s.personBody}>
+          <Text style={s.cardHead}>Last week{lw.band ? ` · ${WEEK_BAND_LABELS[lw.band].name}` : ''}</Text>
+          <View style={s.tileGrid}>
+            <Tile label="Sign-ups" value={`${lw.sales}${lw.goal != null ? ` / ${lw.goal}` : ''}`} s={s} />
+            <Tile label="Days in" value={num(lw.days_in)} s={s} />
+            <Tile label="Piece avg" value={lw.piece_avg == null ? '—' : Number(lw.piece_avg).toFixed(2)} s={s} />
+            <Tile label="Scoring" value={pct(lw.scoring_pct)} s={s} />
+            <Tile label="Gold %" value={pct(lw.gold_pct)} tone={lw.gold_pct == null ? undefined : lw.gold_pct >= 90 ? 'good' : 'bad'} s={s} colors={colors} />
+            <Tile label="The Round" value={pct(lw.round_pct)} tone={lw.round_pct == null ? undefined : lw.round_pct >= 75 ? 'good' : 'bad'} s={s} colors={colors} />
+          </View>
+          {x.flags.last3_pa != null && (
+            <Text style={[s.barSub, x.flags.retrain && { color: colors.red }]}>
+              Last 3 days in: PA {x.flags.last3_pa.toFixed(1)}{x.flags.retrain ? ' (under 1.8, retrain)' : ''}
+            </Text>
+          )}
+          <Text style={[s.cardHead, { marginTop: 10 }]}>Last 4 weeks</Text>
+          <View style={s.trendRow}>
+            {x.trend.map((t) => {
+              const v = t.sales;
+              const tl = weekBandLook(v || 0, dark);
+              return (
+                <View key={t.week_ending} style={s.trendCol}>
+                  <Text style={s.trendNum}>{v == null ? '—' : v}</Text>
+                  <View style={s.trendTrack}>
+                    <View style={[s.trendFill, { height: `${v ? Math.max(8, (v / maxT) * 100) : 0}%` as any, backgroundColor: tl.fg }]} />
+                  </View>
+                  <Text style={s.trendLbl}>{shortDay(t.week_ending)}</Text>
+                </View>
+              );
+            })}
+          </View>
+          {Object.keys(x.quality || {}).length > 0 && (
+            <>
+              <Text style={[s.cardHead, { marginTop: 10 }]}>Quality report</Text>
+              <QualityTiles q={x.quality} s={s} colors={colors} />
+            </>
+          )}
+          <Text style={[s.cardHead, { marginTop: 10 }]}>This week</Text>
+          <Text style={s.winText}>Goal: {x.this_week.goal ?? 'not set'}</Text>
+          <Text style={s.winText}>COD focus: {x.this_week.cod_focus || 'not picked'}</Text>
+          <Text style={s.winText}>Plan: {x.this_week.plan_in ? 'in' : 'not in yet'}</Text>
+          {x.this_week.not_scheduled_days.length > 0 && (
+            <Text style={s.winText}>Not scheduled: {x.this_week.not_scheduled_days.map((i) => DAY3[i]).join(', ')}</Text>
+          )}
+          <TouchableOpacity onPress={onOpen} style={[s.expandAll, { alignSelf: 'flex-start', marginTop: 10 }]}>
+            <Text style={s.expandAllText}>Full breakdown</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+}
 function SectionHead({
   n, icon, title, sub, colors, s, inline,
 }: { n: number; icon: any; title: string; sub?: string; colors: any; s: any; inline?: boolean }) {
@@ -523,6 +726,7 @@ function LeaderCard({
             <Tile label="BA days" value={num(lw.ba_days)} s={s} />
             <Tile label="Zero weeks" value={`${lw.reps_zero}/${lw.reps_worked}`} tone={lw.reps_zero > 0 ? 'bad' : 'good'} s={s} colors={colors} />
             {lw.own && <Tile label="Own sign-ups" value={num(lw.own.sales)} s={s} />}
+            {lw.owners_profit != null && <Tile label="Owner's profit" value={money(lw.owners_profit)} s={s} />}
           </View>
           {lw.top.length > 0 && (
             <Text style={s.topEarners}>
@@ -602,6 +806,26 @@ function LeaderCard({
 }
 
 const createStyles = (colors: any) => StyleSheet.create({
+  filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 },
+  filterChip: { borderRadius: 999, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: colors.surface },
+  filterChipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  filterTxt: { fontFamily: fonts.bodySemibold, fontSize: 12, color: colors.textSecondary },
+  filterTxtOn: { color: colors.onPrimary },
+  personWrap: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  personRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10 },
+  personName: { fontFamily: fonts.bodySemibold, fontSize: 14, color: colors.text },
+  personMeta: { fontFamily: fonts.body, fontSize: 11, color: colors.textMuted, marginTop: 1 },
+  personBody: { paddingBottom: 12 },
+  bandPill: { minWidth: 48, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 5, alignItems: 'center' },
+  bandPillTxt: { fontFamily: fonts.monoSemibold, fontSize: 13 },
+  flag: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 6, paddingVertical: 2 },
+  flagTxt: { fontFamily: fonts.bodySemibold, fontSize: 10 },
+  trendRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-end' },
+  trendCol: { flex: 1, alignItems: 'center' },
+  trendNum: { fontFamily: fonts.monoSemibold, fontSize: 12, color: colors.text, marginBottom: 3 },
+  trendTrack: { width: '70%', height: 48, borderRadius: 6, backgroundColor: colors.surfaceAlt, justifyContent: 'flex-end', overflow: 'hidden' },
+  trendFill: { width: '100%', borderRadius: 6 },
+  trendLbl: { fontFamily: fonts.body, fontSize: 10, color: colors.textMuted, marginTop: 3 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40, gap: 8 },
   emptyTitle: { fontFamily: fonts.display, fontSize: 16, fontWeight: '800', color: colors.text, marginTop: 6 },
   emptyText: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, textAlign: 'center', lineHeight: 18 },
