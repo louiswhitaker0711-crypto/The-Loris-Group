@@ -42,9 +42,9 @@ import { useTabBarClearance } from '../../src/customization/CustomTabBar';
 import { displayGrade } from '../../src/manual/utils';
 
 const gradeColor = (g: string | null, colors: any) => {
-  if (g === 'Excellent' || g === 'Competent' || g === 'Independent' || g === 'Done' || g === 'Learnt' || g === 'Met' || g === 'Well Above' || g === 'Promote' || g === 'Advance')
+  if (g === 'Deliver' || g === 'Do' || g === 'Excellent' || g === 'Competent' || g === 'Independent' || g === 'Done' || g === 'Learnt' || g === 'Met' || g === 'Well Above' || g === 'Promote' || g === 'Advance')
     return { bg: '#10b98118', text: '#10b981' };
-  if (g === 'Average' || g === 'Extend Training' || g === 'Needs More Time' || g === 'Below')
+  if (g === 'Know' || g === 'Average' || g === 'Extend Training' || g === 'Needs More Time' || g === 'Below')
     return { bg: '#f59e0b18', text: '#d97706' };
   if (g === 'Below Average' || g === 'Not Learnt' || g === 'Incompetent' || g === 'Not Done' || g === 'Release')
     return { bg: '#ef444418', text: '#dc2626' };
@@ -107,6 +107,7 @@ const STEP_SKILL: Record<string, string> = {
   rehash: 'skill_rehash',
 };
 const STEP_GRADE_VALUE: Record<string, number> = {
+  Deliver: 10, Do: 8, Know: 6,
   Excellent: 10, Average: 7, 'Below Average': 4,
   Competent: 10, Learnt: 7, 'Not Learnt': 4,
 };

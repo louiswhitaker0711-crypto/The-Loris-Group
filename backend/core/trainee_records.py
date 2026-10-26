@@ -38,7 +38,7 @@ BLANK_ASSESSMENT_FIELDS = {
     "leader_notes": None,
 }
 
-DEFAULT_GRADE_OPTIONS = ["Excellent", "Average", "Below Average"]
+DEFAULT_GRADE_OPTIONS = ["Not Learnt", "Know", "Do", "Deliver"]
 
 
 def _now_iso() -> str:

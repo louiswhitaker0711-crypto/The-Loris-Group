@@ -364,7 +364,7 @@ async def regenerate_assessment_skeletons(request: Request):
                     "outcome_achieved": False,
                     "confidence_level": "Not yet",
                     "grade": None,
-                    "grade_options": item.get("grade_options", ["Excellent", "Average", "Below Average"]),
+                    "grade_options": item.get("grade_options", ["Not Learnt", "Know", "Do", "Deliver"]),
                     "notes": None,
                 }
                 if not dry_run:
@@ -590,7 +590,7 @@ async def restore_manual_by_name(request: Request):
                     "outcome_achieved": False,
                     "confidence_level": "Not yet",
                     "grade": None,
-                    "grade_options": item.get("grade_options", ["Excellent", "Average", "Below Average"]),
+                    "grade_options": item.get("grade_options", ["Not Learnt", "Know", "Do", "Deliver"]),
                     "notes": None,
                 }
                 if not dry_run:
