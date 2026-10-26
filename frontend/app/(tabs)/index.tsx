@@ -39,7 +39,7 @@ import LiveOpsCard from '../../src/components/home/LiveOpsCard';
 import SectorSetupsCard from '../../src/components/home/SectorSetupsCard';
 import HomeAreaMap from '../../src/components/home/HomeAreaMap';
 import MyDayCard from '../../src/components/home/today/MyDayCard';
-import { inFieldHours, inBreakdownHours, fieldStarted, ukNow } from '../../src/utils/fieldTime';
+import { inFieldHours, inBreakdownHours, inMorningPlanning, inMorningMeeting, fieldStarted, ukNow } from '../../src/utils/fieldTime';
 import { addDays, todayISO } from '../../src/utils/calendarDates';
 import MyWeekCard from '../../src/components/home/today/MyWeekCard';
 import WaitingOnYouCard from '../../src/components/home/today/WaitingOnYouCard';
@@ -47,6 +47,8 @@ import NewStartTodayHero from '../../src/components/home/today/NewStartTodayHero
 import LearnTodayCard from '../../src/components/home/today/LearnTodayCard';
 import MoreSection from '../../src/components/home/today/MoreSection';
 import SuggestionsCard from '../../src/components/home/today/SuggestionsCard';
+import MeetingsTodayCard from '../../src/components/home/today/MeetingsTodayCard';
+import HomeSearch from '../../src/components/home/HomeSearch';
 import { dayTargetChips } from '../../src/utils/dayTargets';
 import PrimetimeCard from '../../src/components/home/PrimetimeCard';
 import CoachingTodayCard from '../../src/components/home/CoachingTodayCard';
@@ -206,8 +208,13 @@ export default function HomeScreen() {
   // Field hours (UK time) decide what Home leads with; re-checked each minute.
   const [inField, setInField] = useState(() => inFieldHours());
   const [inBreakdown, setInBreakdown] = useState(() => inBreakdownHours());
+  const [inMorning, setInMorning] = useState(() => inMorningPlanning());
+  const [inMeeting, setInMeeting] = useState(() => inMorningMeeting());
   useEffect(() => {
-    const t = setInterval(() => { setInField(inFieldHours()); setInBreakdown(inBreakdownHours()); }, 60_000);
+    const t = setInterval(() => {
+      setInField(inFieldHours()); setInBreakdown(inBreakdownHours());
+      setInMorning(inMorningPlanning()); setInMeeting(inMorningMeeting());
+    }, 60_000);
     return () => clearInterval(t);
   }, []);
   const queryClient = useQueryClient();
@@ -1468,7 +1475,6 @@ export default function HomeScreen() {
       {/* What each person needs today, then the Primetime plan it feeds. */}
       <SuggestionsCard />
       <PrimetimeCard />
-      <WaitingOnYouCard toGrade={leaderTodayQ.data?.counts?.awaiting || 0} />
       {pNewStarts}
       {pDailyPlans}
     </>
@@ -1485,8 +1491,37 @@ export default function HomeScreen() {
       <MyWeekCard hideWhenEmpty={isAdmin} />
     </>
   );
+  // Mornings (until 11:00, the Owner 26 Oct 2026): plan sectors, Primetime and
+  // today's Coaches Meeting / COD pick come first.
+  const coachMorning = (
+    <>
+      {pSectorPrompt}
+      <SuggestionsCard />
+      <PrimetimeCard />
+      <MeetingsTodayCard mode="plan" />
+      {pNewStarts}
+      {pPlanner}
+      {pDailyPlans}
+      <MyWeekCard hideWhenEmpty={isAdmin} />
+      <SectorSetupsCard />
+    </>
+  );
+  // The morning meeting (11:45 until set-ups open at 12:30): the read-out and
+  // the meeting plan first, then the rest of the pre-field Home.
+  const coachMeeting = (
+    <>
+      <MeetingsTodayCard mode="meeting" />
+      <CoachingTodayCard />
+      {pSectorPrompt}
+      {coachPlanning}
+      <HomeAreaMap />
+      <MyDayCard />
+      <MyWeekCard hideWhenEmpty={isAdmin} />
+    </>
+  );
   // Before the field with a sector today: the sector first, the day's planning under it.
-  const todayCoach = fieldLayout ? <>{coachField}{!inField && coachPlanning}</> : inBreakdown ? coachBreakdown : (
+  const todayCoach = inMorning && !inField ? coachMorning : inMeeting && !inField ? coachMeeting
+    : fieldLayout ? <>{coachField}{!inField && coachPlanning}</> : inBreakdown ? coachBreakdown : (
     <>
       <CoachingTodayCard />
       {pSectorPrompt}
@@ -1559,6 +1594,16 @@ export default function HomeScreen() {
     </>
   );
   const todayBlock = isTrainee ? todayBA : todayCoach;
+  // Always first: search, then what's due this week, then what's waiting on you.
+  const pTop = (
+    <>
+      <HomeSearch />
+      {pReviewCard}
+      {isAdmin && isPlanningSunday && pWeeklyPlans}
+      {pBaWeek}
+      {!isTrainee && <WaitingOnYouCard toGrade={leaderTodayQ.data?.counts?.awaiting || 0} />}
+    </>
+  );
   const moreBlock = isTrainee ? moreBA : moreCoach;
 
   return (
@@ -1621,14 +1666,12 @@ export default function HomeScreen() {
           folds away under "More". */}
       {wide ? (
         <View style={styles.cols}>
-          <View style={styles.colMain}>{pReviewCard}{isAdmin && isPlanningSunday && pWeeklyPlans}{pBaWeek}{todayBlock}</View>
+          <View style={styles.colMain}>{pTop}{todayBlock}</View>
           <View style={styles.colSide}>{moreBlock}</View>
         </View>
       ) : (
         <>
-          {pReviewCard}
-          {isAdmin && isPlanningSunday && pWeeklyPlans}
-          {pBaWeek}
+          {pTop}
           {todayBlock}
           <MoreSection>{moreBlock}</MoreSection>
         </>

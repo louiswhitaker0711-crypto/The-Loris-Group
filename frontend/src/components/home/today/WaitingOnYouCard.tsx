@@ -1,5 +1,6 @@
 // "Waiting on you" on a Coach's Home: grades due and COD checks people have
-// asked for. Hidden when there's nothing.
+// asked for, and for an Admin a weekly quality report that hasn't been
+// imported. Hidden when there's nothing.
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,19 +8,48 @@ import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useColors, fonts } from '../../../theme/ThemeContext';
 import { apiService } from '../../../api/client';
+import { useAuth } from '../../../auth/AuthContext';
+import { planDayNow } from '../../../utils/fieldTime';
+
+/** The quality report for the week before last is due (one week's lag for
+ *  first deliveries); nag when the latest imported one is older than that. */
+function qualityDue(latest?: string | null): string | null {
+  const { weekEnding } = planDayNow();
+  const d = new Date(`${weekEnding}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 14);
+  const due = d.toISOString().slice(0, 10);
+  return !latest || latest < due ? due : null;
+}
 
 export default function WaitingOnYouCard({ toGrade }: { toGrade: number }) {
   const c = useColors();
   const s = useMemo(() => styles(c), [c]);
   const checks = useQuery({ queryKey: ['cod-checks'], queryFn: () => apiService.getPendingChecks().then((r) => r.data.checks), retry: false });
   const nChecks = (checks.data || []).length;
-  if (!toGrade && !nChecks) return null;
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+  const qualityQ = useQuery({
+    queryKey: ['quality-weeks-latest'],
+    queryFn: () => apiService.getQuality({ view: 'week' }).then((r) => (r.data?.weeks?.[0]?.week_ending as string) || null),
+    enabled: isAdmin,
+    staleTime: 30 * 60 * 1000,
+    retry: false,
+  });
+  const qDue = isAdmin && qualityQ.isSuccess ? qualityDue(qualityQ.data) : null;
+  if (!toGrade && !nChecks && !qDue) return null;
   return (
     <View style={s.card} testID="home-waiting">
       <Text style={s.title}>Waiting on you</Text>
       <View style={s.row}>
         {toGrade > 0 && (
           <View style={s.chip}><Ionicons name="school-outline" size={15} color={c.primary} /><Text style={s.chipText}>{toGrade} day{toGrade === 1 ? '' : 's'} to grade</Text></View>
+        )}
+        {!!qDue && (
+          <Pressable onPress={() => router.push('/quality' as never)} style={s.chip} accessibilityRole="button" testID="home-waiting-quality">
+            <Ionicons name="shield-checkmark-outline" size={15} color={c.primary} />
+            <Text style={s.chipText}>Quality report to import</Text>
+            <Ionicons name="chevron-forward" size={13} color={c.textMuted} />
+          </Pressable>
         )}
         {nChecks > 0 && (
           <Pressable onPress={() => router.push('/cod-checks' as never)} style={s.chip} accessibilityRole="button">

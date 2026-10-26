@@ -34,3 +34,32 @@ export function fieldStarted(at: Date = new Date()): boolean {
   if (day === 0) return false;
   return mins >= (day === 6 ? 10 * 60 : 13 * 60 + 30);
 }
+
+/** Morning planning (the Owner, 26 Oct 2026): until 11:00 Monday to Friday,
+ * and until the field (10:00) on a Saturday. Home leads with plan sectors,
+ * Primetime and today's Coaches Meeting / COD pick then. */
+export function inMorningPlanning(at: Date = new Date()): boolean {
+  const { day, mins } = ukNow(at);
+  if (day === 0) return false;
+  return mins < (day === 6 ? 10 * 60 : 11 * 60);
+}
+
+/** The morning meeting (11:45–12:15) until set-ups open at 12:30, Monday to
+ * Friday. Home leads with the Bells read-out and today's meeting plan. */
+export function inMorningMeeting(at: Date = new Date()): boolean {
+  const { day, mins } = ukNow(at);
+  if (day === 0 || day === 6) return false;
+  return mins >= 11 * 60 + 45 && mins < 12 * 60 + 30;
+}
+
+/** Today in the weekly plan: the Sunday that ends this week and Mon=0…Sat=5
+ * (Sunday → -1, there's no day page). */
+export function planDayNow(at: Date = new Date()): { weekEnding: string; dayIndex: number } {
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: APP_TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(at);
+  const g = (t: string) => Number(parts.find((p) => p.type === t)?.value || 0);
+  const d = new Date(Date.UTC(g('year'), g('month') - 1, g('day')));
+  const idx = (d.getUTCDay() + 6) % 7;
+  const sun = new Date(d);
+  sun.setUTCDate(d.getUTCDate() + (6 - idx));
+  return { weekEnding: sun.toISOString().slice(0, 10), dayIndex: idx === 6 ? -1 : idx };
+}
