@@ -10,7 +10,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from routes.academy import clean_state, summary, _day, MAX_TEXT  # noqa: E402
+from routes.academy import clean_state, summary, _day, academy_day, MAX_TEXT  # noqa: E402
 
 
 def test_keeps_notes_done_and_answers():
@@ -128,3 +128,19 @@ def test_another_offices_admin_cant_open_it(mdb, monkeypatch):
         _run(academy.get_workbook(1, _req(), user_id=new["id"]))
     with pytest.raises(HTTPException):
         _run(academy.get_workbook(1, _req(), user_id="not-an-id"))
+
+
+def test_academy_day_moves_to_day_2_the_day_after_they_start():
+    hire = {"current_day": 1, "start_date": "2026-10-26"}
+    assert academy_day(hire, "2026-10-26") == 1
+    assert academy_day(hire, "2026-10-27") == 2
+
+
+def test_academy_day_is_2_once_day_1_is_graded():
+    assert academy_day({"current_day": 2, "start_date": "2026-10-26"}, "2026-10-26") == 2
+
+
+def test_academy_day_defaults_to_1():
+    assert academy_day(None) == 1
+    assert academy_day({"current_day": 1, "start_date": ""}, "2026-10-27") == 1
+    assert academy_day({"current_day": "x", "start_date": "bad"}, "2026-10-27") == 1

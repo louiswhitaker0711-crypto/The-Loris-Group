@@ -11,20 +11,22 @@ the ids the content gives each field, and never interprets it.
 
     GET /api/academy/workbook/{day}[?user_id=]
       → {"day", "user_id", "name", "fields": {id: text}, "done": {section: bool},
-         "quiz": {quiz: {question_index: option_index}}, "updated_at", "read_only"}
+         "quiz": {quiz: {question_index: option_index}}, "updated_at", "read_only",
+         "academy_day"}   (academy_day: 1 or 2, which day they're on; see below)
       Your own workbook; with user_id, someone else's (read-only) if you can
       already see their first days (can_access_hire).
     PUT /api/academy/workbook/{day}   {fields, done, quiz}
       Save your own workbook (whole state; limits below).
     GET /api/academy/class
-      → {"people": [{hire_id, user_id, name, day_number, workbooks: {"1": {...}}}]}
+      → {"people": [{hire_id, user_id, name, day_number, academy_day,
+                     workbooks: {"1": {...}, "2": {...}}}]}
       Admin only: every active new start in the office on an Academy day
       (Days 1-2), with what they've done in each day's workbook.
 """
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any, Optional
 
 from bson import ObjectId
@@ -32,6 +34,7 @@ from bson.errors import InvalidId
 from fastapi import APIRouter, HTTPException, Request
 
 from auth import get_current_user, can_access_hire
+from core.app_time import APP_TZ
 from database import db
 
 router = APIRouter()
@@ -83,10 +86,29 @@ def clean_state(body: Any) -> dict:
     return {"fields": fields, "done": done, "quiz": quiz}
 
 
+def academy_day(hire: Optional[dict], today: Optional[str] = None) -> int:
+    """Which workbook a new start is on: Day 2 once their Day 1 is graded
+    (current_day 2+) or from the day after their start date, whichever comes
+    first, so Tuesday opens Day 2 even if Monday hasn't been graded yet."""
+    if not hire:
+        return 1
+    try:
+        if int(hire.get("current_day") or 1) >= 2:
+            return 2
+    except (TypeError, ValueError):
+        pass
+    today = today or datetime.now(APP_TZ).date().isoformat()
+    try:
+        start = date.fromisoformat(str(hire.get("start_date") or "")[:10]).isoformat()
+    except ValueError:
+        return 1
+    return 2 if today > start else 1
+
+
 async def _hire_of(user_id: str, office_id: Optional[str]) -> Optional[dict]:
     return await db.new_hires.find_one(
         {"trainee_user_id": user_id, "office_id": office_id},
-        {"_id": 0, "id": 1, "name": 1, "current_day": 1, "active": 1})
+        {"_id": 0, "id": 1, "name": 1, "current_day": 1, "active": 1, "start_date": 1})
 
 
 @router.get("/academy/workbook/{day}")
@@ -97,6 +119,7 @@ async def get_workbook(day: int, request: Request, user_id: Optional[str] = None
     target = str(user_id or me)
     read_only = target != me
     name = user.get("name") or ""
+    hire: Optional[dict] = None
     if read_only:
         # Users are keyed by Mongo _id (the app's user id is its string form).
         try:
@@ -110,11 +133,14 @@ async def get_workbook(day: int, request: Request, user_id: Optional[str] = None
         if not hire or not await can_access_hire(user, hire["id"]):
             raise HTTPException(status_code=403, detail="You can't see this person's workbook")
         name = other.get("name") or hire.get("name") or ""
+    else:
+        hire = await _hire_of(me, user.get("office_id"))
     doc = await db.academy_workbooks.find_one({"user_id": target, "day": day}, {"_id": 0}) or {}
     return {
         "day": day, "user_id": target, "name": name,
         "fields": doc.get("fields") or {}, "done": doc.get("done") or {}, "quiz": doc.get("quiz") or {},
         "updated_at": doc.get("updated_at"), "read_only": read_only,
+        "academy_day": academy_day(hire),
     }
 
 
@@ -152,7 +178,7 @@ async def academy_class(request: Request):
     hires = await db.new_hires.find(
         {"active": True, "office_id": user.get("office_id"), "current_day": {"$lte": ACADEMY_DAYS},
          "trainee_user_id": {"$nin": [None, ""]}},
-        {"_id": 0, "id": 1, "name": 1, "current_day": 1, "trainee_user_id": 1},
+        {"_id": 0, "id": 1, "name": 1, "current_day": 1, "trainee_user_id": 1, "start_date": 1},
     ).to_list(60)
     if not hires:
         return {"people": []}
@@ -165,6 +191,7 @@ async def academy_class(request: Request):
         people.append({
             "hire_id": h["id"], "user_id": uid, "name": h.get("name") or "",
             "day_number": int(h.get("current_day") or 1),
+            "academy_day": academy_day(h),
             "workbooks": {str(d): summary(by.get((uid, d))) for d in DAYS},
         })
     people.sort(key=lambda p: p["name"].lower())

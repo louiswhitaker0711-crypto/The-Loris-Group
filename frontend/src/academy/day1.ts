@@ -82,8 +82,8 @@ export function day1Progress(s: Pick<WorkbookState, 'done' | 'quiz'> | null | un
 }
 
 /** "2/3" for each quiz answered in full, else null. */
-export function quizScores(quiz: Record<string, Record<string, number>> | null | undefined) {
-  return DAY1_QUIZZES.map((q) => {
+export function quizScores(quiz: Record<string, Record<string, number>> | null | undefined, quizzes: Quiz[] = DAY1_QUIZZES) {
+  return quizzes.map((q) => {
     const a = (quiz || {})[q.id] || {};
     if (Object.keys(a).length < q.qs.length) return { id: q.id, score: null as number | null, of: q.qs.length };
     return { id: q.id, score: q.qs.filter((x, i) => a[String(i)] === x.a).length, of: q.qs.length };

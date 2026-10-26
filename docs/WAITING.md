@@ -4,7 +4,6 @@ Agreed changes that aren't built yet. Add a line when something is agreed; remov
 
 ## Agreed, not built
 
-- BA Academy Day 2 workbook (`frontend/src/academy/`): waiting on the Owner's Day 2 running order. Add three sections the final quiz tests but the slides don't cover: Code of Practice / compliance (where hidden slide 39 sits, after practising the introduction), avoiding fails, and The Round + 2.5+ drops in Sales quality; red-flag customers in Who we can't sign up; "it's a subscription, be honest about cancelling" in the sign-up process and Rehash. The final quiz (Microsoft Form) ends Day 2.
 
 ## Needs a decision
 
@@ -12,6 +11,7 @@ Agreed changes that aren't built yet. Add a line when something is agreed; remov
 
 ## Recently shipped
 
+- 26 Oct: BA Academy Day 2 workbook (`/academy/2`, `src/academy/day2.ts` + `Day2Page.tsx`): the Owner's running order, sign-up process first (start, set the expectation, build the week, lock it in; sticky products; 2.5 drop days, fails under 10%), through to the 8-step rehash and the Law of Averages; 7 quizzes; ends with the final quiz (Microsoft Form). New starts see Day 2 from the day after their start (or once Day 1 is graded): `academy_day` in routes/academy.py. Day 2 marking checklist in the same order (`core/academy_manual.py` `migrate_day2`): new rows Code of Practice, G.I.F.T.S., Rehash, Law of Averages; the customer pays on the day, there and then, so the old 'weekly, 3 days before the first delivery' line is gone from Day 2 and Day 4 (unedited rows only). Product Knowledge (Campaign Knowledge) still quotes that line: the Owner to decide.
 - 26 Oct: Learn your pitch (`/pitch`, `routes/pitch.py`, content `frontend/src/academy/pitch.ts`): the Owner's pitch word for word, then line by line with why (COD links) and how to say it; Say it (10 out loud · 10 mirror · 10 recorded), Learn (first letters), Check (6 questions). A new start's first night is Read only; the rest opens 18:00 the next day. Notification at 18:00 on their first day (and on start-up after 18:00). Card at the bottom of everyone's Home; near the top for new starts.
 - 26 Oct: Plan your earnings (`/earnings-plan`, `core/earnings_plan.py`): needs and wants per week or month; per sign-up = Gold up front + The Round on 75% (from Rates, £26 by default); breakeven = weekly needs ÷ that, target = needs + wants. Fills Bells' BE column (unless typed), shows on the weekly plan (with a below-breakeven warning), Coaches can open their team's; a Home prompt when missing or over a month old; the monthly goal planner's budget (now with /wk or /mo per row) saves into it.
 - 26 Oct: Viewers' spider diagram is the Owner's (rooted at the Owner, not the viewer); the public Bells link has a Sheet / Spider switch with the office's spider (no emails or phone numbers).

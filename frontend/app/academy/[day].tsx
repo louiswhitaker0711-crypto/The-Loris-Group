@@ -8,7 +8,7 @@
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, Pressable, Platform } from 'react-native';
-import { useLocalSearchParams, Stack } from 'expo-router';
+import { useLocalSearchParams, Stack, router } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useColors, fonts } from '../../src/theme/ThemeContext';
 import { api } from '../../src/api/client';
@@ -17,7 +17,9 @@ import { useTabBarClearance } from '../../src/customization/CustomTabBar';
 import { BrandLoader } from '../../src/components/ui/BrandLoader';
 import { WorkbookContext } from '../../src/academy/Workbook';
 import Day1Page from '../../src/academy/Day1Page';
+import Day2Page from '../../src/academy/Day2Page';
 import { DAY1_SECTIONS, day1Progress, emptyState, WorkbookState } from '../../src/academy/day1';
+import { DAY2_SECTIONS, day2Progress } from '../../src/academy/day2';
 
 type Loaded = WorkbookState & { name: string; read_only: boolean; updated_at?: string | null };
 
@@ -42,6 +44,9 @@ export default function AcademyWorkbook() {
   const [state, setState] = useState<WorkbookState>(emptyState());
   const [saved, setSaved] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const loadedRef = useRef(false);
+  // Switching between Day 1 and Day 2 (or person) loads that workbook afresh.
+  const keyRef = useRef(`${day}:${other}`);
+  if (keyRef.current !== `${day}:${other}`) { keyRef.current = `${day}:${other}`; loadedRef.current = false; }
   useEffect(() => {
     if (q.data && !loadedRef.current) {
       loadedRef.current = true;
@@ -98,7 +103,8 @@ export default function AcademyWorkbook() {
     retry: (quiz: string) => update((p) => { const qz = { ...p.quiz }; delete qz[quiz]; return { ...p, quiz: qz }; }),
   }), [state, readOnly, update]);
 
-  const prog = day1Progress(state);
+  const prog = day === 2 ? day2Progress(state) : day1Progress(state);
+  const sections = day === 2 ? DAY2_SECTIONS : DAY1_SECTIONS;
   const name = q.data?.name || (user as any)?.name || '';
   const first = (name || '').trim().split(/\s+/)[0];
 
@@ -130,7 +136,7 @@ export default function AcademyWorkbook() {
             {readOnly ? 'Read-only' : saved === 'saving' ? 'Saving…' : saved === 'error' ? 'Not saved yet — check your connection' : saved === 'saved' ? 'Saved' : 'Saves as you type'}
           </Text>
         </View>
-        {day === 1 && (
+        {!!prog.total && (
           <View style={{ width: 110, alignItems: 'flex-end' }}>
             <Text style={s.label}>{prog.done} of {prog.total} done</Text>
             <View style={s.track}><View style={[s.fill, { width: `${Math.round((prog.done / prog.total) * 100)}%` as any }]} /></View>
@@ -139,40 +145,48 @@ export default function AcademyWorkbook() {
       </View>
       <ScrollView contentContainerStyle={[s.content, { paddingBottom: 32 + tabClear }]} keyboardShouldPersistTaps="handled">
         <View style={s.shell}>
-          {day === 1 ? (
-            <WorkbookContext.Provider value={ctx}>
-              <View style={s.intro}>
-                <Text style={s.label}>Monday · Product coaching</Text>
-                <Text style={s.h1}>{readOnly ? `${first}’s workbook` : <>Let’s get you <Text style={{ color: c.primary }}>set up{first ? `, ${first}` : ''}.</Text></>}</Text>
-                {!readOnly && (
-                  <Text style={[s.body, { color: c.textMuted }]}>This is your workbook for today. Fill in the gaps and take notes as we go. Tap <Text style={s.bold}>Show answers</Text> on any section to check yourself, and do the quick quizzes when we get to them. It saves as you type.</Text>
-                )}
+          <WorkbookContext.Provider value={ctx}>
+            <View style={s.intro}>
+              <Text style={s.label}>{day === 2 ? 'Tuesday' : 'Monday'} · Product coaching</Text>
+              <Text style={s.h1}>{readOnly ? `${first}’s Day ${day} workbook`
+                : day === 2 ? <>Let’s get you <Text style={{ color: c.primary }}>signing up{first ? `, ${first}` : ''}.</Text></>
+                : <>Let’s get you <Text style={{ color: c.primary }}>set up{first ? `, ${first}` : ''}.</Text></>}</Text>
+              {!readOnly && (
+                <Text style={[s.body, { color: c.textMuted }]}>{day === 2
+                  ? 'Today is how we sign customers up and what makes it work. '
+                  : 'This is your workbook for today. '}Fill in the gaps and take notes as we go. Tap <Text style={s.bold}>Show answers</Text> on any section to check yourself, and do the quick quizzes when we get to them.{day === 2 ? ' Finish with your final quiz at the bottom.' : ''} It saves as you type.</Text>
+              )}
+              {readOnly && other && (
                 <View style={s.toc}>
-                  {DAY1_SECTIONS.map((x, i) => {
-                    const on = !!state.done[x.id];
-                    return (
-                      <Pressable key={x.id} onPress={() => jump(x.id)} style={[s.chip, on && { borderColor: c.sgreen }]}>
-                        <Text style={[s.chipN, on && { color: c.sgreenInk }]}>{String(i + 1).padStart(2, '0')}</Text>
-                        <Text style={[s.chipT, on && { color: c.sgreenInk }]}>{x.short}</Text>
-                      </Pressable>
-                    );
-                  })}
+                  {[1, 2].map((d) => (
+                    <Pressable key={d} onPress={() => router.replace(`/academy/${d}?user=${encodeURIComponent(other)}` as never)}
+                      style={[s.chip, d === day && { borderColor: c.primary, backgroundColor: c.primary + '12' }]}>
+                      <Text style={[s.chipT, d === day && { color: c.primary }]}>Day {d}</Text>
+                    </Pressable>
+                  ))}
                 </View>
+              )}
+              <View style={s.toc}>
+                {sections.map((x, i) => {
+                  const on = !!state.done[x.id];
+                  return (
+                    <Pressable key={x.id} onPress={() => jump(x.id)} style={[s.chip, on && { borderColor: c.sgreen }]}>
+                      <Text style={[s.chipN, on && { color: c.sgreenInk }]}>{String(i + 1).padStart(2, '0')}</Text>
+                      <Text style={[s.chipT, on && { color: c.sgreenInk }]}>{x.short}</Text>
+                    </Pressable>
+                  );
+                })}
               </View>
-              <Day1Page />
+            </View>
+            {day === 2 ? <Day2Page /> : <Day1Page />}
+            {day === 1 && (
               <View style={s.end}>
                 <Text style={s.label}>Day 1</Text>
                 <Text style={[s.h1, { fontSize: 24, textAlign: 'center' }]}>See you tomorrow</Text>
-                <Text style={[s.body, { color: c.textMuted, textAlign: 'center', maxWidth: 460 }]}>Day 2 covers the sign-up process, the 5 Steps, Modern Milkman’s products and quality, and finishes with your final quiz.</Text>
+                <Text style={[s.body, { color: c.textMuted, textAlign: 'center', maxWidth: 460 }]}>Day 2 covers the sign-up process, the rehash, Modern Milkman’s products and quality, and finishes with your final quiz.</Text>
               </View>
-            </WorkbookContext.Provider>
-          ) : (
-            <View style={[s.intro, { paddingTop: 40 }]}>
-              <Text style={s.label}>Tuesday · Product coaching</Text>
-              <Text style={s.h1}>Day 2 workbook is on its way</Text>
-              <Text style={[s.body, { color: c.textMuted }]}>Your Day 1 workbook is still here to look back on.</Text>
-            </View>
-          )}
+            )}
+          </WorkbookContext.Provider>
         </View>
       </ScrollView>
     </View>

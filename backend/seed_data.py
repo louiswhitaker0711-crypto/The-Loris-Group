@@ -102,5 +102,5 @@ TRAINING_MANUAL = [
 ]
 
 # The Owner's Day 1 running order (26 Oct 2026): see core/academy_manual.py.
-from core.academy_manual import apply_to_seed as _academy_day1  # noqa: E402
-TRAINING_MANUAL = _academy_day1(TRAINING_MANUAL)
+from core.academy_manual import apply_to_seed as _academy_day1, apply_day2_to_seed as _academy_day2  # noqa: E402
+TRAINING_MANUAL = _academy_day2(_academy_day1(TRAINING_MANUAL))

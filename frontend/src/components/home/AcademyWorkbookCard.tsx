@@ -1,6 +1,8 @@
 /**
  * A new start's BA Academy workbook on their Home (Days 1-2): one tap opens
- * it, with how far through Day 1 they are. (GET /academy/workbook/1)
+ * today's workbook (Day 1 on their first day, Day 2 from the next), with how
+ * far through it they are. (GET /academy/workbook/{day}; academy_day says
+ * which day they're on.)
  */
 import React, { useEffect, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -11,16 +13,25 @@ import { router } from 'expo-router';
 import { useColors, fonts } from '../../theme/ThemeContext';
 import { api } from '../../api/client';
 import { day1Progress } from '../../academy/day1';
+import { day2Progress } from '../../academy/day2';
 import { useAuth } from '../../auth/AuthContext';
 
 export default function AcademyWorkbookCard() {
   const c = useColors();
   const s = useMemo(() => styles(c), [c]);
-  const { data } = useQuery({
+  const d1 = useQuery({
     queryKey: ['academy-workbook', 1, 'me'],
     queryFn: async () => (await api.get('/academy/workbook/1')).data,
     retry: false,
   });
+  const day = d1.data?.academy_day === 2 ? 2 : 1;
+  const d2 = useQuery({
+    queryKey: ['academy-workbook', 2, 'me'],
+    queryFn: async () => (await api.get('/academy/workbook/2')).data,
+    enabled: day === 2,
+    retry: false,
+  });
+  const data = day === 2 ? d2.data : d1.data;
   // The welcome (what we look for, our core values) opens once by itself,
   // the first time a new start reaches Home (the Owner, 26 Oct 2026).
   const { user } = useAuth();
@@ -38,14 +49,14 @@ export default function AcademyWorkbookCard() {
     })();
     return () => { gone = true; };
   }, [uid]);
-  const p = day1Progress(data);
+  const p = day === 2 ? day2Progress(data) : day1Progress(data);
   const started = p.done > 0 || Object.keys(data?.fields || {}).length > 0;
   return (
-    <Pressable onPress={() => router.push('/academy/1' as never)} style={s.card} accessibilityRole="button" testID="home-academy-workbook">
+    <Pressable onPress={() => router.push(`/academy/${day}` as never)} style={s.card} accessibilityRole="button" testID="home-academy-workbook">
       <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
-        <Text style={s.kicker}>BA Academy · Day 1</Text>
+        <Text style={s.kicker}>BA Academy · Day {day}</Text>
         <Text style={s.title}>{started ? 'Your workbook' : 'Open your workbook'}</Text>
-        <Text style={s.sub}>{started ? `${p.done} of ${p.total} done` : 'Notes, gaps to fill in and quick quizzes for today'}</Text>
+        <Text style={s.sub}>{started ? `${p.done} of ${p.total} done` : day === 2 ? 'Sign-ups, rehash and quality, then your final quiz' : 'Notes, gaps to fill in and quick quizzes for today'}</Text>
         {started && <View style={s.track}><View style={[s.fill, { width: `${Math.round((p.done / p.total) * 100)}%` as any }]} /></View>}
       </View>
       <Ionicons name="chevron-forward" size={20} color={c.inkText} />

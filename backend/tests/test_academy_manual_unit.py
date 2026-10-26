@@ -62,3 +62,41 @@ def test_migration_runs_once_and_rebuilds_unstarted_checklists():
     # Day 2 had a row taught already: left alone.
     assert [r["id"] for r in _run(db.delivery_checklist.find({"assessment_id": "a2"}).to_list(10))] == ["c2"]
     assert _run(am.migrate(db)) == {"skipped": True}
+
+
+def test_seed_day2_follows_the_workbook_and_drops_future_payment_dates():
+    d2 = _topics(TRAINING_MANUAL, 2)
+    assert d2[0] == "Signup Process Overview" and d2[-2:] == ["Rehash", "Law of Averages"]
+    assert [t for t in am.DAY2_ORDER if t in d2] == d2
+    for r in TRAINING_MANUAL:
+        text = r["what_good_looks_like"] + r["expected_outcome"]
+        assert "3 days before" not in text and "3 days in advance" not in text, r["topic"]
+
+
+def test_day2_migration_keeps_edited_rows_and_rebuilds_unstarted_checklists():
+    db = AsyncMongoMockClient()["academy_manual_day2_test"]
+    rows = [
+        {"day_number": 2, "sequence": 1, "category": "Product", "topic": "How It Works", "what_good_looks_like": "x"},
+        {"day_number": 2, "sequence": 2, "category": "Signup", "topic": "Explain the Payments",
+         "what_good_looks_like": "Teach the payments in the customer's words: you pay for your first order today, which activates your discount; after that it's weekly, 3 days before."},
+        {"day_number": 2, "sequence": 3, "category": "Signup", "topic": "Signup Process Overview",
+         "what_good_looks_like": "My own words."},
+        {"day_number": 4, "sequence": 7, "category": "Signup", "topic": "Explaining the Payments",
+         "what_good_looks_like": "The payments explanation is theirs now. Listen for the three beats: 3 days before."},
+    ]
+    _run(db.training_manual.insert_many([{**r, "office_id": "o1"} for r in rows]))
+    _run(db.new_hires.insert_one({"id": "h1", "office_id": "o1", "active": True}))
+    _run(db.daily_assessments.insert_one({"id": "a2", "new_hire_id": "h1", "day_number": 2, "completed": False}))
+    _run(db.delivery_checklist.insert_one({"id": "c1", "assessment_id": "a2", "topic": "How It Works"}))
+    out = _run(am.migrate_day2(db))
+    assert out == {"offices": 1, "checklists_rebuilt": 1}
+    live = _run(db.training_manual.find({"office_id": "o1"}).to_list(100))
+    assert _topics(live, 2) == ["Signup Process Overview", "Explain the Payments", "Code of Practice", "G.I.F.T.S.",
+                                "How It Works", "Rehash", "Law of Averages"]
+    by = {(r["day_number"], r["topic"]): r["what_good_looks_like"] for r in live}
+    assert by[(2, "Signup Process Overview")] == "My own words."          # edited in Manual: kept
+    assert "there and then" in by[(2, "Explain the Payments")] and "3 days" not in by[(2, "Explain the Payments")]
+    assert "3 days" not in by[(4, "Explaining the Payments")]
+    a2 = [r["topic"] for r in _run(db.delivery_checklist.find({"assessment_id": "a2"}).to_list(100))]
+    assert a2[0] == "Signup Process Overview" and "Rehash" in a2
+    assert _run(am.migrate_day2(db)) == {"skipped": True}

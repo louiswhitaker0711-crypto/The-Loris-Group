@@ -1,6 +1,6 @@
 /**
  * The BA Academy class on the Owner's Home (Admin, Days 1-2): each new
- * start's progress through the Day 1 workbook, their quiz scores, and any
+ * start's progress through today's workbook (Day 1 or Day 2), their quiz scores, and any
  * questions they've written for their Coach, so the Owner knows who needs a
  * recap before the break. Tap a name to read their workbook.
  * Hidden when nobody is on an Academy day. (GET /academy/class)
@@ -13,9 +13,10 @@ import { router } from 'expo-router';
 import { useColors, fonts } from '../../theme/ThemeContext';
 import { api } from '../../api/client';
 import { day1Progress, quizScores } from '../../academy/day1';
+import { day2Progress, DAY2_QUIZZES } from '../../academy/day2';
 
 type Wb = { done: Record<string, boolean>; quiz: Record<string, Record<string, number>>; questions: string };
-type Person = { hire_id: string; user_id: string; name: string; day_number: number; workbooks: Record<string, Wb> };
+type Person = { hire_id: string; user_id: string; name: string; day_number: number; academy_day?: number; workbooks: Record<string, Wb> };
 
 export default function AcademyClassCard() {
   const c = useColors();
@@ -30,18 +31,19 @@ export default function AcademyClassCard() {
   if (!people.length) return null;
   return (
     <View style={s.card} testID="home-academy-class">
-      <Text style={s.kicker}>BA Academy · Day 1 workbooks</Text>
+      <Text style={s.kicker}>BA Academy · {people.every((p) => p.academy_day === 2) ? 'Day 2' : people.every((p) => p.academy_day !== 2) ? 'Day 1' : 'Days 1–2'} workbooks</Text>
       <Text style={s.title}>{people.length} new start{people.length === 1 ? '' : 's'}</Text>
       {people.map((p) => {
-        const wb = p.workbooks?.['1'];
-        const prog = day1Progress(wb);
-        const scores = quizScores(wb?.quiz);
+        const day = p.academy_day === 2 ? 2 : 1;
+        const wb = p.workbooks?.[String(day)];
+        const prog = day === 2 ? day2Progress(wb) : day1Progress(wb);
+        const scores = day === 2 ? quizScores(wb?.quiz, DAY2_QUIZZES) : quizScores(wb?.quiz);
         return (
-          <Pressable key={p.hire_id} onPress={() => router.push(`/academy/1?user=${encodeURIComponent(p.user_id)}` as never)} style={s.row} accessibilityRole="button">
+          <Pressable key={p.hire_id} onPress={() => router.push(`/academy/${day}?user=${encodeURIComponent(p.user_id)}` as never)} style={s.row} accessibilityRole="button">
             <View style={{ flex: 1, minWidth: 0, gap: 5 }}>
               <View style={s.rowTop}>
                 <Text style={s.name} numberOfLines={1}>{p.name}</Text>
-                <Text style={s.count}>{prog.done}/{prog.total}</Text>
+                <Text style={s.count}>Day {day} · {prog.done}/{prog.total}</Text>
               </View>
               <View style={s.track}><View style={[s.fill, { width: `${Math.round((prog.done / prog.total) * 100)}%` as any }]} /></View>
               <View style={s.scores}>
