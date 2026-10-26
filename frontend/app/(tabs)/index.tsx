@@ -52,6 +52,8 @@ import HomeSearch from '../../src/components/home/HomeSearch';
 import { dayTargetChips } from '../../src/utils/dayTargets';
 import PrimetimeCard from '../../src/components/home/PrimetimeCard';
 import CoachingTodayCard from '../../src/components/home/CoachingTodayCard';
+import AcademyWorkbookCard from '../../src/components/home/AcademyWorkbookCard';
+import AcademyClassCard from '../../src/components/home/AcademyClassCard';
 import SectorPromptCard from '../../src/components/home/SectorPromptCard';
 import ResetBoardCard from '../../src/components/home/ResetBoardCard';
 import OwnerIQBanner from '../../src/components/home/OwnerIQBanner';
@@ -1598,6 +1600,9 @@ export default function HomeScreen() {
   const pTop = (
     <>
       <HomeSearch />
+      {/* BA Academy (Days 1-2): a new start's workbook, the Owner's class. */}
+      {isTrainee && nextPending && nextPending.day_number <= 2 && <AcademyWorkbookCard />}
+      {isAdmin && <AcademyClassCard />}
       {pReviewCard}
       {isAdmin && isPlanningSunday && pWeeklyPlans}
       {pBaWeek}

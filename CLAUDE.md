@@ -57,6 +57,7 @@ The docs in `docs/` are the source of truth for those tasks. If code and docs di
 | `frontend/public/` | PWA manifest, service worker (`sw.js`), icons |
 | `tests/` | Repo-level tests (app config, office scoping) |
 | `docs/` | Owner guides: SETUP, OWNERIQ, BRANDING, SERVICES, CLAUDE_CONNECTOR |
+| `frontend/src/academy/`, `frontend/app/academy/[day].tsx`, `backend/routes/academy.py` | BA Academy workbook (Days 1–2): content and quizzes in `src/academy/day1.ts` + `Day1Page.tsx`; answers saved per person per day in `academy_workbooks`. Never rename a field id people have used |
 | `backend/routes/claude_connector.py` | Read-only Claude connector (`/mcp/<token>`): team, Bells, recent weeks, person, field numbers, sectors, quality. No contact details |
 
 ## Business rules worth knowing

@@ -43,6 +43,7 @@ const ROUTE_TITLES: Record<string, [string, IconName]> = {
   'sector-plan': ['Plan sectors', 'compass-outline'],
   bas: ['BAs', 'people-outline'],
   'sector-recap': ['Sector recap', 'reader-outline'],
+  academy: ['BA Academy', 'school-outline'],
   'owneriq-connect': ['OwnerIQ', 'flash-outline'],
   'cod-signoff': ['Sign off COD', 'checkmark-done-outline'],
   territory: ['Territory', 'earth-outline'],

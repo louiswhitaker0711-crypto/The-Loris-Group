@@ -5,7 +5,8 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # claude/** so a change can be checked before it goes to main (Railway deploys main).
+    branches: [main, 'claude/**']
   pull_request:
     branches: [main]
 

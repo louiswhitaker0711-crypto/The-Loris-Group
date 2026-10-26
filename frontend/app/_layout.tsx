@@ -252,6 +252,7 @@ function RootNavigator() {
       <Stack.Screen name="sector-plan" options={{ headerShown: true, title: 'Plan sectors', ...MASTHEAD_COMPACT }} />
       <Stack.Screen name="bas" options={{ headerShown: true, title: 'BAs', ...MASTHEAD_COMPACT }} />
       <Stack.Screen name="sector-recap" options={{ headerShown: true, title: 'Sector recap', ...MASTHEAD_COMPACT }} />
+      <Stack.Screen name="academy/[day]" options={{ headerShown: true, title: 'BA Academy', headerBackTitle: 'Back', ...MASTHEAD_COMPACT }} />
       <Stack.Screen name="owneriq-connect" options={{ headerShown: true, title: 'OwnerIQ', ...MASTHEAD_COMPACT }} />
       <Stack.Screen name="owneriq-import" options={{ headerShown: true, title: 'Add from OwnerIQ', ...MASTHEAD_COMPACT }} />
       <Stack.Screen name="rollcall-import" options={{ headerShown: true, title: 'Import roll call', ...MASTHEAD_COMPACT }} />
