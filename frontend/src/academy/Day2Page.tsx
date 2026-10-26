@@ -106,13 +106,15 @@ export default function Day2Page() {
           ['Say who you are', 'and that you’re there on behalf of The Modern Milkman'],
           ['“No Cold Calling” sign?', 'Respect it and don’t knock'],
           ['Data protection:', 'details only go into the approved sign-up. Never photograph or note a customer’s details on your own phone'],
-          ['Be honest:', 'never exaggerate savings or hide costs. Leaving something out is misleading too'],
+          ['Be honest:', 'never exaggerate savings or make claims that aren’t true'],
+          ['No omissions:', 'leaving something out, like hiding a cost, is an omission and counts as misleading. Delivery is free on repeat weekly orders of £8 or more; under £8 there’s a small delivery fee for every drop, so always tell them'],
           ['No pushy or aggressive selling', ''],
           ['If someone seems vulnerable,', 'put their wellbeing first'],
           ['Friends and family', 'only if they genuinely want it and are the account holder'],
           ['Visible ID and smart dress;', 'no swearing, smoking or vaping while you represent the brand'],
         ]} />
         <Fill parts={['If a house has a No Cold Calling sign, I ', { id: 'c1', a: 'don’t knock', w: 11 }, '. A customer’s details never go on my ', { id: 'c2', a: 'personal phone', w: 13 }, '.']} />
+        <Fill parts={['Hiding a cost from the customer is called an ', { id: 'c3', a: 'omission', w: 9 }, '. Delivery is free on repeat orders of £', { id: 'c4', a: '8', w: 3 }, ' or more.']} />
         <Notes id="n5" />
       </Section>
       <QuizBlock quiz={q3} />
@@ -199,15 +201,17 @@ export default function Day2Page() {
       {/* 12 ─ Quality */}
       <Section id="s12" n={12} title="Sales quality" sub="What good looks like, and keeping every sign-up">
         <Panel label="The five quality numbers" hi>
-          <Points items={[['£13+', 'average order value'], ['2.5+', 'drop days a week'], ['Fails under 10%', ''], ['75%+', 'taking The Round'], ['75%+', 'still ordering in their 4th week']]} />
+          <Points items={[['£13+', 'average order value (the quality standard is £12+; we aim higher)'], ['2.5+', 'drop days a week'], ['Fails under 10%', ''], ['75%+', 'taking The Round'], ['75%+', 'still ordering in their 4th week']]} />
         </Panel>
         <Panel label="A fail pays nothing">
           <Points items={['Cancelled before the first delivery', 'First delivery more than 8 days away', 'An order under £5', 'No repeat weekly items']} />
+          <P small><B>Want their first delivery more than 8 days away?</B> Don’t sign them up now: tell them to sign up online when they’re ready. Never change the start date without asking them.</P>
         </Panel>
-        <Panel label="The Round">
-          <P small>Present it as an optional benefit that adds value for the customer, never as a must.</P>
+        <Panel label="The Round (membership)">
+          <P small>Present it as an optional benefit that improves value through delivery savings and member perks, never as a must. Only add it where it suits them and they agree.</P>
         </Panel>
         <Fill parts={['We aim for an average order value of £', { id: 'q1x', a: '13', w: 4 }, '+. The first delivery must be within ', { id: 'q2x', a: '8 days', w: 6 }, '. An order under £', { id: 'q3x', a: '5', w: 3 }, ' is a fail.']} />
+        <Fill parts={['The Round is our ', { id: 'q4x', a: 'membership', w: 10 }, '. I present it as an ', { id: 'q5x', a: 'optional benefit', w: 14 }, ', never a must.']} />
         <Notes id="n12" />
       </Section>
       <QuizBlock quiz={q6} />

@@ -61,6 +61,7 @@ export const DAY2_QUIZZES: Quiz[] = [
       { p: 'A house has a “No Cold Calling” sign. You…', o: ['Knock anyway', 'Respect it and don’t knock', 'Leave a leaflet'], a: 1, w: 'Respect the sign.' },
       { p: 'Which is a data protection breach?', o: ['Entering details into the sign-up', 'Photographing a customer’s details on your own phone', 'Confirming the delivery address'], a: 1, w: 'Details only go into the approved sign-up.' },
       { p: 'Which is misleading?', o: ['Explaining delivery days', 'Exaggerating savings or hiding costs', 'Talking about plastic'], a: 1, w: 'Never exaggerate, and never leave out costs.' },
+      { p: 'Which of these is an omission?', o: ['Hiding the delivery fee', 'Explaining the subscription', 'Talking through the terms'], a: 0, w: 'Leaving out a cost, like the delivery fee on orders under £8, is an omission.' },
     ],
   },
   {
@@ -81,6 +82,8 @@ export const DAY2_QUIZZES: Quiz[] = [
     id: 'q6', title: 'Quiz 6 · Product and quality', qs: [
       { p: 'What average order value do we aim for?', o: ['£8+', '£10+', '£13+'], a: 2, w: '£13 or more.' },
       { p: 'Which of these is a fail?', o: ['The customer changes their items', 'A first delivery 12 days away', 'The customer takes The Round'], a: 1, w: 'A first delivery more than 8 days away is a fail.' },
+      { p: 'A customer wants their first delivery in 12 days. You…', o: ['Sign them up anyway', 'Move the date to within 8 days without asking', 'Tell them to sign up online later'], a: 2, w: 'Over 8 days is a fail, and never change the date without asking.' },
+      { p: 'How do you present The Round (membership)?', o: ['As a must', 'As an optional benefit that adds value', 'As a trial'], a: 1, w: 'Optional, and only where it suits them and they agree.' },
       { p: 'A red bottle top is…', o: ['Whole milk', 'Semi-skimmed', 'Skimmed'], a: 1, w: 'Silver whole, red semi-skimmed, blue skimmed.' },
     ],
   },
