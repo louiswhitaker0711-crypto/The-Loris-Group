@@ -1103,29 +1103,94 @@ async def _sector_people(me: dict, sector_date: str) -> tuple[list[dict], bool]:
     sec = await db.sectors.find_one({"office_id": me.get("office_id"), "date": sector_date,
                                      "leader_id": str(me["id"])}, {"_id": 0, "member_ids": 1})
     ids = list(dict.fromkeys([str(me["id"])] + [str(x) for x in (sec or {}).get("member_ids") or []]))
+    return await _named(me, ids), bool(sec)
+
+
+async def _named(me: dict, ids: list) -> list[dict]:
     oids = [ObjectId(i) for i in ids if ObjectId.is_valid(i)]
     users = {str(u["_id"]): u async for u in db.users.find(
         {"_id": {"$in": oids}, "office_id": me.get("office_id"), "deleted": {"$ne": True}}, {"name": 1})}
-    return [{"user_id": i, "name": users[i].get("name") or ""} for i in ids if i in users], bool(sec)
+    return [{"user_id": i, "name": users[i].get("name") or ""} for i in ids if i in users]
+
+
+async def _morning_people(me: dict, day: str) -> tuple[list[dict], bool]:
+    """Planning the sectors in the morning (the Owner or today's sector
+    planner): everyone in today's sectors, sector by sector, or the whole
+    office if no sectors are in yet. Anyone else plans just themselves."""
+    from routes.sector_plan import can_plan, _office_people
+    if not await can_plan(me, day):
+        return await _named(me, [str(me["id"])]), False
+    ids: list = []
+    async for sec in db.sectors.find({"office_id": me.get("office_id"), "date": day}, {"_id": 0, "leader_id": 1, "member_ids": 1}):
+        ids += [str(sec.get("leader_id") or "")] + [str(x) for x in sec.get("member_ids") or []]
+    ids = [i for i in dict.fromkeys(ids) if i]
+    if not ids:
+        ids = [p["user_id"] for p in await _office_people(me.get("office_id"))]
+    return await _named(me, ids), True
+
+
+async def _plan_scope(me: dict, day: str, scope: str) -> tuple[date, list[dict], bool]:
+    """(the Primetime day, the people this person plans for, plans for others).
+    The breakdown plans tomorrow's for the sector; the morning plans today's."""
+    if scope == "morning":
+        d = date_cls_from_iso(day)
+        target = d if d.weekday() < 5 else _next_primetime_day(d)
+        people, leads = await _morning_people(me, day)
+        return target, people, leads
+    people, leads = await _sector_people(me, day)
+    return _next_primetime_day(date_cls_from_iso(day)), people, leads
+
+
+async def plan_lines(office_id: str, sector_date: str, user_ids: list) -> list[str]:
+    """Tomorrow's Primetime for these people, as lines for the WhatsApp
+    breakdown: each impact with who's in it, then learning/watching, then free."""
+    target = _next_primetime_day(date_cls_from_iso(sector_date))
+    week_ending = _coerce_to_sunday(target.isoformat())
+    day_index = target.weekday()
+    ids = [str(u) for u in user_ids]
+    entries = _dedupe_entries([e async for e in db.primetime_entries.find(
+        {"office_id": office_id, "week_ending": week_ending, "day_index": day_index})])
+    mine = [e for e in entries if e.get("subject_user_id") in ids and e.get("mode")]
+    if not mine:
+        return []
+    first = lambda n: (n or "").strip().split(" ")[0] or "Someone"  # noqa: E731
+    out = [f"*Primetime {DAY_NAMES[day_index]}*"]
+    sessions = _build_sessions([e for e in entries if e.get("mode") in ("teaching", "learning", "watching")])
+    shown: set = set()
+    for s in sessions:
+        everyone = [s["host_user_id"]] + [a["user_id"] for a in s["attendees"]]
+        if not any(u in ids for u in everyone):
+            continue
+        names = ", ".join(first(a["name"]) for a in s["attendees"])
+        out.append(f"🎤 {first(s['host_name'])}: {s['topic'] or 'Impact'}" + (f" ({names})" if names else ""))
+        shown.update(everyone)
+    for e in sorted(mine, key=lambda e: (e.get("subject_name") or "").lower()):
+        if e["subject_user_id"] in shown or e["mode"] == "free":
+            continue
+        verb = {"learning": "learning", "watching": "watching", "teaching": "running"}.get(e["mode"], e["mode"])
+        out.append(f"{first(e.get('subject_name'))}: {verb}" + (f" {e['topic']}" if e.get("topic") else ""))
+    free = [first(e.get("subject_name")) for e in mine if e["mode"] == "free"]
+    if free:
+        out.append(f"Free to work with: {', '.join(free)}")
+    return out
 
 
 @router.get("/primetime/sector")
-async def sector_primetime(request: Request, date: Optional[str] = None):  # noqa: A002 (query name)
-    """Tomorrow's Primetime for everyone in the caller's sector today."""
+async def sector_primetime(request: Request, date: Optional[str] = None, scope: str = "breakdown"):  # noqa: A002 (query name)
+    """The Primetime plan for the people you plan for: tomorrow's for your
+    sector at the breakdown, or today's for everyone in (scope=morning)."""
     me = await get_current_user(request)
     sector_date = date or _today_local().isoformat()
     if not _is_iso_date(sector_date):
         raise HTTPException(status_code=400, detail="Bad date")
-    target = _next_primetime_day(date_cls_from_iso(sector_date))
+    target, people, leads = await _plan_scope(me, sector_date, scope)
     week_ending = _coerce_to_sunday(target.isoformat())
     day_index = target.weekday()
-    people, leads = await _sector_people(me, sector_date)
     office_id = me.get("office_id")
-    rows = {e["subject_user_id"]: _entry_out(_scrub(e)) async for e in db.primetime_entries.find(
-        {"office_id": office_id, "week_ending": week_ending, "day_index": day_index,
-         "subject_user_id": {"$in": [p["user_id"] for p in people]}})}
-    day_entries = [_entry_out(_scrub(e)) for e in await db.primetime_entries.find(
-        {"office_id": office_id, "week_ending": week_ending, "day_index": day_index, "mode": "teaching"}).to_list(MAX_ROSTER)]
+    entries = _dedupe_entries([_entry_out(_scrub(e)) async for e in db.primetime_entries.find(
+        {"office_id": office_id, "week_ending": week_ending, "day_index": day_index})])
+    rows = {e["subject_user_id"]: e for e in entries}
+    ids = {p["user_id"] for p in people}
     out = []
     for p in people:
         e = rows.get(p["user_id"]) or {}
@@ -1133,10 +1198,15 @@ async def sector_primetime(request: Request, date: Optional[str] = None):  # noq
                     "session_id": e.get("session_id") or "",
                     "with_label": ", ".join(e.get("with_names") or []) or e.get("with_text") or "",
                     "set_by": e.get("updated_by_name") or ""})
+    grouped = _build_sessions([e for e in entries if e.get("mode") in ("teaching", "learning", "watching")])
     return {"date": target.isoformat(), "day_name": DAY_NAMES[day_index], "week_ending": week_ending,
-            "day_index": day_index, "leads": leads, "people": out,
-            "sessions": [{"session_id": e["session_id"], "host_name": e["subject_name"], "topic": e["topic"]}
-                         for e in day_entries if e.get("session_id")]}
+            "day_index": day_index, "leads": leads, "people": out, "scope": scope,
+            "is_today": target == _today_local(),
+            # Every impact running that day, office-wide, so anyone can join one.
+            "sessions": [{"session_id": s["session_id"], "host_name": s["host_name"], "host_user_id": s["host_user_id"],
+                          "topic": s["topic"], "attendees": s["attendees"],
+                          "mine": s["host_user_id"] in ids or any(a["user_id"] in ids for a in s["attendees"])}
+                         for s in grouped]}
 
 
 def date_cls_from_iso(v: str) -> date:
@@ -1146,6 +1216,7 @@ def date_cls_from_iso(v: str) -> date:
 class SectorEntryBody(BaseModel):
     date: str
     user_id: str
+    scope: Optional[str] = "breakdown"
     mode: Optional[str] = None
     topic: Optional[str] = ""
     session_id: Optional[str] = None
@@ -1158,7 +1229,7 @@ async def save_sector_primetime(body: SectorEntryBody, request: Request):
     me = await get_current_user(request)
     if not _is_iso_date(body.date):
         raise HTTPException(status_code=400, detail="Bad date")
-    people, _ = await _sector_people(me, body.date)
+    target, people, _ = await _plan_scope(me, body.date, body.scope or "breakdown")
     person = next((p for p in people if p["user_id"] == body.user_id), None)
     if not person:
         raise HTTPException(status_code=403, detail="You can plan Primetime for yourself and the people in your sector")
@@ -1166,7 +1237,6 @@ async def save_sector_primetime(body: SectorEntryBody, request: Request):
     if mode is not None and mode not in MODES:
         raise HTTPException(status_code=400, detail=f"mode must be one of {', '.join(MODES)}")
     office_id = me.get("office_id")
-    target = _next_primetime_day(date_cls_from_iso(body.date))
     week_ending = _coerce_to_sunday(target.isoformat())
     day_index = target.weekday()
     key = {"office_id": office_id, "week_ending": week_ending, "day_index": day_index, "subject_user_id": body.user_id}
