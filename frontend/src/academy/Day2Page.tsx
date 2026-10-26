@@ -107,14 +107,14 @@ export default function Day2Page() {
           ['“No Cold Calling” sign?', 'Respect it and don’t knock'],
           ['Data protection:', 'details only go into the approved sign-up. Never photograph or note a customer’s details on your own phone'],
           ['Be honest:', 'never exaggerate savings or make claims that aren’t true'],
-          ['No omissions:', 'leaving something out, like hiding a cost, is an omission and counts as misleading. Delivery is free on repeat weekly orders of £8 or more; under £8 there’s a small delivery fee for every drop, so always tell them'],
+          ['No omissions:', 'leaving something out, like hiding a cost, is an omission and counts as misleading. Always explain the delivery fee clearly; The Round (membership) covers it on every order'],
           ['No pushy or aggressive selling', ''],
           ['If someone seems vulnerable,', 'put their wellbeing first'],
           ['Friends and family', 'only if they genuinely want it and are the account holder'],
           ['Visible ID and smart dress;', 'no swearing, smoking or vaping while you represent the brand'],
         ]} />
         <Fill parts={['If a house has a No Cold Calling sign, I ', { id: 'c1', a: 'don’t knock', w: 11 }, '. A customer’s details never go on my ', { id: 'c2', a: 'personal phone', w: 13 }, '.']} />
-        <Fill parts={['Hiding a cost from the customer is called an ', { id: 'c3', a: 'omission', w: 9 }, '. Delivery is free on repeat orders of £', { id: 'c4', a: '8', w: 3 }, ' or more.']} />
+        <Fill parts={['Hiding a cost from the customer, like the delivery fee, is called an ', { id: 'c3', a: 'omission', w: 9 }, '.']} />
         <Notes id="n5" />
       </Section>
       <QuizBlock quiz={q3} />

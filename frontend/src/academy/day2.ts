@@ -61,7 +61,7 @@ export const DAY2_QUIZZES: Quiz[] = [
       { p: 'A house has a “No Cold Calling” sign. You…', o: ['Knock anyway', 'Respect it and don’t knock', 'Leave a leaflet'], a: 1, w: 'Respect the sign.' },
       { p: 'Which is a data protection breach?', o: ['Entering details into the sign-up', 'Photographing a customer’s details on your own phone', 'Confirming the delivery address'], a: 1, w: 'Details only go into the approved sign-up.' },
       { p: 'Which is misleading?', o: ['Explaining delivery days', 'Exaggerating savings or hiding costs', 'Talking about plastic'], a: 1, w: 'Never exaggerate, and never leave out costs.' },
-      { p: 'Which of these is an omission?', o: ['Hiding the delivery fee', 'Explaining the subscription', 'Talking through the terms'], a: 0, w: 'Leaving out a cost, like the delivery fee on orders under £8, is an omission.' },
+      { p: 'Which of these is an omission?', o: ['Hiding the delivery fee', 'Explaining the subscription', 'Talking through the terms'], a: 0, w: 'Leaving out a cost, like the delivery fee, is an omission.' },
     ],
   },
   {
