@@ -50,7 +50,7 @@ export default function PitchScreen() {
   const [st, setSt] = useState<State>({ counts: {}, ladder: {}, quiz: {}, shown: {} });
   const loaded = useRef(false);
   useEffect(() => {
-    if (q.data && !loaded.current) { loaded.current = true; setSt({ counts: {}, ladder: {}, quiz: {}, shown: {}, ...(q.data.state || {}) }); }
+    if (q.data && !loaded.current) { loaded.current = true; const v: Partial<State> = q.data.state || {}; setSt({ counts: v.counts || {}, ladder: v.ladder || {}, quiz: v.quiz || {}, shown: v.shown || {} }); }
   }, [q.data]);
 
   const timer = useRef<any>(null);
