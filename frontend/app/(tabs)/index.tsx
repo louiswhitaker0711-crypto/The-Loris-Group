@@ -54,6 +54,7 @@ import PrimetimeCard from '../../src/components/home/PrimetimeCard';
 import CoachingTodayCard from '../../src/components/home/CoachingTodayCard';
 import AcademyWorkbookCard from '../../src/components/home/AcademyWorkbookCard';
 import AcademyClassCard from '../../src/components/home/AcademyClassCard';
+import NewStartsButton from '../../src/components/home/NewStartsButton';
 import SectorPromptCard from '../../src/components/home/SectorPromptCard';
 import ResetBoardCard from '../../src/components/home/ResetBoardCard';
 import OwnerIQBanner from '../../src/components/home/OwnerIQBanner';
@@ -548,7 +549,7 @@ export default function HomeScreen() {
     : [
         { label: 'Bells', sub: 'Weekly sign-ups board', icon: 'notifications-outline', route: '/(tabs)/hires?view=bells', tint: 'primary' },
         { label: 'Bulletins', sub: 'Share last week', icon: 'megaphone-outline', route: '/weekly-share', tint: 'green' },
-        { label: 'Add new starter', testKey: 'Add trainee', sub: 'Start their Day 1–8', icon: 'person-add-outline', route: '/add-hire', tint: 'accent' },
+        { label: 'Set up new starts', testKey: 'Add trainee', sub: 'App QR code and their logins', icon: 'qr-code-outline', route: '/new-starts', tint: 'accent' },
         { label: 'Campaign Knowledge', sub: 'Product, pitch & playbook', icon: 'library-outline', route: '/product-knowledge', tint: 'yellow' },
       ];
 
@@ -1599,6 +1600,8 @@ export default function HomeScreen() {
   // Always first: search, then what's due this week, then what's waiting on you.
   const pTop = (
     <>
+      {/* Mon/Tue 13:30–16:00: set up today's new starts (the Owner). */}
+      {isAdmin && <NewStartsButton />}
       <HomeSearch />
       {/* BA Academy (Days 1-2): a new start's workbook, the Owner's class. */}
       {isTrainee && nextPending && nextPending.day_number <= 2 && <AcademyWorkbookCard />}

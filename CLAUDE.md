@@ -58,6 +58,7 @@ The docs in `docs/` are the source of truth for those tasks. If code and docs di
 | `tests/` | Repo-level tests (app config, office scoping) |
 | `docs/` | Owner guides: SETUP, OWNERIQ, BRANDING, SERVICES, CLAUDE_CONNECTOR |
 | `frontend/src/academy/`, `frontend/app/academy/[day].tsx`, `backend/routes/academy.py` | BA Academy workbook (Days 1–2): content and quizzes in `src/academy/day1.ts` + `Day1Page.tsx`; answers saved per person per day in `academy_workbooks`. Never rename a field id people have used |
+| `frontend/app/new-starts.tsx`, `frontend/app/public/join.tsx`, `backend/routes/new_starts.py` | Set up today's new starts (Academy days): Admin adds name + email, gets a starter password + a one-time join code (stored hashed in `join_tokens`, 3 days); `/public/join` lets the new start choose their password with the code and signs them in |
 | `backend/routes/claude_connector.py` | Read-only Claude connector (`/mcp/<token>`): team, Bells, recent weeks, person, field numbers, sectors, quality. No contact details |
 
 ## Business rules worth knowing

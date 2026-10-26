@@ -63,6 +63,7 @@ from routes.onboarding import router as onboarding_router
 from routes.leader_today import router as leader_today_router
 from routes.coaching_today import router as coaching_today_router
 from routes.academy import router as academy_router
+from routes.new_starts import router as new_starts_router
 from routes.orientation import router as orientation_router
 from routes.streak import router as streak_router
 from routes.achievements import router as achievements_router
@@ -170,6 +171,7 @@ api_router.include_router(onboarding_router)
 api_router.include_router(leader_today_router)
 api_router.include_router(coaching_today_router)
 api_router.include_router(academy_router)
+api_router.include_router(new_starts_router)
 api_router.include_router(orientation_router)
 api_router.include_router(achievements_router)
 api_router.include_router(owneriq_router)
@@ -254,6 +256,9 @@ _CSRF_EXEMPT_PATHS = {
     "/api/auth/reset-password",
     "/api/auth/refresh",
     "/api/auth/logout",
+    # New-start join code (routes/new_starts.py): the code in the body is the credential.
+    "/api/new-starts/join/check",
+    "/api/new-starts/join",
 }
 
 
@@ -493,6 +498,8 @@ async def _startup_work():
     await db.primetime_entries.create_index([("office_id", 1), ("session_id", 1)])
     # BA Academy workbooks: one per person per day (routes/academy.py).
     await db.academy_workbooks.create_index([("user_id", 1), ("day", 1)])
+    # New-start join codes (routes/new_starts.py), looked up by their hash.
+    await db.join_tokens.create_index("token_hash")
     # Bells rows are keyed by (office, week, person). UNIQUE since 2026-09-02:
     # the same check-then-insert race primetime had lived in all seven bells
     # writers (POST /bells, both goal PUTs, the planner goal sync + crew save,

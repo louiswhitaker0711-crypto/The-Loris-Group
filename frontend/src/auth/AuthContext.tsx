@@ -59,6 +59,8 @@ interface AuthContextType {
   isBiometricEnabledForUser: () => Promise<boolean>;
   register: (email: string, password: string, name: string, officeId?: string, leaderId?: string | null) => Promise<{ requires_verification: boolean; email: string }>;
   verifyEmail: (email: string, code: string) => Promise<void>;
+  /** Take on a session the server just issued (the new-start join link). */
+  adoptSession: (data: any) => Promise<void>;
   resendOtp: (email: string) => Promise<void>;
   logout: () => Promise<void>;
   setUser: (user: User | null) => void;
@@ -78,6 +80,7 @@ const AuthContext = createContext<AuthContextType>({
   isBiometricEnabledForUser: async () => false,
   register: async () => ({ requires_verification: false, email: '' }),
   verifyEmail: async () => {},
+  adoptSession: async () => {},
   resendOtp: async () => {},
   logout: async () => {},
   setUser: () => {},
@@ -235,6 +238,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setRealUser(userWithoutCredentials(userData));
   };
 
+  const adoptSession = async (data: any) => {
+    if (!data?.token) throw new Error('No session came back. Try the link again.');
+    await setAuthTokens(data.token, data.refresh_token);
+    const userData = { ...data };
+    try { Object.assign(userData, (await apiService.getMe()).data); } catch {}
+    queryClient.clear();
+    setRealUser(userWithoutCredentials(userData));
+  };
+
   const resendOtp = async (email: string) => {
     await apiService.resendOtp(email);
   };
@@ -319,7 +331,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, realUser, isPreviewing, startPreview, exitPreview, loading, login, loginWithBiometric, enableBiometricForCurrentUser, disableBiometricForCurrentUser, isBiometricEnabledForUser, register, verifyEmail, resendOtp, logout, setUser: setRealUser }}>
+    <AuthContext.Provider value={{ user, realUser, isPreviewing, startPreview, exitPreview, loading, login, loginWithBiometric, enableBiometricForCurrentUser, disableBiometricForCurrentUser, isBiometricEnabledForUser, register, verifyEmail, adoptSession, resendOtp, logout, setUser: setRealUser }}>
       {children}
     </AuthContext.Provider>
   );
