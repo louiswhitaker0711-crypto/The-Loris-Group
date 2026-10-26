@@ -12,7 +12,9 @@ Behaviour:
     • At most one push per leader every MIN_GAP_HOURS (state kept in the
       `assessment_reminder_state` collection), repeating until the pending
       assessments are completed — then it naturally goes silent.
-    • One push per leader summarises all their pending trainees.
+    • One push per leader summarises all their pending trainees. Anyone on
+      the new start's bunny hop that day (not its shadow, not a new start)
+      gets the same push as their Coach — they can grade it too.
     • dry_run=True computes who WOULD be notified without sending or
       touching state — used by the admin test endpoint.
 
@@ -96,6 +98,29 @@ async def _resolve_leader_id(trainee_user_id: str, leader_name: str) -> str | No
     return None
 
 
+async def _hop_partners(hire: dict, iso: str) -> list[str]:
+    """Everyone on the new start's bunny hop on `iso`: not its shadows, not a
+    new start (Days 1-8) themselves."""
+    me = str(hire.get("trainee_user_id") or "")
+    if not me:
+        return []
+    out: list[str] = []
+    async for sec in db.sectors.find({"office_id": hire.get("office_id"), "date": iso, "hops.member_ids": me},
+                                     {"_id": 0, "hops": 1}):
+        for hop in sec.get("hops") or []:
+            ids = [str(i) for i in (hop.get("member_ids") or [])]
+            if me not in ids:
+                continue
+            shadows = {str(i) for i in (hop.get("shadow_ids") or [])}
+            out += [i for i in ids if i != me and i not in shadows]
+    out = list(dict.fromkeys(out))
+    if not out:
+        return []
+    new_starts = {str(x["trainee_user_id"]) async for x in db.new_hires.find(
+        {"trainee_user_id": {"$in": out}, "active": True, "current_day": {"$lte": 8}}, {"_id": 0, "trainee_user_id": 1})}
+    return [i for i in out if i not in new_starts]
+
+
 async def assessment_reminder_tick(dry_run: bool = False, force: bool = False) -> dict:
     """One reminder pass. `force` skips the quiet-hours check (admin testing);
     `dry_run` reports without sending or updating throttle state."""
@@ -133,7 +158,7 @@ async def assessment_reminder_tick(dry_run: bool = False, force: bool = False) -
 
     hires = await db.new_hires.find(
         {"active": True, "trainee_user_id": {"$in": list(worked.keys())}},
-        {"_id": 0, "id": 1, "name": 1, "leader": 1, "current_day": 1, "trainee_user_id": 1},
+        {"_id": 0, "id": 1, "name": 1, "leader": 1, "current_day": 1, "trainee_user_id": 1, "office_id": 1},
     ).to_list(500)
     if not hires:
         return {"sent": 0, "candidates": 0, "reason": "no active new starters with bells"}
@@ -172,6 +197,11 @@ async def assessment_reminder_tick(dry_run: bool = False, force: bool = False) -
             by_leader.setdefault(leader_id, []).append(item)
         else:
             unassigned.append(item["name"])
+        # Whoever was out with them on their bunny hop that day gets it too,
+        # so the Coach can push the hop leader to grade (the Owner, 26 Oct 2026).
+        for uid in await _hop_partners(h, worked_on):
+            if uid != leader_id:
+                by_leader.setdefault(uid, []).append(item)
 
     sent = 0
     skipped_gap = 0
