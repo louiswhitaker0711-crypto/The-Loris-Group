@@ -74,6 +74,18 @@ def set_auth_cookies(response: Response, access_token: str, refresh_token: str):
 STARTER_PASSWORD_ALLOWED = ("/auth/me", "/auth/change-password", "/auth/logout")
 
 
+def viewer_may_preview(viewer: dict, target: dict) -> bool:
+    """A read-only viewer may preview as a BA or Coach in their own office:
+    never an Admin (the Owner included), another viewer, or another office."""
+    return (
+        bool(viewer.get("office_id"))
+        and target.get("office_id") == viewer.get("office_id")
+        and target.get("role") in ("trainee", "leader")
+        and not target.get("is_super_admin")
+        and not target.get("is_viewer")
+    )
+
+
 async def get_current_user(request: Request) -> dict:
     # Explicit native/API credentials take precedence over ambient cookies.
     # React Native can retain an old cookie after AsyncStorage has a newer
@@ -110,8 +122,12 @@ async def get_current_user(request: Request) -> dict:
         # or leader. Only ever honored when the REAL authenticated user
         # (just resolved above) is a super admin; fails safe to the real
         # user on any bad/deleted/missing target.
+        # A read-only viewer (the Owner, 26 Oct 2026) may preview too, but
+        # only as a BA or Coach in their own office — never an Admin, never
+        # another office. Preview is read-only for everyone (server.py).
         view_as_id = request.headers.get("X-View-As-User-Id")
-        if view_as_id and user.get("is_super_admin"):
+        viewer = bool(user.get("is_viewer")) and not user.get("is_super_admin")
+        if view_as_id and (user.get("is_super_admin") or viewer):
             try:
                 target = await db.users.find_one({
                     "_id": ObjectId(view_as_id),
@@ -120,11 +136,14 @@ async def get_current_user(request: Request) -> dict:
                 })
             except Exception:
                 target = None
+            if target and viewer and not viewer_may_preview(user, target):
+                target = None
             if target:
                 target["id"] = str(target["_id"])
                 del target["_id"]
                 target.pop("password_hash", None)
-                logger.info(f"view-as: super admin {user['id']} previewing as {target['id']} ({target.get('role')})")
+                who = "viewer" if viewer else "super admin"
+                logger.info(f"view-as: {who} {user['id']} previewing as {target['id']} ({target.get('role')})")
                 return target
         return user
     except pyjwt.ExpiredSignatureError:

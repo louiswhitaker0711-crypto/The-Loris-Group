@@ -298,6 +298,11 @@ async def run_content_fixes(db) -> dict:
     except Exception as e:
         logger.warning(f"content_fixes: manual text fixes failed: {e}")
     try:
+        from core.academy_manual import migrate as _academy_day1
+        result["academy_day1"] = await _academy_day1(db)
+    except Exception as e:
+        logger.warning(f"content_fixes: Academy Day 1 checklist update failed: {e}")
+    try:
         result["checklist_office_backfilled"] = await _backfill_checklist_office_ids(db)
     except Exception as e:
         logger.warning(f"content_fixes: checklist office_id backfill failed: {e}")

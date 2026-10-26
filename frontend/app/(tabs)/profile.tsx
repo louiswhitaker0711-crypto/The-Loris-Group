@@ -133,7 +133,8 @@ export default function ProfileScreen() {
   const queryClient = useQueryClient();
   const { officeId } = useActiveOffice();
   const [showPreviewPicker, setShowPreviewPicker] = useState(false);
-  const canPreview = !!realUser?.is_super_admin;
+  // The Owner, and read-only viewers (BAs and Coaches in their office only).
+  const canPreview = !!realUser?.is_super_admin || !!realUser?.is_viewer;
   const showPreviewCard = canPreview && !isPreviewing;
   const previewCandidatesQ = useQuery({
     queryKey: ['preview-candidates', officeId],
@@ -145,7 +146,7 @@ export default function ProfileScreen() {
   });
   const previewOptions: ChoiceOption<string>[] = useMemo(() => {
     const rows = (previewCandidatesQ.data || []).filter(
-      (u: any) => (u.role === 'trainee' || u.role === 'leader') && u.is_active !== false,
+      (u: any) => (u.role === 'trainee' || u.role === 'leader') && u.is_active !== false && !u.deleted && !u.is_viewer,
     );
     return rows.map((u: any) => ({
       label: u.name,

@@ -26,6 +26,9 @@ interface User {
   phone?: string;
   office_id?: string;
   is_super_admin?: boolean;
+  /** A read-only viewer: sees the app, saves nothing, and may Preview as a
+   *  BA or Coach in their office (the server enforces it). */
+  is_viewer?: boolean;
   /** A Coach the Owner has picked to see the whole office (Live Operations,
    *  Performance Hub, Field KPIs) and to make ID badges. The server enforces
    *  it; this only decides what the screens offer. See src/utils/roleTitle.ts. */

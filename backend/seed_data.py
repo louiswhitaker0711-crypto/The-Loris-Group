@@ -100,3 +100,7 @@ TRAINING_MANUAL = [
     {"day_number":8,"sequence":5,"category":"Quality","topic":"Sign-ups per Hour","what_good_looks_like":"Do the maths together from their own Field IQ data: sign-ups per hour across the worked day, measured against the daily minimum of 4 sign-ups. If they're under it, find the leak together \u2014 hours worked, lap discipline, or conversion \u2014 the data says which.","expected_outcome":"Your day reaches the daily minimum of 4 sign-ups \u2014 and you can show your sign-ups per hour and exactly where the number comes from.","confidence_expected":"Independent","required":True,"grade_options":["Met","Below","Well Above"]},
     {"day_number":8,"sequence":6,"category":"Outcome","topic":"Day 8 Decision","what_good_looks_like":"Final sign-off with admin \u2014 Advance to solo BA / Needs more time / Release from contract \u2014 decided on the week's evidence: behaviours, skills vs this manual, both KPI benchmark days, and both decision points. Written justification logged the same day, decision delivered face to face.","expected_outcome":"You leave Day 8 knowing the outcome and the exact evidence behind it \u2014 in writing, the same day.","confidence_expected":"Independent","required":True,"grade_options":["Promote","Needs More Time","Release"]}
 ]
+
+# The Owner's Day 1 running order (26 Oct 2026): see core/academy_manual.py.
+from core.academy_manual import apply_to_seed as _academy_day1  # noqa: E402
+TRAINING_MANUAL = _academy_day1(TRAINING_MANUAL)
