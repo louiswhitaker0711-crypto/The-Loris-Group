@@ -17,7 +17,8 @@ from fastapi import APIRouter, HTTPException, Request
 
 from auth import get_subtree_ids, require_admin_or_leader
 from database import db
-from routes.bells import compute_totals
+from routes.bells import compute_totals, _enrich_entries_with_teams
+from core.brand import ORG_NAME
 
 router = APIRouter()
 
@@ -247,11 +248,13 @@ async def bulletin_weekly(request: Request, week_ending: Optional[str] = None):
             office_lbl = office_names.get(r["office_id"])
         office_id = r.get("office_id") or ""
         fees = fees_cache.get(office_id) or default_fees
-        computed_earnings = compute_totals(r, fees).get("earnings", 0.0) if fees else 0.0
+        # No Rates saved yet still means the default pay plan, never £0.
+        computed_earnings = compute_totals(r, fees).get("earnings", 0.0)
         per_rep[uid] = {
             "user_id": uid if r.get("user_id") else None,
             "user_name": r.get("user_name") or "Unknown",
             "office": office_lbl or "Unknown",
+            "office_id": office_id,
             "sales": sales,
             "over30": over30,
             "memberships": memberships,
@@ -296,6 +299,20 @@ async def bulletin_weekly(request: Request, week_ending: Optional[str] = None):
         live_name = name_by_uid.get(str(uid))
         if live_name:
             r["user_name"] = live_name
+
+    # ── Each person's team, the way Bells groups them (the Owner, 26 Oct
+    # 2026: the bulletin names their team, not the office). Someone in no
+    # named team reads "Mini <team>", as on Bells. The label rides in
+    # `office` so the screen and the shared image need no change.
+    linked = [{"user_id": r["user_id"], "office_id": r.get("office_id")} for r in per_rep.values() if r["user_id"] and ObjectId.is_valid(str(r["user_id"]))]
+    try:
+        await _enrich_entries_with_teams(linked)
+    except Exception:
+        linked = []
+    team_of = {e["user_id"]: ((e.get("primary_team") or {}).get("team_name") or "") for e in linked}
+    for r in per_rep.values():
+        if r["user_id"]:
+            r["office"] = team_of.get(r["user_id"]) or f"Mini {ORG_NAME}"
 
     # ── Build the three leaderboards ──
     # Tie-breaker per user spec: higher total sales wins. For top_sales the
