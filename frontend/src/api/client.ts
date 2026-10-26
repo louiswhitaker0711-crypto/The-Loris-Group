@@ -1102,7 +1102,7 @@ export const apiService = {
   territoryUpload: (body: { filename: string; data_b64: string; save: boolean }) => api.post('/territory/upload', body),
   getTerritory: () => api.get('/territory'),
   getTerritoryMap: () => api.get('/territory/map'),
-  territoryCheck: (postcode: string) => api.get('/territory/check', { params: { postcode } }),
+  territoryCheck: (postcode: string, shape = false) => api.get('/territory/check', { params: { postcode, ...(shape ? { shape: true } : {}) } }),
   // Bells: paste the WhatsApp report
   parseBellsWhatsapp: (text: string, officeId?: string) => api.post('/bells/parse-whatsapp', { text, office_id: officeId }),
   applyBellsBulk: (body: { date: string; office_id: string; reps: Array<{ user_id: string | null; user_name: string; raw_name?: string; over30: number; under30: number; memberships: number }> }) =>
