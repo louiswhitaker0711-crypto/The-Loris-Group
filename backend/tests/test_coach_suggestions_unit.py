@@ -30,6 +30,13 @@ def test_three_low_days_in_ask_for_a_retrain():
     assert s[0]["why"] == "1 sign-up in their last 3 days in (PA 0.3)"
 
 
+
+def test_retrain_line_is_a_pa_under_1_8():
+    five = [_week("2026-10-11", [("in", 2, 0, 0), ("in", 2, 0, 0), ("in", 1, 0, 0)])]
+    six = [_week("2026-10-11", [("in", 2, 0, 0), ("in", 2, 0, 0), ("in", 2, 0, 0)])]
+    assert suggest("Ayo Example", bells_days(five), [], THROUGH)[0]["kind"] == "retrain"   # PA 1.7
+    assert all(x["kind"] != "retrain" for x in suggest("Ayo Example", bells_days(six), [], THROUGH))  # PA 2.0
+
 def test_a_silver_heavy_mix_asks_for_order_value_and_the_round():
     rows = [_week("2026-10-11", [("in", 1, 3, 1), ("in", 1, 2, 2), ("in", 0, 2, 0), ("in", 1, 1, 1), ("in", 0, 2, 1), ("in", 1, 1, 1)])]
     s = suggest("Sam Example", bells_days(rows), [], THROUGH)
