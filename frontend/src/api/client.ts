@@ -595,8 +595,23 @@ export interface OfficeReviewLeader {
       scoring_pct: number | null; days_worked: number; goal: number | null;
     } | null;
     team_goal: number | null;
+    owners_profit?: number;
     top: Array<{ user_id: string; name: string; earnings: number; sales: number }>;
   };
+}
+
+export type WeekBand = 'super_green' | 'green' | 'amber' | 'red';
+export interface OfficeReviewPerson {
+  user_id: string; name: string; role: string; coach_name: string;
+  last_week: {
+    sales: number; goal: number | null; goal_pct: number | null;
+    piece_avg: number | null; scoring_pct: number | null; days_in: number;
+    gold_pct: number | null; round_pct: number | null; band: WeekBand | null;
+  };
+  flags: { retrain: boolean; last3_pa: number | null; two_zeroes: boolean };
+  trend: Array<{ week_ending: string; sales: number | null }>;
+  quality: Partial<Record<'sales' | 'aov' | 'drops' | 'fail_rate' | 'fourth_week' | 'the_round', number>>;
+  this_week: { goal: number | null; cod_focus: string | null; plan_in: boolean; not_scheduled_days: number[] };
 }
 
 export interface OfficeWeeklyReview {
@@ -611,7 +626,16 @@ export interface OfficeWeeklyReview {
     target: number | null;
     target_pct: number | null;
     target_source: 'office' | 'crew' | null;
+    round_pct?: number | null;
+    owners_profit?: number;
   };
+  people?: OfficeReviewPerson[];
+  office_week?: {
+    target: number | null; goals_sum: number | null; people: number; scheduled: number[];
+    goals_missing: string[];
+    plans_missing: Array<{ user_id: string; name: string; role: string }>;
+  };
+  quality_week?: { week_ending: string; total: OfficeReviewPerson['quality'] } | null;
   highrollers: OfficeHighroller[];
   leaders: OfficeReviewLeader[];
   wins: Array<{ user_id: string; name: string; text: string }>;

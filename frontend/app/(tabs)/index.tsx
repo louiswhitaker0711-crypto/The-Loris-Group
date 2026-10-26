@@ -239,6 +239,17 @@ export default function HomeScreen() {
     }
   }, []);
   const [sundayPlansClosed, setSundayPlansClosed] = useState(false);
+  // Weekly review window (UK time): Saturday from 21:00, all Sunday, all Monday.
+  const isReviewWindow = useMemo(() => {
+    try {
+      const parts = new Intl.DateTimeFormat('en-GB', { weekday: 'short', hour: '2-digit', hourCycle: 'h23', timeZone: APP_TZ }).formatToParts(new Date());
+      const wd = parts.find((x) => x.type === 'weekday')?.value;
+      const hr = Number(parts.find((x) => x.type === 'hour')?.value || 0);
+      return wd === 'Sun' || wd === 'Mon' || (wd === 'Sat' && hr >= 21);
+    } catch {
+      return false;
+    }
+  }, []);
   const [dailyPlansOpen, setDailyPlansOpen] = useState(false);
   const setGoalMut = useMutation({
     mutationFn: (goal: number) => apiService.setTeamWeeklyGoal({ team_weekly_goal: goal }),
@@ -1049,6 +1060,20 @@ export default function HomeScreen() {
 
     </>
   );
+  // Admin: the Weekly review, big, at the top from Saturday 21:00 to Monday.
+  const pReviewCard = isAdmin && isReviewWindow ? (
+    <DepthCard style={styles.card}>
+      <TouchableOpacity onPress={() => router.push('/weekly-review' as any)} activeOpacity={0.75} testID="home-weekly-review">
+        <View style={styles.cardHeaderRow}>
+          <Text style={styles.cardTitle}>Weekly review</Text>
+          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        </View>
+        <Text style={styles.planRosterMeta}>
+          Last week for the office and everyone in it, who needs a retrain, quality, Owner's profit, and this week's goals, plans and who's in.
+        </Text>
+      </TouchableOpacity>
+    </DepthCard>
+  ) : null;
   // BA: "My week" — on Sundays, and any day until it's submitted.
   const pBaWeek = isTrainee && baWeekQ.data && (isPlanningSunday || !baWeekQ.data.submitted_at) ? (
     <DepthCard style={styles.card}>
@@ -1596,11 +1621,12 @@ export default function HomeScreen() {
           folds away under "More". */}
       {wide ? (
         <View style={styles.cols}>
-          <View style={styles.colMain}>{isAdmin && isPlanningSunday && pWeeklyPlans}{pBaWeek}{todayBlock}</View>
+          <View style={styles.colMain}>{pReviewCard}{isAdmin && isPlanningSunday && pWeeklyPlans}{pBaWeek}{todayBlock}</View>
           <View style={styles.colSide}>{moreBlock}</View>
         </View>
       ) : (
         <>
+          {pReviewCard}
           {isAdmin && isPlanningSunday && pWeeklyPlans}
           {pBaWeek}
           {todayBlock}

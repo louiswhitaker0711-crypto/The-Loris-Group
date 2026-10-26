@@ -82,3 +82,13 @@ def test_meeting_cod_pick_survives_a_save():
     days = wp._normalize_days({"2": {"leaders_meeting": "Objection handling", "leaders_meeting_cod": "mod-123"}})
     assert days["2"]["leaders_meeting_cod"] == "mod-123"
     assert days["2"]["morning_topic_cod"] == ""
+
+
+def test_office_target_prefers_the_office_goal_then_top_crew_goals():
+    names = {"a": "A", "b": "B", "c": "C"}
+    up = {"a": "", "b": "a", "c": ""}
+    rows = [{"user_id": "a", "team_weekly_goal": 30}, {"user_id": "b", "team_weekly_goal": 12},
+            {"user_id": "c", "team_weekly_goal": 10}]
+    assert wp._office_target({"weekly_goal": 50}, rows, names, up) == 50
+    assert wp._office_target({}, rows, names, up) == 40      # a + c, b reports to a
+    assert wp._office_target({}, [], names, up) is None

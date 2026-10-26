@@ -265,7 +265,7 @@ function RootNavigator() {
       <Stack.Screen name="weekly-planner" options={{ headerShown: true, title: 'Weekly Planner', headerBackTitle: 'Back', ...MASTHEAD_COMPACT }} />
       <Stack.Screen name="ba-week" options={{ headerShown: true, title: 'My Week', headerBackTitle: 'Back', ...MASTHEAD_COMPACT }} />
       <Stack.Screen name="absence-approvals" options={{ headerShown: true, title: 'Absence Approvals', headerBackTitle: 'Back', ...MASTHEAD_COMPACT }} />
-      <Stack.Screen name="weekly-review" options={{ headerShown: true, title: 'Monday Review', headerBackTitle: 'Back' }} />
+      <Stack.Screen name="weekly-review" options={{ headerShown: true, title: 'Weekly Review', headerBackTitle: 'Back' }} />
       <Stack.Screen name="coaching" options={{ headerShown: false, animation: 'none' }} />
       <Stack.Screen name="product-knowledge" options={{ headerShown: false, animation: 'none' }} />
       <Stack.Screen name="customize-tabs" options={{ headerShown: false }} />

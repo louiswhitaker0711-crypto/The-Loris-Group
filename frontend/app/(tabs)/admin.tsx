@@ -416,7 +416,7 @@ export default function AdminScreen() {
 
   type Tool = { key: string; icon: React.ComponentProps<typeof Ionicons>['name']; title: string; sub: string; onPress: () => void; badge?: number; testID?: string };
   const tools: Tool[] = [
-    { key: 'review', icon: 'podium-outline', title: 'Monday Review', sub: "Last week's numbers and plans", onPress: () => router.push('/weekly-review' as any) },
+    { key: 'review', icon: 'podium-outline', title: 'Weekly Review', sub: "Last week, everyone in it, and this week", onPress: () => router.push('/weekly-review' as any) },
     { key: 'goals', icon: 'flag-outline', title: 'Goal Planner', sub: 'KPI and Rock suggestions', onPress: () => router.push('/planner-goal-menu') },
     usesExternalBadgeMaker
       ? { key: 'badges', icon: 'ribbon-outline', title: 'Badges', sub: 'Opens your badge maker in a new tab', testID: 'admin-badges', onPress: openBadgeMaker }
