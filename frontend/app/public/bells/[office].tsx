@@ -19,6 +19,7 @@ import { APP_NAME, APP_SHORT_NAME } from '../../../src/theme/brand';
 import { SUPER_GREEN_WEEK_MIN, GREEN_WEEK_MIN, AMBER_WEEK_MIN, RED_WEEK_MAX } from '../../../src/utils/weekBands';
 import { dayBandText } from '../../../src/utils/dayBands';
 import SheetTable from '../../../src/components/bells/TableView';
+import TeamMapView, { type TeamMapNode } from '../../../src/components/spider/TeamMapView';
 
 // ─────────────────────────── helpers ───────────────────────────
 function currentWeekEndingISO(): string {
@@ -90,6 +91,8 @@ type Entry = {
 };
 
 type Payload = {
+  /** The office's spider diagram, rooted at the Owner (no contact details). */
+  tree?: TeamMapNode | null;
   /** The same sheet the app shows (as an Admin of the office sees it). */
   sheet?: { entries: any[]; week_ending?: string; mini_team_goal?: number | null };
   office_name: string;
@@ -133,6 +136,7 @@ export default function PublicBellsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [codeLoaded, setCodeLoaded] = useState(false);
   const [openDayIdx, setOpenDayIdx] = useState<number | null>(null);
+  const [view, setView] = useState<'sheet' | 'spider'>('sheet');
 
   // Load stored code from storage on mount if no code in URL
   useEffect(() => {
@@ -190,6 +194,14 @@ export default function PublicBellsScreen() {
   }, [code, weekEnding, officeSlug]);
 
   useEffect(() => { if (code && codeLoaded) fetchData(); }, [fetchData, code, codeLoaded]);
+  // Each person's sign-ups and goal this week, for the spider's person card.
+  const spiderWeek = useMemo(() => {
+    const m: Record<string, { sales?: number | null; target?: number | null }> = {};
+    for (const e of (data?.sheet?.entries || [])) {
+      if (e?.user_id) m[e.user_id] = { sales: e.total_sales ?? null, target: e.weekly_goal ?? null };
+    }
+    return m;
+  }, [data]);
   // Kept up to date: reload every minute while the page is open (quietly: the
   // sheet stays on screen while it fetches).
   useEffect(() => {
@@ -349,8 +361,23 @@ export default function PublicBellsScreen() {
             </View>
           </View>
 
-          {/* Weekly Table */}
-          {entries.length === 0 ? (
+          {/* Sheet or the office's spider diagram (the Owner, 26 Oct 2026). */}
+          {!!data?.tree && (
+            <View style={{ flexDirection: 'row', gap: 6, marginBottom: 10 }}>
+              {(['sheet', 'spider'] as const).map((v) => (
+                <TouchableOpacity key={v} onPress={() => setView(v)}
+                  style={[styles.actionBtn, view === v && styles.actionBtnPrimary, { flex: 1, justifyContent: 'center' }]}>
+                  <Ionicons name={v === 'sheet' ? 'grid-outline' : 'git-network-outline'} size={14} color={view === v ? colors.onPrimary : colors.text} />
+                  <Text style={[styles.actionBtnText, view === v && { color: colors.onPrimary }]}>{v === 'sheet' ? 'Sheet' : 'Spider'}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+          {view === 'spider' && data?.tree ? (
+            <View style={{ height: 620, borderRadius: 14, overflow: 'hidden' }}>
+              <TeamMapView root={data.tree} week={spiderWeek} />
+            </View>
+          ) : entries.length === 0 ? (
             <View style={styles.emptyBox}>
               <Ionicons name="document-text-outline" size={40} color={colors.textMuted} />
               <Text style={styles.emptyText}>No entries for this week yet.</Text>

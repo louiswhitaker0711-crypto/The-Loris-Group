@@ -2669,7 +2669,15 @@ async def public_bells(office_slug: str, request: Request):
     )
 
     await attach_recruit_badges(enriched)
+    # The office's spider diagram (the Owner, 26 Oct 2026), rooted at the
+    # Owner, with no contact details.
+    try:
+        from routes.training_routes import public_office_tree
+        tree = await public_office_tree(office["id"])
+    except Exception:
+        tree = None
     return {
+        "tree": tree,
         "office_name": office.get("name"),
         "office_slug": office_slug,
         "week_ending": week_ending,

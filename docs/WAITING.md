@@ -14,6 +14,7 @@ Agreed changes that aren't built yet. Add a line when something is agreed; remov
 
 ## Recently shipped
 
+- 26 Oct: Viewers' spider diagram is the Owner's (rooted at the Owner, not the viewer); the public Bells link has a Sheet / Spider switch with the office's spider (no emails or phone numbers).
 - 26 Oct: Read-only viewers can Preview as a BA or Coach in their own office (never an Admin or another office); everything else stays read-only.
 - 26 Oct: Academy Day 1 marking checklist in the Owner's running order (`core/academy_manual.py`, runs once on a live database): first week, look-for & core values, indirect vs direct, our model, expectations, progression, self-employed, payments, your worth, FAQs; The 'A' Customer, What Good Looks Like and Retention Standards moved to Day 2. Unstarted Day 1/2 checklists rebuilt.
 - 26 Oct: Welcome for new starts (`/welcome`, opens once from their Home on Days 1–2): what we look for (work ethic, willingness to learn, good attitude) and Ginger Promotions' six core values from the First Week Booklet (`frontend/src/academy/values.ts`); the core values also sit in the Day 1 workbook's first section.

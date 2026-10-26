@@ -971,6 +971,38 @@ async def sync_hierarchy(request: Request):
 
 # ==================== HIERARCHY ROUTES ====================
 
+async def office_owner_doc(office_id: Optional[str]) -> Optional[dict]:
+    """The office's Owner: its super admin, else its first real Admin (never a
+    demo or viewer account). Read-only viewers and the public Bells link see
+    the team from here."""
+    if not office_id:
+        return None
+    base = {"office_id": office_id, "is_active": {"$ne": False}, "deleted": {"$ne": True},
+            "is_demo": {"$ne": True}, "is_viewer": {"$ne": True}}
+    return (await db.users.find_one({**base, "is_super_admin": True})
+            or await db.users.find_one({**base, "role": "admin"}))
+
+
+def _strip_contacts(node: dict) -> dict:
+    """A tree safe to show on a public link: no emails or phone numbers."""
+    node.pop("email", None)
+    node.pop("phone", None)
+    for ch in node.get("children") or []:
+        _strip_contacts(ch)
+    return node
+
+
+async def public_office_tree(office_id: str) -> Optional[dict]:
+    """The office's spider diagram for the public Bells link: rooted at the
+    Owner, pruned to the office, without contact details."""
+    owner = await office_owner_doc(office_id)
+    if not owner:
+        return None
+    tree = await build_tree_node(owner)
+    _prune_tree_to_office(tree, office_id)
+    return _strip_contacts(tree)
+
+
 async def build_tree_node(user_doc: dict) -> dict:
     uid = str(user_doc["_id"])
     role = user_doc.get("role", "")
@@ -1082,6 +1114,12 @@ async def get_team_tree(request: Request, office: Optional[str] = None):
         if not user.get("office_id"):
             raise HTTPException(status_code=403, detail="Your account is not assigned to an office")
         selected_office = user["office_id"]
+    # A read-only viewer sees the office as the Owner does (the Owner, 26 Oct
+    # 2026): the spider is rooted at the Owner, not at the viewer's account.
+    if viewer_doc.get("is_viewer") and not user.get("is_super_admin"):
+        owner = await office_owner_doc(viewer_doc.get("office_id"))
+        if owner:
+            root_doc = owner
     if selected_office and user.get("is_super_admin") and selected_office != viewer_doc.get("office_id"):
         office_admin = await db.users.find_one({
             "office_id": selected_office, "role": "admin",
