@@ -577,7 +577,7 @@ export default function AssessmentScreen() {
                     </View>
                     {items.map((item) => {
                       const expanded = !!expandedTopics[item.id];
-                      const canShowTeach = !isTrainee && !!item.what_good_looks_like;
+                      const canShowTeach = !(isTrainee && (user as any)?.new_hire_id === (assessment as any)?.new_hire_id) && !!item.what_good_looks_like;
                       const canShowGood = !!item.expected_outcome;
                       const hasManual = canShowTeach || canShowGood;
                       return (
