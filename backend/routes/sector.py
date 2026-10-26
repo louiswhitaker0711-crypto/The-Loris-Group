@@ -246,7 +246,8 @@ def setup_text(rows: list, iso: str, sector_goal: Optional[int] = None, postcode
     return "\n".join(out)
 
 
-def breakdown_text(rows: list, iso: str, sector_goal: Optional[int] = None, postcode: str = "") -> str:
+def breakdown_text(rows: list, iso: str, sector_goal: Optional[int] = None, postcode: str = "",
+                   primetime: Optional[list] = None) -> str:
     out = [f"*Breakdown* {_label(iso)}"]
     if postcode:
         out.append(f"Postcode: {postcode}")
@@ -274,7 +275,19 @@ def breakdown_text(rows: list, iso: str, sector_goal: Optional[int] = None, post
             out.append(f"Proud of: {b['proud']}")
         if b.get("change"):
             out.append(f"Change: {b['change']}")
+    if primetime:
+        out += [""] + list(primetime)
     return "\n".join(out)
+
+
+async def _primetime_lines(office_id, iso: str, ids: list) -> list:
+    """Tomorrow's Primetime plan for these people, for the WhatsApp breakdown."""
+    try:
+        from routes.primetime import plan_lines
+        return await plan_lines(office_id, iso, ids)
+    except Exception as ex:  # the message still goes without it
+        logger.warning("breakdown primetime lines failed: %s", ex)
+        return []
 
 
 # ── Who can see / edit whom ──────────────────────────────────────────────────
@@ -445,7 +458,10 @@ async def sector_day(request: Request, date: Optional[str] = None):
                     "kpi_metrics": [{"key": k, "label": v, "loa": LOA.get(k)} for k, v in KPI_METRICS.items()]},
         "people": rows,
         "whatsapp": {"setup": setup_text(rows, iso, (sector or {}).get("goal"), (sector or {}).get("postcode") or ""),
-                     "breakdown": breakdown_text(rows, iso, (sector or {}).get("goal"), (sector or {}).get("postcode") or "")},
+                     "breakdown": breakdown_text(rows, iso, (sector or {}).get("goal"), (sector or {}).get("postcode") or "",
+                                                 await _primetime_lines(user.get("office_id"), iso,
+                                                                        ([sector.get("leader_id")] + list(sector.get("member_ids") or [])) if sector
+                                                                        else [r.get("user_id") for r in rows]))},
     }
 
 
@@ -1114,7 +1130,9 @@ async def sector_board(request: Request, date: Optional[str] = None):
                     "can_delete": (user.get("role") or "").lower() == "admin"
                                   or (sec["leader_id"] == str(user["id"]) and await _deletable(sec)),
                     "whatsapp": {"setup": setup_text(rows, iso, sg, sec.get("postcode") or ""),
-                                 "breakdown": breakdown_text(rows, iso, sg, sec.get("postcode") or "")}})
+                                 "breakdown": breakdown_text(rows, iso, sg, sec.get("postcode") or "",
+                                                             await _primetime_lines(user.get("office_id"), iso,
+                                                                                    [sec.get("leader_id")] + list(sec.get("member_ids") or [])))}})
     return {"date": iso, "sectors": out}
 
 

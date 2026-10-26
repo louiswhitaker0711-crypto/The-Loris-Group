@@ -1016,8 +1016,9 @@ export const apiService = {
     mode?: 'learning' | 'watching'; office?: string;
   }) => api.post<{ ok: boolean; entry: PrimetimeEntry }>('/primetime/session/join', body),
   // Primetime at the sector breakdown: tomorrow's plan for you and your sector.
-  getSectorPrimetime: (date: string) => api.get('/primetime/sector', { params: { date } }),
-  saveSectorPrimetime: (body: { date: string; user_id: string; mode: PrimetimeMode | null; topic?: string; session_id?: string }) =>
+  getSectorPrimetime: (date: string, scope: 'breakdown' | 'morning' = 'breakdown') =>
+    api.get('/primetime/sector', { params: { date, scope } }),
+  saveSectorPrimetime: (body: { date: string; user_id: string; mode: PrimetimeMode | null; topic?: string; session_id?: string; scope?: 'breakdown' | 'morning' }) =>
     api.put('/primetime/sector', body),
   clearPrimetimeEntry: (params: {
     week_ending: string; day_index: number; subject_user_id: string; office?: string;

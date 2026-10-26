@@ -22,6 +22,7 @@ import SectorRecap from '../src/components/sector/SectorRecap';
 import PostcodeMiniMap from '../src/components/sector/PostcodeMiniMap';
 import PostcodePair from '../src/components/sector/PostcodePair';
 import HopLines, { type HopLine } from '../src/components/sector/HopLines';
+import BreakdownPrimetime from '../src/components/sector/BreakdownPrimetime';
 import { splitPostcodes } from '../src/utils/postcodes';
 
 type Person = { user_id: string; name: string; role: string; sector_leader_id?: string | null; in_today?: boolean; no_show?: boolean; not_scheduled?: boolean };
@@ -58,6 +59,7 @@ export default function SectorPlanScreen() {
   const sectors: Sector[] = d?.sectors || [];
   const refresh = (data?: any) => {
     if (data) qc.setQueryData(['sector-plan', date], data); else q.refetch();
+    qc.invalidateQueries({ queryKey: ['sector-primetime'] });
     ['sector-days', 'sector-board', 'sector-status'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
   };
   // Load the board from the server, unless the planner has unsaved local edits.
@@ -276,6 +278,9 @@ export default function SectorPlanScreen() {
         </Pressable>
       )}
       {!sent && board.length > 0 && dirty && <Text style={s.small}>Save all first, then you can confirm.</Text>}
+
+      {/* Today's Primetime, planned alongside the sectors (the Owner 26 Oct 2026). */}
+      {board.length > 0 && !dirty && <BreakdownPrimetime date={date} scope="morning" />}
 
       {(() => {
         const unplaced = people.filter((p) => canPlace(p) && !p.no_show && !p.not_scheduled && p.role !== 'admin' && !board.some((x) => x.member_ids.includes(p.user_id)));
