@@ -1579,8 +1579,11 @@ export default function HomeScreen() {
       <MyWeekCard />
     </>
   );
-  const todayBA = fieldLayout ? <>{baField}{!inField && baPlanning}</> : inBreakdown ? baBreakdown : (
+  // A BA leading a new start's bunny hop grades their day (the Owner's call,
+  // 26 Oct 2026): Coaching today hides itself for everyone else.
+  const todayBA = fieldLayout ? <><CoachingTodayCard />{baField}{!inField && baPlanning}</> : inBreakdown ? <><CoachingTodayCard />{baBreakdown}</> : (
     <>
+      <CoachingTodayCard />
       {pSectorPrompt}
       {baPlanning}
       <HomeAreaMap />

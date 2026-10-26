@@ -331,6 +331,42 @@ async def get_subtree_ids(user_id: str):
     return ordered
 
 async def can_access_hire(user: dict, hire_id: str) -> bool:
+    """Can this user see and grade a new start's days: their Coach's tree (or
+    an Admin), or whoever is out with them on their bunny hop."""
+    if await _can_access_hire_tree(user, hire_id):
+        return True
+    return await leads_hop_with_hire(user, hire_id)
+
+
+HOP_GRADE_DAYS = 2   # today and yesterday, so a day can be graded the next morning
+
+
+async def leads_hop_with_hire(user: dict, hire_id: str) -> bool:
+    """The Owner's call (26 Oct 2026): the leader on a new start's bunny hop
+    grades their day. That's anyone in the same hop today or yesterday who
+    isn't a shadow on it and isn't a new start (Days 1-8) themselves, so a BA
+    leading the hop can grade as well as a Coach."""
+    role = (user.get("role") or "").lower()
+    if role not in ("trainee", "leader") or not user.get("office_id"):
+        return False
+    me = str(user.get("id") or "")
+    hire = await db.new_hires.find_one({"id": hire_id}, {"_id": 0, "office_id": 1, "trainee_user_id": 1})
+    them = str((hire or {}).get("trainee_user_id") or "")
+    if not hire or not them or them == me or hire.get("office_id") != user.get("office_id"):
+        return False
+    if await db.new_hires.find_one({"trainee_user_id": me, "active": True, "current_day": {"$lte": 8}}, {"_id": 1}):
+        return False
+    from core.app_time import APP_TZ
+    today = datetime.now(APP_TZ).date()
+    dates = [(today - timedelta(days=i)).isoformat() for i in range(HOP_GRADE_DAYS)]
+    sec = await db.sectors.find_one({
+        "office_id": user.get("office_id"), "date": {"$in": dates},
+        "hops": {"$elemMatch": {"member_ids": {"$all": [me, them]}, "shadow_ids": {"$ne": me}}},
+    }, {"_id": 1})
+    return bool(sec)
+
+
+async def _can_access_hire_tree(user: dict, hire_id: str) -> bool:
     """Check if user can access a hire's assessments/data based on hierarchy."""
     scoped_hire = None
     if not user.get("is_super_admin"):

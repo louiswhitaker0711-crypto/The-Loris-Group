@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from database import db
 from auth import (
-    get_current_user, require_admin, require_super_admin, can_access_hire,
+    get_current_user, require_admin, require_super_admin, can_access_hire, leads_hop_with_hire,
     get_subtree_ids, hash_password, MIN_PASSWORD_LENGTH,
 )
 from models import (
@@ -339,11 +339,13 @@ async def _day_kpis(a: dict) -> Optional[dict]:
 @router.put("/assessment/{assessment_id}")
 async def update_assessment(assessment_id: str, update: DailyAssessmentUpdate, request: Request):
     user = await get_current_user(request)
-    if user.get("role") == "trainee":
-        raise HTTPException(status_code=403, detail="New BAs cannot update assessments")
     assessment = await db.daily_assessments.find_one({"id": assessment_id})
     if not assessment:
         raise HTTPException(status_code=404, detail="Assessment not found")
+    # A BA can't grade their own days, only a new start they're leading on a
+    # bunny hop (the Owner's call, 26 Oct 2026).
+    if user.get("role") == "trainee" and not await leads_hop_with_hire(user, assessment["new_hire_id"]):
+        raise HTTPException(status_code=403, detail="New BAs cannot update assessments")
     if not await can_access_hire(user, assessment["new_hire_id"]):
         raise HTTPException(status_code=403, detail="You don't have access to update this assessment")
     update_dict = {k: v for k, v in update.dict().items() if v is not None}

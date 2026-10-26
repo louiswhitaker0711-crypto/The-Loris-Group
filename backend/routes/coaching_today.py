@@ -57,6 +57,15 @@ def people_with(sec: Optional[dict], me: str) -> list[str]:
     return [i for i in dict.fromkeys(everyone) if i and i != me]
 
 
+def hop_mates(sec: Optional[dict], me: str) -> list[str]:
+    """The others on the caller's own bunny hop today (not if they're its shadow)."""
+    for h in (sec or {}).get("hops") or []:
+        ids = [str(i) for i in (h.get("member_ids") or [])]
+        if me in ids and me not in [str(i) for i in (h.get("shadow_ids") or [])]:
+            return [i for i in ids if i != me]
+    return []
+
+
 async def _my_sector(user: dict, iso: str) -> Optional[dict]:
     from routes.coverage import sector_of
     return await sector_of(str(user["id"]), iso, user.get("office_id"))
@@ -82,9 +91,18 @@ async def _manual_notes(office_id: Optional[str], day: int) -> dict[str, dict]:
 async def coaching_today(request: Request):
     user = await get_current_user(request)
     iso = _today()
-    if (user.get("role") or "").lower() not in ("leader", "admin"):
+    role = (user.get("role") or "").lower()
+    if role not in ("leader", "admin", "trainee"):
         return {"date": iso, "people": []}
-    ids = people_with(await _my_sector(user, iso), str(user["id"]))
+    sec = await _my_sector(user, iso)
+    if role == "trainee":
+        # A BA leading a new start's bunny hop (the Owner's call, 26 Oct 2026):
+        # only the people on their own hop, and only if they aren't a new start.
+        ids = hop_mates(sec, str(user["id"]))
+        if not ids:
+            return {"date": iso, "people": []}
+    else:
+        ids = people_with(sec, str(user["id"]))
     proj = {"_id": 0, "id": 1, "name": 1, "current_day": 1, "office_id": 1}
     hires = await db.new_hires.find(
         {"active": True, "office_id": user.get("office_id"), "trainee_user_id": {"$in": ids}}, proj,
@@ -102,6 +120,8 @@ async def coaching_today(request: Request):
     for h in hires:
         day = int(h.get("current_day") or 1)
         if day > FIRST_DAYS:
+            continue
+        if role == "trainee" and not await can_access_hire(user, h["id"]):
             continue
         a = await db.daily_assessments.find_one(
             {"new_hire_id": h["id"], "day_number": day},
@@ -136,7 +156,7 @@ async def coaching_today(request: Request):
 @router.put("/coaching/today/taught")
 async def tick_taught(request: Request):
     user = await get_current_user(request)
-    if (user.get("role") or "").lower() not in ("leader", "admin"):
+    if (user.get("role") or "").lower() not in ("leader", "admin", "trainee"):
         raise HTTPException(status_code=403, detail="For Coaches")
     body = await request.json()
     item = await db.delivery_checklist.find_one({"id": str(body.get("item_id") or "")}, {"_id": 0})
