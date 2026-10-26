@@ -4,7 +4,6 @@ Agreed changes that aren't built yet. Add a line when something is agreed; remov
 
 ## Agreed, not built
 
-- "Learn your pitch": from 18:00 after a new start's Day 1, the app sends them the pitch with annotations. Waiting on the Owner's pitch text.
 - BA Academy Day 2 workbook (`frontend/src/academy/`): waiting on the Owner's Day 2 running order. Add three sections the final quiz tests but the slides don't cover: Code of Practice / compliance (where hidden slide 39 sits, after practising the introduction), avoiding fails, and The Round + 2.5+ drops in Sales quality; red-flag customers in Who we can't sign up; "it's a subscription, be honest about cancelling" in the sign-up process and Rehash. The final quiz (Microsoft Form) ends Day 2.
 
 ## Needs a decision
@@ -13,6 +12,7 @@ Agreed changes that aren't built yet. Add a line when something is agreed; remov
 
 ## Recently shipped
 
+- 26 Oct: Learn your pitch (`/pitch`, `routes/pitch.py`, content `frontend/src/academy/pitch.ts`): the Owner's pitch word for word, then line by line with why (COD links) and how to say it; Say it (10 out loud · 10 mirror · 10 recorded), Learn (first letters), Check (6 questions). A new start's first night is Read only; the rest opens 18:00 the next day. Notification at 18:00 on their first day (and on start-up after 18:00). Card at the bottom of everyone's Home; near the top for new starts.
 - 26 Oct: Plan your earnings (`/earnings-plan`, `core/earnings_plan.py`): needs and wants per week or month; per sign-up = Gold up front + The Round on 75% (from Rates, £26 by default); breakeven = weekly needs ÷ that, target = needs + wants. Fills Bells' BE column (unless typed), shows on the weekly plan (with a below-breakeven warning), Coaches can open their team's; a Home prompt when missing or over a month old; the monthly goal planner's budget (now with /wk or /mo per row) saves into it.
 - 26 Oct: Viewers' spider diagram is the Owner's (rooted at the Owner, not the viewer); the public Bells link has a Sheet / Spider switch with the office's spider (no emails or phone numbers).
 - 26 Oct: Read-only viewers can Preview as a BA or Coach in their own office (never an Admin or another office); everything else stays read-only.

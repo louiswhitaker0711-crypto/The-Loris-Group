@@ -56,6 +56,7 @@ import AcademyWorkbookCard from '../../src/components/home/AcademyWorkbookCard';
 import AcademyClassCard from '../../src/components/home/AcademyClassCard';
 import NewStartsButton from '../../src/components/home/NewStartsButton';
 import EarningsPlanCard from '../../src/components/home/EarningsPlanCard';
+import PitchCard from '../../src/components/home/PitchCard';
 import SectorPromptCard from '../../src/components/home/SectorPromptCard';
 import ResetBoardCard from '../../src/components/home/ResetBoardCard';
 import OwnerIQBanner from '../../src/components/home/OwnerIQBanner';
@@ -1607,6 +1608,8 @@ export default function HomeScreen() {
       {/* BA Academy (Days 1-2): a new start's workbook, the Owner's class. */}
       {isTrainee && nextPending && nextPending.day_number <= 2 && <AcademyWorkbookCard />}
       {isAdmin && <AcademyClassCard />}
+      {/* A new start's pitch, from 18:00 on their first day. */}
+      {isTrainee && <PitchCard place="top" />}
       {/* Everyone knows their breakeven: no plan yet, or over a month old (not on Academy days, not viewers). */}
       {!(user as any)?.is_viewer && !(isTrainee && nextPending && nextPending.day_number <= 2) && <EarningsPlanCard />}
       {pReviewCard}
@@ -1615,6 +1618,7 @@ export default function HomeScreen() {
       {!isTrainee && <WaitingOnYouCard toGrade={leaderTodayQ.data?.counts?.awaiting || 0} />}
     </>
   );
+  // Everyone has their pitch at the bottom of Home (the Owner, 26 Oct 2026).
   const moreBlock = isTrainee ? moreBA : moreCoach;
 
   return (
@@ -1687,6 +1691,8 @@ export default function HomeScreen() {
           <MoreSection>{moreBlock}</MoreSection>
         </>
       )}
+      {/* Everyone has their pitch at the bottom of Home (the Owner, 26 Oct 2026). */}
+      <PitchCard place="bottom" />
 
       {/* ── Quick actions ── */}
       <View style={styles.kickerRow}>

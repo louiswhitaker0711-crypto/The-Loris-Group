@@ -284,6 +284,7 @@ function RootNavigator() {
       <Stack.Screen name="public/join" options={{ headerShown: false }} />
       <Stack.Screen name="public/signup" options={{ headerShown: false }} />
       <Stack.Screen name="welcome" options={{ headerShown: false }} />
+      <Stack.Screen name="pitch" options={{ headerShown: true, title: 'Your pitch', headerBackTitle: 'Back', ...MASTHEAD_COMPACT }} />
       <Stack.Screen name="earnings-plan" options={{ headerShown: true, title: 'Plan your earnings', headerBackTitle: 'Back', ...MASTHEAD_COMPACT }} />
       <Stack.Screen name="new-starts" options={{ headerShown: true, title: 'New starts', headerBackTitle: 'Back', ...MASTHEAD_COMPACT }} />
       </Stack>

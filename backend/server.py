@@ -65,6 +65,7 @@ from routes.coaching_today import router as coaching_today_router
 from routes.academy import router as academy_router
 from routes.new_starts import router as new_starts_router
 from routes.earnings_plan import router as earnings_plan_router
+from routes.pitch import router as pitch_router
 from routes.orientation import router as orientation_router
 from routes.streak import router as streak_router
 from routes.achievements import router as achievements_router
@@ -174,6 +175,7 @@ api_router.include_router(coaching_today_router)
 api_router.include_router(academy_router)
 api_router.include_router(new_starts_router)
 api_router.include_router(earnings_plan_router)
+api_router.include_router(pitch_router)
 api_router.include_router(orientation_router)
 api_router.include_router(achievements_router)
 api_router.include_router(owneriq_router)
@@ -1147,6 +1149,20 @@ async def _startup_work():
             id="orientation_nudge_d1",
             replace_existing=True,
         )
+
+        # "Learn your pitch" to today's new starts at 18:00 (routes/pitch.py),
+        # once each; also shortly after start-up, so a deploy after 18:00
+        # still reaches today's new starts.
+        async def _pitch_push():
+            try:
+                from routes.pitch import pitch_push_tick
+                logger.info(f"pitch push: {await pitch_push_tick()} sent")
+            except Exception as ex:
+                logger.error(f"pitch push failed: {ex}")
+
+        scheduler.add_job(_pitch_push, "cron", hour=18, minute=0, id="pitch_push", replace_existing=True)
+        scheduler.add_job(_pitch_push, "date", run_date=datetime.now(APP_TZ) + timedelta(seconds=90),
+                          id="pitch_push_startup", replace_existing=True)
 
         scheduler.add_job(
             _orientation_nudge_d2,
