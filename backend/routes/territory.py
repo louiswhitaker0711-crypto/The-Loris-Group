@@ -128,9 +128,10 @@ async def sector_for_postcode(office_id: Optional[str], postcode: str, with_shap
 
 
 @router.get("/territory/check")
-async def territory_check(request: Request, postcode: str = ""):
+async def territory_check(request: Request, postcode: str = "", shape: bool = False):
     """For the set-up screen: is this postcode in the territory, and how has
-    its sector been worked? One sector's figures only."""
+    its sector been worked? One sector's figures only; `shape` adds its
+    outline (the Plan sectors map)."""
     user = await get_current_user(request)
     if (user.get("role") or "").lower() not in ("leader", "admin"):
         # A BA only when they lead a sector today: one sector at a time.
@@ -142,7 +143,7 @@ async def territory_check(request: Request, postcode: str = ""):
     if not has:
         return {"loaded": False}
     code = postcode_to_sector(postcode)
-    s = await sector_for_postcode(user.get("office_id"), postcode)
+    s = await sector_for_postcode(user.get("office_id"), postcode, with_shape=shape)
     if not s:
         return {"loaded": True, "code": code, "found": False}
     s.pop("bbox", None)

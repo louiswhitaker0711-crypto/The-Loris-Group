@@ -208,7 +208,7 @@ export default function SectorPlanScreen() {
                 <Text style={s.label}>Postcode</Text>
                 <PostcodePair key={`pc-${sec.leader_id}`} value={sec.postcode} onChange={(v) => setField(sec.leader_id, 'postcode', v)}
                   placeholder="e.g. WF4 2" inputStyle={s.input} />
-                {splitPostcodes(sec.postcode).map((pc) => <PostcodeMiniMap key={pc} postcode={pc} />)}
+                {splitPostcodes(sec.postcode).map((pc) => <PostcodeMiniMap key={pc} postcode={pc} marked height={280} />)}
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.label}>Goal</Text>
