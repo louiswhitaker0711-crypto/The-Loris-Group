@@ -2,7 +2,8 @@
  * RatingChips — one-tap 5-level rating row for the end-of-day grader.
  *
  * Replaces the old free-text 0–10 keyboard fields. Each chip maps to a fixed
- * score (Poor 2 · Below 4 · OK 6 · Good 8 · Excellent 10) so the backend
+ * score (Not yet 2 · Needs work 4 · Getting there 6 · Good 8 · Excellent 10 —
+ * gentler words, the Owner's call 26 Oct 2026; same scores) so the backend
  * keeps receiving the same 0–10 numbers and historical data stays comparable.
  * Loading a legacy draft (e.g. a typed 7) highlights the nearest chip while
  * preserving the stored value until the leader taps a chip.
@@ -14,9 +15,9 @@ import { fonts } from '../../theme/brand';
 import { haptics } from '../../utils/haptics';
 
 export const RATING_LEVELS = [
-  { label: 'Poor', value: 2 },
-  { label: 'Below', value: 4 },
-  { label: 'OK', value: 6 },
+  { label: 'Not yet', value: 2 },
+  { label: 'Needs work', value: 4 },
+  { label: 'Getting there', value: 6 },
   { label: 'Good', value: 8 },
   { label: 'Excellent', value: 10 },
 ] as const;
@@ -63,7 +64,7 @@ export function RatingChips({ label, value, onChange, disabled }: Props) {
               accessibilityRole="button"
               accessibilityState={{ selected: active }}
             >
-              <Text style={[styles.chipText, active && styles.chipTextActive]} numberOfLines={1}>
+              <Text style={[styles.chipText, active && styles.chipTextActive]} numberOfLines={2}>
                 {l.label}
               </Text>
             </TouchableOpacity>
@@ -81,11 +82,12 @@ const createStyles = (colors: any) => StyleSheet.create({
   valueText: { fontFamily: fonts.mono, fontSize: 12, fontWeight: '700', color: colors.primary },
   chips: { flexDirection: 'row', gap: 5 },
   chip: {
-    flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: 9,
+    flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 40,
+    paddingVertical: 6, paddingHorizontal: 2, borderRadius: 9,
     borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.surface,
   },
   chipActive: { borderColor: colors.primary, backgroundColor: colors.primary + '18' },
-  chipText: { fontSize: 10.5, fontWeight: '600', color: colors.textMuted },
+  chipText: { fontSize: 10.5, fontWeight: '600', color: colors.textMuted, textAlign: 'center' },
   chipTextActive: { color: colors.primary, fontWeight: '800' },
 });
 
