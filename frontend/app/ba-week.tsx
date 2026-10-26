@@ -18,7 +18,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '../src/theme/ThemeContext';
 import { fonts } from '../src/theme/brand';
-import { apiService } from '../src/api/client';
+import { api, apiService } from '../src/api/client';
+import { router as nav } from 'expo-router';
 import { showAlert } from '../src/utils/showAlert';
 import { APP_LOCALE } from '../src/utils/appTime';
 import { DAY_STATUS_LABEL } from '../src/utils/dayStatus';
@@ -59,6 +60,15 @@ export default function BaWeekScreen() {
       ? apiService.getCodFocusPerson(otherId, weekEnding)
       : apiService.getCodFocusMe(weekEnding)).then((r) => r.data),
   });
+
+  // Their breakeven from Plan your earnings (the Owner, 26 Oct 2026).
+  const planQ = useQuery({
+    queryKey: ['earnings-plan', otherId || 'me'],
+    queryFn: () => api.get(`/earnings-plan${otherId ? `?user_id=${encodeURIComponent(otherId)}` : ''}`).then((r) => r.data),
+    retry: false,
+  });
+  const breakeven: number | null = planQ.data?.breakeven ?? null;
+  const planTarget: number | null = planQ.data?.target ?? null;
 
   const [days, setDays] = useState<string[]>(['off', 'off', 'off', 'off', 'off', 'off']);
   const [goal, setGoal] = useState('');
@@ -162,6 +172,17 @@ export default function BaWeekScreen() {
           testID="ba-week-goal"
         />
         {data.goal_locked ? <Text style={s.hint}>Goals locked at Monday 10:30. Ask your Coach to change it.</Text> : null}
+        {breakeven != null ? (
+          <Text style={s.hint}>
+            Breakeven: {breakeven} a week{planTarget != null ? ` · target ${planTarget}` : ''}
+            {goal.trim() !== '' && Number(goal) < breakeven ? '  ·  This goal is below breakeven.' : ''}
+          </Text>
+        ) : null}
+        {!otherId ? (
+          <TouchableOpacity onPress={() => nav.push('/earnings-plan' as never)} accessibilityRole="button" testID="ba-week-earnings-plan">
+            <Text style={[s.hint, { color: colors.primary }]}>{breakeven != null ? 'Update my earnings plan' : 'Plan your earnings to see your breakeven'}</Text>
+          </TouchableOpacity>
+        ) : breakeven == null ? <Text style={s.hint}>No earnings plan yet.</Text> : null}
       </View>
 
       {/* COD focus */}

@@ -717,12 +717,12 @@ function BudgetSection({ budget, canEdit, onChange }: { budget: any; canEdit: bo
   const colors = useColors();
   const s = useMemo(() => createS(colors), [colors]);
 
-  const updateRow =(group: 'needs' | 'wants', idx: number, field: 'label' | 'amount' | 'sales', v: string) => {
+  const updateRow =(group: 'needs' | 'wants', idx: number, field: 'label' | 'amount' | 'sales' | 'per', v: string) => {
     const list = (budget[group] || []).map((r: any, i: number) => i === idx ? { ...r, [field]: v } : r);
     onChange({ ...budget, [group]: list });
   };
   const addRow = (group: 'needs' | 'wants') => {
-    onChange({ ...budget, [group]: [...(budget[group] || []), { id: `tmp-${Date.now()}`, label: '', amount: '', sales: '' }] });
+    onChange({ ...budget, [group]: [...(budget[group] || []), { id: `tmp-${Date.now()}`, label: '', amount: '', sales: '', per: 'month' }] });
   };
   const removeRow = (group: 'needs' | 'wants', idx: number) => {
     onChange({ ...budget, [group]: (budget[group] || []).filter((_: any, i: number) => i !== idx) });
@@ -730,8 +730,10 @@ function BudgetSection({ budget, canEdit, onChange }: { budget: any; canEdit: bo
 
   // Derive totals for live display (server also recomputes on save)
   const num = (x: any) => parseFloat(String(x || '').replace(/[£$,]/g, '')) || 0;
-  const tmN = (budget.needs || []).reduce((acc: number, r: any) => acc + num(r.amount), 0);
-  const tmW = (budget.wants || []).reduce((acc: number, r: any) => acc + num(r.amount), 0);
+  // Monthly totals: a per-week row counts as × 52 ÷ 12.
+  const monthly = (r: any) => (r.per === 'week' ? num(r.amount) * 52 / 12 : num(r.amount));
+  const tmN = (budget.needs || []).reduce((acc: number, r: any) => acc + monthly(r), 0);
+  const tmW = (budget.wants || []).reduce((acc: number, r: any) => acc + monthly(r), 0);
   const sv = num(budget.sale_value);
   const totalSales = sv > 0 ? Math.round((tmN + tmW) / sv) : ((budget.needs || []).reduce((a: number, r: any) => a + num(r.sales), 0) + (budget.wants || []).reduce((a: number, r: any) => a + num(r.sales), 0));
 
@@ -762,6 +764,16 @@ function BudgetSection({ budget, canEdit, onChange }: { budget: any; canEdit: bo
                 value={r.amount || ''}
                 onChangeText={(v) => updateRow(group, idx, 'amount', v)}
               />
+              {/* Per week or per month: their breakeven on Bells is worked out weekly. */}
+              <TouchableOpacity
+                disabled={!canEdit}
+                onPress={() => updateRow(group, idx, 'per', (r.per || 'month') === 'month' ? 'week' : 'month')}
+                style={{ paddingHorizontal: 6, justifyContent: 'center' }}
+                accessibilityRole="button"
+                accessibilityLabel={(r.per || 'month') === 'month' ? 'Per month. Tap for per week' : 'Per week. Tap for per month'}
+              >
+                <Text style={[s.tblHCell, { color: colors.primary }]}>{(r.per || 'month') === 'month' ? '/mo' : '/wk'}</Text>
+              </TouchableOpacity>
               <TextInput
                 style={[s.tblInput, { flex: 1, textAlign: 'right' }, !canEdit && s.disabled]} editable={canEdit}
                 placeholder="0" placeholderTextColor={colors.textMuted}
@@ -809,6 +821,7 @@ function BudgetSection({ budget, canEdit, onChange }: { budget: any; canEdit: bo
           <Text style={[s.summaryLabel, { color: colors.primary, fontWeight: '800' }]}>Total sign-ups required to break even</Text>
           <AnimatedNumber value={totalSales} decimals={0} style={[s.summaryValue, { color: colors.primary, fontSize: 18 }]} />
         </View>
+        <Text style={[s.summaryLabel, { marginTop: 6 }]}>Saving this updates your weekly breakeven on Bells and your weekly plan.</Text>
       </View>
     </Section>
   );

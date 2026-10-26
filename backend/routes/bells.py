@@ -1236,7 +1236,7 @@ async def bells_week_for(user: dict, week: Optional[str] = None, office: Optiona
     try:
         async for u in db.users.find(
             {"_id": {"$in": [ObjectId(i) for i in ids if ObjectId.is_valid(str(i))]}},
-            {"_id": 1, "name": 1, "owneriq_stage": 1},
+            {"_id": 1, "name": 1, "owneriq_stage": 1, "earnings_plan": 1},
         ):
             people[str(u["_id"])] = u
     except Exception as _e:
@@ -1248,6 +1248,16 @@ async def bells_week_for(user: dict, week: Optional[str] = None, office: Optiona
         coach_id = reports_to_map.get(uid) if uid else None
         e["coach_name"] = (people.get(str(coach_id)) or {}).get("name") if coach_id else None
         e["stage_label"] = _stage_label((people.get(uid) or {}).get("owneriq_stage")) if uid else None
+        # BE comes from their Plan your earnings unless it's typed on the
+        # sheet (the Owner, 26 Oct 2026: nobody types it in by hand).
+        if uid and e.get("break_even") is None:
+            plan = (people.get(uid) or {}).get("earnings_plan")
+            if plan:
+                from core.earnings_plan import compute as _be
+                be = _be(plan, fees).get("breakeven")
+                if be is not None:
+                    e["break_even"] = be
+                    e["break_even_source"] = "plan"
         if show_mc:
             e["mc_fees"] = mc_fees(e.get("total_under30"), e.get("total_over30"), fees)
     if show_mc:

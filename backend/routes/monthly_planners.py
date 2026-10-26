@@ -479,6 +479,7 @@ def _normalize_budget_rows(raw: list) -> list:
                 "label": (r.get("label") or "").strip(),
                 "amount": (str(r.get("amount") or "")).strip(),
                 "sales": (str(r.get("sales") or "")).strip(),
+                "per": r.get("per") if r.get("per") in ("week", "month") else "month",
             })
     return out
 
@@ -496,9 +497,13 @@ def _safe_num(x) -> float:
 def _compute_budget_totals(b: dict) -> dict:
     needs = b.get("needs") or []
     wants = b.get("wants") or []
-    tm_n = sum(_safe_num(r.get("amount")) for r in needs)
+    # Monthly totals: a per-week row counts as × 52 ÷ 12.
+    def _monthly(r: dict) -> float:
+        n = _safe_num(r.get("amount"))
+        return n * 52 / 12 if r.get("per") == "week" else n
+    tm_n = sum(_monthly(r) for r in needs)
     ts_n = sum(_safe_num(r.get("sales")) for r in needs)
-    tm_w = sum(_safe_num(r.get("amount")) for r in wants)
+    tm_w = sum(_monthly(r) for r in wants)
     ts_w = sum(_safe_num(r.get("sales")) for r in wants)
     sale_v = _safe_num(b.get("sale_value"))
     if sale_v > 0:
@@ -572,6 +577,13 @@ async def upsert_planner(month: str, request: Request):
         "sale_value": (str(budget_in.get("sale_value") or "")).strip(),
     }
     budget = _compute_budget_totals(budget)
+    # The budget is their Plan your earnings too (the Owner, 26 Oct 2026):
+    # saving it here updates their breakeven on Bells and their weekly plan.
+    if any(_safe_num(r.get("amount")) for r in budget["needs"] + budget["wants"]):
+        from core.earnings_plan import clean_rows as _plan_rows
+        await db.users.update_one({"_id": ObjectId(user_id)}, {"$set": {"earnings_plan": {
+            "needs": _plan_rows(budget["needs"], "month"), "wants": _plan_rows(budget["wants"], "month"),
+            "updated_at": datetime.now(timezone.utc).isoformat(), "from": "monthly_planner"}}})
 
     gap_in = (body.get("gap_analysis") or {}).get("scores") or {}
     gap_scores: dict = {}

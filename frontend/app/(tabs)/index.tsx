@@ -55,6 +55,7 @@ import CoachingTodayCard from '../../src/components/home/CoachingTodayCard';
 import AcademyWorkbookCard from '../../src/components/home/AcademyWorkbookCard';
 import AcademyClassCard from '../../src/components/home/AcademyClassCard';
 import NewStartsButton from '../../src/components/home/NewStartsButton';
+import EarningsPlanCard from '../../src/components/home/EarningsPlanCard';
 import SectorPromptCard from '../../src/components/home/SectorPromptCard';
 import ResetBoardCard from '../../src/components/home/ResetBoardCard';
 import OwnerIQBanner from '../../src/components/home/OwnerIQBanner';
@@ -1606,6 +1607,8 @@ export default function HomeScreen() {
       {/* BA Academy (Days 1-2): a new start's workbook, the Owner's class. */}
       {isTrainee && nextPending && nextPending.day_number <= 2 && <AcademyWorkbookCard />}
       {isAdmin && <AcademyClassCard />}
+      {/* Everyone knows their breakeven: no plan yet, or over a month old (not on Academy days, not viewers). */}
+      {!(user as any)?.is_viewer && !(isTrainee && nextPending && nextPending.day_number <= 2) && <EarningsPlanCard />}
       {pReviewCard}
       {isAdmin && isPlanningSunday && pWeeklyPlans}
       {pBaWeek}
