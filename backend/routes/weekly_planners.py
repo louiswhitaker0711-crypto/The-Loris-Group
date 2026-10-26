@@ -896,7 +896,6 @@ async def _review_people(office_id, users, name_by_id, upline_by_id, perf, plan_
     from core.coach_suggestions import bells_days, RETRAIN_PA
     from core.week_bands import week_band
     from core.zero_alerts import zero_run
-    from routes.cod_focus import focus_for
 
     through = date.fromisoformat(review_week)
     ids = list(name_by_id)
@@ -908,7 +907,10 @@ async def _review_people(office_id, users, name_by_id, upline_by_id, perf, plan_
         hist.setdefault(e["user_id"], []).append(e)
     weeks = [(through - timedelta(days=7 * k)).isoformat() for k in (3, 2, 1, 0)]
 
-    focus = await focus_for(ids, week_ending)
+    # This week's COD focus (routes/cod_focus.py), read through this module's db.
+    focus = {f["user_id"]: f async for f in db.cod_focus.find(
+        {"user_id": {"$in": ids}, "week_ending": week_ending}, {"_id": 0, "user_id": 1, "topic": 1})
+        if f.get("user_id")}
     ba_plans = {p["user_id"]: p async for p in db.ba_week_plans.find(
         {"user_id": {"$in": ids}, "week_ending": week_ending}, {"_id": 0, "user_id": 1, "submitted_at": 1})}
     plan_by_user = {r.get("user_id"): r for r in plan_rows if r.get("user_id")}
