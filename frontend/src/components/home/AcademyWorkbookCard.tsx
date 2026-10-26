@@ -2,7 +2,8 @@
  * A new start's BA Academy workbook on their Home (Days 1-2): one tap opens
  * it, with how far through Day 1 they are. (GET /academy/workbook/1)
  */
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
@@ -10,6 +11,7 @@ import { router } from 'expo-router';
 import { useColors, fonts } from '../../theme/ThemeContext';
 import { api } from '../../api/client';
 import { day1Progress } from '../../academy/day1';
+import { useAuth } from '../../auth/AuthContext';
 
 export default function AcademyWorkbookCard() {
   const c = useColors();
@@ -19,6 +21,23 @@ export default function AcademyWorkbookCard() {
     queryFn: async () => (await api.get('/academy/workbook/1')).data,
     retry: false,
   });
+  // The welcome (what we look for, our core values) opens once by itself,
+  // the first time a new start reaches Home (the Owner, 26 Oct 2026).
+  const { user } = useAuth();
+  const uid = (user as any)?.id;
+  useEffect(() => {
+    if (!uid) return;
+    const key = `welcome-seen-${uid}`;
+    let gone = false;
+    (async () => {
+      try {
+        if (await AsyncStorage.getItem(key)) return;
+        await AsyncStorage.setItem(key, '1');
+      } catch { return; }
+      if (!gone) router.push('/welcome' as never);
+    })();
+    return () => { gone = true; };
+  }, [uid]);
   const p = day1Progress(data);
   const started = p.done > 0 || Object.keys(data?.fields || {}).length > 0;
   return (

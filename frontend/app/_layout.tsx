@@ -283,6 +283,7 @@ function RootNavigator() {
       <Stack.Screen name="public/bells/[office]" options={{ headerShown: false }} />
       <Stack.Screen name="public/join" options={{ headerShown: false }} />
       <Stack.Screen name="public/signup" options={{ headerShown: false }} />
+      <Stack.Screen name="welcome" options={{ headerShown: false }} />
       <Stack.Screen name="new-starts" options={{ headerShown: true, title: 'New starts', headerBackTitle: 'Back', ...MASTHEAD_COMPACT }} />
       </Stack>
       </NavThemeProvider>

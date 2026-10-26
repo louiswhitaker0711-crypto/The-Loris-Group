@@ -16,6 +16,7 @@ import { formatMoney } from '../utils/appTime';
 import { DAY1_QUIZZES, RECEIPTS } from './day1';
 import { Section, Fill, Notes, Points, Panel, Two, Say, Rows, Figure, Break, QuizBlock, Ticks, P, B, H3, Label, useWbStyles } from './Workbook';
 import { ModelDiagram, LadderDiagram } from './diagrams';
+import { CORE_VALUES } from './values';
 
 /** The Sunday that ends this Bells week (Mon–Sat working week). */
 function weekEndingSunday(iso: string): string {
@@ -49,7 +50,7 @@ export default function Day1Page() {
   return (
     <View>
       {/* 1 ─ First week */}
-      <Section id="s1" n={1} title="Your first week" sub="What the next 8 days look like, and what we look for in you">
+      <Section id="s1" n={1} title="Your first week" sub="What the next 8 days look like, what we look for, and our core values">
         <View>
           {WEEK.map((w, i) => (
             <View key={i} style={[x.weekRow, { borderTopColor: c.border }, i === 0 && { borderTopWidth: 0 }]}>
@@ -71,6 +72,10 @@ export default function Day1Page() {
         </View>
         <Panel label="What we look for" hi>
           <Fill parts={['The three things we look for in people are ', { id: 'v1', a: 'work ethic', w: 11 }, ', ', { id: 'v2', a: 'willingness to learn', w: 14 }, ' and a ', { id: 'v3', a: 'good attitude', w: 11 }, '.']} />
+        </Panel>
+        <Panel label="Our core values">
+          <Points items={CORE_VALUES.map((v) => [`${v.title}.`, v.text] as [string, string])} />
+          <Fill parts={['The value that matters most to me is ', { id: 'cv1', w: 14 }, ', because ', { id: 'cv2', w: 20 }, '.']} />
         </Panel>
         <View style={{ gap: 8 }}>
           <H3>Our expectations for these two days</H3>
