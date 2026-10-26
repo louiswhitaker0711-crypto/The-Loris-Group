@@ -651,7 +651,7 @@ async def _startup_work():
                         "confidence_expected": item.get("confidence_expected", "Understand"),
                         "taught": False, "outcome_achieved": False, "confidence_level": "Not yet",
                         "grade": None,
-                        "grade_options": item.get("grade_options", ["Excellent", "Average", "Below Average"]),
+                        "grade_options": item.get("grade_options", ["Not Learnt", "Know", "Do", "Deliver"]),
                         "notes": None,
                         "office_id": office_id
                     })

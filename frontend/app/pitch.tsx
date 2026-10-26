@@ -133,7 +133,13 @@ export default function PitchScreen() {
                 {PITCH.map((b) => (
                   <View key={b.n} style={{ gap: 3 }}>
                     <Text style={[s.kicker, { color: stepColour(b.c) }]}>{b.n} · {b.t}</Text>
-                    <Text style={s.fullP}>{b.lines.map((l) => l.say + (l.q ? ` … ${l.q}` : '')).join(' ')}</Text>
+                    {/* One line each, like the Owner's own pitch sheet. */}
+                    {b.lines.map((l, i) => (
+                      <View key={i} style={{ marginBottom: 6 }}>
+                        <Text style={s.fullP}>{l.say}</Text>
+                        {!!l.q && <Text style={[s.fullP, { color: c.textMuted, paddingLeft: 14 }]}>… {l.q}</Text>}
+                      </View>
+                    ))}
                   </View>
                 ))}
               </View>

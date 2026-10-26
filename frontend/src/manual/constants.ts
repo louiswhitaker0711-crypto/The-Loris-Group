@@ -10,6 +10,7 @@ import { colors } from '../theme/colors';
  * the options matters because the API stores grade_options as an array. */
 export const PRESET_LABELS: Record<string, string> = {
   '10,9,8,7,6,5,4,3,2,1': '1-10',
+  'Not Learnt,Know,Do,Deliver': 'Not Learnt / Know / Do / Deliver',
   'Competent,Learnt,Not Learnt': 'Competent / Learnt / Not Learnt',
   'Learnt,Not Learnt': 'Learnt / Not Learnt',
   'Excellent,Average,Below Average': 'Excellent / Average / Needs Work',
@@ -19,6 +20,7 @@ export const PRESET_LABELS: Record<string, string> = {
  * to neutral text colour for unknown presets. */
 export const PRESET_COLORS: Record<string, string> = {
   '1-10': '#225bc3',
+  'Not Learnt / Know / Do / Deliver': '#0a9bcb',
   'Competent / Learnt / Not Learnt': '#059669',
   'Learnt / Not Learnt': '#2563EB',
   'Excellent / Average / Needs Work': '#D97706',

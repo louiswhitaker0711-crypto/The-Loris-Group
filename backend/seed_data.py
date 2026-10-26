@@ -104,3 +104,7 @@ TRAINING_MANUAL = [
 # The Owner's Day 1 running order (26 Oct 2026): see core/academy_manual.py.
 from core.academy_manual import apply_to_seed as _academy_day1, apply_day2_to_seed as _academy_day2  # noqa: E402
 TRAINING_MANUAL = _academy_day2(_academy_day1(TRAINING_MANUAL))
+
+# Field days on the COD ladder (26 Oct 2026): see core/field_ladder.py.
+from core.field_ladder import apply_to_seed as _field_ladder  # noqa: E402
+TRAINING_MANUAL = _field_ladder(TRAINING_MANUAL)

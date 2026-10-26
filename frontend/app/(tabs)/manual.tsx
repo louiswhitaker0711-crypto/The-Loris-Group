@@ -256,7 +256,7 @@ export default function ManualScreen() {
       day_number: selectedDay, category: newItem.category.trim(),
       topic: newItem.topic.trim(), what_good_looks_like: newItem.what_good_looks_like.trim(),
       expected_outcome: newItem.expected_outcome.trim(),
-      grade_options: selectedDay <= 2 ? ['Learnt', 'Not Learnt'] : ['Excellent', 'Average', 'Below Average'],
+      grade_options: selectedDay <= 2 ? ['Learnt', 'Not Learnt'] : ['Not Learnt', 'Know', 'Do', 'Deliver'],
     });
   };
 
@@ -459,7 +459,7 @@ export default function ManualScreen() {
                                 topic: assessNewItem.topic.trim(),
                                 what_good_looks_like: assessNewItem.what_good_looks_like.trim(),
                                 expected_outcome: assessNewItem.expected_outcome.trim(),
-                                grade_options: day <= 2 ? ['Learnt', 'Not Learnt'] : ['Excellent', 'Average', 'Below Average'],
+                                grade_options: day <= 2 ? ['Learnt', 'Not Learnt'] : ['Not Learnt', 'Know', 'Do', 'Deliver'],
                               });
                             }}>
                               <Text style={[styles.editSaveText, { color: colors.onPrimary }]}>Add</Text>
@@ -984,7 +984,7 @@ export default function ManualScreen() {
                             day_number: selectedDay, category: category,
                             topic: addSubItem.topic.trim(), what_good_looks_like: addSubItem.what_good_looks_like.trim(),
                             expected_outcome: addSubItem.expected_outcome.trim(),
-                            grade_options: selectedDay <= 2 ? ['Learnt', 'Not Learnt'] : ['Excellent', 'Average', 'Below Average'],
+                            grade_options: selectedDay <= 2 ? ['Learnt', 'Not Learnt'] : ['Not Learnt', 'Know', 'Do', 'Deliver'],
                           });
                           setAddToCategory(null);
                         }}><Text style={styles.editSaveText}>Add</Text></TouchableOpacity>

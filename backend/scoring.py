@@ -1,12 +1,15 @@
 from typing import Optional
 from database import db
 
-GRADE_VALUES = {"Excellent": 10, "Average": 7, "Below Average": 4, "Competent": 10, "Learnt": 7, "Not Learnt": 4, "Done": 10, "Not Done": 4, "Independent": 10, "Extend Training": 5, "Incompetent": 2}
+# The COD ladder on field days (the Owner, 26 Oct 2026): Not Learnt · Know · Do · Deliver.
+FIELD_GRADE_OPTIONS = ["Not Learnt", "Know", "Do", "Deliver"]
+GRADE_VALUES = {"Deliver": 10, "Do": 8, "Know": 6, "Excellent": 10, "Average": 7, "Below Average": 4, "Competent": 10, "Learnt": 7, "Not Learnt": 4, "Done": 10, "Not Done": 4, "Independent": 10, "Extend Training": 5, "Incompetent": 2}
 for _i in range(1, 11):
     GRADE_VALUES[str(_i)] = _i
 
 GRADE_PRESETS = [
     {"label": "1-10", "options": [str(i) for i in range(10, 0, -1)]},
+    {"label": "Not Learnt / Know / Do / Deliver", "options": list(FIELD_GRADE_OPTIONS)},
     {"label": "Competent / Learnt / Not Learnt", "options": ["Competent", "Learnt", "Not Learnt"]},
     {"label": "Learnt / Not Learnt", "options": ["Learnt", "Not Learnt"]},
     {"label": "Excellent / Average / Below Average", "options": ["Excellent", "Average", "Below Average"]},

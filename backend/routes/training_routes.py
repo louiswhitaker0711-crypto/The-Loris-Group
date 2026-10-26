@@ -656,14 +656,14 @@ async def add_manual_item(item: ManualItemCreateBody, request: Request, office: 
         for o in offices:
             existing = await db.training_manual.find({"day_number": item.day_number, "office_id": o["id"]}).sort("sequence", -1).to_list(1)
             next_seq = (existing[0]["sequence"] + 1) if existing else 1
-            new_item = {"day_number": item.day_number, "sequence": next_seq, "category": item.category, "topic": item.topic, "what_good_looks_like": item.what_good_looks_like, "expected_outcome": item.expected_outcome, "confidence_expected": confidence, "required": True, "grade_options": item.grade_options or ["Excellent", "Average", "Below Average"], "office_id": o["id"]}
+            new_item = {"day_number": item.day_number, "sequence": next_seq, "category": item.category, "topic": item.topic, "what_good_looks_like": item.what_good_looks_like, "expected_outcome": item.expected_outcome, "confidence_expected": confidence, "required": True, "grade_options": item.grade_options or ["Not Learnt", "Know", "Do", "Deliver"], "office_id": o["id"]}
             await db.training_manual.insert_one(new_item)
         return {"message": "Item added to all offices"}
     else:
         oid = await resolve_office_id(request, user, office)
         existing = await db.training_manual.find({"day_number": item.day_number, "office_id": oid}).sort("sequence", -1).to_list(1)
         next_seq = (existing[0]["sequence"] + 1) if existing else 1
-        new_item = {"day_number": item.day_number, "sequence": next_seq, "category": item.category, "topic": item.topic, "what_good_looks_like": item.what_good_looks_like, "expected_outcome": item.expected_outcome, "confidence_expected": confidence, "required": True, "grade_options": item.grade_options or ["Excellent", "Average", "Below Average"], "office_id": oid}
+        new_item = {"day_number": item.day_number, "sequence": next_seq, "category": item.category, "topic": item.topic, "what_good_looks_like": item.what_good_looks_like, "expected_outcome": item.expected_outcome, "confidence_expected": confidence, "required": True, "grade_options": item.grade_options or ["Not Learnt", "Know", "Do", "Deliver"], "office_id": oid}
         await db.training_manual.insert_one(new_item)
         return {"message": "Item added", "sequence": next_seq}
 

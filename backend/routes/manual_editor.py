@@ -319,7 +319,7 @@ async def add_item(request: Request, office_id: str, body: ItemCreate):
         "expected_outcome": body.expected_outcome or "",
         "confidence_expected": (body.confidence_expected or "").strip() or "Understand",
         "required": True,
-        "grade_options": body.grade_options or ["Excellent", "Average", "Below Average"],
+        "grade_options": body.grade_options or ["Not Learnt", "Know", "Do", "Deliver"],
     }
     await db.training_manual.insert_one(new_item)
     new_item.pop("_id", None)
