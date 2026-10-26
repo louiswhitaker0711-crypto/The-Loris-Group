@@ -78,7 +78,6 @@ export type Gap = { id: string; a?: string; w?: number };
 /** A sentence with gaps: ['The most important link is ', {id:'o1', a:'BA', w:12}, '.'] */
 export function Fill({ parts, big }: { parts: (string | Gap)[]; big?: boolean }) {
   const s = useWbStyles();
-  const c = useColors();
   const { state, setField, readOnly } = useWb();
   const reveal = useContext(RevealContext);
   const out: React.ReactNode[] = [];
@@ -99,9 +98,7 @@ export function Fill({ parts, big }: { parts: (string | Gap)[]; big?: boolean })
           value={state.fields[key] || ''}
           onChangeText={(v) => setField(key, v)}
           editable={!readOnly}
-          placeholder="✎"
-          placeholderTextColor={c.primaryLight}
-          style={[s.gap, { width: Math.max(5, p.w || 8) * 9.5 }]}
+          style={[s.gap, { width: Math.max(6, (p.w || 8) + 2) * 10.5 }]}
           accessibilityLabel="Fill in the gap"
           autoCapitalize="none"
           testID={`academy-gap-${p.id}`}

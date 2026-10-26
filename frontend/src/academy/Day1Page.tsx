@@ -101,7 +101,7 @@ export default function Day1Page() {
             <Points items={['Takes time', 'The brand doesn’t control the message, so how we treat people matters']} />
           </Panel>
         </Two>
-        <Fill parts={['We specialise in ', { id: 'm1', a: 'direct', w: 8 }, ' marketing. We see about ', { id: 'm2', a: '2,500', w: 7 }, ' adverts a day. Every customer, ', { id: 'm3', a: 'yes or no', w: 9 }, ', is left with a positive impression of the brand.']} />
+        <Fill parts={['We specialise in ', { id: 'm1', a: 'direct', w: 8 }, ' marketing. We see about ', { id: 'm2', a: '2,500', w: 7 }, ' adverts a day. Every customer is left with a positive impression of the brand, whether they say ', { id: 'm3', a: 'yes', w: 5 }, ' or ', { id: 'm4', a: 'no', w: 5 }, '.']} />
         <Say>I know how you’ll react to a yes. I’m more interested in how you react to a no.</Say>
         <Notes id="n2" />
       </Section>

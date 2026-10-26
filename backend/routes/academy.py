@@ -27,6 +27,8 @@ import re
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+from bson import ObjectId
+from bson.errors import InvalidId
 from fastapi import APIRouter, HTTPException, Request
 
 from auth import get_current_user, can_access_hire
@@ -96,7 +98,12 @@ async def get_workbook(day: int, request: Request, user_id: Optional[str] = None
     read_only = target != me
     name = user.get("name") or ""
     if read_only:
-        other = await db.users.find_one({"id": target}, {"_id": 0, "id": 1, "name": 1, "office_id": 1})
+        # Users are keyed by Mongo _id (the app's user id is its string form).
+        try:
+            other = await db.users.find_one({"_id": ObjectId(target), "deleted": {"$ne": True}},
+                                            {"_id": 1, "name": 1, "office_id": 1})
+        except (InvalidId, TypeError):
+            other = None
         if not other or (other.get("office_id") != user.get("office_id") and not user.get("is_super_admin")):
             raise HTTPException(status_code=404, detail="Not found")
         hire = await _hire_of(target, other.get("office_id"))

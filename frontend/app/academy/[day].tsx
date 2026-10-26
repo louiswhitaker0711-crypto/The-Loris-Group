@@ -112,7 +112,9 @@ export default function AcademyWorkbook() {
   if (q.isError) {
     return (
       <View style={[s.page, s.center, { padding: 24 }]}>
-        <Text style={s.body}>Couldn’t open this workbook. Check your connection and try again.</Text>
+        <Text style={s.body}>{typeof (q.error as any)?.response?.data?.detail === 'string'
+          ? (q.error as any).response.data.detail
+          : 'Couldn’t open this workbook. Check your connection and try again.'}</Text>
         <Pressable onPress={() => q.refetch()} style={s.btn}><Text style={s.btnText}>Try again</Text></Pressable>
       </View>
     );

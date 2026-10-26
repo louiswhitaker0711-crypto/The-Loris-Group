@@ -61,3 +61,70 @@ def test_summary_reads_questions_and_progress():
     assert s == {"done": {"s1": True}, "quiz": {"q1": {"0": 1}},
                  "questions": "How do I get my UTR?", "updated_at": "t"}
     assert summary(None)["questions"] == ""
+
+
+# ── Reading someone else's workbook (the Owner's class card) ──────────────
+
+import asyncio  # noqa: E402
+
+from bson import ObjectId  # noqa: E402
+from mongomock_motor import AsyncMongoMockClient  # noqa: E402
+from starlette.requests import Request  # noqa: E402
+
+import auth  # noqa: E402
+from routes import academy  # noqa: E402
+
+
+def _run(coro):
+    return asyncio.new_event_loop().run_until_complete(coro)
+
+
+def _req():
+    async def receive():
+        return {"type": "http.request", "body": b"", "more_body": False}
+    return Request({"type": "http", "method": "GET", "path": "/test", "query_string": b"", "headers": [],
+                    "client": ("10.0.0.9", 5000), "server": ("test", 443), "scheme": "https"}, receive)
+
+
+@pytest.fixture()
+def mdb(monkeypatch):
+    database = AsyncMongoMockClient()["academy_test"]
+    monkeypatch.setattr(auth, "db", database)
+    monkeypatch.setattr(academy, "db", database)
+    return database
+
+
+def _user(db, name, role, office="o1"):
+    doc = {"_id": ObjectId(), "name": name, "role": role, "office_id": office}
+    _run(db.users.insert_one(doc))
+    return {**doc, "id": str(doc["_id"])}
+
+
+def _as(monkeypatch, user):
+    async def current(_request):
+        return dict(user)
+    monkeypatch.setattr(academy, "get_current_user", current)
+
+
+def test_the_owner_opens_a_new_starts_workbook_read_only(mdb, monkeypatch):
+    owner = _user(mdb, "Owner Example", "admin")
+    new = _user(mdb, "New Example", "trainee")
+    _run(mdb.new_hires.insert_one({"id": "h1", "office_id": "o1", "trainee_user_id": new["id"],
+                                   "name": "New Example", "current_day": 1, "active": True}))
+    _run(mdb.academy_workbooks.insert_one({"user_id": new["id"], "day": 1, "fields": {"n1": "notes"},
+                                           "done": {"s1": True}, "quiz": {}}))
+    _as(monkeypatch, owner)
+    got = _run(academy.get_workbook(1, _req(), user_id=new["id"]))
+    assert got["read_only"] is True and got["name"] == "New Example"
+    assert got["fields"] == {"n1": "notes"} and got["done"] == {"s1": True}
+
+
+def test_another_offices_admin_cant_open_it(mdb, monkeypatch):
+    other = _user(mdb, "Other Owner", "admin", office="o2")
+    new = _user(mdb, "New Example", "trainee")
+    _run(mdb.new_hires.insert_one({"id": "h1", "office_id": "o1", "trainee_user_id": new["id"], "active": True}))
+    _as(monkeypatch, other)
+    with pytest.raises(HTTPException):
+        _run(academy.get_workbook(1, _req(), user_id=new["id"]))
+    with pytest.raises(HTTPException):
+        _run(academy.get_workbook(1, _req(), user_id="not-an-id"))
