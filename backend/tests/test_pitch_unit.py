@@ -58,3 +58,22 @@ def test_six_pm_push_goes_to_todays_new_starts_once(monkeypatch):
     assert _run(pitch.pitch_push_tick(datetime(2026, 10, 26, 17, 0, tzinfo=APP_TZ))) == 0
     assert _run(pitch.pitch_push_tick(at_seven)) == 1 and sent == [str(today)]
     assert _run(pitch.pitch_push_tick(at_seven)) == 0
+
+
+def test_pitch_words_keep_line_ids_and_drop_blanks():
+    out = pitch.clean_words({"words": {"L1-0": "  Hiya,   you alright? ", "L2-1q": "Perfect.", "L3-2": "",
+                                        "bad": "x", "L1-1": 5, "L9-99": "ok"}})
+    assert out == {"L1-0": "Hiya, you alright?", "L2-1q": "Perfect.", "L9-99": "ok"}
+
+
+def test_pitch_words_must_be_an_object():
+    with pytest.raises(HTTPException):
+        pitch.clean_words({"words": ["x"]})
+    with pytest.raises(HTTPException):
+        pitch.clean_words({"words": {f"L1-{i}": "x" for i in range(pitch.MAX_WORDS + 1)}})
+
+
+def test_only_the_owner_edits_the_pitch():
+    assert pitch._can_edit({"role": "admin"})
+    assert not pitch._can_edit({"role": "admin", "is_viewer": True})
+    assert not pitch._can_edit({"role": "coach"})

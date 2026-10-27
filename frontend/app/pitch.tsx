@@ -5,11 +5,13 @@
  * recorded and listened back), Learn (each line hidden to its first
  * letters) and Check (6 questions). A new start's first night is Read only;
  * the rest opens at 18:00 the next day. Progress saves to their account.
- * (GET/PUT /pitch; content in src/academy/pitch.ts)
+ * The Owner can change the words (27 Oct 2026: just the words; the why and
+ * how notes stay): Edit on the pitch, saved for the whole office.
+ * (GET/PUT /pitch, PUT /pitch/words; content in src/academy/pitch.ts)
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
-import { useQuery } from '@tanstack/react-query';
+import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator, TextInput, Platform } from 'react-native';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors, fonts } from '../src/theme/ThemeContext';
 import { api } from '../src/api/client';
@@ -19,7 +21,7 @@ import { PITCH, PITCH_QUIZ, REHASH, PitchLine } from '../src/academy/pitch';
 
 type Tab = 'read' | 'say' | 'learn' | 'check';
 type State = { counts: Record<string, number>; ladder: Record<string, boolean>; quiz: Record<string, number>; shown: Record<string, boolean> };
-type Status = { unlocked: boolean; unlocks_at: string | null; new_start: boolean; state: State };
+type Status = { unlocked: boolean; unlocks_at: string | null; new_start: boolean; state: State; words?: Record<string, string>; can_edit?: boolean };
 
 const COUNTERS = [
   { id: 'read', t: 'Read it out loud', d: 'From the page, out loud, all the way through.' },
@@ -46,6 +48,46 @@ export default function PitchScreen() {
 
   const q = useQuery({ queryKey: ['pitch'], queryFn: async () => (await api.get('/pitch')).data as Status, retry: false });
   const unlocked = q.data?.unlocked ?? true;
+  const qc = useQueryClient();
+  const words = q.data?.words || {};
+  const canEdit = !!q.data?.can_edit;
+  // The office's own wording over the original lines.
+  const pitch = useMemo(() => PITCH.map((b) => ({
+    ...b,
+    lines: b.lines.map((l, i) => ({ ...l, say: words[`L${b.n}-${i}`] || l.say, q: l.q ? (words[`L${b.n}-${i}q`] || l.q) : l.q })),
+  })), [words]);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [saveErr, setSaveErr] = useState('');
+  const startEdit = () => {
+    const d: Record<string, string> = {};
+    pitch.forEach((b) => b.lines.forEach((l, i) => { d[`L${b.n}-${i}`] = l.say; if (l.q) d[`L${b.n}-${i}q`] = l.q; }));
+    setDraft(d); setSaveErr(''); setEditing(true);
+  };
+  const original = () => {
+    const d: Record<string, string> = {};
+    PITCH.forEach((b) => b.lines.forEach((l, i) => { d[`L${b.n}-${i}`] = l.say; if (l.q) d[`L${b.n}-${i}q`] = l.q; }));
+    setDraft(d);
+  };
+  const saveWords = async () => {
+    // Only lines that differ from the original are kept; a blank line goes back to the original.
+    const out: Record<string, string> = {};
+    PITCH.forEach((b) => b.lines.forEach((l, i) => {
+      const k = `L${b.n}-${i}`;
+      const v = (draft[k] || '').trim();
+      if (v && v !== l.say) out[k] = v;
+      if (l.q) { const vq = (draft[`${k}q`] || '').trim(); if (vq && vq !== l.q) out[`${k}q`] = vq; }
+    }));
+    setSaving(true); setSaveErr('');
+    try {
+      await api.put('/pitch/words', { words: out });
+      await qc.invalidateQueries({ queryKey: ['pitch'] });
+      setEditing(false);
+    } catch (e: any) {
+      setSaveErr(typeof e?.response?.data?.detail === 'string' ? e.response.data.detail : 'Couldn’t save. Check your connection and try again.');
+    } finally { setSaving(false); }
+  };
   const [tab, setTab] = useState<Tab>('read');
   const [st, setSt] = useState<State>({ counts: {}, ladder: {}, quiz: {}, shown: {} });
   const loaded = useRef(false);
@@ -97,7 +139,7 @@ export default function PitchScreen() {
 
   const Steps = ({ learn }: { learn?: boolean }) => (
     <>
-      {PITCH.map((b) => (
+      {pitch.map((b) => (
         <View key={b.n} style={[s.block, { borderLeftColor: stepColour(b.c) }]}>
           <View style={s.blockHead}>
             <View style={[s.num, { borderColor: stepColour(b.c) }]}><Text style={[s.numT, { color: stepColour(b.c) }]}>0{b.n}</Text></View>
@@ -128,9 +170,48 @@ export default function PitchScreen() {
               <Text style={s.h1}>Learn your pitch</Text>
               <Text style={s.muted}>What you’ll say at every door: four steps, about 30 seconds. Learn what each line is for, not just the words, so you always know where you are.</Text>
               <View style={s.full}>
-                <Text style={s.kicker}>The pitch</Text>
-                <Text style={s.h2}>Say this at every door</Text>
-                {PITCH.map((b) => (
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={s.kicker}>The pitch</Text>
+                    <Text style={s.h2}>Say this at every door</Text>
+                  </View>
+                  {canEdit && !editing && (
+                    <Pressable onPress={startEdit} style={[s.btn, { flexDirection: 'row', gap: 6 }]} accessibilityRole="button" testID="pitch-edit">
+                      <Ionicons name="create-outline" size={15} color={c.text} /><Text style={s.btnT}>Edit</Text>
+                    </Pressable>
+                  )}
+                </View>
+                {editing ? (
+                  <>
+                    <Text style={s.small}>Change the words people say. The notes on why and how stay as they are. Leave a line blank to go back to the original.</Text>
+                    {PITCH.map((b) => (
+                      <View key={b.n} style={{ gap: 6 }}>
+                        <Text style={[s.kicker, { color: stepColour(b.c) }]}>{b.n} · {b.t}</Text>
+                        {b.lines.map((l, i) => {
+                          const k = `L${b.n}-${i}`;
+                          return (
+                            <View key={k} style={{ gap: 4 }}>
+                              <TextInput value={draft[k] ?? ''} onChangeText={(v) => setDraft((d) => ({ ...d, [k]: v }))} multiline placeholder={l.say}
+                                placeholderTextColor={c.textMuted} style={s.edit} accessibilityLabel={`Line ${b.n}.${i + 1}`} />
+                              {!!l.q && (
+                                <TextInput value={draft[`${k}q`] ?? ''} onChangeText={(v) => setDraft((d) => ({ ...d, [`${k}q`]: v }))} placeholder={l.q}
+                                  placeholderTextColor={c.textMuted} style={[s.edit, { marginLeft: 14 }]} accessibilityLabel={`Line ${b.n}.${i + 1}, after they answer`} />
+                              )}
+                            </View>
+                          );
+                        })}
+                      </View>
+                    ))}
+                    {!!saveErr && <Text style={[s.small, { color: c.red }]}>{saveErr}</Text>}
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                      <Pressable onPress={saveWords} disabled={saving} style={[s.btn, s.btnPrimary]} accessibilityRole="button" testID="pitch-save">
+                        <Text style={[s.btnT, { color: c.onPrimary }]}>{saving ? 'Saving…' : 'Save for everyone'}</Text>
+                      </Pressable>
+                      <Pressable onPress={() => setEditing(false)} style={s.btn} accessibilityRole="button"><Text style={s.btnT}>Cancel</Text></Pressable>
+                      <Pressable onPress={original} style={s.btn} accessibilityRole="button"><Text style={s.btnT}>Use the original wording</Text></Pressable>
+                    </View>
+                  </>
+                ) : pitch.map((b) => (
                   <View key={b.n} style={{ gap: 3 }}>
                     <Text style={[s.kicker, { color: stepColour(b.c) }]}>{b.n} · {b.t}</Text>
                     {/* One line each, like the Owner's own pitch sheet. */}
@@ -212,7 +293,7 @@ export default function PitchScreen() {
               <Text style={s.muted}>Each line is hidden down to its first letters. Say it out loud, then tap the line to check.</Text>
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 <Pressable onPress={() => update((p) => ({ ...p, shown: {} }))} style={s.btn}><Text style={s.btnT}>Hide all</Text></Pressable>
-                <Pressable onPress={() => update((p) => ({ ...p, shown: Object.fromEntries(PITCH.flatMap((b) => b.lines.map((_, i) => [`L${b.n}-${i}`, true]))) }))} style={s.btn}><Text style={s.btnT}>Show all</Text></Pressable>
+                <Pressable onPress={() => update((p) => ({ ...p, shown: Object.fromEntries(pitch.flatMap((b) => b.lines.map((_, i) => [`L${b.n}-${i}`, true]))) }))} style={s.btn}><Text style={s.btnT}>Show all</Text></Pressable>
               </View>
               <Steps learn />
             </>
@@ -307,6 +388,7 @@ const styles = (c: any) => StyleSheet.create({
   optR: { backgroundColor: 'rgba(16,185,129,0.25)', borderColor: '#3ddc9a' },
   optW: { backgroundColor: 'rgba(239,68,68,0.22)', borderColor: '#ff8a8a' },
   optT: { fontFamily: fonts.body, fontSize: 15, color: c.inkText },
+  edit: { fontFamily: fonts.bodyMedium, fontSize: 16, lineHeight: 23, color: c.text, borderWidth: 1, borderColor: c.border, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, backgroundColor: c.surface, ...(Platform.OS === 'web' ? { outlineStyle: 'none' } : {}) } as any,
   qw: { fontFamily: fonts.body, fontSize: 13.5, lineHeight: 20, color: c.inkMuted },
   score: { fontFamily: fonts.display, fontSize: 18, color: c.markOnInk },
 });

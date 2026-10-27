@@ -6,8 +6,13 @@ it's Read only, because the Owner hasn't gone over it yet. Say it, Learn
 and Check open at 18:00 the day after (their BA Academy Day 2). Everyone
 else has every tab.
 
-    GET /api/pitch          → {unlocked, unlocks_at, new_start, state}
+    GET /api/pitch          → {unlocked, unlocks_at, new_start, state, words, can_edit}
     PUT /api/pitch {counts, ladder, quiz, shown}   save your own progress
+    PUT /api/pitch/words {words: {line_id: text}}  Admin: the office's own
+        wording for the pitch lines (27 Oct 2026: "just the words"; the why
+        and how notes stay). Line ids are the app's: "L<step>-<line>" for what
+        the BA says, with a "q" suffix for the follow-up ("Perfect."). An
+        empty text goes back to the original wording.
 
 pitch_push_tick() sends "Learn your pitch" to today's new starts at 18:00
 (once each); server.py runs it at 18:00 and once on start-up after 18:00.
@@ -15,6 +20,7 @@ pitch_push_tick() sends "Learn your pitch" to today's new starts at 18:00
 from __future__ import annotations
 
 import logging
+import re
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Any, Optional
 
@@ -30,6 +36,26 @@ router = APIRouter()
 
 UNLOCK_HOUR = 18
 COUNTERS = ("read", "mirror", "record")
+WORD_KEY = re.compile(r"^L[1-9]-[0-9]{1,2}q?$")
+MAX_WORDS = 60
+MAX_LINE = 400
+
+
+def clean_words(body: Any) -> dict:
+    """{line_id: text} the office keeps; blank texts dropped (original wording)."""
+    words = body.get("words") if isinstance(body, dict) else None
+    if not isinstance(words, dict):
+        raise HTTPException(status_code=400, detail="Send the pitch words as an object")
+    if len(words) > MAX_WORDS:
+        raise HTTPException(status_code=400, detail="Too many lines")
+    out = {}
+    for k, v in words.items():
+        if not (isinstance(k, str) and WORD_KEY.match(k) and isinstance(v, str)):
+            continue
+        text = " ".join(v.split())[:MAX_LINE]
+        if text:
+            out[k] = text
+    return out
 
 
 def unlock_at(start_date: Optional[str]) -> Optional[datetime]:
@@ -78,9 +104,29 @@ async def get_pitch(request: Request):
     new_start = bool(hire) and int((hire or {}).get("current_day") or 1) <= 3
     at = unlock_at(start) if new_start else None
     doc = await db.users.find_one({"_id": ObjectId(uid)}, {"pitch_progress": 1}) or {}
+    office = await db.office_pitch.find_one({"office_id": user.get("office_id")}, {"_id": 0, "words": 1}) or {}
     return {"unlocked": (not new_start) or is_unlocked(start), "unlocks_at": at.isoformat() if at else None,
             "new_start": new_start, "start_date": start,
-            "state": doc.get("pitch_progress") or {"counts": {}, "ladder": {}, "quiz": {}, "shown": {}}}
+            "state": doc.get("pitch_progress") or {"counts": {}, "ladder": {}, "quiz": {}, "shown": {}},
+            "words": office.get("words") or {}, "can_edit": _can_edit(user)}
+
+
+def _can_edit(user: dict) -> bool:
+    return (user.get("role") or "").lower() == "admin" and not user.get("is_viewer")
+
+
+@router.put("/pitch/words")
+async def save_pitch_words(request: Request):
+    user = await get_current_user(request)
+    if not _can_edit(user):
+        raise HTTPException(status_code=403, detail="Only the Owner can change the pitch")
+    words = clean_words(await request.json())
+    await db.office_pitch.update_one(
+        {"office_id": user.get("office_id")},
+        {"$set": {"office_id": user.get("office_id"), "words": words,
+                  "updated_at": datetime.now(timezone.utc).isoformat(), "updated_by": str(user["id"])}},
+        upsert=True)
+    return {"ok": True, "words": words}
 
 
 @router.put("/pitch")

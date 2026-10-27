@@ -1605,14 +1605,16 @@ export default function HomeScreen() {
   // Always first: search, then what's due this week, then what's waiting on you.
   const pTop = (
     <>
+      {/* In the field: the pitch on a thin bar at the very top, for everyone. */}
+      <PitchCard place="bar" />
       {/* Mon/Tue 13:30–16:00: set up today's new starts (the Owner). */}
       {isAdmin && <NewStartsButton />}
       <HomeSearch />
       {/* BA Academy (Days 1-2): a new start's workbook, the Owner's class. */}
       {isTrainee && nextPending && nextPending.day_number <= 2 && <AcademyWorkbookCard />}
       {isAdmin && <AcademyClassCard />}
-      {/* A new start's pitch, from 18:00 on their first day. */}
-      {isTrainee && <PitchCard place="top" />}
+      {/* The pitch near the top: everyone in Primetime (11:00–11:45); a new start from 18:00 on their first day. */}
+      <PitchCard place="top" />
       {/* Everyone knows their breakeven: no plan yet, or over a month old (not on Academy days, not viewers). */}
       {!(user as any)?.is_viewer && !(isTrainee && nextPending && nextPending.day_number <= 2) && <EarningsPlanCard />}
       {pReviewCard}

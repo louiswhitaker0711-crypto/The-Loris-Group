@@ -44,6 +44,14 @@ export function inMorningPlanning(at: Date = new Date()): boolean {
   return mins < (day === 6 ? 10 * 60 : 11 * 60);
 }
 
+/** Primetime (the Owner, 27 Oct 2026): 11:00–11:45 Monday to Friday. Home
+ * puts the pitch at the top for everyone then. */
+export function inPrimetime(at: Date = new Date()): boolean {
+  const { day, mins } = ukNow(at);
+  if (day === 0 || day === 6) return false;
+  return mins >= 11 * 60 && mins < 11 * 60 + 45;
+}
+
 /** The morning meeting (11:45–12:15) until set-ups open at 12:30, Monday to
  * Friday. Home leads with the Bells read-out and today's meeting plan. */
 export function inMorningMeeting(at: Date = new Date()): boolean {
