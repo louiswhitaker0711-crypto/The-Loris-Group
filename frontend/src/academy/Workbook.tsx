@@ -25,6 +25,9 @@ const useWb = () => {
   return v;
 };
 const RevealContext = createContext(false);
+/** Per section: the teaching notes can be covered while they fill in the
+ * Check yourself gaps from memory (27 Oct 2026: recall, not copying). */
+const CoverContext = createContext<{ cover: boolean; setCover: (v: boolean) => void }>({ cover: false, setCover: () => {} });
 
 export function useWbStyles() {
   const c = useColors();
@@ -39,6 +42,7 @@ export function Section({ id, n, title, sub, answers = true, footNote, children 
   const c = useColors();
   const { state, toggleDone, readOnly } = useWb();
   const [reveal, setReveal] = useState(false);
+  const [cover, setCover] = useState(false);
   const done = !!state.done[id];
   return (
     <View style={s.sec} nativeID={id} testID={`academy-${id}`}>
@@ -53,7 +57,9 @@ export function Section({ id, n, title, sub, answers = true, footNote, children 
         </View>
       </View>
       <RevealContext.Provider value={reveal}>
-        <View style={s.secBody}>{children}</View>
+        <CoverContext.Provider value={{ cover, setCover }}>
+          <View style={s.secBody}>{children}</View>
+        </CoverContext.Provider>
       </RevealContext.Provider>
       <View style={s.foot}>
         {answers ? (
@@ -108,6 +114,39 @@ export function Fill({ parts, big }: { parts: (string | Gap)[]; big?: boolean })
     );
   });
   return <View style={s.fillRow}>{out}</View>;
+}
+
+// ── Teach / Check yourself ─────────────────────────────────────────────────
+/** The teaching notes of a section; hidden while they're covered. */
+export function Teach({ children }: { children: React.ReactNode }) {
+  const s = useWbStyles();
+  const c = useColors();
+  const { cover, setCover } = useContext(CoverContext);
+  if (cover) {
+    return (
+      <Pressable onPress={() => setCover(false)} style={s.covered} accessibilityRole="button">
+        <Ionicons name="eye-off-outline" size={16} color={c.textMuted} />
+        <Text style={s.label}>Notes covered · tap to show them</Text>
+      </Pressable>
+    );
+  }
+  return <View style={{ gap: 16 }}>{children}</View>;
+}
+/** The gaps at the end of a section, filled from memory. */
+export function Check({ children }: { children: React.ReactNode }) {
+  const s = useWbStyles();
+  const { cover, setCover } = useContext(CoverContext);
+  return (
+    <View style={s.check}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+        <Text style={[s.label, s.panelLabel]}>Check yourself</Text>
+        <Pressable onPress={() => setCover(!cover)} hitSlop={6} accessibilityRole="button">
+          <Text style={[s.label, s.panelLabel]}>{cover ? 'Show the notes' : 'Cover the notes'}</Text>
+        </Pressable>
+      </View>
+      {children}
+    </View>
+  );
 }
 
 // ── Notes ───────────────────────────────────────────────────────────────────
@@ -342,6 +381,8 @@ function makeStyles(c: any) {
     say: { borderLeftWidth: 3, borderLeftColor: c.yellow, backgroundColor: c.yellowBg, paddingHorizontal: 12, paddingVertical: 10, borderTopRightRadius: 8, borderBottomRightRadius: 8 },
     row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10, paddingVertical: 9, borderTopWidth: 1, borderTopColor: c.border },
     fig: { borderWidth: 1, borderColor: c.border, borderRadius: 12, padding: 12, backgroundColor: c.surface, gap: 8 },
+    covered: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderStyle: 'dashed', borderColor: c.border, borderRadius: 12, padding: 12 },
+    check: { borderWidth: 1, borderColor: c.primaryLight, borderRadius: 12, padding: 14, gap: 10, backgroundColor: c.primary + '08' },
     brk: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 6, marginBottom: 18 },
     brkLine: { flex: 1, height: 1, backgroundColor: c.border },
 

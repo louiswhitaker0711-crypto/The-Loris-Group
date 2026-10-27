@@ -17,7 +17,7 @@ import { useColors, fonts } from '../src/theme/ThemeContext';
 import { api } from '../src/api/client';
 import { useTabBarClearance } from '../src/customization/CustomTabBar';
 import { APP_LOCALE, APP_TZ } from '../src/utils/appTime';
-import { PITCH, PITCH_QUIZ, REHASH, PitchLine } from '../src/academy/pitch';
+import { PITCH, ALL_PITCH, PITCH_QUIZ, PitchLine, withWords } from '../src/academy/pitch';
 
 type Tab = 'read' | 'say' | 'learn' | 'check';
 type State = { counts: Record<string, number>; ladder: Record<string, boolean>; quiz: Record<string, number>; shown: Record<string, boolean> };
@@ -44,7 +44,7 @@ export default function PitchScreen() {
   const c = useColors();
   const s = useMemo(() => styles(c), [c]);
   const tabClear = useTabBarClearance();
-  const stepColour = (k: string) => ({ '--s1': c.primary, '--s2': c.primaryLight, '--s3': c.sgreen, '--s4': c.yellow } as Record<string, string>)[k] || c.primary;
+  const stepColour = (k: string) => ({ '--s1': c.primary, '--s2': c.primaryLight, '--s3': c.sgreen, '--s4': c.yellow, '--s5': c.primary, '--s6': c.sgreen } as Record<string, string>)[k] || c.primary;
 
   const q = useQuery({ queryKey: ['pitch'], queryFn: async () => (await api.get('/pitch')).data as Status, retry: false });
   const unlocked = q.data?.unlocked ?? true;
@@ -52,28 +52,26 @@ export default function PitchScreen() {
   const words = q.data?.words || {};
   const canEdit = !!q.data?.can_edit;
   // The office's own wording over the original lines.
-  const pitch = useMemo(() => PITCH.map((b) => ({
-    ...b,
-    lines: b.lines.map((l, i) => ({ ...l, say: words[`L${b.n}-${i}`] || l.say, q: l.q ? (words[`L${b.n}-${i}q`] || l.q) : l.q })),
-  })), [words]);
+  const all = useMemo(() => withWords(ALL_PITCH, words), [words]);
+  const pitch = all.filter((b) => b.n <= PITCH.length);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState('');
   const startEdit = () => {
     const d: Record<string, string> = {};
-    pitch.forEach((b) => b.lines.forEach((l, i) => { d[`L${b.n}-${i}`] = l.say; if (l.q) d[`L${b.n}-${i}q`] = l.q; }));
+    all.forEach((b) => b.lines.forEach((l, i) => { d[`L${b.n}-${i}`] = l.say; if (l.q) d[`L${b.n}-${i}q`] = l.q; }));
     setDraft(d); setSaveErr(''); setEditing(true);
   };
   const original = () => {
     const d: Record<string, string> = {};
-    PITCH.forEach((b) => b.lines.forEach((l, i) => { d[`L${b.n}-${i}`] = l.say; if (l.q) d[`L${b.n}-${i}q`] = l.q; }));
+    ALL_PITCH.forEach((b) => b.lines.forEach((l, i) => { d[`L${b.n}-${i}`] = l.say; if (l.q) d[`L${b.n}-${i}q`] = l.q; }));
     setDraft(d);
   };
   const saveWords = async () => {
     // Only lines that differ from the original are kept; a blank line goes back to the original.
     const out: Record<string, string> = {};
-    PITCH.forEach((b) => b.lines.forEach((l, i) => {
+    ALL_PITCH.forEach((b) => b.lines.forEach((l, i) => {
       const k = `L${b.n}-${i}`;
       const v = (draft[k] || '').trim();
       if (v && v !== l.say) out[k] = v;
@@ -137,9 +135,9 @@ export default function PitchScreen() {
     return <Pressable onPress={() => update((p) => ({ ...p, shown: { ...p.shown, [id]: !p.shown[id] } }))} accessibilityRole="button" accessibilityLabel={hidden ? 'Show this line' : 'Hide this line'}>{body}</Pressable>;
   };
 
-  const Steps = ({ learn }: { learn?: boolean }) => (
+  const Steps = ({ learn, from = 1, to = 99 }: { learn?: boolean; from?: number; to?: number }) => (
     <>
-      {pitch.map((b) => (
+      {all.filter((b) => b.n >= from && b.n <= to).map((b) => (
         <View key={b.n} style={[s.block, { borderLeftColor: stepColour(b.c) }]}>
           <View style={s.blockHead}>
             <View style={[s.num, { borderColor: stepColour(b.c) }]}><Text style={[s.numT, { color: stepColour(b.c) }]}>0{b.n}</Text></View>
@@ -184,7 +182,7 @@ export default function PitchScreen() {
                 {editing ? (
                   <>
                     <Text style={s.small}>Change the words people say. The notes on why and how stay as they are. Leave a line blank to go back to the original.</Text>
-                    {PITCH.map((b) => (
+                    {ALL_PITCH.map((b) => (
                       <View key={b.n} style={{ gap: 6 }}>
                         <Text style={[s.kicker, { color: stepColour(b.c) }]}>{b.n} · {b.t}</Text>
                         {b.lines.map((l, i) => {
@@ -225,12 +223,16 @@ export default function PitchScreen() {
                 ))}
               </View>
               <Text style={[s.h2, { marginTop: 8 }]}>Line by line: why and how</Text>
-              <Steps />
+              <Steps to={PITCH.length} />
               <View style={s.after}>
                 <Text style={[s.kicker, { color: c.inkMuted }]}>After they say yes</Text>
-                <Text style={[s.h2, { color: c.inkText, fontSize: 17 }]}>Then the Rehash</Text>
-                {REHASH.map((r) => <Text key={r} style={{ fontFamily: fonts.body, fontSize: 14, color: c.inkMuted }}>• {r}</Text>)}
+                <Text style={[s.h2, { color: c.inkText, fontSize: 17 }]}>The sign-up pitch, then the rehash pitch</Text>
+                <Text style={{ fontFamily: fonts.body, fontSize: 14, color: c.inkMuted }}>Build their week with them, then remove every reason to cancel before you leave.</Text>
               </View>
+              <Text style={[s.h2, { marginTop: 8 }]}>The sign-up pitch</Text>
+              <Steps from={5} to={5} />
+              <Text style={[s.h2, { marginTop: 8 }]}>The rehash pitch</Text>
+              <Steps from={6} to={6} />
               {!unlocked && <Text style={[s.muted, { textAlign: 'center' }]}>Tonight, just read it through. We’ll go over it together tomorrow, then Say it, Learn and Check open {opens ? `on ${opens}` : 'tomorrow evening'}.</Text>}
             </>
           )}
@@ -293,7 +295,7 @@ export default function PitchScreen() {
               <Text style={s.muted}>Each line is hidden down to its first letters. Say it out loud, then tap the line to check.</Text>
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 <Pressable onPress={() => update((p) => ({ ...p, shown: {} }))} style={s.btn}><Text style={s.btnT}>Hide all</Text></Pressable>
-                <Pressable onPress={() => update((p) => ({ ...p, shown: Object.fromEntries(pitch.flatMap((b) => b.lines.map((_, i) => [`L${b.n}-${i}`, true]))) }))} style={s.btn}><Text style={s.btnT}>Show all</Text></Pressable>
+                <Pressable onPress={() => update((p) => ({ ...p, shown: Object.fromEntries(all.flatMap((b) => b.lines.map((_, i) => [`L${b.n}-${i}`, true]))) }))} style={s.btn}><Text style={s.btnT}>Show all</Text></Pressable>
               </View>
               <Steps learn />
             </>

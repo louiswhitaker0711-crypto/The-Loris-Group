@@ -209,6 +209,20 @@ DAY2_NEW_ROWS = [
           "no surprises, no cancellations), 6 doorstep photo, 7 set the 4-week expectation (quality, quantity, "
           "addition, routine), 8 thank and inspire.",
           "You can run all 8 steps of the rehash so the customer feels confident to adjust instead of cancel."),
+    _row2("Signup", "Sticky Products",
+          "The products customers reorder every week: milk, eggs, bread, juice, milkshakes, butter, yoghurt, "
+          "cheese. Build every week on them, spread across the week: we aim for 2.5 drop days on average and "
+          "fails under 10%.",
+          "You can name the sticky products and build the week around them."),
+    _row2("Signup", "The Round",
+          "The Round is The Modern Milkman's membership: the delivery fee covered on every order, plus member "
+          "perks. Present it as an optional benefit that adds value, never a must; explain it clearly, let the "
+          "customer choose and never add it for them. We aim for 75%+ of sign-ups taking it.",
+          "You can explain The Round in a sentence and present it as an optional benefit."),
+    _row2("Quality", "Field IQ",
+          "Field IQ is the app they track their daily sign-ups and performance in. Download it before the "
+          "first day on badge, when their team leader sets them up.",
+          "You've downloaded Field IQ and know you'll be set up on your first day on badge."),
     _row2("Quality", "Law of Averages",
           "It's a numbers game: 120 doors, 70 spoken to, 25 pitched, 15 closed, 4+ sign-ups a day. More "
           "opportunities, more sign-ups.",
@@ -269,9 +283,10 @@ DAY2_REWRITES = {
 
 # Day 2 in the workbook's order. Rows not named here keep their place at the end.
 DAY2_ORDER = [
-    # 1 · The sign-up process
+    # Sticky products, then the sign-up process, then The Round (27 Oct 2026)
+    "Sticky Products",
     "Signup Process Overview", "Build the Order Correctly", "Need to Know", "Before the Customer Pays",
-    "Explain the Payments",
+    "Explain the Payments", "The Round",
     # 2–4 · Introduction, body language and tone
     "Pitch Introduction", "First Impression", "Icebreaker", "Who We Are / Where We Are From",
     "Body Language", "Tone of Voice", "SEE Factors",
@@ -287,8 +302,8 @@ DAY2_ORDER = [
     "Products",
     # 12 · Sales quality
     "What Good Looks Like", "Retention Standards", "Mistakes to Avoid",
-    # 13 · Rehash, 14 · Law of Averages
-    "Rehash", "Law of Averages",
+    # Rehash, Field IQ, Law of Averages
+    "Rehash", "Field IQ", "Law of Averages",
 ]
 
 
@@ -337,9 +352,39 @@ def _is_old(key, text) -> bool:
 
 def apply_day2_to_seed(rows: list[dict]) -> list[dict]:
     """Seed rows (no office) with Day 2 in the Owner's order, for a new office."""
-    if any(r.get("day_number") == 2 and r.get("topic") == "Law of Averages" for r in rows):
+    if any(r.get("day_number") == 2 and r.get("topic") == "Field IQ" for r in rows):
         return rows
     return reshape_day2(rows)
+
+
+DAY2_MARKER_V2 = "academy_day2_running_order_v2"
+
+
+async def migrate_day2_v2(db) -> dict:
+    """Once per database (27 Oct 2026): add Sticky Products, The Round and
+    Field IQ to each office's Day 2 and put it back in the workbook's order;
+    Day 2 checklists nobody has started marking are rebuilt."""
+    if await db.content_migrations.find_one({"id": DAY2_MARKER_V2}):
+        return {"skipped": True}
+    offices = await db.training_manual.distinct("office_id", {"day_number": 2})
+    changed = 0
+    for office_id in offices:
+        rows = await db.training_manual.find({"office_id": office_id, "day_number": 2}).to_list(500)
+        if any(r.get("topic") == "Field IQ" for r in rows):
+            continue
+        before = {r["_id"]: r.get("sequence") for r in rows if r.get("_id")}
+        for r in reshape_day2([dict(r) for r in rows]):
+            if r.get("_id"):
+                if before.get(r["_id"]) != r.get("sequence"):
+                    await db.training_manual.update_one({"_id": r["_id"]}, {"$set": {"sequence": r["sequence"]}})
+            else:
+                await db.training_manual.insert_one({**r, "office_id": office_id})
+        changed += 1
+    rebuilt = await _rebuild_unstarted_checklists(db, days=(2,))
+    await db.content_migrations.insert_one({"id": DAY2_MARKER_V2, "at": datetime.now(timezone.utc).isoformat(),
+                                            "offices": changed, "checklists_rebuilt": rebuilt})
+    logger.info(f"academy_manual: Day 2 v2 for {changed} office(s), {rebuilt} checklist(s) rebuilt")
+    return {"offices": changed, "checklists_rebuilt": rebuilt}
 
 
 async def migrate_day2(db) -> dict:

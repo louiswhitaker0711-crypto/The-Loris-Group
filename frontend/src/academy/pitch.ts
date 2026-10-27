@@ -42,3 +42,36 @@ export const PITCH_QUIZ: PitchQ[] = [
 
 export const REHASH = ['Explain the payments and the discount period', 'Show them how to manage their regular order',
   'Order by 8pm the night before; delivery by 7:30am', 'Leave the empty bottles out'];
+
+/** The sign-up pitch and the rehash pitch (27 Oct 2026): what to say once
+ * they've said yes, from the Owner's sign-up flow and rehash system. A first
+ * draft in the Owner's words; he edits the wording in the app (Edit). */
+export const SIGNUP_PITCH: PitchStep = {n:5,t:'Sign-up pitch',job:'Start, set the expectation, build the week, lock it in',c:'--s5',lines:[
+  {say:'Do you use iPhone or Android? If you go grab your phone, I’ll show you how it works.',how:'Relaxed and already moving forward, like it’s the obvious next step.',why:'Assumes the yes and gets the phone in their hand. That’s the start of the sign-up.',tags:[['5 Steps · Close'],['Sign-up']]},
+  {say:'Pop your postcode in there… perfect, so these are your delivery days.',how:'Don’t make it a thing, just do it. Point at the screen.',why:'Step 1, Start: postcode and delivery days, so you know when their week is.',tags:[['Sign-up · Start','q']]},
+  {say:'Let’s build a week of everything you already use.',how:'Calm and certain. You’re leading.',why:'Step 2, Set the expectation: it frames the whole order around what they really use.',tags:[['Sign-up · Set the expectation','q']]},
+  {say:'So what milk do you use? How much do you go through? And when do you next need it?',how:'One item at a time. They speak first; you drive the pace.',why:'Step 3, Build the week: the three questions, repeated for every product.',tags:[['Sign-up · Build the week','q'],['Order value £13+','q']]},
+  {say:'And eggs? Bread? Juice?',how:'Light and quick, then wait for the answer each time.',why:'Sticky products: the ones they reorder every week. Spread across the week, aiming for 2.5 drop days.',tags:[['Sticky products','q'],['Drop days','q']]},
+  {say:'So that’s Tuesday…, Thursday…, Saturday… Everything for the week is…',how:'Read back every item and every day. Say the price calmly, then pause.',why:'Step 4, Lock it in: no surprises, and they agree the week before they pay.',tags:[['Sign-up · Lock it in','q']]},
+]};
+export const REHASH_PITCH: PitchStep = {n:6,t:'Rehash pitch',job:'Remove every reason to cancel before it happens',c:'--s6',lines:[
+  {say:'Let me show you your week. So Tuesday you’ve got…, Thursday…, Saturday…',how:'Open their upcoming deliveries and read out each day.',why:'1 · Show their week: removes stress. It’s set up, paid, sorted.',tags:[['Rehash · Build control']]},
+  {say:'If you want more or less, just tap plus or minus. Skip misses a day, and remove stops it repeating.',how:'Show them on their phone as you say it.',why:'2 · Change amounts: they don’t cancel, they adjust.',tags:[['Rehash · Build control']]},
+  {say:'Going away? Pop the dates in here and it pauses. No need to cancel.',how:'Show the calendar.',why:'3 · Pause, don’t cancel.',tags:[['Rehash · Build control']]},
+  {say:'Anything extra, like something for the weekend, add it as a one-off. Saves you a trip to the shop.',how:'Easy and helpful.',why:'4 · One-offs: more convenient and more personal.',tags:[['Rehash · Build control']]},
+  {say:'Here’s your receipt, and this is where your next payment shows.',how:'Show the receipt in the app.',why:'5 · Payments: no surprises means no cancellations.',tags:[['Rehash · Lock it in']]},
+  {say:'Pop a photo of your doorstep on, so the milkman knows exactly where to leave it. If it’s a bit off the first time or two, just bear with us.',how:'Help them take it there and then.',why:'6 · Doorstep photo: no missed deliveries.',tags:[['Rehash · Lock it in']]},
+  {say:'You’ll spend about 4 weeks figuring it out: week 1 the taste, week 2 how much you use, week 3 adding extras, and by week 4 it’s routine.',how:'Relate it to what they’ve ordered.',why:'7 · Set the expectation: quality, quantity, addition, routine.',tags:[['Rehash · Lock it in'],['4th-week rate','q']]},
+  {say:'Thank you so much! You’re helping farmers get paid up to 4 times more, and saving plastic bottles. The turtles say thank you!',how:'Big smile. Mean it.',why:'8 · Thank and inspire: they finish feeling good about it.',tags:[['Rehash · Lock it in']]},
+]};
+/** Everything on the pitch screen: the door pitch, then the sign-up and rehash pitches. */
+export const ALL_PITCH: PitchStep[] = [...PITCH, SIGNUP_PITCH, REHASH_PITCH];
+
+/** The office's own wording (GET /pitch → words) over the original lines. */
+export function withWords(steps: PitchStep[], words: Record<string, string> | null | undefined): PitchStep[] {
+  const w = words || {};
+  return steps.map((b) => ({
+    ...b,
+    lines: b.lines.map((l, i) => ({ ...l, say: w[`L${b.n}-${i}`] || l.say, q: l.q ? (w[`L${b.n}-${i}q`] || l.q) : l.q })),
+  }));
+}

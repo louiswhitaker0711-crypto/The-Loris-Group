@@ -1,9 +1,17 @@
 /**
  * BA Academy Day 2: the workbook's sections and quizzes, in the Owner's
- * running order (26 Oct 2026). It starts with the sign-up process (start,
- * set the expectation, build the week, lock it in) and finishes with the
- * external final quiz. The screen lays the content out (Day2Page.tsx); this
- * file holds what both the screen and the Owner's class card need.
+ * running order (26–27 Oct 2026): sticky products, the sign-up process (start,
+ * set the expectation, build the week, lock it in), The Round, then the door
+ * pitch theory with the matching part of the pitch after each, quality, the
+ * rehash, Field IQ and the Law of Averages, and finally the external final
+ * quiz. The screen lays the content out (Day2Page.tsx); this file holds what
+ * both the screen and the Owner's class card need.
+ *
+ * 27 Oct 2026 rework: fewer gaps (a short Check yourself at the end of each
+ * section, filled from memory), 4 quizzes instead of 7 with 4 options each and
+ * believable wrong answers, testing what the final Form doesn't (the pitch,
+ * the sign-up, sticky products, The Round, the rehash). New quiz ids (qa–qd)
+ * so answers to the old quizzes never score against new questions.
  *
  * Field ids are saved on the server the same way as Day 1 (see day1.ts).
  * Don't rename an id once people have used it.
@@ -12,9 +20,13 @@ import type { Quiz, WorkbookState } from './day1';
 
 /** The Owner's final quiz (Microsoft Forms), opened from the end of Day 2. */
 export const FINAL_QUIZ_URL = 'https://forms.cloud.microsoft/e/dF555jSN2L';
+/** Field IQ download (Campaign Knowledge → Field IQ). */
+export const FIELD_IQ_URL = 'https://www.tfo.group/fieldiqdownload';
 
 export const DAY2_SECTIONS: { id: string; title: string; short: string }[] = [
+  { id: 'sk', title: 'Sticky products', short: 'Sticky products' },
   { id: 's1', title: 'The sign-up process', short: 'Sign-up' },
+  { id: 'rd', title: 'The Round (membership)', short: 'The Round' },
   { id: 's2', title: 'Introduction', short: 'Introduction' },
   { id: 's3', title: 'Body language & tone', short: 'Body language' },
   { id: 's4', title: 'Let’s practise', short: 'Practise' },
@@ -23,76 +35,73 @@ export const DAY2_SECTIONS: { id: string; title: string; short: string }[] = [
   { id: 's7', title: 'Who we can’t sign up', short: 'Who we can’t' },
   { id: 's8', title: 'Short story: the mission and reducing plastic', short: 'Short story' },
   { id: 's9', title: 'Supporting independent farmers', short: 'Farmers' },
-  { id: 's10', title: 'Convenience, then let’s practise', short: 'Convenience' },
+  { id: 's10', title: 'Convenience, the close, then let’s practise', short: 'Close' },
   { id: 's11', title: 'Product knowledge', short: 'Products' },
   { id: 's12', title: 'Sales quality', short: 'Quality' },
   { id: 's13', title: 'Rehash', short: 'Rehash' },
+  { id: 'fq', title: 'Field IQ', short: 'Field IQ' },
   { id: 's14', title: 'Law of Averages', short: 'Law of Averages' },
 ];
 
 export const DAY2_QUIZZES: Quiz[] = [
   {
-    id: 'q1', title: 'Quiz 1 · The sign-up process', qs: [
-      { p: 'What are the three questions when you build the order?', o: ['Name, address, email', 'What do you use, how much, when do you next need it', 'Milk, eggs or bread'], a: 1,
-        w: 'What do you use, how much, and when do you next need it. Then repeat for every product.' },
-      { p: 'What do you say to set the expectation?', o: ['“Let’s build a week of everything you already use.”', '“What’s your budget?”', '“Do you want the cheapest option?”'], a: 0,
-        w: 'It sets the frame: a week of everything they already use.' },
-      { p: 'You tell them the price for the week. Then you…', o: ['Keep talking to fill the silence', 'Pause', 'Offer a cheaper order straight away'], a: 1,
+    id: 'qa', title: 'Quiz 1 · Sticky products, the sign-up and The Round', qs: [
+      { p: 'A customer says they go through 6 pints of milk a week. What do you ask next?', o: ['“How about we start you on 2 and see how it goes?”', '“When do you next need it?”', '“Shall I add The Round?”', '“Do you want eggs as well?”'], a: 1,
+        w: 'What do you use, how much, when do you next need it, for every product. Never start them on less than they use.' },
+      { p: 'Which of these is NOT one of our sticky products?', o: ['Butter', 'Milkshakes', 'A one-off birthday cake', 'Yoghurt'], a: 2,
+        w: 'Sticky products are the ones they reorder every week: milk, eggs, bread, juice, milkshakes, butter, yoghurt, cheese.' },
+      { p: 'You’ve read back the week and said the price. What now?', o: ['Explain the price again so it doesn’t sound expensive', 'Offer to take something off', 'Pause and let them answer', 'Move straight on to the rehash'], a: 2,
         w: 'Say it calmly, then pause.' },
-      { p: 'Why do we build the order around sticky products like milk, eggs and bread?', o: ['They’re the cheapest', 'Customers reorder them every week, which keeps them ordering', 'They’re the newest products'], a: 1,
-        w: 'Sticky products get reordered every week, so the order lasts.' },
-      { p: 'On average, how many drop days a week do we aim for?', o: ['1', '2.5', '5'], a: 1,
-        w: 'We aim for 2.5 drop days on average, with fails under 10%.' },
-      { p: 'When does the customer pay?', o: ['On the day, there and then', 'At the end of the month', 'After their first delivery'], a: 0,
-        w: 'They pay on the day, there and then, when they sign up.' },
-      { p: 'A customer asks if they can cancel. You…', o: ['Change the subject', 'Explain clearly and honestly that they can manage, pause or cancel in the app', 'Tell them not to worry'], a: 1,
-        w: 'Always be honest about how the subscription works.' },
+      { p: 'What does The Round cover?', o: ['The first order only', 'A free pint every week', 'The 20% discount', 'The delivery fee on every order'], a: 3,
+        w: 'The Round is the membership: the delivery fee is covered on every order, plus member perks.' },
+      { p: 'A customer isn’t sure about The Round. You…', o: ['Explain what it gives them and let them choose', 'Add it anyway: they can cancel in the app', 'Tell them they need it for the discount', 'Leave it out and don’t mention it'], a: 0,
+        w: 'It’s an optional benefit. Explain it clearly and let them choose; never add it for them.' },
+      { p: 'Who speaks first when you’re building the order?', o: ['You, so you keep control', 'The customer', 'Whoever’s holding the phone', 'It doesn’t matter'], a: 1,
+        w: 'They speak first, one item at a time, and you drive the pace.' },
     ],
   },
   {
-    id: 'q2', title: 'Quiz 2 · Introduction and body language', qs: [
-      { p: 'What does S.E.E. stand for?', o: ['Smile, eye contact, enthusiasm', 'Sell, explain, end', 'Speak, engage, enjoy'], a: 0, w: 'Smile, eye contact, enthusiasm.' },
-      { p: 'How much of communication is body language?', o: ['7%', '23%', '70%'], a: 2, w: '70% body language, 23% tone, 7% words.' },
-      { p: 'How long do you have to make a first impression?', o: ['7 seconds', '30 seconds', '2 minutes'], a: 0, w: 'About 7 seconds.' },
+    id: 'qb', title: 'Quiz 2 · Introduction and code of practice', qs: [
+      { p: 'The door opens. What comes before you say anything?', o: ['Holding up your badge', 'The discount', 'Asking if they do the shopping', 'A smile, eye contact and enthusiasm'], a: 3,
+        w: 'S.E.E. first: they decide in about 7 seconds whether to listen.' },
+      { p: 'How is communication split?', o: ['7% body language, 23% tone, 70% words', '70% body language, 23% tone, 7% words', '50% words, 50% tone', '23% body language, 70% tone, 7% words'], a: 1,
+        w: '70% body language, 23% tone of voice, 7% the words.' },
+      { p: 'Why do we say “nothing serious” in the opener?', o: ['To drop their guard straight away', 'To explain the offer', 'To fill time while they decide', 'Because the client tells us to'], a: 0,
+        w: 'It relaxes them straight away, so they listen.' },
+      { p: 'Someone tells you you’re in a no-cold-calling zone. You…', o: ['Finish this street, then move', 'Only skip their house', 'Leave the immediate area and tell your Coach and the Owner', 'Ask them to prove it'], a: 2,
+        w: 'Apologise, leave the immediate area, and tell your Coach and the Owner so it can be checked.' },
+      { p: 'Leaving out the delivery fee when you explain the price is…', o: ['Fine if they don’t ask', 'An omission, which counts as misleading', 'Only a problem on orders under £5', 'Up to you'], a: 1,
+        w: 'Hiding a cost is an omission. Always explain the delivery fee.' },
     ],
   },
   {
-    id: 'q3', title: 'Quiz 3 · Code of practice', qs: [
-      { p: 'A house has a “No Cold Calling” sign. You…', o: ['Knock anyway', 'Respect it and don’t knock', 'Leave a leaflet'], a: 1, w: 'Respect the sign.' },
-      { p: 'Which is a data protection breach?', o: ['Entering details into the sign-up', 'Photographing a customer’s details on your own phone', 'Confirming the delivery address'], a: 1, w: 'Details only go into the approved sign-up.' },
-      { p: 'Which is misleading?', o: ['Explaining delivery days', 'Exaggerating savings or hiding costs', 'Talking about plastic'], a: 1, w: 'Never exaggerate, and never leave out costs.' },
-      { p: 'Which of these is an omission?', o: ['Hiding the delivery fee', 'Explaining the subscription', 'Talking through the terms'], a: 0, w: 'Leaving out a cost, like the delivery fee, is an omission.' },
+    id: 'qc', title: 'Quiz 3 · The pitch: presentation, short story and close', qs: [
+      { p: '“We’ve got so popular we’re sending another van round.” Which two G.I.F.T.S. is that?', o: ['Greed and Indifference', 'The Jones Theory and Sense of urgency', 'Fear of loss and Greed', 'Indifference and Sense of urgency'], a: 1,
+        w: 'Everyone else has it (The Jones Theory), and another van means now (Sense of urgency).' },
+      { p: 'A man says his wife does the shopping and she’s at work. You…', o: ['Sign him up: he can tell her later', 'Ask for her phone number', 'Sign up with her card details', 'Don’t sign him up: leave a good impression and come back when she’s in'], a: 3,
+        w: 'Only sign up the person who does the shopping: the decision maker.' },
+      { p: 'What’s the biggest reason customers sign up?', o: ['The 20% discount', 'Fresher milk', 'Cutting plastic and helping the planet', 'Not having to go to the shop'], a: 2,
+        w: 'Reducing plastic. Passion is transferred: if you care about it, they will.' },
+      { p: 'How much more are independent farmers paid by The Modern Milkman than by a supermarket?', o: ['Up to 4 times more', 'Twice as much', 'The same', '10% more'], a: 0,
+        w: 'Up to 4 times more.' },
+      { p: '“I’m guessing you’d rather do that.” What kind of close is it?', o: ['A question close', 'An assumptive close', 'A discount close', 'A trial close'], a: 1,
+        w: 'Assumptive: it plays back everything they’ve agreed with. Then stop talking and let them answer.' },
     ],
   },
   {
-    id: 'q4', title: 'Quiz 4 · G.I.F.T.S. and customers', qs: [
-      { p: '“Your neighbours already have it” is which impulse?', o: ['Greed', 'The Jones Theory', 'Indifference'], a: 1, w: 'The Jones Theory.' },
-      { p: 'Who is the best customer?', o: ['Someone signing up only for the discount', 'The person who does the shopping and uses the products every week', 'A visiting family member'], a: 1, w: 'The decision maker who uses the products: an A-customer.' },
-      { p: 'Who can’t we sign up?', o: ['Someone under 18', 'A pensioner who’s happy with the app', 'Someone who works nights'], a: 0, w: 'Under 18s can’t sign up. There’s no upper age limit.' },
-    ],
-  },
-  {
-    id: 'q5', title: 'Quiz 5 · The short story', qs: [
-      { p: 'What’s the biggest reason customers sign up?', o: ['The discount', 'Reducing plastic and helping the planet', 'The milk float'], a: 1, w: 'Reducing plastic.' },
-      { p: 'How much more are independent farmers paid by The Modern Milkman?', o: ['The same', 'Up to 4 times more', 'Half as much'], a: 1, w: 'Up to 4 times more than from a supermarket.' },
-      { p: 'Order by…, on the doorstep by…', o: ['8pm · 7:30am', '6pm · 9am', 'Midnight · noon'], a: 0, w: 'Order by 8pm the night before, delivered by 7:30am.' },
-    ],
-  },
-  {
-    id: 'q6', title: 'Quiz 6 · Product and quality', qs: [
-      { p: 'What average order value do we aim for?', o: ['£8+', '£10+', '£13+'], a: 2, w: '£13 or more.' },
-      { p: 'Which of these is a fail?', o: ['The customer changes their items', 'A first delivery 12 days away', 'The customer takes The Round'], a: 1, w: 'A first delivery more than 8 days away is a fail.' },
-      { p: 'A customer wants their first delivery in 12 days. You…', o: ['Sign them up anyway', 'Move the date to within 8 days without asking', 'Tell them to sign up online later'], a: 2, w: 'Over 8 days is a fail, and never change the date without asking.' },
-      { p: 'How do you present The Round (membership)?', o: ['As a must', 'As an optional benefit that adds value', 'As a trial'], a: 1, w: 'Optional, and only where it suits them and they agree.' },
-      { p: 'A red bottle top is…', o: ['Whole milk', 'Semi-skimmed', 'Skimmed'], a: 1, w: 'Silver whole, red semi-skimmed, blue skimmed.' },
-    ],
-  },
-  {
-    id: 'q7', title: 'Quiz 7 · Rehash', qs: [
-      { p: 'A customer says they’re away for a week next month. You…', o: ['Show them how to pause between dates', 'Tell them to cancel and sign up again', 'Say nothing'], a: 0, w: 'Going away = pause, not cancel.' },
-      { p: 'In the first 4 weeks, week 2 is about…', o: ['Quality', 'Quantity', 'Routine'], a: 1, w: 'Week 1 quality, week 2 quantity, week 3 addition, week 4 routine.' },
-      { p: 'Why add a doorstep photo?', o: ['For our records', 'So the milkman knows exactly where to go', 'It’s optional, so skip it'], a: 1, w: 'No missed deliveries.' },
-      { p: 'What is the rehash for?', o: ['Upselling', 'Removing every reason to cancel before it happens', 'Filling time'], a: 1, w: 'Remove every reason to cancel, and make them confident to adjust.' },
+    id: 'qd', title: 'Quiz 4 · Products, quality, rehash and Field IQ', qs: [
+      { p: 'A red glass bottle top is…', o: ['Whole milk', 'Skimmed', 'Semi-skimmed', 'Oat drink'], a: 2,
+        w: 'Silver is whole, red is semi-skimmed, blue is skimmed.' },
+      { p: 'A repeat order comes to £4.80, and the delivery fee takes it over £5. Is it a fail?', o: ['No: it’s over £5 with the fee', 'Yes: the delivery fee doesn’t count', 'Only if they cancel', 'Only if it’s a Silver'], a: 1,
+        w: 'The repeat weekly items must come to £5 or more without the delivery fee.' },
+      { p: 'In the first 4 weeks, week 2 is about…', o: ['Quality', 'Routine', 'Quantity', 'Addition'], a: 2,
+        w: 'Week 1 quality, week 2 quantity, week 3 addition, week 4 routine.' },
+      { p: 'Why add a doorstep photo in the rehash?', o: ['For our records', 'To prove we were there', 'It’s optional, so skip it', 'So the milkman knows exactly where to leave it'], a: 3,
+        w: 'No missed deliveries.' },
+      { p: 'When are you set up on Field IQ?', o: ['On your first day on badge, with your team leader', 'Today, in the office', 'After your evaluation', 'You set it up yourself whenever'], a: 0,
+        w: 'Download it before, and you’re set up on your first day on badge.' },
+      { p: 'A full day is 120 doors, 70 spoken to, 25 pitched, 15 closed and…', o: ['2 sign-ups', '4+ sign-ups', '8 sign-ups', '10 sign-ups'], a: 1,
+        w: 'The Law of Averages: 4 or more sign-ups.' },
     ],
   },
 ];

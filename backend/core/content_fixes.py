@@ -308,6 +308,11 @@ async def run_content_fixes(db) -> dict:
     except Exception as e:
         logger.warning(f"content_fixes: Academy Day 2 checklist update failed: {e}")
     try:
+        from core.academy_manual import migrate_day2_v2 as _academy_day2_v2
+        result["academy_day2_v2"] = await _academy_day2_v2(db)
+    except Exception as e:
+        logger.warning(f"content_fixes: Academy Day 2 (v2) checklist update failed: {e}")
+    try:
         from core.field_ladder import migrate as _field_ladder
         result["field_ladder"] = await _field_ladder(db)
     except Exception as e:

@@ -66,7 +66,7 @@ def test_migration_runs_once_and_rebuilds_unstarted_checklists():
 
 def test_seed_day2_follows_the_workbook_and_drops_future_payment_dates():
     d2 = _topics(TRAINING_MANUAL, 2)
-    assert d2[0] == "Signup Process Overview" and d2[-2:] == ["Rehash", "Law of Averages"]
+    assert d2[:2] == ["Sticky Products", "Signup Process Overview"] and d2[-3:] == ["Rehash", "Field IQ", "Law of Averages"]
     assert [t for t in am.DAY2_ORDER if t in d2] == d2
     for r in TRAINING_MANUAL:
         text = r["what_good_looks_like"] + r["expected_outcome"]
@@ -91,12 +91,25 @@ def test_day2_migration_keeps_edited_rows_and_rebuilds_unstarted_checklists():
     out = _run(am.migrate_day2(db))
     assert out == {"offices": 1, "checklists_rebuilt": 1}
     live = _run(db.training_manual.find({"office_id": "o1"}).to_list(100))
-    assert _topics(live, 2) == ["Signup Process Overview", "Explain the Payments", "Code of Practice", "G.I.F.T.S.",
-                                "How It Works", "Rehash", "Law of Averages"]
+    assert _topics(live, 2) == ["Sticky Products", "Signup Process Overview", "Explain the Payments", "The Round",
+                                "Code of Practice", "G.I.F.T.S.", "How It Works", "Rehash", "Field IQ", "Law of Averages"]
     by = {(r["day_number"], r["topic"]): r["what_good_looks_like"] for r in live}
     assert by[(2, "Signup Process Overview")] == "My own words."          # edited in Manual: kept
     assert "there and then" in by[(2, "Explain the Payments")] and "3 days" not in by[(2, "Explain the Payments")]
     assert "3 days" not in by[(4, "Explaining the Payments")]
     a2 = [r["topic"] for r in _run(db.delivery_checklist.find({"assessment_id": "a2"}).to_list(100))]
-    assert a2[0] == "Signup Process Overview" and "Rehash" in a2
+    assert a2[0] == "Sticky Products" and "Rehash" in a2
     assert _run(am.migrate_day2(db)) == {"skipped": True}
+
+
+def test_day2_v2_adds_sticky_round_and_field_iq_once():
+    db = AsyncMongoMockClient()["academy_manual_day2_v2_test"]
+    rows = [{"day_number": 2, "sequence": i + 1, "category": "x", "topic": t, "what_good_looks_like": "x"}
+            for i, t in enumerate(["Signup Process Overview", "Explain the Payments", "Rehash", "Law of Averages"])]
+    _run(db.training_manual.insert_many([{**r, "office_id": "o1"} for r in rows]))
+    out = _run(am.migrate_day2_v2(db))
+    assert out["offices"] == 1
+    live = _run(db.training_manual.find({"office_id": "o1"}).to_list(100))
+    assert _topics(live, 2) == ["Sticky Products", "Signup Process Overview", "Explain the Payments", "The Round",
+                                "Code of Practice", "G.I.F.T.S.", "Rehash", "Field IQ", "Law of Averages"]
+    assert _run(am.migrate_day2_v2(db)) == {"skipped": True}
