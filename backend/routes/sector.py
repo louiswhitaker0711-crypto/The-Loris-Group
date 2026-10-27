@@ -119,6 +119,25 @@ async def cod_pick_stages(target: dict) -> list[int]:
     return [s for s in COD_PICK_STAGES if s <= n]
 
 
+def cod_stage_of(target: dict, stages: list[int]) -> Optional[float]:
+    """Someone's COD stage for the prompts: their OwnerIQ stage, else a BA's
+    open learning stage, else 3 for a Coach."""
+    from core.schedule_template import stage_num
+    n = stage_num(target.get("owneriq_stage"))
+    if n is not None:
+        return n
+    role = (target.get("role") or "").lower()
+    if role == "trainee":
+        return float(max(stages)) if stages else 1.0
+    return 3.0 if role in ("leader", "coach") else None
+
+
+def cod_prompt_for(stage: Optional[float]) -> bool:
+    """Stage 2 and Stage 3 get the COD front and centre in the set-up and the
+    breakdown (the Owner, 27 Oct 2026); new starts (Stage 1) and 3+ don't."""
+    return stage in (2.0, 3.0)
+
+
 async def cod_options(office_id) -> list[dict]:
     """The office's COD items a set-up can pick from, in order. Learning (Stage
     1-2) picks from their own stage or below; "an example of" (Stage 3+) from
@@ -138,7 +157,9 @@ def clean_breakdown(body: dict) -> dict:
            "change": _text(body.get("change")),
            # Silver / Gold / took The Round, from Field IQ (sign-ups = Silver + Gold).
            "silver": _int(body.get("silver"), 0, 30), "gold": _int(body.get("gold"), 0, 30),
-           "round": _int(body.get("round"), 0, 30)}
+           "round": _int(body.get("round"), 0, 30),
+           # Stage 2-3: how this week's COD focus went today (the Owner, 27 Oct 2026).
+           "cod_note": _text(body.get("cod_note"))}
     if out["silver"] is not None or out["gold"] is not None:
         out["hit"] = (out["silver"] or 0) + (out["gold"] or 0)
         if out["round"] is not None:
@@ -259,7 +280,8 @@ def breakdown_text(rows: list, iso: str, sector_goal: Optional[int] = None, post
     for r in rows:
         b = r.get("breakdown") or {}
         nums = [b.get(k) for k in ("doors", "spoken", "pitched", "closed")]
-        if not any(v is not None for v in nums) and b.get("hit") is None and not b.get("proud") and not b.get("change"):
+        if not any(v is not None for v in nums) and b.get("hit") is None and not b.get("proud") and not b.get("change") \
+                and not b.get("cod_note"):
             continue
         out += ["", f"*{_first(r.get('user_name'))}*"]
         if any(v is not None for v in nums):
@@ -275,6 +297,9 @@ def breakdown_text(rows: list, iso: str, sector_goal: Optional[int] = None, post
             out.append(f"Proud of: {b['proud']}")
         if b.get("change"):
             out.append(f"Change: {b['change']}")
+        if b.get("cod_note"):
+            topic = (r.get("week_focus") or {}).get("topic")
+            out.append(f"COD{f' ({topic})' if topic else ''}: {b['cod_note']}")
     if primetime:
         out += [""] + list(primetime)
     return "\n".join(out)
@@ -433,6 +458,7 @@ async def sector_day(request: Request, date: Optional[str] = None):
             # Stage 3+ (no learning pick): "what I'm being an example of".
             "example_mode": not stages,
             "week_focus": week_focus.get(p["user_id"]),
+            "cod_prompt": cod_prompt_for(cod_stage_of(targets.get(p["user_id"]) or {}, stages)),
             "teacher_name": names.get(st.get("teacher_id") or "") or "",
             "example": example,
             "setup": doc.get("setup"),

@@ -29,7 +29,7 @@ type CodItem = { id: string; stage: number; topic: string; category?: string };
 type CodDay = { stages: number[]; pick: CodItem | null; observed: { by_name: string; date: string } | null };
 type Breakdown = { doors: number | null; spoken: number | null; pitched: number | null; closed: number | null;
   note: string; goal: number | null; hit: number | null; proud: string; change: string;
-  silver?: number | null; gold?: number | null; round?: number | null };
+  silver?: number | null; gold?: number | null; round?: number | null; cod_note?: string };
 type Person = { user_id: string; user_name: string; setup: Setup | null; breakdown: Breakdown | null;
   prefill: Partial<Record<'doors' | 'spoken' | 'pitched' | 'closed' | 'hit' | 'silver' | 'gold' | 'round', number>>;
   yesterday: { change: string; proud: string; goal: number | null; kpi: { kpi_metric: string; kpi_target: number } | null };
@@ -422,6 +422,7 @@ function SetupCard({ p, date, opts, codOptions, sectorPeople, open, onToggle, on
       </Pressable>
       {open && (
         <View style={{ gap: 10 }}>
+          <CodFocusBanner p={p} s={s} c={c} />
           {shadow && (
             <Text style={s.muted}>{p.hop || 'Shadow day'}. No sales goal or KPI today: set what they're learning and their focus.</Text>
           )}
@@ -515,6 +516,25 @@ function SetupCard({ p, date, opts, codOptions, sectorPeople, open, onToggle, on
   );
 }
 
+/** Stage 2-3 (the Owner, 27 Oct 2026): this week's COD focus at the top of
+ * their set-up and breakdown, or a prompt to pick one. */
+function CodFocusBanner({ p, s, c }: any) {
+  const router = useRouter();
+  if (!p.cod_prompt) return null;
+  const wf: WeekFocus = p.week_focus || null;
+  return (
+    <Pressable onPress={() => router.push((wf ? `/module/${wf.module_id}` : p.example_mode ? '/(tabs)/progress' : '/ba-week') as never)}
+      style={[s.hint, { borderWidth: 1, borderColor: wf ? c.primary : c.yellow, borderRadius: 10, padding: 10 }]} accessibilityRole="button" testID="cod-focus-banner">
+      <Ionicons name={wf ? 'flag' : 'flag-outline'} size={16} color={wf ? c.primary : c.yellow} />
+      <View style={{ flex: 1 }}>
+        <Text style={[s.label, { marginTop: 0 }]}>{wf ? 'This week’s COD focus' : 'No COD focus this week'}</Text>
+        <Text style={s.ghostText}>{wf ? wf.topic : (p.example_mode ? 'Pick one on your COD' : 'Pick one in your weekly plan') + ', so the set-up and breakdown work on it.'}</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={16} color={c.textMuted} />
+    </Pressable>
+  );
+}
+
 /** At the breakdown: was today's COD item seen in the field? */
 function CodObserved({ p, date, canMark, onSaved, s, c }: any) {
   const [busy, setBusy] = useState(false);
@@ -556,6 +576,7 @@ function BreakdownCard({ p, date, opts, canMarkCod, open, onToggle, onSaved, s, 
   const [note, setNote] = useState(cur.note || '');
   const [proud, setProud] = useState(cur.proud || '');
   const [change, setChange] = useState(cur.change || '');
+  const [codNote, setCodNote] = useState(cur.cod_note || '');
   const [busy, setBusy] = useState(false);
   useEffect(() => { if (!p.breakdown) setVals(fresh()); }, [p.prefill]); // eslint-disable-line react-hooks/exhaustive-deps
   // Sign-ups are Silver + Gold once either is typed.
@@ -571,7 +592,7 @@ function BreakdownCard({ p, date, opts, canMarkCod, open, onToggle, onSaved, s, 
     try {
       await apiService.saveSectorDay(p.user_id, date, { breakdown: {
         doors: num(vals.doors), spoken: num(vals.spoken), pitched: num(vals.pitched), closed: num(vals.closed),
-        hit: signups, silver: num(vals.silver), gold: num(vals.gold), round: num(vals.round), goal: num(goal), note, proud, change } });
+        hit: signups, silver: num(vals.silver), gold: num(vals.gold), round: num(vals.round), goal: num(goal), note, proud, change, cod_note: codNote } });
       toast.success('Saved'); onSaved(); onToggle();
     } catch (e) { showAlert('Could not save', errText(e, 'Try again.')); }
     finally { setBusy(false); }
@@ -588,6 +609,14 @@ function BreakdownCard({ p, date, opts, canMarkCod, open, onToggle, onSaved, s, 
       </Pressable>
       {open && (
         <View style={{ gap: 10 }}>
+          <CodFocusBanner p={p} s={s} c={c} />
+          {!!p.cod_prompt && !!p.week_focus && (
+            <>
+              <Text style={s.label}>How did your COD focus go today?</Text>
+              <TextInput value={codNote} onChangeText={setCodNote} placeholder={`What you did on ${p.week_focus.topic} today`}
+                placeholderTextColor={c.textMuted} style={s.input} maxLength={160} testID="bd-cod-note" />
+            </>
+          )}
           <CodObserved p={p} date={date} canMark={canMarkCod} onSaved={onSaved} s={s} c={c} />
           <View style={s.numRow}>
             {(['doors', 'spoken', 'pitched', 'closed'] as const).map((k) => (

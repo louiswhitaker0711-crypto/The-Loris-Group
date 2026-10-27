@@ -371,3 +371,19 @@ def test_joined_shape_carries_both_outlines(monkeypatch):
     assert both["bbox"] == {"s": 53.49, "n": 53.51, "w": -1.10, "e": -1.08}
     assert both["households"] == 1500 and both["weeks_since"] == 8
     assert asyncio.run(sec._joined_shape("off", "ZZ9 9")) is None
+
+
+def test_cod_prompt_is_for_stage_2_and_3_only():
+    assert sec.cod_prompt_for(sec.cod_stage_of({"owneriq_stage": "stage_2"}, [1, 2]))
+    assert sec.cod_prompt_for(sec.cod_stage_of({"owneriq_stage": "stage_3"}, []))
+    assert not sec.cod_prompt_for(sec.cod_stage_of({"owneriq_stage": "stage_3_plus"}, []))
+    assert not sec.cod_prompt_for(sec.cod_stage_of({"role": "trainee"}, [1]))
+    assert sec.cod_prompt_for(sec.cod_stage_of({"role": "trainee"}, [1, 2]))
+    assert sec.cod_prompt_for(sec.cod_stage_of({"role": "leader"}, []))
+
+
+def test_breakdown_keeps_the_cod_note_and_posts_it():
+    b = sec.clean_breakdown({"cod_note": "  Used the assumptive close  "})
+    assert b["cod_note"] == "Used the assumptive close"
+    text = sec.breakdown_text([{"user_name": "Sam B", "breakdown": b, "week_focus": {"topic": "The Close"}}], "2026-10-27")
+    assert "COD (The Close): Used the assumptive close" in text

@@ -17,6 +17,7 @@ import { Aurora } from '../src/components/ui/Aurora';
 import { Breathe } from '../src/components/ui/Breathe';
 import PressableScale from '../src/components/ui/PressableScale';
 import MeetingCodPick from '../src/components/planner/MeetingCodPick';
+import CodWeekCard from '../src/components/cod/CodWeekCard';
 import PlannerLoaReview from '../src/components/planner/PlannerLoaReview';
 import PrimetimeDayBlock from '../src/components/planner/PrimetimeDayBlock';
 import { RowEditor, dayOrder, DayTimeInput, type SheetRow } from '../src/components/planner/DayLayout';
@@ -762,6 +763,9 @@ export default function WeeklyPlannerScreen() {
           onToggleSearch={() => { setSearchOpen((s) => !s); setSearchTerm(''); }} searchOpen={searchOpen}
           title={showWeekTab ? 'Weekly Planner' : 'Daily Planner'}
         />
+
+        {/* This week's COD focus and what to do on it, or a prompt to pick one (the Owner, 27 Oct 2026). */}
+        {canEdit && <CodWeekCard week={typeof week === 'string' ? week : undefined} />}
 
         {!canEdit && (
           <View style={styles.roBanner}>

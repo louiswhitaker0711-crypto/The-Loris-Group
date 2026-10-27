@@ -69,3 +69,13 @@ def test_week_and_focus(monkeypatch):
     assert got == {str(BA): {"module_id": "m1", "topic": "Impulses", "stage": 1,
                              "set_by_name": "Coach Example", "at": None}}
     assert run(cf.focus_for([str(BA)], "2026-11-01")) == {}
+
+
+def test_next_step_walks_the_proof_ladder():
+    from routes import cod_focus as cf
+    assert cf.next_step(0, 2)["rung"] == "Know"
+    assert "Coach" in cf.next_step(1, 3)["text"] and cf.next_step(1, 3)["rung"] == "Do"
+    assert cf.next_step(2, 2)["rung"] == "Deliver"
+    assert cf.next_step(3, 2)["rung"] is None           # Stage 1-2 top out at Deliver
+    assert cf.next_step(3, 3)["rung"] == "Teach"        # Stage 3 adds Teach
+    assert cf.next_step(4, 3)["rung"] is None

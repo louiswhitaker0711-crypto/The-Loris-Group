@@ -193,6 +193,10 @@ export default function BaWeekScreen() {
         ) : (
           <Text style={s.hint}>{canEdit ? 'Pick what you\'ll work on this week.' : 'No focus picked yet.'}</Text>
         )}
+        {/* What to do on it this week: the next rung (the Owner, 27 Oct 2026). */}
+        {!!focus && !!focusQ.data?.next && (
+          <Text style={s.hint}>{focusQ.data.next.rung ? `This week: ${focusQ.data.next.rung}. ` : ''}{focusQ.data.next.text}</Text>
+        )}
         {canEdit && (
           <TouchableOpacity style={s.ghostBtn} onPress={() => setPicking((v) => !v)} testID="ba-week-pick-focus">
             <Text style={s.ghostTxt}>{picking ? 'Close' : focus ? 'Change focus' : 'Choose focus'}</Text>

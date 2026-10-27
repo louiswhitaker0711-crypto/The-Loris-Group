@@ -93,6 +93,41 @@ async def _user(user_id: str) -> dict:
     return u
 
 
+# What to do this week on your focus (the Owner, 27 Oct 2026): the next rung
+# of its proof ladder. You tick Know yourself; Do and above are your Coach's.
+RUNGS = ["Know", "Do", "Deliver", "Teach", "Systemise"]
+
+
+def next_step(ladder: int, stage: Optional[int]) -> dict:
+    """{"rung", "text"} for the next rung after `ladder` (0 = nothing yet)."""
+    top = 3 if (stage or 1) <= 2 else 4 if stage == 3 else 5
+    if ladder >= top:
+        return {"rung": None, "text": "Signed off. Keep it up, and pick a new focus next week."}
+    rung = RUNGS[ladder]
+    text = {
+        "Know": "Learn it this week, then tick Know yourself on the COD.",
+        "Do": "Do it in the field this week. Ask your Coach to watch you and sign off Do.",
+        "Deliver": "Do it every day this week. Your Coach signs off Deliver once it's consistent.",
+        "Teach": "Teach it to someone on your team this week. Your Coach signs off Teach.",
+        "Systemise": "Make it how the team works. Your Coach signs off Systemise.",
+    }[rung]
+    return {"rung": rung, "text": text}
+
+
+async def focus_next(uid: str, focus: Optional[dict]) -> Optional[dict]:
+    if not focus or not focus.get("module_id"):
+        return None
+    mid = focus["module_id"]
+    m = await db.training_modules.find_one({"id": mid}, {"_id": 0, "what_good_looks_like": 1, "stage": 1}) or {}
+    prog = await db.module_progress.find_one(
+        {"$or": [{"target_user_id": uid, "module_id": mid},
+                 {"user_id": uid, "module_id": mid, "target_user_id": {"$exists": False}}]},
+        {"_id": 0, "ladder": 1}) or {}
+    ladder = int(prog.get("ladder") or 0)
+    wgll = [w for w in (m.get("what_good_looks_like") or []) if isinstance(w, str)][:3]
+    return {"ladder": ladder, **next_step(ladder, m.get("stage") or focus.get("stage")), "good": wgll}
+
+
 @router.get("/cod-focus/me")
 async def my_focus(request: Request, week: Optional[str] = None):
     user = await get_current_user(request)
@@ -101,6 +136,7 @@ async def my_focus(request: Request, week: Optional[str] = None):
     mine = (await focus_for([uid], we)).get(uid)
     setter = (user.get("role") or "").lower() in ("trainee", "leader", "admin")
     return {"week_ending": we, "user_id": uid, "focus": mine, "can_set": setter,
+            "next": await focus_next(uid, mine),
             "options": await cod_items(user.get("office_id")) if setter else []}
 
 

@@ -57,6 +57,7 @@ import AcademyClassCard from '../../src/components/home/AcademyClassCard';
 import NewStartsButton from '../../src/components/home/NewStartsButton';
 import EarningsPlanCard from '../../src/components/home/EarningsPlanCard';
 import PitchCard from '../../src/components/home/PitchCard';
+import CodWeekCard from '../../src/components/cod/CodWeekCard';
 import SectorPromptCard from '../../src/components/home/SectorPromptCard';
 import ResetBoardCard from '../../src/components/home/ResetBoardCard';
 import OwnerIQBanner from '../../src/components/home/OwnerIQBanner';
@@ -1615,6 +1616,8 @@ export default function HomeScreen() {
       {isAdmin && <AcademyClassCard />}
       {/* The pitch near the top: everyone in Primetime (11:00–11:45); a new start from 18:00 on their first day. */}
       <PitchCard place="top" />
+      {/* Stage 2-3: this week's COD focus and what to do on it, or a prompt to pick one (the Owner, 27 Oct 2026). */}
+      {(codStage === 2 || codStage === 3) && !(isTrainee && nextPending) && !(user as any)?.is_viewer && <CodWeekCard />}
       {/* Everyone knows their breakeven: no plan yet, or over a month old (not on Academy days, not viewers). */}
       {!(user as any)?.is_viewer && !(isTrainee && nextPending && nextPending.day_number <= 2) && <EarningsPlanCard />}
       {pReviewCard}
