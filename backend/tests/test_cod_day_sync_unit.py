@@ -6,7 +6,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from core.cod_day_sync import rungs_for_day  # noqa: E402
+from core.cod_day_sync import rungs_for_day, cap_rung  # noqa: E402
 
 
 def test_lowest_of_the_five_steps():
@@ -25,3 +25,10 @@ def test_ungraded_and_off_ladder_rows_dont_count():
 
 def test_not_learnt_is_zero():
     assert rungs_for_day([{"topic": "Impulse Factors", "grade": "Not Learnt"}]) == {"Impulses": 0}
+
+
+def test_one_good_day_is_never_deliver():
+    assert cap_rung(3, 1) == 2
+    assert cap_rung(3, 2) == 2
+    assert cap_rung(3, 3) == 3
+    assert cap_rung(2, 0) == 2

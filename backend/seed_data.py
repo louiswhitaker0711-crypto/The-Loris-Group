@@ -108,3 +108,7 @@ TRAINING_MANUAL = _academy_day2(_academy_day1(TRAINING_MANUAL))
 # Field days on the COD ladder (26 Oct 2026): see core/field_ladder.py.
 from core.field_ladder import apply_to_seed as _field_ladder  # noqa: E402
 TRAINING_MANUAL = _field_ladder(TRAINING_MANUAL)
+
+# More COD in the first 8 days (28 Oct 2026): see core/field_cod_rows.py.
+from core.field_cod_rows import apply_to_seed as _field_cod_rows  # noqa: E402
+TRAINING_MANUAL = _field_cod_rows(TRAINING_MANUAL)
