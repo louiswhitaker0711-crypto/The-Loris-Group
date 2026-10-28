@@ -590,7 +590,14 @@ export default function AssessmentScreen() {
                             disabled={!hasManual}
                             testID={`expand-topic-${item.id}`}
                           >
-                            <Text style={styles.gradeItemTopic}>{item.topic}</Text>
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.gradeItemTopic}>{item.topic}</Text>
+                              {!!(item as any).cod_items?.length && (
+                                <Text style={{ fontSize: 11.5, color: colors.primary, marginTop: 2 }}>
+                                  COD: {(item as any).cod_items.join(' · ')}
+                                </Text>
+                              )}
+                            </View>
                             {hasManual && (
                               <Ionicons
                                 name={expanded ? 'chevron-up' : 'information-circle-outline'}

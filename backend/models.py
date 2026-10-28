@@ -165,6 +165,8 @@ class DeliveryChecklist(BaseModel):
     # tapped (no DB migration needed; stale rows just return None).
     what_good_looks_like: Optional[str] = None
     expected_outcome: Optional[str] = None
+    # The COD Stage 1 items this row feeds on a field day (core/cod_day_sync.py).
+    cod_items: List[str] = []
 
 class ReassignLeaderRequest(BaseModel):
     leader: str
