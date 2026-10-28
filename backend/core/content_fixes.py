@@ -318,6 +318,11 @@ async def run_content_fixes(db) -> dict:
     except Exception as e:
         logger.warning(f"content_fixes: field-day COD ladder update failed: {e}")
     try:
+        from core.field_cod_rows import migrate as _field_cod_rows
+        result["field_cod_rows"] = await _field_cod_rows(db)
+    except Exception as e:
+        logger.warning(f"content_fixes: field-day COD rows failed: {e}")
+    try:
         result["checklist_office_backfilled"] = await _backfill_checklist_office_ids(db)
     except Exception as e:
         logger.warning(f"content_fixes: checklist office_id backfill failed: {e}")

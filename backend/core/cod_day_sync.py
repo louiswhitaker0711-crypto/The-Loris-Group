@@ -10,7 +10,10 @@ COD sheet:
     their bunny hop), up to Deliver;
   • several rows feeding one item (all five steps → 5-Step Sign-Up Process)
     count as the LOWEST of them that day: one step at Know holds it at Know;
-  • it only ever moves up; a Coach can still change the COD by hand.
+  • it only ever moves up; a Coach can still change the COD by hand;
+  • one good day is never Deliver (the Owner, 28 Oct 2026): Deliver means
+    doing it consistently, so it needs Deliver on DELIVER_DAYS separate field
+    days. Until then a Deliver day moves the COD to Do.
 """
 from __future__ import annotations
 
@@ -24,6 +27,7 @@ logger = logging.getLogger(__name__)
 RUNG = {"Not Learnt": 0, "Know": 1, "Do": 2, "Deliver": 3}
 STAGE = 1
 MAX_RUNG = 3   # Stage 1 tops out at Deliver
+DELIVER_DAYS = 3
 
 # Field-day checklist topic → the COD Stage 1 items it proves.
 FIELD_TO_COD: dict[str, list[str]] = {
@@ -51,6 +55,9 @@ FIELD_TO_COD: dict[str, list[str]] = {
     "Consistency & Grit": ["Professional Reliability"],
     "3 Types of Days": ["Resilience After Rejection"],
 }
+# The COD rows added to the first 8 days (core/field_cod_rows.py) feed their own item.
+from core.field_cod_rows import NEW_ROW_COD  # noqa: E402
+FIELD_TO_COD.update(NEW_ROW_COD)
 
 
 def rungs_for_day(rows: Iterable[dict]) -> dict[str, int]:
@@ -64,6 +71,14 @@ def rungs_for_day(rows: Iterable[dict]) -> dict[str, int]:
         for item in FIELD_TO_COD.get((r.get("topic") or "").strip(), []):
             seen.setdefault(item, []).append(RUNG[g])
     return {item: min(v) for item, v in seen.items()}
+
+
+def cap_rung(rung: int, deliver_days: int) -> int:
+    """Deliver only once it's been Deliver on DELIVER_DAYS separate days."""
+    rung = min(rung, MAX_RUNG)
+    if rung >= MAX_RUNG and deliver_days < DELIVER_DAYS:
+        return MAX_RUNG - 1
+    return rung
 
 
 async def _module(office_id: Optional[str], topic: str) -> Optional[dict]:
@@ -87,12 +102,23 @@ async def sync_day_to_cod(assessment: dict, grader: dict) -> int:
             return 0
         rows = await db.delivery_checklist.find({"assessment_id": assessment["id"]},
                                                 {"_id": 0, "topic": 1, "grade": 1}).to_list(200)
+        # Every completed field day so far, for the Deliver-needs-3-days rule.
+        day_ids = {a["id"] async for a in db.daily_assessments.find(
+            {"new_hire_id": assessment.get("new_hire_id"), "day_number": {"$gte": 3}, "completed": True},
+            {"_id": 0, "id": 1})} | {assessment["id"]}
+        delivered_days: dict[str, int] = {}
+        for aid in day_ids:
+            day_rows = rows if aid == assessment["id"] else await db.delivery_checklist.find(
+                {"assessment_id": aid}, {"_id": 0, "topic": 1, "grade": 1}).to_list(200)
+            for item, r in rungs_for_day(day_rows).items():
+                if r >= MAX_RUNG:
+                    delivered_days[item] = delivered_days.get(item, 0) + 1
         from routes.modules import _apply_ladder_dates, _compute_completed, _today_iso, _sales_path_recompute
         today = _today_iso()
         grader_id = str(grader.get("id") or grader.get("_id") or "")
         moved = 0
         for topic, rung in rungs_for_day(rows).items():
-            rung = min(rung, MAX_RUNG)
+            rung = cap_rung(rung, delivered_days.get(topic, 0))
             if rung <= 0:
                 continue
             m = await _module(hire.get("office_id"), topic)
