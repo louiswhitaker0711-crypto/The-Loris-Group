@@ -47,6 +47,8 @@ function updateBells() {
     try {
       const people = fetchWeek(sunday);
       const added = sunday === thisWeek ? addNewPeople(tab, people) : [];
+      const mended = repairTeamBlocks(tab);
+      if (mended.length) log.push([tab.getName(), 'Team labels mended: ' + mended.join(', '), '']);
       const r = fillTab(tab, people, sunday);
       log.push([tab.getName(), 'Filled ' + r.filled + ' people' + (added.length ? ' · added ' + added.join(', ') : ''),
         r.unmatched.length ? 'Not matched: ' + r.unmatched.join(', ') : '']);
@@ -127,16 +129,20 @@ function addNewPeople(tab, people) {
 function insertPersonRow(tab, row) {
   const width = tab.getLastColumn();
   const below = String(tab.getRange(row + 1, NAME_COLUMN).getDisplayValue() || '').trim();
+  // Column A is the team's label, one merged cell down the block: inserting
+  // inside the block stretches it, so only B onwards is copied (copying A
+  // broke the label into one squashed copy per row, 28 Oct 2026).
+  const cols = width - NAME_COLUMN + 1;
   let target;
   if (below) {
     tab.insertRowAfter(row);
     target = row + 1;
-    tab.getRange(row, 1, 1, width).copyTo(tab.getRange(target, 1, 1, width));
+    tab.getRange(row, NAME_COLUMN, 1, cols).copyTo(tab.getRange(target, NAME_COLUMN, 1, cols));
   } else {
     // `row` is the last in its block: add the row above it (inside the
     // totals' ranges), move `row` up into it, and use the old row.
     tab.insertRowBefore(row);
-    tab.getRange(row + 1, 1, 1, width).copyTo(tab.getRange(row, 1, 1, width));
+    tab.getRange(row + 1, NAME_COLUMN, 1, cols).copyTo(tab.getRange(row, NAME_COLUMN, 1, cols));
     target = row + 1;
   }
   tab.getRange(target, NAME_COLUMN, 1, COL.focusTo - NAME_COLUMN + 1).clearContent();
@@ -144,6 +150,62 @@ function insertPersonRow(tab, row) {
   days.clearContent();
   days.setBackgrounds([[0, 1, 2, 3, 4, 5, 6].reduce(function (a) { return a.concat([COLOURS.gold, COLOURS.silver]); }, [])]);
   return target;
+}
+
+/** Column A: each team's label is one merged cell down its block, with thin
+ *  lines between people and thick lines round the block. Where a label has
+ *  been broken into one cell per row, or a block has thick lines inside it,
+ *  put it back. Returns the labels mended. */
+function repairTeamBlocks(tab) {
+  const last = tab.getLastRow();
+  if (last < FIRST_ROW) return [];
+  const width = tab.getLastColumn();
+  const n = last - FIRST_ROW + 1;
+  const labelOf = [];
+  const names = tab.getRange(FIRST_ROW, 1, n, 2).getDisplayValues();
+  let end = n;
+  for (let i = 0; i < n; i++) {
+    if (/\btotal\b/.test((names[i][0] + ' ' + names[i][1]).toLowerCase())) { end = i; break; }
+  }
+  // The label for each row: the merged cell it sits in, or its own value.
+  const merges = tab.getRange(FIRST_ROW, 1, end, 1).getMergedRanges();
+  for (let i = 0; i < end; i++) labelOf.push(String(names[i][0] || '').trim());
+  merges.forEach(function (m) {
+    const v = String(m.getCell(1, 1).getDisplayValue() || '').trim();
+    for (let r = m.getRow(); r <= m.getLastRow(); r++) {
+      const i = r - FIRST_ROW;
+      if (i >= 0 && i < end) labelOf[i] = v;
+    }
+  });
+  const mended = [];
+  let i = 0;
+  while (i < end) {
+    const label = labelOf[i];
+    if (!label) { i++; continue; }
+    let j = i;
+    while (j + 1 < end && labelOf[j + 1] === label) j++;
+    const top = FIRST_ROW + i, rows = j - i + 1;
+    const col = tab.getRange(top, 1, rows, 1);
+    const whole = col.getMergedRanges();
+    const ok = rows === 1 || (whole.length === 1 && whole[0].getRow() === top && whole[0].getNumRows() === rows);
+    if (!ok) {
+      // The label's look from its biggest remaining merged cell (the original).
+      const biggest = whole.slice().sort(function (a, b) { return b.getNumRows() - a.getNumRows(); })[0];
+      const rotation = (biggest ? biggest.getCell(1, 1) : tab.getRange(top, 1)).getTextRotation().getDegrees();
+      col.breakApart();
+      col.clearContent();
+      col.merge();
+      col.setValue(label).setVerticalAlignment('middle').setHorizontalAlignment('center').setTextRotation(rotation || 90);
+      // Thin lines between people, thick along the top and bottom of the block.
+      const block = tab.getRange(top, NAME_COLUMN, rows, width - NAME_COLUMN + 1);
+      block.setBorder(null, null, null, null, null, true, '#000000', SpreadsheetApp.BorderStyle.SOLID);
+      block.setBorder(true, null, true, null, null, null, '#000000', SpreadsheetApp.BorderStyle.SOLID_THICK);
+      tab.getRange(top, 1, rows, 1).setBorder(true, true, true, true, null, null, '#000000', SpreadsheetApp.BorderStyle.SOLID_THICK);
+      mended.push(label);
+    }
+    i = j + 1;
+  }
+  return mended;
 }
 
 /** First name, or "First L" when someone else on Bells has the same first name. */
@@ -199,7 +261,8 @@ function fetchWeek(sunday) {
       live: !!e.user_id && !e.archived,   // a real profile, not an old Roll Call import row
       coach: String(e.coach_name || '').trim(), role: e.role || '',
       stage: e.stage_label || '', badge: e.recruit_badge || '', breakEven: e.break_even,
-      goal: e.weekly_goal, total: Number(e.total_sales || 0) };
+      goal: e.weekly_goal, total: Number(e.total_sales || 0),
+      startDate: e.start_date ? String(e.start_date).slice(0, 10) : '' };
   }).filter(function (p) { return p.name; });
 }
 
@@ -217,10 +280,16 @@ function fillTab(tab, people, sunday) {
     for (let d = 0; d < 7; d++) {
       const day = person.days[d] || {};
       const date = isoDate(new Date(sunday.getFullYear(), sunday.getMonth(), sunday.getDate() - 6 + d));
+      // A new start's first three days (Academy Monday and Tuesday, shadow
+      // Wednesday) are in office, yellow, unless there are numbers in the field.
+      const firstDays = person.startDate && date >= person.startDate
+        && date <= isoDate(addDays(parseIso(person.startDate), 2));
+      const numbers = day.status === 'in' && (Number(day.over30 || 0) + Number(day.under30 || 0)) > 0;
       const block = person.leftOn && date >= person.leftOn ? COLOURS.notCurrent
         : day.status === 'ab' ? COLOURS.notScheduled
         : day.status === 'ns' ? COLOURS.noShow
-        : day.status === 'pc' ? COLOURS.inOffice : null;
+        : day.status === 'pc' || day.status === 'sd' ? COLOURS.inOffice
+        : firstDays && !numbers ? COLOURS.inOffice : null;
       if (day.status === 'in' && !block) values.push(Number(day.over30 || 0), Number(day.under30 || 0));
       else values.push('', '');
       fills.push(block || COLOURS.gold, block || COLOURS.silver);
@@ -300,6 +369,11 @@ function sundayOf(date) {
   const day = new Date(uk[0], uk[1] - 1, uk[2]);
   const dow = (day.getDay() + 6) % 7;          // Monday 0 … Sunday 6
   return new Date(uk[0], uk[1] - 1, uk[2] + (6 - dow));
+}
+
+function parseIso(s) {
+  const p = String(s).slice(0, 10).split('-').map(Number);
+  return new Date(p[0], p[1] - 1, p[2]);
 }
 
 function isoDate(d) {

@@ -2620,6 +2620,11 @@ async def _public_bells_payload(office_slug: str, week: Optional[str], code: Opt
         def _join_key(uid: str):
             return new_hire_starts.get(uid) or user_created_at.get(uid) or ""
 
+        # The Roll Call sheet colours a new start's first days in office.
+        for e in enriched:
+            if e.get("user_id") and new_hire_starts.get(str(e["user_id"])):
+                e["start_date"] = str(new_hire_starts[str(e["user_id"])])[:10]
+
         # Team enrichment must happen BEFORE the section-aware sort so each
         # entry knows which section it belongs to.
         await _enrich_entries_with_teams(enriched)
