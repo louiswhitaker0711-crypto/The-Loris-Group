@@ -374,6 +374,9 @@ async def update_assessment(assessment_id: str, update: DailyAssessmentUpdate, r
         except Exception as e:
             logger.error(f"stage1 achievement award error: {e}")
     if update.completed:
+        # The day's Know / Do / Deliver ticks move their COD up (core/cod_day_sync.py).
+        from core.cod_day_sync import sync_day_to_cod
+        await sync_day_to_cod({**assessment, **merged}, user)
         all_a = await db.daily_assessments.find({"new_hire_id": assessment["new_hire_id"]}).to_list(10)
         completed_days = [a["day_number"] for a in all_a if a.get("completed")]
         next_day = max(completed_days) + 1 if completed_days else 1
@@ -727,6 +730,10 @@ async def get_checklist(assessment_id: str, request: Request):
                     it["what_good_looks_like"] = w
                 if e:
                     it["expected_outcome"] = e
+    if assessment and int(assessment.get("day_number") or 0) >= 3:
+        from core.cod_day_sync import FIELD_TO_COD
+        for it in items:
+            it["cod_items"] = FIELD_TO_COD.get((it.get("topic") or "").strip(), [])
     return [DeliveryChecklist(**i) for i in items]
 
 @router.put("/checklist/{item_id}")
@@ -750,6 +757,10 @@ async def update_checklist_item(item_id: str, update: DeliveryChecklistUpdate, r
     if item:
         gs = await calculate_checklist_grade(item["assessment_id"])
         await db.daily_assessments.update_one({"id": item["assessment_id"]}, {"$set": {"checklist_grade_score": gs}})
+        # A grade changed on a day already completed still moves the COD up.
+        if assessment.get("completed") and "grade" in update_dict:
+            from core.cod_day_sync import sync_day_to_cod
+            await sync_day_to_cod(assessment, user)
     return {"message": "Checklist item updated"}
 
 # ==================== DASHBOARD ROUTES ====================
