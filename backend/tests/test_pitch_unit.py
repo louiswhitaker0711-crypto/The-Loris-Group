@@ -77,3 +77,13 @@ def test_only_the_owner_edits_the_pitch():
     assert pitch._can_edit({"role": "admin"})
     assert not pitch._can_edit({"role": "admin", "is_viewer": True})
     assert not pitch._can_edit({"role": "coach"})
+
+
+def test_only_a_real_first_week_counts_as_a_new_start():
+    from datetime import date as _d
+    today = _d(2026, 10, 28)
+    assert pitch.is_new_start({"current_day": 1, "start_date": "2026-10-26"}, today)
+    assert not pitch.is_new_start({"current_day": 1, "start_date": ""}, today)          # no start date
+    assert not pitch.is_new_start({"current_day": 1, "start_date": "2026-05-01"}, today)  # stale record
+    assert not pitch.is_new_start({"current_day": 5, "start_date": "2026-10-26"}, today)
+    assert not pitch.is_new_start(None, today)

@@ -37,7 +37,7 @@ export default function PitchCard({ place }: { place: 'top' | 'bottom' | 'bar' }
   const today = todayISO();
   const started = !!start && (today > start.slice(0, 10) || (today === start.slice(0, 10) && ukNow().mins >= 18 * 60));
   const newStart = !!data.new_start;
-  if (newStart && !started) return null;               // not until 18:00 on their first day
+  if (newStart && start && !started) return null;      // not until 18:00 on their first day
   const field = inFieldHours();
   const prime = inPrimetime();
   const open = () => router.push('/pitch' as never);

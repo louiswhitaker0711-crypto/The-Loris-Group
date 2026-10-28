@@ -104,10 +104,14 @@ async def _owneriq_unlocked(user: dict) -> Optional[set]:
     or None when they have no OwnerIQ stage (older role rules apply)."""
     from core.schedule_template import stage_num
     from core.cod_access import unlocked_stages
+    from core.cod_access import COACH_STAGES
     n = stage_num(user.get("owneriq_stage"))
     if n is None:
         return None
-    return unlocked_stages(n, n < 3.5 and await _team_has_stage3(user))
+    out = unlocked_stages(n, n < 3.0 and await _team_has_stage3(user))
+    if (user.get("role") or "").lower() == "leader":
+        out |= COACH_STAGES          # every Coach: Stage 3 and SL, whoever's on their team
+    return out
 
 
 async def _is_stage_unlocked(user: dict, stage: int) -> bool:
@@ -117,7 +121,11 @@ async def _is_stage_unlocked(user: dict, stage: int) -> bool:
     if (user.get("role") or "").lower() == "admin":
         return True
     from core.schedule_template import stage_num
-    from core.cod_access import unlocked_stages
+    from core.cod_access import unlocked_stages, COACH_STAGES
+    # Every Coach is a Stage 3 and SL for the COD, whoever's on their team
+    # (the Owner, 28 Oct 2026).
+    if (user.get("role") or "").lower() == "leader" and stage in COACH_STAGES:
+        return True
     n = stage_num(user.get("owneriq_stage"))
     if n is not None:
         if stage in unlocked_stages(n, False):
@@ -159,11 +167,8 @@ async def _is_stage_unlocked_by_role(user: dict, stage: int) -> bool:
         )
         return all(d in (completed_days or []) for d in range(1, 9))
     if stage == 3:
-        if role == "admin":
-            return True
-        if role == "leader":
-            return await _team_has_junior_leader(user)
-        return False
+        # Every Coach, whoever's on their team (the Owner, 28 Oct 2026).
+        return role in ("leader", "admin")
     if stage == 4:
         return role == "admin"
     if stage == 5:
@@ -1218,7 +1223,9 @@ async def my_stage_status(request: Request):
     s3_unlocked = await _is_stage_unlocked(user, 3)
     s4_unlocked = await _is_stage_unlocked(user, 4)
     s5_unlocked = await _is_stage_unlocked(user, 5)
-    has_junior = is_leader and await _team_has_junior_leader(user)
+    # Stage 3 is open to every Coach now, whoever's on their team (the Owner,
+    # 28 Oct 2026); the module screen reads this flag for Stage 3.
+    has_junior = is_leader or is_admin or s3_unlocked
 
     # Visibility rules:
     #  • Trainees see Stage 2 (locked or active) and Stage 3 (always locked teaser); Stage 4 hidden.

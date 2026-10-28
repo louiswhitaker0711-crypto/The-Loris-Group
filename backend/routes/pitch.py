@@ -72,6 +72,23 @@ def is_unlocked(start_date: Optional[str], now: Optional[datetime] = None) -> bo
     return at is None or (now or datetime.now(APP_TZ)) >= at
 
 
+NEW_START_DAYS = 10   # after this long it's not a first week, whatever the record says
+
+
+def is_new_start(hire: Optional[dict], today: Optional[date] = None) -> bool:
+    """In their first week: a start date in the last NEW_START_DAYS days and
+    not past Day 3. An old record with no start date (or a stale one) isn't,
+    so it never hides the pitch (28 Oct 2026: a Coach couldn't see it)."""
+    if not hire or int(hire.get("current_day") or 1) > 3:
+        return False
+    try:
+        d = date.fromisoformat(str(hire.get("start_date") or "")[:10])
+    except ValueError:
+        return False
+    today = today or datetime.now(APP_TZ).date()
+    return 0 <= (today - d).days <= NEW_START_DAYS
+
+
 def clean_state(body: Any) -> dict:
     if not isinstance(body, dict):
         raise HTTPException(status_code=400, detail="Send your progress as an object")
@@ -101,7 +118,7 @@ async def get_pitch(request: Request):
     uid = str(user["id"])
     hire = await _hire(uid) if (user.get("role") or "") == "trainee" else None
     start = (hire or {}).get("start_date")
-    new_start = bool(hire) and int((hire or {}).get("current_day") or 1) <= 3
+    new_start = is_new_start(hire)
     at = unlock_at(start) if new_start else None
     doc = await db.users.find_one({"_id": ObjectId(uid)}, {"pitch_progress": 1}) or {}
     office = await db.office_pitch.find_one({"office_id": user.get("office_id")}, {"_id": 0, "words": 1}) or {}

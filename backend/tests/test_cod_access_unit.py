@@ -12,8 +12,8 @@ from core.cod_access import unlocked_stages, visible_stages  # noqa: E402
 from core.schedule_template import stage_num  # noqa: E402
 
 
-def test_a_stage_3_opens_1_to_3():
-    assert unlocked_stages(stage_num("stage_3"), False) == {1, 2, 3}
+def test_a_stage_3_opens_1_to_3_and_sl_whoever_is_on_their_team():
+    assert unlocked_stages(stage_num("stage_3"), False) == {1, 2, 3, 5}
 
 
 def test_a_stage_3_with_a_stage_3_on_the_team_opens_3_plus():

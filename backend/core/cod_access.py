@@ -4,7 +4,10 @@ rule, Oct 2026):
   • you can open every COD stage up to and including your own OwnerIQ stage:
     a Stage 3 opens 1, 2 and 3; a Stage 3+ also opens 3+; a Stage 4 opens
     1 to 4; a Stage 5 or above opens everything;
-  • anyone with a Stage 3 (or above) on their team also opens Stage 3+;
+  • anyone at Stage 3 or above opens Stage 3+ (SL) too, whoever is on their
+    team (the Owner, 28 Oct 2026: a Stage 3 with no Stage 3 below them gets
+    the same as a Stage 3+);
+  • a Coach opens Stages 1, 2, 3 and 3+ whatever their OwnerIQ stage;
   • Admins open everything.
 People with no OwnerIQ stage fall back to the older role-based rules
 (routes/modules.py).
@@ -27,9 +30,12 @@ def unlocked_stages(owneriq_level: Optional[float], has_stage3_on_team: bool) ->
     """COD stages (stored numbers) open to someone at this OwnerIQ level."""
     out = {s for s in COD_STAGE_ORDER if owneriq_level is not None and owneriq_level >= LEVEL[s]}
     out.add(1)
-    if has_stage3_on_team:
+    if has_stage3_on_team or (owneriq_level is not None and owneriq_level >= 3.0):
         out.add(5)
     return out
+
+
+COACH_STAGES = {1, 2, 3, 5}   # what every Coach opens, as a Stage 3 and SL
 
 
 def visible_stages(unlocked: set[int]) -> set[int]:
