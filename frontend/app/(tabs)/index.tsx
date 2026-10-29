@@ -39,7 +39,7 @@ import LiveOpsCard from '../../src/components/home/LiveOpsCard';
 import SectorSetupsCard from '../../src/components/home/SectorSetupsCard';
 import HomeAreaMap from '../../src/components/home/HomeAreaMap';
 import MyDayCard from '../../src/components/home/today/MyDayCard';
-import { inFieldHours, inBreakdownHours, inMorningPlanning, inMorningMeeting, fieldStarted, ukNow } from '../../src/utils/fieldTime';
+import { inFieldHours, inBreakdownHours, inMorningPlanning, inMorningMeeting, fieldStarted, ukNow, homeSlot, type HomeSlot } from '../../src/utils/fieldTime';
 import { addDays, todayISO } from '../../src/utils/calendarDates';
 import MyWeekCard from '../../src/components/home/today/MyWeekCard';
 import WaitingOnYouCard from '../../src/components/home/today/WaitingOnYouCard';
@@ -48,7 +48,7 @@ import LearnTodayCard from '../../src/components/home/today/LearnTodayCard';
 import MoreSection from '../../src/components/home/today/MoreSection';
 import SuggestionsCard from '../../src/components/home/today/SuggestionsCard';
 import MeetingsTodayCard from '../../src/components/home/today/MeetingsTodayCard';
-import HomeSearch from '../../src/components/home/HomeSearch';
+import QualityNewCard from '../../src/components/home/QualityNewCard';
 import { dayTargetChips } from '../../src/utils/dayTargets';
 import PrimetimeCard from '../../src/components/home/PrimetimeCard';
 import CoachingTodayCard from '../../src/components/home/CoachingTodayCard';
@@ -216,10 +216,12 @@ export default function HomeScreen() {
   const [inBreakdown, setInBreakdown] = useState(() => inBreakdownHours());
   const [inMorning, setInMorning] = useState(() => inMorningPlanning());
   const [inMeeting, setInMeeting] = useState(() => inMorningMeeting());
+  const [slot, setSlot] = useState<HomeSlot>(() => homeSlot());
   useEffect(() => {
     const t = setInterval(() => {
       setInField(inFieldHours()); setInBreakdown(inBreakdownHours());
       setInMorning(inMorningPlanning()); setInMeeting(inMorningMeeting());
+      setSlot(homeSlot());
     }, 60_000);
     return () => clearInterval(t);
   }, []);
@@ -533,31 +535,42 @@ export default function HomeScreen() {
     return hires.filter((h) => h.leader === 'Unassigned' && h.active).length;
   }, [hiresQ.data]);
 
-  // ── Quick actions per role ──────────────────────────────────────────────
-  const quickActions: QuickAction[] = isTrainee
-    ? [
-        { label: 'Manual', sub: 'The playbook', icon: 'book-outline', route: '/(tabs)/manual', tint: 'primary' },
-        { label: 'Earnings', sub: 'What a week is worth', icon: 'calculator-outline', route: '/(tabs)/pay', tint: 'green' },
-        { label: 'My progress', sub: 'Scores & journey', icon: 'stats-chart-outline', route: '/(tabs)/progress', tint: 'accent' },
-        { label: 'Campaign training', sub: 'Playbook + quiz', icon: 'school-outline', route: '/product-knowledge', tint: 'yellow' },
-        { label: 'Notes', sub: 'Everything you’ve written', icon: 'folder-open-outline', route: '/notes', tint: 'green' },
-      ]
-    : isLeader
-    ? [
-        { label: 'Add new starter', testKey: 'Add trainee', sub: 'Start their Day 1–8', icon: 'person-add-outline', route: '/add-hire', tint: 'primary' },
-        { label: 'Goal planner', sub: 'Monthly targets', icon: 'bar-chart-outline', route: '/monthly-planner', tint: 'green' },
-        { label: 'COD', sub: 'Coaching & development', icon: 'school-outline', route: '/coaching', tint: 'accent' },
-        { label: 'Bells', sub: 'Weekly sign-ups board', icon: 'notifications-outline', route: '/(tabs)/hires?view=bells', tint: 'yellow' },
-        { label: 'Campaign Knowledge', sub: 'Product, pitch & playbook', icon: 'library-outline', route: '/product-knowledge', tint: 'primary' },
-        { label: 'Notes', sub: 'Your notes, by heading', icon: 'folder-open-outline', route: '/notes', tint: 'green' },
-      ]
-    : [
-        { label: 'Bells', sub: 'Weekly sign-ups board', icon: 'notifications-outline', route: '/(tabs)/hires?view=bells', tint: 'primary' },
-        { label: 'Bulletins', sub: 'Share last week', icon: 'megaphone-outline', route: '/weekly-share', tint: 'green' },
-        { label: 'Set up new starts', testKey: 'Add trainee', sub: 'App QR code and their logins', icon: 'qr-code-outline', route: '/new-starts', tint: 'accent' },
-        { label: 'Campaign Knowledge', sub: 'Product, pitch & playbook', icon: 'library-outline', route: '/product-knowledge', tint: 'yellow' },
-        { label: 'Notes', sub: 'Yours, and posting to everyone', icon: 'folder-open-outline', route: '/notes', tint: 'green' },
-      ];
+  // ── Quick actions: four at the top of Home, changing through the day ──
+  // (the Owner, 29 Oct 2026). Morning planning → Primetime and the meeting →
+  // set-ups → the field → the evening. Coaches and Admins share a set (only
+  // the Owner sets up new starts); BAs have their own.
+  const BELLS = '/(tabs)/hires?view=bells';
+  const A = (label: string, sub: string, icon: QuickAction['icon'], route: string, tint: QuickAction['tint'] = 'primary'): QuickAction => ({ label, sub, icon, route, tint });
+  const coachActions: Record<HomeSlot, QuickAction[]> = {
+    morning: [A('Plan sectors', 'Today\u2019s areas', 'compass-outline', '/sector-plan'), A('Coaches Meeting', 'Notes and today\u2019s COD', 'people-outline', '/meeting-notes', 'accent'),
+      A('Bells', 'The weekly board', 'notifications-outline', BELLS, 'yellow'), A('Planner', 'Today\u2019s plan', 'calendar-number-outline', '/weekly-planner', 'green')],
+    prime: [A('Pitch', 'Primetime run-through', 'mic-outline', '/pitch'), A('Bells read-out', 'For the meeting', 'notifications-outline', BELLS, 'yellow'),
+      A('Meeting notes', 'The 11:45 meeting', 'document-text-outline', '/meeting-notes', 'accent'), A('Planner', 'Today\u2019s plan', 'calendar-number-outline', '/weekly-planner', 'green')],
+    setup: [A('Sector set-up', 'Hops and goals', 'people-circle-outline', '/my-sector'), A('Sector map', 'Today\u2019s streets', 'map-outline', '/sector-map', 'green'),
+      isAdmin ? A('Set up new starts', 'QR sign-up and logins', 'qr-code-outline', '/new-starts', 'accent') : A('Notes', 'Jot it down', 'folder-open-outline', '/notes', 'accent'),
+      A('Pitch', 'Quick refresh', 'mic-outline', '/pitch', 'yellow')],
+    field: [A('Pitch', 'On the doors', 'mic-outline', '/pitch'), A('My sector', 'Hops and the map', 'people-circle-outline', '/my-sector', 'green'),
+      A('Bells', 'Today so far', 'notifications-outline', BELLS, 'yellow'), A('Notes', 'Jot it down', 'folder-open-outline', '/notes', 'accent')],
+    evening: [A('Breakdown', 'Today\u2019s numbers', 'stats-chart-outline', '/my-sector'), A('Paste WhatsApp', 'Silver, Gold and The Round', 'clipboard-outline', '/bells-paste', 'green'),
+      A('Tomorrow\u2019s plan', 'Set it up tonight', 'calendar-number-outline', '/weekly-planner', 'accent'), A('Bells', 'End of the day', 'notifications-outline', BELLS, 'yellow')],
+    sunday: [A('Bells', 'Last week', 'notifications-outline', BELLS, 'yellow'), A('Weekly review', 'Last week and this week', 'podium-outline', '/weekly-review'),
+      A('Planner', 'Plan the week', 'calendar-number-outline', '/weekly-planner', 'green'), A('Notes', 'Your notes', 'folder-open-outline', '/notes', 'accent')],
+  };
+  const baActions: Record<HomeSlot, QuickAction[]> = {
+    morning: [A('Pitch', 'Practise it out loud', 'mic-outline', '/pitch'), A('My COD', 'This week\u2019s focus', 'trending-up-outline', '/(tabs)/progress', 'accent'),
+      A('Library', 'Scripts and the playbook', 'library-outline', '/library', 'yellow'), A('Notes', 'Your notes', 'folder-open-outline', '/notes', 'green')],
+    prime: [A('Pitch', 'Primetime run-through', 'mic-outline', '/pitch'), A('My COD', 'This week\u2019s focus', 'trending-up-outline', '/(tabs)/progress', 'accent'),
+      A('Notes', 'From the meeting', 'folder-open-outline', '/notes', 'green'), A('Library', 'Scripts and the playbook', 'library-outline', '/library', 'yellow')],
+    setup: [A('Sector set-up', 'Your goal and hop', 'people-circle-outline', '/my-sector'), A('Sector map', 'Today\u2019s streets', 'map-outline', '/sector-map', 'green'),
+      A('Pitch', 'Quick refresh', 'mic-outline', '/pitch', 'yellow'), A('My COD', 'What to learn today', 'trending-up-outline', '/(tabs)/progress', 'accent')],
+    field: [A('Pitch', 'On the doors', 'mic-outline', '/pitch'), A('My sector', 'Your hop and the map', 'people-circle-outline', '/my-sector', 'green'),
+      A('Notes', 'Jot it down', 'folder-open-outline', '/notes', 'accent'), A('Library', 'Scripts and the playbook', 'library-outline', '/library', 'yellow')],
+    evening: [A('Breakdown', 'Today\u2019s numbers', 'stats-chart-outline', '/my-sector'), A('Tomorrow\u2019s plan', 'Set it up tonight', 'calendar-number-outline', '/weekly-planner', 'accent'),
+      A('My week', 'Where you\u2019re at', 'calendar-outline', '/ba-week', 'green'), A('Notes', 'Your notes', 'folder-open-outline', '/notes', 'yellow')],
+    sunday: [A('My week', 'Plan your week', 'calendar-outline', '/ba-week'), A('Planner', 'Your days', 'calendar-number-outline', '/weekly-planner', 'green'),
+      A('Library', 'Scripts and the playbook', 'library-outline', '/library', 'yellow'), A('Notes', 'Your notes', 'folder-open-outline', '/notes', 'accent')],
+  };
+  const quickActions: QuickAction[] = (isTrainee ? baActions : coachActions)[slot];
 
   const tintColor = (t?: QuickAction['tint']) =>
     t === 'green' ? colors.green : t === 'accent' ? colors.accent : t === 'yellow' ? '#f59e0b' : colors.primary;
@@ -1613,7 +1626,6 @@ export default function HomeScreen() {
       <PitchCard place="bar" />
       {/* Mon/Tue 13:30–16:00: set up today's new starts (the Owner). */}
       {isAdmin && <NewStartsButton />}
-      <HomeSearch />
       {/* BA Academy (Days 1-2): a new start's workbook, the Owner's class. */}
       {isTrainee && nextPending && nextPending.day_number <= 2 && <AcademyWorkbookCard />}
       {isAdmin && <AcademyClassCard />}
@@ -1621,8 +1633,12 @@ export default function HomeScreen() {
       <PitchCard place="top" />
       {/* Stage 2-3: this week's COD focus and what to do on it, or a prompt to pick one (the Owner, 27 Oct 2026). */}
       {(codStage === 2 || codStage === 3) && !(isTrainee && nextPending) && !(user as any)?.is_viewer && <CodWeekCard />}
-      {/* Everyone knows their breakeven: no plan yet, or over a month old (not on Academy days, not viewers). */}
-      {!(user as any)?.is_viewer && !(isTrainee && nextPending && nextPending.day_number <= 2) && <EarningsPlanCard />}
+      {/* Breakeven lives in Profile now (the Owner, 29 Oct 2026). Home only nudges a
+          Coach whose plan is missing or over a month old, and a new start in their
+          first week once the Academy days are done. */}
+      {!(user as any)?.is_viewer && (isLeader || (isTrainee && nextPending && nextPending.day_number > 2)) && <EarningsPlanCard />}
+      {/* The week's quality, for a week after the report is added. */}
+      <QualityNewCard />
       {pReviewCard}
       {isAdmin && isPlanningSunday && pWeeklyPlans}
       {pBaWeek}
@@ -1688,6 +1704,25 @@ export default function HomeScreen() {
         </View>
       ) : null}
 
+      {/* ── Quick actions: the four things for this time of day, at the top ── */}
+      <View style={styles.actionsGrid}>
+        {quickActions.map((a) => (
+          <PressableScale
+            key={a.label}
+            style={styles.actionTile}
+            scaleTo={0.97}
+            onPress={() => router.push(a.route as never)}
+            testID={`home-action-${a.testKey || a.label}`}
+          >
+            <View style={[styles.actionIcon, { backgroundColor: tintBg(a.tint) }]}>
+              <Ionicons name={a.icon} size={20} color={tintColor(a.tint)} />
+            </View>
+            <Text style={styles.actionTitle} numberOfLines={1}>{a.label}</Text>
+            <Text style={styles.actionSub} numberOfLines={1}>{a.sub}</Text>
+          </PressableScale>
+        ))}
+      </View>
+
       {/* Today first. On a wide screen the rest sits alongside; on a phone it
           folds away under "More". */}
       {wide ? (
@@ -1704,32 +1739,6 @@ export default function HomeScreen() {
       )}
       {/* Everyone has their pitch at the bottom of Home (the Owner, 26 Oct 2026). */}
       <PitchCard place="bottom" />
-
-      {/* ── Quick actions ── */}
-      <View style={styles.kickerRow}>
-        <View style={styles.kickerBar} />
-        <Text style={styles.kicker}>Quick actions</Text>
-      </View>
-      <View style={styles.actionsGrid}>
-        {quickActions.map((a) => (
-          <PressableScale
-            key={a.label}
-            style={styles.actionTile}
-            scaleTo={0.97}
-            onPress={() => router.push(a.route as never)}
-            testID={`home-action-${a.testKey || a.label}`}
-          >
-            <View style={[styles.actionIcon, { backgroundColor: tintBg(a.tint) }]}>
-              <Ionicons name={a.icon} size={17} color={tintColor(a.tint)} />
-            </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={styles.actionTitle} numberOfLines={1}>{a.label}</Text>
-              <Text style={styles.actionSub} numberOfLines={1}>{a.sub}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
-          </PressableScale>
-        ))}
-      </View>
 
       {/* ── Non-trainee: onboarding hub shortcut ── */}
       {!isTrainee && (
@@ -2039,12 +2048,12 @@ const createStyles = (colors: any, isDark: boolean) => {
 
   // Quick actions — SectionHead + a grid of paper DepthCards
   sectionHead: { marginTop: 6, marginBottom: 12 },
-  actionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  actionTile: { flexGrow: 1, flexBasis: 230, minWidth: 210, maxWidth: 420, flexDirection: 'row', alignItems: 'center', gap: 11, minHeight: 56, paddingHorizontal: 12, paddingVertical: 9,
-    borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background },
-  actionIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  actionTitle: { fontFamily: fonts.bodySemibold, fontSize: 13.5, color: colors.text },
-  actionSub: { fontFamily: fonts.body, fontSize: 11.5, color: colors.textMuted, marginTop: 1 },
+  actionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 14 },
+  actionTile: { flexGrow: 1, flexBasis: '45%', minWidth: 140, gap: 6, minHeight: 104, padding: 14,
+    borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background },
+  actionIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
+  actionTitle: { fontFamily: fonts.bodySemibold, fontSize: 15, color: colors.text },
+  actionSub: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted },
 
   // Footer link
   footerLink: {

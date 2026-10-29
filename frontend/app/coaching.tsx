@@ -149,7 +149,9 @@ export default function LeadershipHub() {
   // '/coaching?tab=library') beats the remembered segment; with no param,
   // restore the last-used one. Keyed on the param so it re-runs when the
   // tab bar replaces in place while this screen is already mounted.
-  const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
+  // ?only=1 (from the Library or COD) shows just that section, no switcher.
+  const { tab: tabParam, only } = useLocalSearchParams<{ tab?: string; only?: string }>();
+  const single = !!only && (tabParam === 'library' || tabParam === 'cycle');
   const [tab, setTab] = useState<HubTab>('cycle');
   const [tabLoaded, setTabLoaded] = useState(false);
   useEffect(() => {
@@ -453,7 +455,7 @@ export default function LeadershipHub() {
       <Masthead
         standalone
         compact
-        title="Leadership Hub"
+        title={single ? (tab === 'library' ? 'Coaching library' : 'The Cycle') : 'Leadership Hub'}
         onBack={() => router.back()}
         right={(
           <View style={styles.topBarActions}>
@@ -475,13 +477,15 @@ export default function LeadershipHub() {
       {/* The Cycle | Library switcher — fixed under the top bar (same pill
           pattern as the reader's Learn | Notes toggle) so the Library is one
           tap away no matter how far down the impacts you've scrolled. */}
-      <SlidingSegments
-        style={styles.hubSegWrap}
-        items={hubItems}
-        value={tab}
-        onChange={(k) => switchTab(k as HubTab)}
-        haptic={false}
-      />
+      {!single && (
+        <SlidingSegments
+          style={styles.hubSegWrap}
+          items={hubItems}
+          value={tab}
+          onChange={(k) => switchTab(k as HubTab)}
+          haptic={false}
+        />
+      )}
 
       {loading || !tabLoaded ? (
         <View style={styles.skeletonWrap}>

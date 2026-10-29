@@ -9,7 +9,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { apiService } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
-import { resolveTabPrefs, defaultPrefsForRole, Role, TabItem } from './tabRegistry';
+import { resolveTabPrefs, defaultPrefsForRole, Role, TabItem, MENU_RESET_AT } from './tabRegistry';
 
 type ResolvedItem = { item: TabItem; visible: boolean };
 
@@ -32,7 +32,10 @@ export function TabPrefsProvider({ children }: { children: React.ReactNode }) {
     if (!user?.id) { setLoaded(true); return; }
     try {
       const { data } = await apiService.getTabPrefs();
-      setRaw(data?.items || []);
+      // A menu saved before the streamline goes back to the new default.
+      const saved = data?.updated_at ? Date.parse(String(data.updated_at)) : NaN;
+      const stale = !(saved >= Date.parse(MENU_RESET_AT));
+      setRaw(stale ? [] : (data?.items || []));
     } catch {
       setRaw([]);
     } finally {

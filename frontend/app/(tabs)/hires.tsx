@@ -149,11 +149,13 @@ export default function HiresScreen() {
   // Performance (OwnerIQ's Performance Hub), Spider and Bells are the views on
   // offer. Tree and Unassigned were taken off the bar (owner, Oct 2026); their
   // views are still below but nothing switches to them.
-  const [viewMode, setViewMode] = useState<'performance' | 'timeline' | 'spider' | 'bells' | 'sectors' | 'tree' | 'unassigned'>('performance');
+  const [viewMode, setViewMode] = useState<'performance' | 'timeline' | 'spider' | 'bells' | 'sectors' | 'tree' | 'unassigned'>('bells');
   // A link can open a section directly: /hires?view=bells (Home's Bells shortcut).
   const { view: viewParam } = useLocalSearchParams<{ view?: string }>();
   useEffect(() => {
-    if (viewParam === 'performance' || viewParam === 'timeline' || viewParam === 'spider' || viewParam === 'bells' || viewParam === 'sectors') setViewMode(viewParam);
+    // Just Bells and Spider now (the Owner, 29 Oct 2026); old links land on Bells.
+    if (viewParam === 'spider' || viewParam === 'bells') setViewMode(viewParam);
+    else if (viewParam) setViewMode('bells');
   }, [viewParam]);
   // Which tree row has its contact dropdown (phone / email / call) open.
   const [expandedContactId, setExpandedContactId] = useState<string | null>(null);
@@ -242,14 +244,15 @@ export default function HiresScreen() {
     queryKey: ['owneriq-switch'], queryFn: () => apiService.getOwnerIQSwitch().then((r) => r.data), staleTime: 10 * 60 * 1000, retry: false,
   });
   const oiqOn = !!oiqSwitch?.on;
-  useEffect(() => { if (!oiqOn && viewMode === 'timeline') setViewMode('performance'); }, [oiqOn, viewMode]);
+  useEffect(() => { if (!oiqOn && viewMode === 'timeline') setViewMode('bells'); }, [oiqOn, viewMode]);
   const viewSegments = useMemo<PillTab[]>(() => {
+    // Was the Performance Hub: now just Bells, with the spider beside it.
+    // Performance and Sectors came off (a name on Bells opens their page;
+    // sectors have their own tab). Timeline returns only with OwnerIQ on.
     const items: PillTab[] = [
-      { key: 'performance', label: 'Performance', testID: 'hires-view-performance' },
-      ...(oiqOn ? [{ key: 'timeline', label: 'Timeline', testID: 'hires-view-timeline' }] : []),
-      { key: 'spider', label: 'Spider', testID: 'hires-view-spider' },
       { key: 'bells', label: 'Bells', testID: 'hires-view-bells' },
-      { key: 'sectors', label: 'Sectors', testID: 'hires-view-sectors' },
+      { key: 'spider', label: 'Spider', testID: 'hires-view-spider' },
+      ...(oiqOn ? [{ key: 'timeline', label: 'Timeline', testID: 'hires-view-timeline' }] : []),
     ];
     return items;
   }, [oiqOn]);
@@ -692,7 +695,7 @@ export default function HiresScreen() {
         <OfficeToggle />
       </View>
 
-      {/* Performance | Spider | Bells: a small row of pills. */}
+      {/* Bells | Spider: a small row of pills. */}
       <View style={styles.topBar}>
         <PillTabs
           fit

@@ -71,3 +71,20 @@ export function planDayNow(at: Date = new Date()): { weekEnding: string; dayInde
   sun.setUTCDate(d.getUTCDate() + (6 - idx));
   return { weekEnding: sun.toISOString().slice(0, 10), dayIndex: idx === 6 ? -1 : idx };
 }
+
+/** Which part of the day Home's quick actions are for (the Owner, 29 Oct
+ * 2026): morning planning until 11:00 → Primetime and the meeting until
+ * 12:30 → set-ups until 13:30 → the field until 18:00 → the evening (the 6pm
+ * reset, breakdowns, tomorrow's plan). Saturday runs morning until 10:00,
+ * the field 10:00–17:00, then the evening; Sunday is planning day. */
+export type HomeSlot = 'morning' | 'prime' | 'setup' | 'field' | 'evening' | 'sunday';
+export function homeSlot(at: Date = new Date()): HomeSlot {
+  const { day, mins } = ukNow(at);
+  if (day === 0) return 'sunday';
+  if (day === 6) return mins < 10 * 60 ? 'morning' : mins < 17 * 60 ? 'field' : 'evening';
+  if (mins < 11 * 60) return 'morning';
+  if (mins < 12 * 60 + 30) return 'prime';
+  if (mins < 13 * 60 + 30) return 'setup';
+  if (mins < 18 * 60) return 'field';
+  return 'evening';
+}

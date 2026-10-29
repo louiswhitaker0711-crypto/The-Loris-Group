@@ -87,11 +87,11 @@ export default function TabLayout() {
       <Tabs.Screen
         name="hires"
         options={{
-          title: 'Performance Hub',
+          title: 'Bells',
           // Trainees can never reach this — keep route inert.
           href: isTrainee ? null : undefined,
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="people-outline" size={size} color={color} />
+            <Ionicons name="notifications-outline" size={size} color={color} />
           ),
         }}
       />

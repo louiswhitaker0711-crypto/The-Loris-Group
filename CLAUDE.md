@@ -52,7 +52,7 @@ The docs in `docs/` are the source of truth for those tasks. If code and docs di
 | `backend/seed/`, `seed_data.py`, `seed_loader.py` | Starting content for a new database |
 | `backend/emergentintegrations/` | Small vendored wrapper around the Anthropic SDK (`LlmChat`) |
 | `backend/tests/` | Backend unit tests (in-memory Mongo; nothing needs to be running) |
-| `frontend/app/` | Screens (file-based routes). `(tabs)/` holds Home, Performance Hub (`hires.tsx`), Schedule, COD (`progress.tsx`), Earnings (`pay.tsx`), Manual, Admin, Profile |
+| `frontend/app/` | Screens (file-based routes). `(tabs)/` holds Home, Bells (`hires.tsx`: Bells \| Spider), Schedule, COD (`progress.tsx`), Earnings (`pay.tsx`, opened from Profile), Manual (opened from Library), Admin, Profile. The side menu (Oct 2026): Home · Bells · Sector · Schedule (Coach/Admin) · COD · Library (`library.tsx`) · Notes · Admin; Home's quick actions change by time of day (`homeSlot()` in `src/utils/fieldTime.ts`) |
 | `frontend/src/` | API client (`api/client.ts`), theme (`theme/`), nav (`nav/`, `customization/tabRegistry.ts`), components, hooks, utils |
 | `frontend/public/` | PWA manifest, service worker (`sw.js`), icons |
 | `tests/` | Repo-level tests (app config, office scoping) |

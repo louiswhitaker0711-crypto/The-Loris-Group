@@ -1,13 +1,12 @@
 // "My week" on Home: this week's sign-ups against the traffic light (and
-// your weekly goal when you've set one), from your own Bells row (tap for your numbers, Field KPIs); under it
-// the latest quality report (QualityStrip).
+// your weekly goal when you've set one), from your own Bells row (tap for your numbers, Field KPIs).
+// Quality has its own card at the top of Home the week a report lands (QualityNewCard).
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useColors, fonts } from '../../../theme/ThemeContext';
 import { apiService } from '../../../api/client';
-import QualityStrip from './QualityStrip';
 import { ukNow } from '../../../utils/fieldTime';
 import { weekBand, WEEK_BAND_LABELS, AMBER_WEEK_MIN, GREEN_WEEK_MIN, SUPER_GREEN_WEEK_MIN } from '../../../utils/weekBands';
 
@@ -18,10 +17,7 @@ export default function MyWeekCard({ hideWhenEmpty = false }: { hideWhenEmpty?: 
   const s = useMemo(() => styles(c), [c]);
   const q = useQuery({ queryKey: ['my-bells-summary', 1], queryFn: () => apiService.getMyBellsSummary(1).then((r) => r.data), retry: false });
   const w = q.data?.this_week;
-  // No week on the sheet yet: still show the quality, on its own.
-  if (!q.data || (hideWhenEmpty && !q.data.has_entry && !(w?.sign_ups))) {
-    return q.isLoading ? null : <QualityCardAlone />;
-  }
+  if (!q.data || (hideWhenEmpty && !q.data.has_entry && !(w?.sign_ups))) return null;
   const n = Number(w?.sign_ups || 0);
   const band = weekBand(n);
   const next = n < AMBER_WEEK_MIN ? { at: AMBER_WEEK_MIN, name: 'Amber' } : n < GREEN_WEEK_MIN ? { at: GREEN_WEEK_MIN, name: 'Green' }
@@ -72,15 +68,8 @@ export default function MyWeekCard({ hideWhenEmpty = false }: { hideWhenEmpty?: 
         <Text style={s.need}>Need {perDay} a day for the {left} day{left === 1 ? '' : 's'} left to hit {goal ? `your goal of ${goal}` : next?.name}</Text>
       )}
     </Pressable>
-    <QualityStrip />
     </View>
   );
-}
-
-function QualityCardAlone() {
-  const c = useColors();
-  const s = useMemo(() => styles(c), [c]);
-  return <View style={s.cardQ}><QualityStrip bare /></View>;
 }
 
 const styles = (c: any) => StyleSheet.create({
