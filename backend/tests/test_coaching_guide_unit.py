@@ -14,12 +14,20 @@ def test_new_and_keep_with_a_changed_expectation():
     assert out["Presentation"]["status"] == "keep" and out["Presentation"]["changed_from"] is None
 
 
-def test_behind_uses_the_latest_grade():
+def test_behind_is_only_not_learnt_on_the_latest_grade():
     past = [{"topic": "Introduction", "grade": "Not Learnt", "expected": "Know", "day": 3},
             {"topic": "Introduction", "grade": "Do", "expected": "Do", "day": 4},
-            {"topic": "Close", "grade": "Know", "expected": "Do", "day": 4}]
+            {"topic": "Close", "grade": "Not Learnt", "expected": "Do", "day": 4},
+            {"topic": "Rehash", "grade": "Know", "expected": "Do", "day": 4}]
     _, behind = flags([], past)
     assert [b["topic"] for b in behind] == ["Close"]
+
+
+def test_academy_learnt_is_never_behind_or_ahead():
+    # Days 1-2 are graded Learnt / Not Learnt: Learnt is a pass.
+    past = [{"topic": "Explain the Payments", "grade": "Learnt", "expected": "Independent", "day": 2}]
+    items, behind = flags([{"topic": "Explain the Payments", "confidence_expected": "Understand"}], past)
+    assert behind == [] and items[0]["ahead"] is False
 
 
 def test_ahead_when_graded_above_todays_expectation():
