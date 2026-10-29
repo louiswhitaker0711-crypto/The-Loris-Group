@@ -73,6 +73,7 @@ const ROUTE_TITLES: Record<string, [string, IconName]> = {
   'product-knowledge': ['Campaign Knowledge', 'library-outline'],
   'customize-tabs': ['Customise', 'options-outline'],
   library: ['Library', 'library-outline'],
+  'coaching-guide': ['Today\u2019s guide', 'school-outline'],
   notifications: ['Inbox', 'mail-outline'],
   'weekly-share': ['Weekly Share', 'share-social-outline'],
   'share-bulletins': ['Bulletins', 'megaphone-outline'],
