@@ -138,7 +138,12 @@ function RootNavigator() {
       try {
         const data: any = response?.notification?.request?.content?.data || {};
         const type = data?.type;
-        if (type === 'assessment_complete') {
+        // Every notification carries the page it's about (the server fills one
+        // in when a sender didn't): go straight there.
+        const url = String(data?.url || '');
+        if (url.startsWith('/') && url !== '/') {
+          router.push(url as never);
+        } else if (type === 'assessment_complete') {
           // Trainee — the graded day-by-day record lives on My Progress
           // (the COD tab is the capability view, no scores there).
           router.push('/assessments' as any);

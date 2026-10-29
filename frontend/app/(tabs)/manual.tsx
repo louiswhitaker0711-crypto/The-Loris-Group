@@ -1,4 +1,5 @@
-import React, { useState, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
+import { useLocalSearchParams } from 'expo-router';
 import { showAlert } from '../../src/utils/showAlert';
 import { promptText } from '../../src/utils/promptText';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, KeyboardAvoidingView, Platform,  } from 'react-native';
@@ -60,6 +61,12 @@ export default function ManualScreen() {
   const isDarkTheme = String(colors.background).toLowerCase() !== '#ffffff';
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [selectedDay, setSelectedDay] = useState(1);
+  // ?day=N opens that day (Coaching today's "Today's coaching guide").
+  const { day: dayParam } = useLocalSearchParams<{ day?: string }>();
+  useEffect(() => {
+    const n = parseInt(String(dayParam || ''), 10);
+    if (n >= 1 && n <= 8) { setSelectedDay(n); setActiveSection('manual'); }
+  }, [dayParam]);
   const [editMode, setEditMode] = useState(false);
   const [editingItem, setEditingItem] = useState<{ day: number; seq: number } | null>(null);
   const [editFields, setEditFields] = useState({ topic: '', what_good_looks_like: '', expected_outcome: '', category: '', confidence_expected: '' });

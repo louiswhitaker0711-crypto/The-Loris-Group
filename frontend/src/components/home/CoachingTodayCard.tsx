@@ -15,6 +15,7 @@ import { useRouter } from 'expo-router';
 import { useColors, fonts } from '../../theme/ThemeContext';
 import { api } from '../../api/client';
 import { toast } from '../../utils/toast';
+import { inFieldHours, fieldStarted } from '../../utils/fieldTime';
 
 type Item = { id: string; topic: string; category: string; confidence_expected: string; taught: boolean;
   what_good_looks_like?: string | null; expected_outcome?: string | null };
@@ -40,6 +41,8 @@ export default function CoachingTodayCard() {
 }
 
 function PersonCard({ p, s, c }: { p: Person; s: any; c: any }) {
+  // Grading opens once today's field is over (after 20:00, or 17:00 on a Saturday).
+  const gradeTime = fieldStarted() && !inFieldHours();
   const router = useRouter();
   const qc = useQueryClient();
   const [open, setOpen] = useState<string | null>(null);
@@ -117,9 +120,19 @@ function PersonCard({ p, s, c }: { p: Person; s: any; c: any }) {
         </Pressable>
       )}
 
-      {p.can_grade && !!p.assessment_id && (
+      {/* During the day: the Manual's page for today, the coaching guide
+          (the Owner, 29 Oct 2026). Once the field is over: grade the day. */}
+      {!p.done && !gradeTime && (
+        <Pressable onPress={() => router.push(`/(tabs)/manual?day=${p.day_number}` as never)} style={s.link} accessibilityRole="button"
+          testID={`coaching-manual-${p.hire_id}`}>
+          <Ionicons name="book-outline" size={15} color={c.primary} />
+          <Text style={s.linkText}>{`${p.day_label} in the Manual`}</Text>
+          <Ionicons name="chevron-forward" size={14} color={c.primary} />
+        </Pressable>
+      )}
+      {p.can_grade && !!p.assessment_id && (p.done || gradeTime) && (
         <Pressable onPress={() => router.push(`/assessment/${p.assessment_id}` as never)} style={s.link} accessibilityRole="button">
-          <Text style={s.linkText}>{p.done ? 'Graded · see their day' : 'Open their day'}</Text>
+          <Text style={s.linkText}>{p.done ? 'Graded · see their day' : `Grade ${first(p.name)}\u2019s day`}</Text>
           <Ionicons name="chevron-forward" size={14} color={c.primary} />
         </Pressable>
       )}
