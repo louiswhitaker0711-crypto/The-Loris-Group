@@ -302,7 +302,7 @@ async def get_quality(request: Request, view: str = "week", week: Optional[str] 
         print(f"[quality] relinking saved weeks failed: {ex}")
     now, before, label = pick_weeks(weeks, view, week, month)
     docs = {d["week_ending"]: d async for d in db.quality_weeks.find(
-        {"office_id": office_id, "week_ending": {"$in": now + before}}, {"_id": 0, "week_ending": 1, "bas": 1, "total": 1})}
+        {"office_id": office_id, "week_ending": {"$in": now + before}}, {"_id": 0, "week_ending": 1, "bas": 1, "total": 1, "imported_at": 1})}
 
     uid = str(user.get("id"))
     role = user.get("role")
@@ -422,6 +422,8 @@ async def get_quality(request: Request, view: str = "week", week: Optional[str] 
 
     return {**base, "week_ending": now[0], "month": now[0][:7] if view == "month" else None,
             "label": label, "period_weeks": len(now), "me": me, "team": team, "teams": teams, "box": box,
+            # when the newest week in view was added: Home shows the quality card for a week after
+            "imported_at": (docs.get(now[0]) or {}).get("imported_at"),
             # older screens read these two
             "total": box["metrics"] if box and box["kind"] == "office" else None,
             "total_history": box.get("history") if box and box["kind"] == "office" else None}

@@ -306,6 +306,24 @@ export default function TraineeProgressScreen() {
     >
       {/* This week's COD focus, picked by their Coach. */}
       <WeeklyCodFocus />
+      {/* The Cycle (was half of Coaching): the impacts by stage, in COD now. */}
+      <TouchableOpacity
+        style={styles.journeyTouch}
+        activeOpacity={0.85}
+        onPress={() => router.push('/coaching?tab=cycle&only=1' as any)}
+        testID="cod-the-cycle-link"
+      >
+        <DepthCard style={styles.journeyPointer}>
+          <LinearGradient colors={GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.journeyPointerIcon}>
+            <Ionicons name="sync" size={18} color="#fff" />
+          </LinearGradient>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.journeyPointerTitle}>The Cycle</Text>
+            <Text style={styles.journeyPointerSub}>Impacts by stage, with their quick checks</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        </DepthCard>
+      </TouchableOpacity>
       {/* ── Two ladders, side by side — always a next thing on each ── */}
       {salesPathQ.data?.enabled && salesPathQ.data?.path && salesPathQ.data?.meta && (() => {
         const curQ = devStage === 2 ? stage2Q : stage1Q;
@@ -495,7 +513,7 @@ export default function TraineeProgressScreen() {
                     </LinearGradient>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.journeyPointerTitle}>My Progress — my first 8 days</Text>
-                      <Text style={styles.journeyPointerSub}>Your day-by-day path and assessments live on the My Progress tab</Text>
+                      <Text style={styles.journeyPointerSub}>Your day-by-day path and assessments</Text>
                     </View>
                     <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
                   </DepthCard>

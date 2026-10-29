@@ -416,6 +416,8 @@ export default function AdminScreen() {
 
   type Tool = { key: string; icon: React.ComponentProps<typeof Ionicons>['name']; title: string; sub: string; onPress: () => void; badge?: number; testID?: string };
   const tools: Tool[] = [
+    // Territory came off the side menu into here (the Owner, 29 Oct 2026).
+    { key: 'territory', icon: 'earth-outline', title: 'Territory', sub: 'Sectors, worked streets and sales', testID: 'admin-territory', onPress: () => router.push('/territory' as any) },
     { key: 'review', icon: 'podium-outline', title: 'Weekly Review', sub: "Last week, everyone in it, and this week", onPress: () => router.push('/weekly-review' as any) },
     { key: 'goals', icon: 'flag-outline', title: 'Goal Planner', sub: 'KPI and Rock suggestions', onPress: () => router.push('/planner-goal-menu') },
     usesExternalBadgeMaker

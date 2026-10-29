@@ -34,8 +34,15 @@ export type TabItem = {
   defaultVisibleByRole: Partial<Record<Role, boolean>>;
 };
 
+// The streamlined side menu (the Owner, 29 Oct 2026): Home · Bells · Sector ·
+// Schedule · COD · Library · Notes · Admin. Everything that used to have its
+// own item still exists, in one of these:
+//   Performance Hub → Bells (Bells | Spider); the BAs list → tap a name on Bells;
+//   Coaching library + Manual + Campaign Knowledge → Library; Coaching's
+//   The Cycle and My Progress → COD; Quality → a Home card when the week's
+//   report lands; Earnings + breakeven → Profile; Territory → Admin › Office
+//   tools; Schedule is for Coaches and Admins (a BA's own events: Profile).
 export const TAB_REGISTRY: TabItem[] = [
-  // ── Existing (tabs)/ screens ────────────────────────────────────────
   {
     id: 'home', label: 'Home', longLabel: 'Home Dashboard',
     icon: 'home-outline', kind: 'tab', target: 'index',
@@ -43,23 +50,11 @@ export const TAB_REGISTRY: TabItem[] = [
     defaultVisibleByRole: { trainee: true, leader: true, admin: true },
   },
   {
-    id: 'hires', label: 'Performance Hub', short: 'Performance', longLabel: 'Performance Hub — figures, teams and the spider diagram',
-    icon: 'people-outline', kind: 'tab', target: 'hires',
+    // Was the Performance Hub; the id stays 'hires' so saved menus keep it.
+    id: 'hires', label: 'Bells', longLabel: 'Bells — the weekly board and the spider diagram',
+    icon: 'notifications-outline', kind: 'tab', target: 'hires',
     visibleFor: ['leader', 'admin'],
     defaultVisibleByRole: { leader: true, admin: true },
-  },
-  {
-    // Everyone you coach in one list: tap a name for their page.
-    id: 'bas', label: 'BAs', longLabel: 'BAs — everyone you coach, tap for their page',
-    icon: 'people-outline', kind: 'route', target: '/bas',
-    visibleFor: ['leader', 'admin'],
-    defaultVisibleByRole: { trainee: false, leader: true, admin: true },
-  },
-  {
-    id: 'schedule', label: 'Schedule', longLabel: 'Schedule',
-    icon: 'calendar-outline', kind: 'tab', target: 'schedule',
-    visibleFor: ['trainee', 'leader', 'admin'],
-    defaultVisibleByRole: { trainee: true, leader: true, admin: true },
   },
   {
     // Everyone's day in their sector: set-up, the sector map, breakdown and
@@ -70,38 +65,32 @@ export const TAB_REGISTRY: TabItem[] = [
     defaultVisibleByRole: { trainee: true, leader: true, admin: true },
   },
   {
-    // Acwyre's weekly quality report: order value, drop days, The Round, 4th
-    // week and fails against the Owner's targets. Everyone sees their own;
-    // Coaches their team; Admins add the week's screenshot.
-    id: 'quality', label: 'Quality', longLabel: 'Quality — order value, drops, 4th week and fails',
-    icon: 'shield-checkmark-outline', kind: 'route', target: '/quality',
-    visibleFor: ['trainee', 'leader', 'admin'],
-    defaultVisibleByRole: { trainee: true, leader: true, admin: true },
+    // For planning: Coaches and Admins. A BA's own events open from Profile.
+    id: 'schedule', label: 'Schedule', longLabel: 'Schedule',
+    icon: 'calendar-outline', kind: 'tab', target: 'schedule',
+    visibleFor: ['leader', 'admin'],
+    defaultVisibleByRole: { leader: true, admin: true },
   },
   {
-    // One surface for the whole Cycle of Development: trainees see their
-    // journey + Stage 2, leaders/admins the full Stage 1→SL hub. "My
-    // Progress" and "COD" were two names for the same thing — now it's one.
+    // One surface for the whole Cycle of Development, a BA's journey included.
     id: 'progress', label: 'COD', longLabel: 'COD — Cycle of Development (all stages)',
     icon: 'trending-up-outline', kind: 'tab', target: 'progress',
     visibleFor: ['trainee', 'leader', 'admin'],
     defaultVisibleByRole: { trainee: true, leader: true, admin: true },
   },
   {
-    // Trainee-only: the day-by-day 8-day journey (profile + JourneyPath +
-    // assessments) on its own surface, so "my progress" and "the COD" are
-    // two different doors — the COD tab stays the capability/proof-ladder
-    // view, mirroring what leaders see.
-    id: 'assessments', label: 'My Progress', longLabel: 'My Progress — My 8-Day Journey',
-    icon: 'footsteps-outline', kind: 'route', target: '/assessments',
-    visibleFor: ['trainee'],
-    defaultVisibleByRole: { trainee: true },
+    // Campaign Knowledge, the Training Manual, the Coaching library and the
+    // BA Academy workbooks, in one place.
+    id: 'library', label: 'Library', longLabel: 'Library — the playbook, the manual and coaching resources',
+    icon: 'library-outline', kind: 'route', target: '/library',
+    visibleFor: ['trainee', 'leader', 'admin'],
+    defaultVisibleByRole: { trainee: true, leader: true, admin: true },
   },
   {
-    id: 'pay', label: 'Earnings Calculator', short: 'Earnings', longLabel: 'Earnings Calculator',
-    icon: 'calculator-outline', kind: 'tab', target: 'pay',
+    id: 'notes', label: 'Notes', longLabel: 'Notes — everything you have written',
+    icon: 'folder-open-outline', kind: 'route', target: '/notes',
     visibleFor: ['trainee', 'leader', 'admin'],
-    defaultVisibleByRole: { trainee: false, leader: false, admin: false },
+    defaultVisibleByRole: { trainee: true, leader: true, admin: true },
   },
   {
     id: 'admin', label: 'Admin', longLabel: 'Admin',
@@ -110,44 +99,7 @@ export const TAB_REGISTRY: TabItem[] = [
     defaultVisibleByRole: { admin: true },
   },
 
-  // ── External routes (renamed per product owner) ─────────────────────
-  {
-    id: 'cod', label: 'Coaching', longLabel: 'Coaching Hub — Impacts & Library',
-    icon: 'school-outline', kind: 'route', target: '/coaching',
-    visibleFor: ['trainee', 'leader', 'admin'],
-    defaultVisibleByRole: { trainee: false, leader: true, admin: true },
-  },
-  // The campaign playbook (the product, the pitch, quality, pay) and its quiz.
-  // Everyone gets it pinned: before this it was only a Home shortcut for BAs,
-  // so an Admin or Coach had no way in without typing the address.
-  {
-    id: 'campaign-knowledge', label: 'Campaign Knowledge', short: 'Campaign', longLabel: 'Campaign Knowledge — the product, the pitch and the playbook',
-    icon: 'library-outline', kind: 'route', target: '/product-knowledge',
-    visibleFor: ['trainee', 'leader', 'admin'],
-    defaultVisibleByRole: { trainee: true, leader: true, admin: true },
-  },
-  // The Library has no sidebar item of its own: it is a section of Coaching
-  // (/coaching?tab=library).
-  // Bells has no sidebar item of its own: it is the third section of the
-  // Performance Hub (Performance | Spider | Bells). The /bells route still
-  // opens the same board for links and notifications.
-  {
-    id: 'mgp', label: 'MGP', longLabel: 'Monthly Goal Planners',
-    icon: 'bar-chart-outline', kind: 'route', target: '/monthly-planner',
-    visibleFor: ['trainee', 'leader', 'admin'],
-    defaultVisibleByRole: { trainee: false, leader: false, admin: false },
-  },
-  // Badges has no sidebar item of its own: a badge is made and printed from
-  // the person's own page (tap a name in Admin), and the full list of saved
-  // badges opens from Admin, under Office tools (/badges).
-  {
-    id: 'manual', label: 'Manual', longLabel: 'Training Manual',
-    icon: 'book-outline', kind: 'tab', target: 'manual',
-    // Trainees too: Home's quick actions already deep-link them to the
-    // Manual tab, so they must be able to pin it (hidden by default).
-    visibleFor: ['trainee', 'leader', 'admin'],
-    defaultVisibleByRole: { trainee: false, leader: false, admin: false },
-  },
+  // ── Under "More" (off by default; anyone can pin them in Customise) ──
   {
     id: 'weekly-planner', label: 'Planner', longLabel: 'Daily / Weekly Planner',
     icon: 'calendar-number-outline', kind: 'route', target: '/weekly-planner',
@@ -155,37 +107,34 @@ export const TAB_REGISTRY: TabItem[] = [
     defaultVisibleByRole: { trainee: false, leader: false, admin: false },
   },
   {
-    id: 'field-kpis', label: 'KPIs', longLabel: 'Field KPIs (OwnerIQ / DataByte)',
-    icon: 'speedometer-outline', kind: 'route', target: '/field-kpis',
+    id: 'mgp', label: 'MGP', longLabel: 'Monthly Goal Planners',
+    icon: 'bar-chart-outline', kind: 'route', target: '/monthly-planner',
     visibleFor: ['trainee', 'leader', 'admin'],
-    // Opt-in: users pin it from Customize Tabs (off by default per role).
     defaultVisibleByRole: { trainee: false, leader: false, admin: false },
   },
   {
-    // New id (was 'sectors', hidden by default): a fresh id is added to
-    // everyone's saved sidebar with the defaults below, so Coaches and admins
-    // get Live Operations pinned without touching their other choices.
+    id: 'field-kpis', label: 'KPIs', longLabel: 'Field KPIs',
+    icon: 'speedometer-outline', kind: 'route', target: '/field-kpis',
+    visibleFor: ['trainee', 'leader', 'admin'],
+    defaultVisibleByRole: { trainee: false, leader: false, admin: false },
+  },
+  {
     id: 'live-ops', label: 'Live Operations', short: 'Live Ops', longLabel: 'Live Operations — sectors in the field, door by door',
     icon: 'radio-outline', kind: 'route', target: '/live-ops',
     visibleFor: ['trainee', 'leader', 'admin'], needsOwnerIQ: true,
     defaultVisibleByRole: { trainee: false, leader: true, admin: true },
   },
   {
-    // Acwyre's territory, the big map, sector maps and area history in one
-    // place. Admins only (the sector leaders and BAs get their own sector).
-    id: 'territory', label: 'Territory', longLabel: 'Territory — sectors, worked streets and sales',
-    icon: 'earth-outline', kind: 'route', target: '/territory',
-    visibleFor: ['admin'],
-    defaultVisibleByRole: { trainee: false, leader: false, admin: true },
-  },
-  {
     id: 'notifications', label: 'Inbox', longLabel: 'Inbox — Notification History',
     icon: 'mail-outline', kind: 'route', target: '/notifications',
     visibleFor: ['trainee', 'leader', 'admin'],
-    // Hidden by default — the bell on Home is the everyday way in.
     defaultVisibleByRole: { trainee: false, leader: false, admin: false },
   },
 ];
+
+/** Menus saved before the streamline (29 Oct 2026) are set back to the new
+ *  default once, so everyone gets the same short menu in the same order. */
+export const MENU_RESET_AT = '2026-10-29T15:00:00Z';
 
 
 /** Items eligible for a given user role. */

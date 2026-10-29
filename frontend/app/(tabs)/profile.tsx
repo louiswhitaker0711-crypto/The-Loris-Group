@@ -493,6 +493,33 @@ export default function ProfileScreen() {
           </DepthCard>
         )}
 
+        {/* My money: breakeven and the earnings calculator moved here off Home
+            (the Owner, 29 Oct 2026). A BA's own schedule too: Schedule is on
+            the menu for Coaches and Admins only. Viewers can't plan. */}
+        {!(user as any)?.is_viewer && (
+          <ScrollReveal scrollY={scrollY}>
+          <DepthCard style={styles.section}>
+            <TouchableOpacity style={styles.menuItem} onPress={() => router.navigate('/earnings-plan' as any)} testID="profile-breakeven">
+              <IconWell><Ionicons name="trending-up-outline" size={20} color={colors.primary} /></IconWell>
+              <Text style={styles.menuItemText}>My breakeven</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.menuItem} onPress={() => router.navigate('/(tabs)/pay' as any)} testID="profile-earnings">
+              <IconWell><Ionicons name="calculator-outline" size={20} color={colors.primary} /></IconWell>
+              <Text style={styles.menuItemText}>Earnings calculator</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            </TouchableOpacity>
+            {user?.role === 'trainee' && (
+              <TouchableOpacity style={styles.menuItem} onPress={() => router.navigate('/(tabs)/schedule' as any)} testID="profile-schedule">
+                <IconWell><Ionicons name="calendar-outline" size={20} color={colors.primary} /></IconWell>
+                <Text style={styles.menuItemText}>My schedule</Text>
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              </TouchableOpacity>
+            )}
+          </DepthCard>
+          </ScrollReveal>
+        )}
+
         {/* Quick Access — items hidden from the bottom tab bar appear here
             so they're still one tap away. Tapping a tile navigates straight
             to that screen. The grid is hidden when nothing is hidden. */}
