@@ -84,6 +84,7 @@ export default function WeeklyCodFocus({ team = false }: { team?: boolean }) {
   const canTeam = team && !!me.data?.can_set;
   const tq = useQuery({ queryKey: ['cod-focus', 'team'], queryFn: () => apiService.getCodFocusTeam().then((r) => r.data), enabled: canTeam });
   const myId: string | undefined = me.data?.user_id;
+  const [teamOpen, setTeamOpen] = useState(false);
 
   const save = (userId: string | null) => async (moduleId: string | null) => {
     try {
@@ -98,6 +99,8 @@ export default function WeeklyCodFocus({ team = false }: { team?: boolean }) {
   if (!me.data) return null;
   const options: Item[] = me.data.options || tq.data?.options || [];
   const people: Person[] = tq.data?.people || [];
+  const picked = people.filter((p) => !!p.focus).length;
+  const sorted = [...people.filter((p) => !p.focus), ...people.filter((p) => !!p.focus)];
 
   return (
     <View style={s.card} testID="weekly-cod-focus">
@@ -114,15 +117,24 @@ export default function WeeklyCodFocus({ team = false }: { team?: boolean }) {
         sub={me.data.focus?.set_by_name && !me.data.can_set ? `Picked by ${me.data.focus.set_by_name.split(' ')[0]}` : undefined}
         onSave={save(myId || null)} s={s} c={c} testID="cod-focus-me" />
       {canTeam && (
-        <>
-          <Text style={[s.label, { marginTop: 6 }]}>Your team</Text>
-          {tq.isLoading ? <ActivityIndicator color={c.primary} />
-            : people.length === 0 ? <Text style={s.muted}>Nobody under you yet.</Text>
-              : people.map((p) => (
-                <Row key={p.user_id} title={p.user_name} focus={p.focus} canSet options={options}
-                  onSave={save(p.user_id)} s={s} c={c} testID={`cod-focus-${p.user_id}`} />
-              ))}
-        </>
+        // The team folds into one line (the Owner, 29 Oct 2026): how many are
+        // picked, tap to open; not-picked-yet people come first.
+        <View style={s.row}>
+          <Pressable onPress={() => setTeamOpen(!teamOpen)} style={s.rowHead} accessibilityRole="button" testID="cod-focus-team-toggle">
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={s.rowTitle}>Your team</Text>
+              <Text style={s.rowFocus}>
+                {tq.isLoading ? 'Loading…' : people.length === 0 ? 'Nobody under you yet.'
+                  : `${picked} of ${people.length} picked${people.length - picked ? ` · ${people.length - picked} to pick` : ''}`}
+              </Text>
+            </View>
+            <Ionicons name={teamOpen ? 'chevron-up' : 'chevron-down'} size={17} color={c.primary} />
+          </Pressable>
+          {teamOpen && sorted.map((p) => (
+            <Row key={p.user_id} title={p.user_name} focus={p.focus} canSet options={options}
+              onSave={save(p.user_id)} s={s} c={c} testID={`cod-focus-${p.user_id}`} />
+          ))}
+        </View>
       )}
     </View>
   );

@@ -53,8 +53,9 @@ export default function PitchCard({ place }: { place: 'top' | 'bottom' | 'bar' }
       </Pressable>
     );
   }
-  // At the top: everyone in Primetime; a new start outside the field (the bar covers the field).
-  if (place === 'top' && !(prime || (newStart && !field))) return null;
+  // At the top: only a new start learning their pitch (outside the field). Everyone
+  // else has the Pitch tile in Home's quick actions (the Owner, 29 Oct 2026).
+  if (place === 'top' && !(newStart && !field)) return null;
   const top = place === 'top';
   const title = top ? (prime ? 'Primetime: your pitch' : data.unlocked ? 'Learn your pitch' : 'Learn your pitch for tomorrow') : 'Your pitch';
   const sub = top
