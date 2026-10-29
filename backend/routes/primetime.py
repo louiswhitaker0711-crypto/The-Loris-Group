@@ -65,8 +65,10 @@ MAX_TOPIC = 200
 MAX_WITH_TEXT = 200
 MAX_WITH_IDS = 25
 # Not in that day, so not in Primetime (the Owner, 29 Oct 2026): not scheduled
-# (grey), no-show (black), off, or exited.
-NOT_IN = ("ab", "ns", "off", "ex")
+# (grey, 'ab'), no-show (black, 'ns') or exited ('ex'). Not 'off': that's what
+# a Bells day nobody has filled in reads as, so treating it as out left
+# Primetime empty. Same rule as Plan sectors' In today (sector_plan.OUT_TODAY).
+NOT_IN = ("ab", "ns", "ex")
 
 # An office roster is dozens of people, not thousands. The cap is a runaway
 # guard, not a real limit.
