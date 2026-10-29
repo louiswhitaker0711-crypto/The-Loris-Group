@@ -23,8 +23,8 @@ from typing import Iterable, Optional
 _LEVEL = {
     "not learnt": 0, "not learned": 0, "": 0,
     "learnt": 1, "learned": 1, "understand": 1, "know": 1, "aware": 1,
-    "do": 2, "practise": 2, "practice": 2,
-    "deliver": 3, "teach": 3, "master": 3,
+    "do": 2, "practise": 2, "practice": 2, "assisted": 2,
+    "deliver": 3, "teach": 3, "master": 3, "independent": 3,
 }
 
 

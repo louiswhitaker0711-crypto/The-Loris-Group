@@ -28,6 +28,25 @@ export type CoachPerson = { hire_id: string; name: string; day_number: number; d
   /** From field day 2 (Day 4): their breakeven, or null when not worked out yet. */
   trainee_user_id?: string; breakeven_due?: boolean; breakeven?: number | null };
 
+// The Manual's aim for a topic, coloured as the Manual colours it, with one
+// line on what the Coach does (the Owner, 29 Oct 2026).
+export function aimOf(conf: string | undefined | null, c: any) {
+  const k = String(conf || '').trim().toLowerCase();
+  if (k === 'understand' || k === 'know') return { label: 'Understand', bg: `${c.info}22`, fg: c.info, todo: 'Explain it and check they get it' };
+  if (k === 'assisted' || k === 'do') return { label: 'Assisted', bg: c.yellowBg, fg: c.yellow, todo: 'Do it with them: you show, they try, you step in' };
+  if (k === 'independent' || k === 'deliver') return { label: 'Independent', bg: c.greenBg, fg: c.green, todo: 'They do it on their own: watch and give one tip' };
+  return conf ? { label: String(conf), bg: c.surface, fg: c.textMuted, todo: '' } : null;
+}
+
+// One line of detail under a topic (the Owner, 29 Oct 2026): what exactly they
+// should know, from the Manual (By the end of the day, else What good looks like).
+export function detailOf(it: { expected_outcome?: string | null; what_good_looks_like?: string | null }): string {
+  const raw = String(it.expected_outcome || it.what_good_looks_like || '').replace(/\s+/g, ' ').trim();
+  if (!raw) return '';
+  const first = raw.split(/(?<=[.!?])\s/)[0];
+  return first.length > 140 ? `${first.slice(0, 137)}\u2026` : first;
+}
+
 export const firstName = (n: string) => (n || '').trim().split(/\s+/)[0] || n;
 
 export function useCoachingToday() {
@@ -88,13 +107,22 @@ function PersonCard({ p, s, c }: { p: CoachPerson; s: any; c: any }) {
         </View>
       )}
       <Text style={s.section}>{fresh.length ? `What to teach today · ${taughtNew} of ${fresh.length}` : 'What to teach today'}</Text>
-      {fresh.length ? fresh.map((it) => (
-        <Pressable key={it.id} onPress={guide} style={s.teach} accessibilityRole="button">
-          <Ionicons name={it.taught ? 'checkmark-circle' : 'ellipse-outline'} size={20} color={it.taught ? c.green : c.textMuted} />
-          <Text style={[s.teachText, it.taught && s.teachDone]} numberOfLines={1}>{it.topic}</Text>
-          {it.ahead && <Text style={s.aheadText}>Ahead</Text>}
-        </Pressable>
-      )) : <Text style={s.sub}>{kept.length ? `Nothing new: build on ${kept.length} from yesterday` : 'Their day plan is on the guide.'}</Text>}
+      {fresh.length ? fresh.map((it) => {
+        const aim = aimOf(it.confidence_expected, c);
+        return (
+          <Pressable key={it.id} onPress={guide} style={s.teach} accessibilityRole="button">
+            <Ionicons name={it.taught ? 'checkmark-circle' : 'ellipse-outline'} size={20} color={it.taught ? c.green : c.textMuted} style={{ marginTop: 1 }} />
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={[s.teachText, it.taught && s.teachDone]} numberOfLines={1}>{it.topic}</Text>
+                {!!aim && <View style={[s.aim, { backgroundColor: aim.bg }]}><Text style={[s.aimText, { color: aim.fg }]}>{aim.label}</Text></View>}
+                {it.ahead && <Text style={s.aheadText}>Ahead</Text>}
+              </View>
+              {!!detailOf(it) && <Text style={s.aimDo} numberOfLines={1}>{detailOf(it)}</Text>}
+            </View>
+          </Pressable>
+        );
+      }) : <Text style={s.sub}>{kept.length ? `Nothing new: build on ${kept.length} from yesterday` : 'Their day plan is on the guide.'}</Text>}
       {changedItems.length > 0 && (
         <Text style={s.changed}>{`Changed since yesterday: ${changedItems.map((i) => `${i.topic} (${i.changed_from} \u2192 ${i.confidence_expected})`).join(', ')}`}</Text>
       )}
@@ -140,8 +168,11 @@ const styles = (c: any) => StyleSheet.create({
   title: { fontFamily: fonts.bodyBold, fontSize: 18, color: c.text },
   body: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: c.text },
   section: { fontFamily: fonts.bodySemibold, fontSize: 11.5, letterSpacing: 0.6, textTransform: 'uppercase', color: c.primary, marginTop: 6 },
-  teach: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 40, borderBottomWidth: 1, borderBottomColor: c.border },
-  teachText: { flex: 1, fontFamily: fonts.bodySemibold, fontSize: 15, color: c.text },
+  teach: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: c.border },
+  aim: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
+  aimText: { fontFamily: fonts.bodyBold, fontSize: 11 },
+  aimDo: { fontFamily: fonts.body, fontSize: 12.5, color: c.textMuted, marginTop: 2 },
+  teachText: { flexShrink: 1, fontFamily: fonts.bodySemibold, fontSize: 15, color: c.text },
   teachDone: { color: c.textMuted, textDecorationLine: 'line-through' },
   aheadText: { fontFamily: fonts.bodyBold, fontSize: 11, color: c.green },
   behind: { borderRadius: 12, padding: 10, backgroundColor: c.redBg, gap: 2 },

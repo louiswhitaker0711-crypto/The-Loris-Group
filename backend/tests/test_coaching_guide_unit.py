@@ -32,3 +32,8 @@ def test_ahead_when_graded_above_todays_expectation():
 
 def test_levels():
     assert level("Not Learnt") == 0 and level("Know") == 1 and level("Do") == 2 and level("Deliver") == 3
+
+
+def test_manual_aims_line_up_with_grades():
+    # The Manual's aims (Understand → Assisted → Independent) against the grades (Know → Do → Deliver).
+    assert level("Understand") == level("Know") and level("Assisted") == level("Do") and level("Independent") == level("Deliver")
