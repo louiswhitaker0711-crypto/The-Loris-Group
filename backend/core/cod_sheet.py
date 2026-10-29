@@ -9,7 +9,7 @@ fixed):
     1 → Stage 1   6 Day Evaluation
     2 → Stage 2   Becoming a Leader
     3 → Stage 3   Being a Leader
-    5 → Stage 3+  Being a Core Leader / Coach   (the slot Sector/Site Leader
+    5 → Stage 3+  Being a Core Leader / Coach   (the slot Sector Leader
                   used, which already sat between 3 and 4)
     4 → Stage 4   Advanced Team Building
     6 → Stage 5   Becoming a Business Owner
@@ -34,7 +34,7 @@ STAGE_TITLES = {
     1: "Foundation",
     2: "Self Management",
     3: "Leader",
-    5: "Sector/Site Leader",
+    5: "Sector Leader",
     4: "Team Builder",
     6: "Becoming a Business Owner",
 }

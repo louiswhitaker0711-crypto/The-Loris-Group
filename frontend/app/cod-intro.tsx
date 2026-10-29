@@ -4,7 +4,7 @@
  * The "how this all works" front page from the Final Cycle of Development
  * document: the Proof Ladder (Know → Do → Deliver → Teach → Systemize),
  * the weekly rhythm, the 4 Pillars, and the stage map from Foundation to
- * Sector/Site Leader. Static content — the source of truth is the COD
+ * Sector Leader. Static content — the source of truth is the COD
  * document; update both together.
  *
  * Visual system ("Ink & Cube"): a full-bleed pop hero with a 130px Rubik
@@ -72,7 +72,7 @@ const STAGES = sortByCodStage([
   { stage: 2, tag: 'STAGE 2', name: 'Self Management', sub: 'Operate like a professional' },
   { stage: 3, tag: 'STAGE 3', name: 'Leader', sub: 'Creating success in others' },
   { stage: 4, tag: 'STAGE 4', name: 'Team Builder', sub: 'Embedding systems, standards & creating independence' },
-  { stage: 5, tag: 'STAGE SL', name: 'Sector/Site Leader', sub: 'Performance management — for leaders running sectors' },
+  { stage: 5, tag: 'STAGE SL', name: 'Sector Leader', sub: 'Performance management — for leaders running sectors' },
 ], (s) => s.stage);
 
 export default function CodIntroScreen() {

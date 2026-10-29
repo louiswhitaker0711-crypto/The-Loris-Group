@@ -273,7 +273,7 @@ def _stage_label(value) -> Optional[str]:
     if not digits:
         return None
     if text.endswith("plus"):
-        # The Owner's label for 3+ (Sector/Site Leader), 22 Oct 2026.
+        # The Owner's label for 3+ (Sector Leader), 22 Oct 2026.
         return "SL" if int(digits) == 3 else f"{int(digits)}+"
     return str(int(digits))
 

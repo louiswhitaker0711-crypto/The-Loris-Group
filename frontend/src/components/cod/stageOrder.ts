@@ -3,14 +3,14 @@
  *
  * The Cycle of Development runs:
  *   Stage 1 Foundation → Stage 2 Self Management → Stage 3 Leader →
- *   Stage SL Sector/Site Leader → Stage 4 Team Builder
+ *   Stage SL Sector Leader → Stage 4 Team Builder
  *   → Stage 5 Assistant Owner  (NOT BUILT — see below)
  *
  * ── The Assistant Owner collision ──────────────────────────────────────────
  * The real Stage 5 is Assistant Owner, and it comes after Stage 4. Its COD
  * content is not written yet, so it does not exist in the app.
  *
- * The number 5 is ALREADY TAKEN: Sector/Site Leader is stored as stage 5,
+ * The number 5 is ALREADY TAKEN: Sector Leader is stored as stage 5,
  * because (stage, topic) is the identity key for every module, module_progress
  * row, COD sheet rung and check-queue card in production. SL cannot be
  * renumbered without orphaning all of them.
@@ -65,12 +65,12 @@ export const COD_STAGE_NAME: Record<number, string> = {
   2: 'Self Management',
   3: 'Leader',
   4: 'Team Builder',
-  5: 'Sector/Site Leader',
+  5: 'Sector Leader',
 };
 
 /**
  * Short stage names for tight places — the Home hero, where the column is
- * ~156px wide. "Sector/Site Leader" has no space to break at, so the renderer
+ * ~156px wide. "Sector Leader" has no space to break at, so the renderer
  * split it mid-word as "SECTOR/SIT E LEADER"; "Sector Leader" (already the
  * wording used on the Two Ladders rail) wraps cleanly or fits outright.
  */
@@ -101,11 +101,11 @@ export function furthestCodStage(stages: readonly number[], fallback = 1): numbe
   return best;
 }
 
-/** Stored stage number for Sector/Site Leader. Stored as 5, never shown as 5. */
+/** Stored stage number for Sector Leader. Stored as 5, never shown as 5. */
 export const COD_SL_STAGE = 5;
 
 /**
- * How a stage is SPELLED on screen: "SL" for Sector/Site Leader, the number
+ * How a stage is SPELLED on screen: "SL" for Sector Leader, the number
  * otherwise. SL is stored as 5 but sits between 3 and 4, so printing the
  * stored number puts a "5" between a "3" and a "4" and reads like a mistake.
  * Anywhere a stage number reaches a user, it goes through here.

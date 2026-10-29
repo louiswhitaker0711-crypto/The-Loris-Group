@@ -28,7 +28,7 @@ const STAGE_LABEL: Record<number, string> = {
   2: 'Stage 2 · Self Management',
   3: 'Stage 3 · Leader',
   4: 'Stage 4 · Team Builder',
-  5: 'Stage SL · Sector/Site Leader',
+  5: 'Stage SL · Sector Leader',
 };
 
 type VetModule = {

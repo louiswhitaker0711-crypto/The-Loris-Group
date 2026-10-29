@@ -25,7 +25,7 @@ const STAGE_LABEL: Record<Stage, string> = {
   2: 'Stage 2 · Independence',
   3: 'Stage 3 · Leadership',
   4: 'Stage 4 · Team Builder',
-  5: 'Stage SL · Sector/Site Leader',
+  5: 'Stage SL · Sector Leader',
 };
 
 type ModuleRow = {
