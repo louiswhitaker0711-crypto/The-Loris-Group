@@ -34,6 +34,7 @@ import { usePullToRefresh } from '../src/components/ui/PullRefresh';
 import { useTabBarClearance } from '../src/customization/CustomTabBar';
 import { useKeyboardInset } from '../src/hooks/useKeyboardInset';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useDeviceInsets } from '../src/nav/AppShell';
 import { APP_LOCALE, formatMoney } from '../src/utils/appTime';
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -488,6 +489,7 @@ export default function WeeklyPlannerScreen() {
   };
   const kbInset = useKeyboardInset();
   const safeInsets = useSafeAreaInsets();
+  const deviceInsets = useDeviceInsets();
 
   const onShare = async () => {
     if (!draft) return;
@@ -1411,7 +1413,9 @@ export default function WeeklyPlannerScreen() {
           equal to the keyboard overlap (iOS + mobile web — Android resizes
           the window itself, the hook returns 0 there). */}
       <Modal visible={!!editorField} animationType="slide" onRequestClose={() => setEditorField(null)}>
-        <View style={[styles.editorRoot, { paddingTop: safeInsets.top }]}>
+        {/* A full-screen modal covers the top bar, so it needs the device's real
+            top inset (the shell zeroes it for screens underneath the bar). */}
+        <View style={[styles.editorRoot, { paddingTop: deviceInsets.top }]}>
           <View style={styles.editorHeader}>
             <View style={{ flex: 1 }}>
               <Text style={styles.editorTitle} numberOfLines={1}>{editorField?.title}</Text>

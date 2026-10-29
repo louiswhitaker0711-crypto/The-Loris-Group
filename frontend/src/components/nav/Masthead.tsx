@@ -49,6 +49,7 @@
  * three-deep stack plus eight visited tabs would run eleven cube loops.
  */
 import React, { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { router } from 'expo-router';
 import {
   Platform,
   Pressable,
@@ -206,7 +207,9 @@ function resolve(props: MastheadProps, colors: ColorPalette): Resolved {
     showChip,
     leftNode,
     rightNode,
-    onBack: () => navigation.goBack(),
+    // Nothing to go back to (opened from a link, a push or the side menu):
+    // go Home rather than doing nothing.
+    onBack: () => (navigation.canGoBack() ? navigation.goBack() : router.replace('/(tabs)' as never)),
     sceneTransparent,
   };
 }

@@ -7,6 +7,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Modal, Pressable, Switch, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useDeviceInsets } from '../../nav/AppShell';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors, fonts } from '../../theme/ThemeContext';
 import { toast } from '../../utils/toast';
@@ -72,7 +73,7 @@ export function RowEditor({ layout, onClose, onSave }: {
 }) {
   const c = useColors();
   const s = useMemo(() => styles(c), [c]);
-  const insets = useSafeAreaInsets();
+  const insets = useDeviceInsets();   // full-screen modal: the real top inset
   const [rows, setRows] = useState<SheetRow[]>(() => layout.map((r) => ({ ...r })));
   const [saving, setSaving] = useState(false);
   const badTime = rows.some((r) => r.time && !TIME_RE.test(r.time));
