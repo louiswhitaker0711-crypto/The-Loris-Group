@@ -19,7 +19,7 @@ type Folder = {
 };
 
 export function useNotesFolder() {
-  return useQuery({ queryKey: ['notes-folder'], queryFn: async () => (await api.get('/notes/folder')).data as Folder & any, staleTime: 60_000 });
+  return useQuery({ queryKey: ['notes-folder'], queryFn: async () => (await api.get('/notes/folder')).data as Folder, staleTime: 60_000 });
 }
 
 export function headLabel(folder: Folder | undefined, head: string): string {
