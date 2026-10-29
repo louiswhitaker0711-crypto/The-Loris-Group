@@ -125,7 +125,24 @@ async def get_pitch(request: Request):
     return {"unlocked": (not new_start) or is_unlocked(start), "unlocks_at": at.isoformat() if at else None,
             "new_start": new_start, "start_date": start,
             "state": doc.get("pitch_progress") or {"counts": {}, "ladder": {}, "quiz": {}, "shown": {}},
-            "words": office.get("words") or {}, "can_edit": _can_edit(user)}
+            "words": office.get("words") or {}, "can_edit": _can_edit(user),
+            "practice": await _practice(user)}
+
+
+async def _practice(user: dict) -> bool:
+    """Say it / Learn / Check are for new starts (COD Stage 1); from Stage 2
+    it's the words with why and how (the Owner, 29 Oct 2026). The Owner sees
+    everything."""
+    role = (user.get("role") or "").lower()
+    if role == "admin":
+        return True
+    if role != "trainee":
+        return False
+    from routes.modules import _is_stage_unlocked
+    try:
+        return not await _is_stage_unlocked(user, 2)
+    except Exception:
+        return True
 
 
 def _can_edit(user: dict) -> bool:

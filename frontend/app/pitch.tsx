@@ -7,6 +7,8 @@
  * the rest opens at 18:00 the next day. Progress saves to their account.
  * The Owner can change the words (27 Oct 2026: just the words; the why and
  * how notes stay): Edit on the pitch, saved for the whole office.
+ * Three buttons at the top (the Owner, 29 Oct 2026): Pitch, Sign-up, Rehash;
+ * Say it / Learn / Check only for new starts (Stage 1).
  * (GET/PUT /pitch, PUT /pitch/words; content in src/academy/pitch.ts)
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -17,11 +19,18 @@ import { useColors, fonts } from '../src/theme/ThemeContext';
 import { api } from '../src/api/client';
 import { useTabBarClearance } from '../src/customization/CustomTabBar';
 import { APP_LOCALE, APP_TZ } from '../src/utils/appTime';
-import { PITCH, ALL_PITCH, PITCH_QUIZ, PitchLine, withWords } from '../src/academy/pitch';
+import { ALL_PITCH, PITCH_QUIZ, PitchLine, withWords } from '../src/academy/pitch';
 
 type Tab = 'read' | 'say' | 'learn' | 'check';
 type State = { counts: Record<string, number>; ladder: Record<string, boolean>; quiz: Record<string, number>; shown: Record<string, boolean> };
-type Status = { unlocked: boolean; unlocks_at: string | null; new_start: boolean; state: State; words?: Record<string, string>; can_edit?: boolean };
+type Status = { unlocked: boolean; unlocks_at: string | null; new_start: boolean; state: State; words?: Record<string, string>; can_edit?: boolean; practice?: boolean };
+type Mode = 'pitch' | 'signup' | 'rehash';
+// The three things to practise (the Owner, 29 Oct 2026): one button each at the top.
+const MODES: { id: Mode; t: string; from: number; to: number; sub: string }[] = [
+  { id: 'pitch', t: 'Pitch', from: 1, to: 4, sub: 'Say this at every door' },
+  { id: 'signup', t: 'Sign-up', from: 5, to: 5, sub: 'Build their week with them' },
+  { id: 'rehash', t: 'Rehash', from: 6, to: 6, sub: 'Remove every reason to cancel' },
+];
 
 const COUNTERS = [
   { id: 'read', t: 'Read it out loud', d: 'From the page, out loud, all the way through.' },
@@ -53,7 +62,12 @@ export default function PitchScreen() {
   const canEdit = !!q.data?.can_edit;
   // The office's own wording over the original lines.
   const all = useMemo(() => withWords(ALL_PITCH, words), [words]);
-  const pitch = all.filter((b) => b.n <= PITCH.length);
+  const [mode, setMode] = useState<Mode>('pitch');
+  const M = MODES.find((x) => x.id === mode) || MODES[0];
+  const shownSteps = all.filter((b) => b.n >= M.from && b.n <= M.to);
+  // Say it / Learn / Check only for new starts (Stage 1); Say it and Check are the door pitch's.
+  const practice = q.data?.practice ?? true;
+  const tabsHere: Tab[] = !practice ? ['read'] : mode === 'pitch' ? ['read', 'say', 'learn', 'check'] : ['read', 'learn'];
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -152,26 +166,33 @@ export default function PitchScreen() {
 
   return (
     <View style={s.page}>
-      <View style={s.tabs}>
-        {(['read', 'say', 'learn', 'check'] as Tab[]).map((t) => (
+      <View style={s.modes}>
+        {MODES.map((m) => (
+          <Pressable key={m.id} onPress={() => { setMode(m.id); setEditing(false); if (!(practice ? (m.id === 'pitch' ? ['read', 'say', 'learn', 'check'] : ['read', 'learn']) : ['read']).includes(tab)) setTab('read'); }}
+            style={[s.mode, mode === m.id && s.modeOn]} accessibilityRole="tab" accessibilityState={{ selected: mode === m.id }} testID={`pitch-mode-${m.id}`}>
+            <Ionicons name={m.id === 'pitch' ? 'mic-outline' : m.id === 'signup' ? 'cart-outline' : 'refresh-outline'} size={18} color={mode === m.id ? c.onPrimary : c.primary} />
+            <Text style={[s.modeT, mode === m.id && { color: c.onPrimary }]}>{m.t}</Text>
+          </Pressable>
+        ))}
+      </View>
+      {tabsHere.length > 1 && <View style={s.tabs}>
+        {tabsHere.map((t) => (
           <Pressable key={t} onPress={() => setTab(t)} style={[s.tab, tab === t && s.tabOn]} accessibilityRole="tab" accessibilityState={{ selected: tab === t }}>
             {locked(t) && <Ionicons name="lock-closed" size={11} color={tab === t ? c.onPrimary : c.textMuted} />}
             <Text style={[s.tabT, tab === t && { color: c.onPrimary }]}>{t === 'read' ? 'Read' : t === 'say' ? 'Say it' : t === 'learn' ? 'Learn' : 'Check'}</Text>
           </Pressable>
         ))}
-      </View>
+      </View>}
       <ScrollView contentContainerStyle={[s.content, { paddingBottom: 32 + tabClear }]}>
         <View style={s.shell}>
           {tab === 'read' && (
             <>
-              <Text style={s.kicker}>Your pitch</Text>
-              <Text style={s.h1}>Learn your pitch</Text>
-              <Text style={s.muted}>What you’ll say at every door: four steps, about 30 seconds. Learn what each line is for, not just the words, so you always know where you are.</Text>
+              {mode === 'pitch' && <Text style={s.muted}>What you’ll say at every door: four steps, about 30 seconds. Learn what each line is for, not just the words, so you always know where you are.</Text>}
               <View style={s.full}>
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
                   <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={s.kicker}>The pitch</Text>
-                    <Text style={s.h2}>Say this at every door</Text>
+                    <Text style={s.kicker}>{mode === 'pitch' ? 'The pitch' : mode === 'signup' ? 'The sign-up pitch' : 'The rehash pitch'}</Text>
+                    <Text style={s.h2}>{M.sub}</Text>
                   </View>
                   {canEdit && !editing && (
                     <Pressable onPress={startEdit} style={[s.btn, { flexDirection: 'row', gap: 6 }]} accessibilityRole="button" testID="pitch-edit">
@@ -182,7 +203,7 @@ export default function PitchScreen() {
                 {editing ? (
                   <>
                     <Text style={s.small}>Change the words people say. The notes on why and how stay as they are. Leave a line blank to go back to the original.</Text>
-                    {ALL_PITCH.map((b) => (
+                    {ALL_PITCH.filter((b) => b.n >= M.from && b.n <= M.to).map((b) => (
                       <View key={b.n} style={{ gap: 6 }}>
                         <Text style={[s.kicker, { color: stepColour(b.c) }]}>{b.n} · {b.t}</Text>
                         {b.lines.map((l, i) => {
@@ -209,7 +230,7 @@ export default function PitchScreen() {
                       <Pressable onPress={original} style={s.btn} accessibilityRole="button"><Text style={s.btnT}>Use the original wording</Text></Pressable>
                     </View>
                   </>
-                ) : pitch.map((b) => (
+                ) : shownSteps.map((b) => (
                   <View key={b.n} style={{ gap: 3 }}>
                     <Text style={[s.kicker, { color: stepColour(b.c) }]}>{b.n} · {b.t}</Text>
                     {/* One line each, like the Owner's own pitch sheet. */}
@@ -223,16 +244,7 @@ export default function PitchScreen() {
                 ))}
               </View>
               <Text style={[s.h2, { marginTop: 8 }]}>Line by line: why and how</Text>
-              <Steps to={PITCH.length} />
-              <View style={s.after}>
-                <Text style={[s.kicker, { color: c.inkMuted }]}>After they say yes</Text>
-                <Text style={[s.h2, { color: c.inkText, fontSize: 17 }]}>The sign-up pitch, then the rehash pitch</Text>
-                <Text style={{ fontFamily: fonts.body, fontSize: 14, color: c.inkMuted }}>Build their week with them, then remove every reason to cancel before you leave.</Text>
-              </View>
-              <Text style={[s.h2, { marginTop: 8 }]}>The sign-up pitch</Text>
-              <Steps from={5} to={5} />
-              <Text style={[s.h2, { marginTop: 8 }]}>The rehash pitch</Text>
-              <Steps from={6} to={6} />
+              <Steps from={M.from} to={M.to} />
               {!unlocked && <Text style={[s.muted, { textAlign: 'center' }]}>Tonight, just read it through. We’ll go over it together tomorrow, then Say it, Learn and Check open {opens ? `on ${opens}` : 'tomorrow evening'}.</Text>}
             </>
           )}
@@ -295,9 +307,9 @@ export default function PitchScreen() {
               <Text style={s.muted}>Each line is hidden down to its first letters. Say it out loud, then tap the line to check.</Text>
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 <Pressable onPress={() => update((p) => ({ ...p, shown: {} }))} style={s.btn}><Text style={s.btnT}>Hide all</Text></Pressable>
-                <Pressable onPress={() => update((p) => ({ ...p, shown: Object.fromEntries(all.flatMap((b) => b.lines.map((_, i) => [`L${b.n}-${i}`, true]))) }))} style={s.btn}><Text style={s.btnT}>Show all</Text></Pressable>
+                <Pressable onPress={() => update((p) => ({ ...p, shown: Object.fromEntries(shownSteps.flatMap((b) => b.lines.map((_, i) => [`L${b.n}-${i}`, true]))) }))} style={s.btn}><Text style={s.btnT}>Show all</Text></Pressable>
               </View>
-              <Steps learn />
+              <Steps learn from={M.from} to={M.to} />
             </>
           )}
 
@@ -337,6 +349,10 @@ export default function PitchScreen() {
 
 const styles = (c: any) => StyleSheet.create({
   page: { flex: 1, backgroundColor: c.page || c.surface },
+  modes: { flexDirection: 'row', gap: 8, marginHorizontal: 12, marginTop: 12 },
+  mode: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 12, borderRadius: 14, borderWidth: 1.5, borderColor: c.primary, backgroundColor: c.background },
+  modeOn: { backgroundColor: c.primary },
+  modeT: { fontFamily: fonts.bodySemibold, fontSize: 14, color: c.primary },
   tabs: { flexDirection: 'row', gap: 4, margin: 12, marginBottom: 0, padding: 3, borderRadius: 999, borderWidth: 1, borderColor: c.border, backgroundColor: c.background },
   tab: { flex: 1, flexDirection: 'row', gap: 4, alignItems: 'center', justifyContent: 'center', paddingVertical: 8, borderRadius: 999 },
   tabOn: { backgroundColor: c.primary },

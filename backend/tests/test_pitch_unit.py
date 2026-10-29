@@ -87,3 +87,9 @@ def test_only_a_real_first_week_counts_as_a_new_start():
     assert not pitch.is_new_start({"current_day": 1, "start_date": "2026-05-01"}, today)  # stale record
     assert not pitch.is_new_start({"current_day": 5, "start_date": "2026-10-26"}, today)
     assert not pitch.is_new_start(None, today)
+
+
+def test_practice_tabs_are_for_new_starts_and_the_owner():
+    loop = asyncio.new_event_loop()
+    assert loop.run_until_complete(pitch._practice({"role": "admin"}))
+    assert not loop.run_until_complete(pitch._practice({"role": "leader"}))
