@@ -28,6 +28,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from auth import get_current_user, can_access_hire
 from core.app_time import APP_TZ
+from core.grading_time import latest_field_start
 from database import db
 
 router = APIRouter()
@@ -38,6 +39,18 @@ ACADEMY_DAYS = 2
 
 def _today() -> str:
     return datetime.now(APP_TZ).date().isoformat()
+
+
+def graded_before_today(when, now: Optional[datetime] = None) -> bool:
+    """True when a day was graded before the latest field start (13:30, or
+    10:00 on a Saturday): it belongs to an earlier day, not today."""
+    try:
+        dt = datetime.fromisoformat(str(when))
+    except (TypeError, ValueError):
+        return False
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=APP_TZ)
+    return dt < latest_field_start(now)
 
 
 def day_label(day: int) -> str:
@@ -125,7 +138,11 @@ async def coaching_today(request: Request):
             continue
         a = await db.daily_assessments.find_one(
             {"new_hire_id": h["id"], "day_number": day},
-            {"_id": 0, "id": 1, "completed": 1})
+            {"_id": 0, "id": 1, "completed": 1, "assessment_date": 1})
+        # Graded before today's field started: that day is over (e.g. their
+        # Day 8 was signed off yesterday), so it isn't today's coaching.
+        if a and a.get("completed") and graded_before_today(a.get("assessment_date")):
+            continue
         items = []
         if a:
             notes = await _manual_notes(h.get("office_id"), day)
