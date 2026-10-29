@@ -13,6 +13,8 @@ Admin gets every new start on those days: the Owner runs the Academy.
       → {"date", "people": [{hire_id, name, day_number, day_label,
            objective, assessment_id, done, can_grade, trainee_user_id,
            breakeven_due (Day 4 on), breakeven (null until worked out),
+           behind: [{topic, grade, expected, day}],
+           checklist items also carry status (new|keep), changed_from, ahead,
            checklist: [{id, topic, category, confidence_expected, taught,
                         what_good_looks_like, expected_outcome}]}]}
     PUT /api/coaching/today/taught   {item_id, taught}
@@ -30,6 +32,7 @@ from fastapi import APIRouter, HTTPException, Request
 from auth import get_current_user, can_access_hire
 from core.app_time import APP_TZ
 from core.grading_time import latest_field_start
+from core.coaching_guide import classify, flags
 from database import db
 
 router = APIRouter()
@@ -117,6 +120,19 @@ async def _manual_notes(office_id: Optional[str], day: int) -> dict[str, dict]:
     return {f"D{day}-{m.get('sequence', 0):02d}": m for m in manuals}
 
 
+async def _past_grades(hire_id: str, day: int) -> list[dict]:
+    """Every graded topic from a new start's earlier days: {topic, grade, expected, day}."""
+    out: list[dict] = []
+    async for a in db.daily_assessments.find(
+            {"new_hire_id": hire_id, "day_number": {"$lt": day}, "completed": True}, {"_id": 0, "id": 1, "day_number": 1}):
+        async for it in db.delivery_checklist.find({"assessment_id": a["id"]},
+                                                   {"_id": 0, "topic": 1, "grade": 1, "confidence_expected": 1}):
+            if it.get("grade"):
+                out.append({"topic": it.get("topic"), "grade": it.get("grade"),
+                            "expected": it.get("confidence_expected"), "day": a.get("day_number")})
+    return out
+
+
 @router.get("/coaching/today")
 async def coaching_today(request: Request):
     user = await get_current_user(request)
@@ -174,6 +190,13 @@ async def coaching_today(request: Request):
                     "expected_outcome": m.get("expected_outcome") or None,
                 })
             items.sort(key=lambda x: x.pop("order"))
+        # Today's guide: new vs carried over from yesterday's Manual page, and
+        # Behind / Ahead from earlier grades (core/coaching_guide.py).
+        behind: list = []
+        if items:
+            yesterday = list((await _manual_notes(h.get("office_id"), day - 1)).values()) if day > 1 else []
+            items = classify(items, yesterday)
+            items, behind = flags(items, await _past_grades(h["id"], day))
         # Field day 2 (Day 4) onwards: their breakeven, worked out with them.
         be_due = day >= BREAKEVEN_DAY and bool(h.get("trainee_user_id"))
         be = await _breakeven(h.get("trainee_user_id"), h.get("office_id")) if be_due else None
@@ -186,6 +209,7 @@ async def coaching_today(request: Request):
             "done": bool((a or {}).get("completed")),
             "can_grade": await can_access_hire(user, h["id"]),
             "checklist": items,
+            "behind": behind,
         })
     out.sort(key=lambda p: (p["day_number"], p["name"].lower()))
     return {"date": iso, "people": out}
