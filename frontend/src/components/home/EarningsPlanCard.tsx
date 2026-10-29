@@ -14,7 +14,8 @@ import { api } from '../../api/client';
 
 const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
 
-export default function EarningsPlanCard() {
+/** onlyMissing: a new start from field day 2 (Day 4), until they've worked it out. */
+export default function EarningsPlanCard({ onlyMissing = false }: { onlyMissing?: boolean } = {}) {
   const c = useColors();
   const s = useMemo(() => styles(c), [c]);
   const { data } = useQuery({
@@ -26,7 +27,7 @@ export default function EarningsPlanCard() {
   const updated = data.updated_at ? Date.parse(data.updated_at) : NaN;
   const missing = data.breakeven == null;
   const stale = !missing && Number.isFinite(updated) && Date.now() - updated > MONTH_MS;
-  if (!missing && !stale) return null;
+  if (onlyMissing ? !missing : (!missing && !stale)) return null;
   return (
     <Pressable onPress={() => router.push('/earnings-plan' as never)} style={s.card} accessibilityRole="button" testID="home-earnings-plan">
       <View style={s.icon}><Ionicons name="calculator-outline" size={22} color={c.primary} /></View>

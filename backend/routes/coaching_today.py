@@ -11,7 +11,8 @@ Admin gets every new start on those days: the Owner runs the Academy.
 
     GET /api/coaching/today
       → {"date", "people": [{hire_id, name, day_number, day_label,
-           objective, assessment_id, done, can_grade,
+           objective, assessment_id, done, can_grade, trainee_user_id,
+           breakeven_due (Day 4 on), breakeven (null until worked out),
            checklist: [{id, topic, category, confidence_expected, taught,
                         what_good_looks_like, expected_outcome}]}]}
     PUT /api/coaching/today/taught   {item_id, taught}
@@ -35,6 +36,22 @@ router = APIRouter()
 
 FIRST_DAYS = 8
 ACADEMY_DAYS = 2
+BREAKEVEN_DAY = 4     # field day 2 (Thursday): work out their breakeven
+
+
+async def _breakeven(user_id, office_id) -> Optional[int]:
+    from bson import ObjectId
+    from core.earnings_plan import compute
+    try:
+        u = await db.users.find_one({"_id": ObjectId(str(user_id))}, {"earnings_plan": 1})
+    except Exception:
+        u = None
+    plan = (u or {}).get("earnings_plan")
+    if not plan:
+        return None
+    fees = (await db.commission_fees.find_one({"office_id": office_id}, {"_id": 0})
+            or await db.commission_fees.find_one({}, {"_id": 0}))
+    return compute(plan, fees).get("breakeven")
 
 
 def _today() -> str:
@@ -116,7 +133,7 @@ async def coaching_today(request: Request):
             return {"date": iso, "people": []}
     else:
         ids = people_with(sec, str(user["id"]))
-    proj = {"_id": 0, "id": 1, "name": 1, "current_day": 1, "office_id": 1}
+    proj = {"_id": 0, "id": 1, "name": 1, "current_day": 1, "office_id": 1, "trainee_user_id": 1}
     hires = await db.new_hires.find(
         {"active": True, "office_id": user.get("office_id"), "trainee_user_id": {"$in": ids}}, proj,
     ).to_list(50) if ids else []
@@ -157,8 +174,12 @@ async def coaching_today(request: Request):
                     "expected_outcome": m.get("expected_outcome") or None,
                 })
             items.sort(key=lambda x: x.pop("order"))
+        # Field day 2 (Day 4) onwards: their breakeven, worked out with them.
+        be_due = day >= BREAKEVEN_DAY and bool(h.get("trainee_user_id"))
+        be = await _breakeven(h.get("trainee_user_id"), h.get("office_id")) if be_due else None
         out.append({
             "hire_id": h["id"], "name": h.get("name") or "",
+            "trainee_user_id": h.get("trainee_user_id"), "breakeven_due": be_due, "breakeven": be,
             "day_number": day, "day_label": day_label(day),
             "objective": await _objective(day),
             "assessment_id": (a or {}).get("id"),

@@ -11,6 +11,7 @@
  * so the Coach sees them and can change them until the lock.
  * A Coach or Admin opening `?user_id=` sees it read-only.
  */
+import { goalVsBreakeven } from '../src/utils/breakeven';
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
@@ -173,9 +174,8 @@ export default function BaWeekScreen() {
         />
         {data.goal_locked ? <Text style={s.hint}>Goals locked at Monday 10:30. Ask your Coach to change it.</Text> : null}
         {breakeven != null ? (
-          <Text style={s.hint}>
-            Breakeven: {breakeven} a week{planTarget != null ? ` · target ${planTarget}` : ''}
-            {goal.trim() !== '' && Number(goal) < breakeven ? '  ·  This goal is below breakeven.' : ''}
+          <Text style={[s.hint, goal.trim() !== '' && Number(goal) < breakeven && { color: colors.red }]}>
+            {goalVsBreakeven(goal, breakeven, otherId ? 'their' : 'your')}{planTarget != null ? ` · target ${planTarget}` : ''}
           </Text>
         ) : null}
         {!otherId ? (

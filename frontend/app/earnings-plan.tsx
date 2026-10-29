@@ -60,10 +60,10 @@ export default function EarningsPlanScreen() {
   const save = async () => {
     setBusy(true);
     try {
-      await api.put('/earnings-plan', { needs, wants });
+      await api.put(`/earnings-plan${otherId ? `?user_id=${encodeURIComponent(otherId)}` : ''}`, { needs, wants });
       qc.invalidateQueries({ queryKey: ['earnings-plan'] });
       qc.invalidateQueries({ queryKey: ['bells'] });
-      toast.success('Plan saved', 'Your breakeven is on Bells and your weekly plan');
+      toast.success('Plan saved', otherId ? `${(q.data?.name || 'Their').split(' ')[0]}\u2019s breakeven is on Bells and their weekly goal` : 'Your breakeven is on Bells and your weekly plan');
       router.back();
     } catch {
       toast.error('Couldn’t save', 'Check your connection and try again.');
