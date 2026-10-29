@@ -43,6 +43,10 @@ async def list_notifications(request: Request, limit: int = 50, before: Optional
     rows = await db.notifications.find(query, {"_id": 0}).sort(
         "created_at", -1
     ).to_list(limit)
+    # Every row opens its page, older rows too (the Owner, 29 Oct 2026).
+    from core.push import with_target
+    for r in rows:
+        r["data"] = with_target(r.get("data"))
     return rows
 
 
