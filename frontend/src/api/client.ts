@@ -1080,6 +1080,7 @@ export const apiService = {
   deleteSectorPlan: (date: string, leader: string) => api.delete('/sector/plan/sector', { params: { date, leader } }),
   confirmSectorPlan: (date: string) => api.post('/sector/plan/confirm', null, { params: { date } }),
   markSectorNoShow: (date: string, userId: string) => api.put('/sector/plan/no-show', { user_id: userId }, { params: { date } }),
+  undoSectorNoShow: (date: string, userId: string) => api.put('/sector/plan/shown-up', { user_id: userId }, { params: { date } }),
   setSectorPlanner: (date: string, userId: string | null) => api.put('/sector/plan/planner', { user_id: userId }, { params: { date } }),
   changeSectorPostcode: (date: string, leaderId: string, postcode: string) => api.put('/sector/plan/postcode', { leader_id: leaderId, postcode }, { params: { date } }),
   getMyDay: () => api.get('/sector/my-day'),

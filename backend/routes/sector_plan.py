@@ -167,7 +167,8 @@ async def get_plan(request: Request, date: Optional[str] = None):
             "people": [{**p, "sector_leader_id": where.get(p["user_id"]),
                         "in_today": bells_status.get(p["user_id"]) == "in",
                         "no_show": bells_status.get(p["user_id"]) == "ns",
-                        "not_scheduled": bells_status.get(p["user_id"]) == "ab"} for p in people],
+                        "not_scheduled": bells_status.get(p["user_id"]) == "ab",
+                        "day_status": bells_status.get(p["user_id"]) or ""} for p in people],
             "sent_at": (sent or {}).get("at")}
 
 
@@ -570,6 +571,50 @@ async def mark_no_show(request: Request, date: Optional[str] = None):
                    if set((before.get(k) or {}).get("member_ids") or []) != set((after.get(k) or {}).get("member_ids") or [])]
         if changed:
             await _tell(office_id, iso, changed, "🔄 Sectors have changed")
+    return await get_plan(request, iso)
+
+
+async def _set_bells_status(target: dict, iso: str, status: str) -> None:
+    from owneriq_performance import _bells_entry, _empty_day
+    d0 = datetime.fromisoformat(iso).date()
+    entry = await _bells_entry(target, (d0 + timedelta(days=6 - d0.weekday())).isoformat())
+    if not entry:
+        return
+    idx = d0.weekday()
+    days = list(entry.get("days") or [])
+    while len(days) < 7:
+        days.append(_empty_day())
+    day = dict(days[idx] or {})
+    day["status"] = status
+    days[idx] = day
+    await db.bells_entries.update_one({"id": entry["id"]},
+        {"$set": {"days": days, "updated_at": datetime.now(timezone.utc).isoformat()}})
+
+
+@router.put("/sector/plan/shown-up")
+async def undo_no_show(request: Request, date: Optional[str] = None):
+    """Undo a No Show tapped by mistake (or they turned up late): back to In
+    on Bells if the day's In list is in use, otherwise back to blank, so they
+    can be placed in a sector again."""
+    user, iso = await _require_planner(request, date)
+    office_id = user.get("office_id")
+    uid = str((await request.json()).get("user_id") or "")
+    if not ObjectId.is_valid(uid):
+        raise HTTPException(status_code=400, detail="Pick a person")
+    target = await db.users.find_one({"_id": ObjectId(uid), "office_id": office_id},
+                                     {"name": 1, "role": 1, "office_id": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="Person not found")
+    d0 = datetime.fromisoformat(iso).date()
+    widx = d0.weekday()
+    week_ending = (d0 + timedelta(days=6 - widx)).isoformat()
+    others_in = False
+    async for e in db.bells_entries.find({"office_id": office_id, "week_ending": week_ending}, {"user_id": 1, "days": 1}):
+        days = e.get("days") or []
+        if str(e.get("user_id")) != uid and widx < len(days) and (days[widx] or {}).get("status") == "in":
+            others_in = True
+            break
+    await _set_bells_status(target, iso, "in" if others_in else "")
     return await get_plan(request, iso)
 
 

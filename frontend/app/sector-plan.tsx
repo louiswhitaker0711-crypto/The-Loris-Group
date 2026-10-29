@@ -25,7 +25,7 @@ import HopLines, { type HopLine } from '../src/components/sector/HopLines';
 import BreakdownPrimetime from '../src/components/sector/BreakdownPrimetime';
 import { splitPostcodes } from '../src/utils/postcodes';
 
-type Person = { user_id: string; name: string; role: string; sector_leader_id?: string | null; in_today?: boolean; no_show?: boolean; not_scheduled?: boolean };
+type Person = { user_id: string; name: string; role: string; sector_leader_id?: string | null; in_today?: boolean; no_show?: boolean; not_scheduled?: boolean; day_status?: string };
 type Sector = { leader_id: string; leader_name: string; postcode: string; goal: number | null; member_ids: string[]; can_delete: boolean; hops?: HopLine[] };
 type Draft = { leader_id: string; postcode: string; goal: string; member_ids: string[] };
 type BoardSec = { leader_id: string; leader_name: string; postcode: string; goal: string; member_ids: string[]; hops: HopLine[] };
@@ -137,6 +137,12 @@ export default function SectorPlanScreen() {
     catch (e) { showAlert('Could not mark', err(e)); }
     finally { setBusy(null); }
   };
+  const shownUp = async (uid: string) => {
+    setBusy(`ns:${uid}`);
+    try { refresh((await apiService.undoSectorNoShow(date, uid)).data); toast.success(`${first(nameOf(uid))} is back in`); }
+    catch (e) { showAlert('Could not change', err(e)); }
+    finally { setBusy(null); }
+  };
   const when = (iso?: string | null) => (iso ? new Date(iso).toLocaleTimeString(APP_LOCALE, { hour: '2-digit', minute: '2-digit', timeZone: APP_TZ }) : '');
 
   return (
@@ -169,11 +175,15 @@ export default function SectorPlanScreen() {
       )}
 
       {(() => {
-        const roster = people.filter((p) => p.in_today || p.no_show);
+        // Everyone who could be out today (not scheduled off), no shows at the bottom.
+        const OFF = ['ab', 'off', 'nc'];
+        const roster = people.filter((p) => !OFF.includes(p.day_status || ''))
+          .sort((a, b) => Number(!!a.no_show) - Number(!!b.no_show));
         if (!roster.length) return null;
         return (
           <View style={s.card} testID="plan-in-today">
             <Text style={s.h}>In today · {roster.filter((p) => !p.no_show).length}</Text>
+            <Text style={s.small}>Tap Not shown up for anyone who hasn’t come in. Tap No show to undo.</Text>
             {roster.map((p) => {
               const sec = sectors.find((x) => x.leader_id === p.sector_leader_id);
               return (
@@ -185,7 +195,9 @@ export default function SectorPlanScreen() {
                     </Text>
                   </View>
                   {p.no_show
-                    ? <View style={s.nsTag}><Text style={s.nsTagText}>No show</Text></View>
+                    ? <Pressable onPress={() => shownUp(p.user_id)} disabled={busy === `ns:${p.user_id}`} style={s.nsTag} accessibilityRole="button" accessibilityLabel={`Undo no show for ${p.name}`} testID={`plan-undo-ns-${p.user_id}`}>
+                        <Text style={s.nsTagText}>{busy === `ns:${p.user_id}` ? '…' : 'No show ✕'}</Text>
+                      </Pressable>
                     : <Pressable onPress={() => noShow(p.user_id)} disabled={busy === `ns:${p.user_id}`} style={s.nsBtn} accessibilityRole="button" testID={`plan-ns-${p.user_id}`}>
                         <Text style={s.nsBtnText}>{busy === `ns:${p.user_id}` ? '…' : 'Not shown up'}</Text>
                       </Pressable>}
