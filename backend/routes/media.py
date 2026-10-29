@@ -1,6 +1,7 @@
 """Public media route: serves avatar files out of the R2 bucket.
 
 GET /api/media/avatars/<user id>/<random>.jpg
+GET /api/media/notes/<user id>/<random>.jpg    (photos on planner notes)
 
 No auth header, because <img> tags and React Native <Image> cannot send one.
 The random part of the key is the access control: the URL is only ever handed
@@ -16,7 +17,7 @@ router = APIRouter()
 
 @router.get("/media/{key:path}")
 async def get_media(key: str):
-    if not media_store.AVATAR_KEY_RE.match(key) or not media_store.enabled():
+    if not media_store.servable(key) or not media_store.enabled():
         raise HTTPException(status_code=404, detail="Not found")
     raw = await object_storage.get_bytes(key)
     if raw is None:

@@ -1788,11 +1788,12 @@ async def get_weekly_planner(week: str, request: Request, user_id: Optional[str]
             "week_ending": week_ending, "planner": doc}
 
 
-async def _file_notes(me: dict, week_ending: str, days: dict, notes: str, folder: dict) -> None:
+async def _file_notes(me: dict, week_ending: str, days: dict, notes: str, folder: dict,
+                      slot_notes: Optional[dict] = None) -> None:
     """The note boxes into the Notes folder; never fails the planner save."""
     try:
         from routes.notes_folder import sync_planner
-        await sync_planner(me, week_ending, days, notes, folder)
+        await sync_planner(me, week_ending, days, notes, folder, slot_notes)
     except Exception as ex:  # noqa: BLE001
         print(f"[weekly-planner] notes folder sync failed: {ex}")
 
@@ -1812,8 +1813,10 @@ async def upsert_weekly_planner(week: str, request: Request):
     times = normalize_times(body.get("times"))
     notes = _s(body.get("notes"), 8000)
     # Each note box's heading and title for the Notes folder (routes/notes_folder.py).
-    from routes.notes_folder import clean_folder
+    from routes.notes_folder import clean_folder, clean_slot_notes
     folder = clean_folder(body.get("folder"))
+    # Extra notes on any slot, with titles, headings and photos (the Owner, 29 Oct 2026).
+    slot_notes = clean_slot_notes(body.get("slot_notes"))
     # Trainees get the daily plan only — no week review, no crew (they don't
     # have one yet). Enforced server-side regardless of what a client sends,
     # so this can never be bypassed by a modified app. The moment someone is
@@ -1830,19 +1833,21 @@ async def upsert_weekly_planner(week: str, request: Request):
     now = datetime.now(timezone.utc).isoformat()
     existing = await db.weekly_planners.find_one({"user_id": me["id"], "week_ending": week_ending}, {"_id": 0})
     if existing:
-        update = {"review": review, "days": days, "times": times, "notes": notes, "folder": folder, "updated_at": now}
+        update = {"review": review, "days": days, "times": times, "notes": notes, "folder": folder,
+                  "slot_notes": slot_notes, "updated_at": now}
         await db.weekly_planners.update_one({"id": existing["id"]}, {"$set": update})
         if (existing.get("times") or {}) != times or (times and existing.get("days") != days):
             await sync_planner_calendar(me, week_ending, days, times)
-        if existing.get("days") != days or existing.get("notes") != notes or (existing.get("folder") or {}) != folder:
-            await _file_notes(me, week_ending, days, notes, folder)
+        if existing.get("days") != days or existing.get("notes") != notes or (existing.get("folder") or {}) != folder \
+                or (existing.get("slot_notes") or {}) != slot_notes:
+            await _file_notes(me, week_ending, days, notes, folder, slot_notes)
         existing.update(update)
         return _scrub(existing)
 
     doc = _seed(me["id"], me.get("office_id") or "", week_ending)
-    doc.update({"review": review, "days": days, "times": times, "notes": notes, "folder": folder})
+    doc.update({"review": review, "days": days, "times": times, "notes": notes, "folder": folder, "slot_notes": slot_notes})
     await db.weekly_planners.insert_one(doc.copy())
-    await _file_notes(me, week_ending, days, notes, folder)
+    await _file_notes(me, week_ending, days, notes, folder, slot_notes)
     if any(times.values()):
         await sync_planner_calendar(me, week_ending, days, times)
     return _scrub(doc)

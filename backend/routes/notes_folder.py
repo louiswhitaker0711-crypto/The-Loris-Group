@@ -11,9 +11,17 @@ The planner stays the place notes are written: on each save the planner's
 note boxes are mirrored here (`sync_planner`), one note per box with text,
 keyed by `ref` so editing the box edits the note and emptying it removes it.
 
+Planner notes (the Owner, 29 Oct 2026): any time slot on a day page (and
+the big Notes box at the bottom of each day, slot "day") can hold several
+notes besides its plan, each with a title, a heading and photos. They're
+kept on the planner as `slot_notes` {"<day>:<slot>": [note]} and file here
+the same way, one note each (`ref` …:<day>:n:<note id>).
+
+    POST /api/notes/photo  {image}  → {url}   a photo for a note
+
 Collection `folder_notes`:
   {id, ref, office_id, user_id, author_name, head, head_label, stage,
-   category, title, body, date, source_label, shared, created_at, updated_at}
+   category, title, body, photos, date, source_label, shared, created_at, updated_at}
   head: "cod:<module id>" | "pitch:<key>"
 
     GET /api/notes/folder              the folder: pitch headings and the COD
@@ -75,6 +83,52 @@ def clean_folder(raw) -> dict:
     return out
 
 
+_SLOT = re.compile(r"^[0-5]:[A-Za-z0-9_]{1,40}$")
+_NOTE_ID = re.compile(r"^[A-Za-z0-9_-]{6,40}$")
+MAX_NOTES_PER_SLOT = 10
+MAX_PHOTOS = 4
+MAX_DATA_URI = 900_000      # local runs only (no bucket): photos kept inline
+
+
+def _photo_ok(url) -> bool:
+    if not isinstance(url, str):
+        return False
+    if url.startswith("data:image/"):
+        return len(url) <= MAX_DATA_URI
+    from core.media_store import MEDIA_ROUTE, servable
+    return MEDIA_ROUTE in url and servable(url.split(MEDIA_ROUTE, 1)[1]) and url.split(MEDIA_ROUTE, 1)[1].startswith("notes/")
+
+
+def clean_slot_notes(raw) -> dict:
+    """The planner's extra notes per slot: {"<day>:<slot>": [{id, title, head,
+    body, photos, share, label}]}; bad entries dropped, sizes capped."""
+    out: dict = {}
+    if not isinstance(raw, dict):
+        return out
+    for k, notes in list(raw.items())[:80]:
+        if not isinstance(k, str) or not _SLOT.match(k) or not isinstance(notes, list):
+            continue
+        keep = []
+        for n in notes[:MAX_NOTES_PER_SLOT]:
+            if not isinstance(n, dict):
+                continue
+            nid = str(n.get("id") or "")
+            if not _NOTE_ID.match(nid):
+                nid = uuid.uuid4().hex[:16]
+            head = str(n.get("head") or "")
+            photos = [p for p in (n.get("photos") or []) if _photo_ok(p)][:MAX_PHOTOS] if isinstance(n.get("photos"), list) else []
+            body = str(n.get("body") or "")[:MAX_BODY]
+            title = " ".join(str(n.get("title") or "").split())[:MAX_TITLE]
+            if not (body.strip() or photos or title):
+                continue
+            keep.append({"id": nid, "title": title, "head": head if _HEAD.match(head) else "", "body": body,
+                         "photos": photos, "share": n.get("share") is True,
+                         "label": " ".join(str(n.get("label") or "").split())[:60]})
+        if keep:
+            out[k] = keep
+    return out
+
+
 def default_head(day: dict, box: str) -> str:
     """No heading picked: the meeting's COD pick if it has one, else Other."""
     cod = (day or {}).get(f"{box}_cod") or ""
@@ -85,9 +139,19 @@ def day_date(week_ending: str, day_index: int) -> str:
     return (date.fromisoformat(week_ending) - timedelta(days=6 - day_index)).isoformat()
 
 
-def planner_entries(user_id: str, week_ending: str, days: dict, extra: str, folder: dict) -> list[dict]:
-    """The notes a planner week files: one per box with text."""
+def planner_entries(user_id: str, week_ending: str, days: dict, extra: str, folder: dict,
+                    slot_notes: Optional[dict] = None) -> list[dict]:
+    """The notes a planner week files: one per box with text, and one per
+    extra note on a slot."""
     out = []
+    for k, notes in (slot_notes or {}).items():
+        d, _, slot = k.partition(":")
+        for n in notes:
+            label = n.get("label") or ("Day notes" if slot == "day" else "Notes")
+            out.append({"ref": f"planner:{user_id}:{week_ending}:{d}:n:{n['id']}", "body": n.get("body") or "",
+                        "head": n.get("head") or "pitch:other", "title": n.get("title") or label,
+                        "share": bool(n.get("share")), "date": day_date(week_ending, int(d)),
+                        "source_label": label, "photos": n.get("photos") or []})
     for d in range(6):
         day = (days or {}).get(str(d)) or {}
         for box, label in NOTE_BOXES.items():
@@ -115,11 +179,12 @@ async def _cod_lookup(office_id, module_ids: list[str]) -> dict:
         {"id": {"$in": module_ids}, "office_id": office_id}, {"_id": 0, "id": 1, "topic": 1, "stage": 1, "category": 1})}
 
 
-async def sync_planner(user: dict, week_ending: str, days: dict, extra: str, folder: dict) -> int:
-    """Mirror one planner week's note boxes into the folder."""
+async def sync_planner(user: dict, week_ending: str, days: dict, extra: str, folder: dict,
+                       slot_notes: Optional[dict] = None) -> int:
+    """Mirror one planner week's note boxes (and slot notes) into the folder."""
     uid = str(user["id"])
     office_id = user.get("office_id")
-    entries = planner_entries(uid, week_ending, days, extra, folder)
+    entries = planner_entries(uid, week_ending, days, extra, folder, slot_notes)
     cods = await _cod_lookup(office_id, [e["head"][4:] for e in entries if e["head"].startswith("cod:")])
     can_share = (user.get("role") or "").lower() == "admin" and not user.get("is_viewer")
     now = datetime.now(timezone.utc).isoformat()
@@ -138,7 +203,8 @@ async def sync_planner(user: dict, week_ending: str, days: dict, extra: str, fol
             {"ref": e["ref"]},
             {"$set": {"office_id": office_id, "user_id": uid, "author_name": user.get("name") or "",
                       "head": head, "head_label": label or "Other", "stage": stage, "category": category,
-                      "title": e["title"], "body": e["body"], "date": e["date"], "source_label": e["source_label"],
+                      "title": e["title"], "body": e["body"], "photos": e.get("photos") or [],
+                      "date": e["date"], "source_label": e["source_label"],
                       "shared": bool(e["share"] and can_share), "updated_at": now},
              "$setOnInsert": {"id": str(uuid.uuid4()), "created_at": now}},
             upsert=True)
@@ -155,7 +221,8 @@ def _visible(user: dict) -> dict:
 
 def _out(n: dict, me: str) -> dict:
     return {k: n.get(k) for k in ("id", "head", "head_label", "stage", "category", "title", "body", "date",
-                                  "source_label", "shared", "author_name")} | {"mine": n.get("user_id") == me}
+                                  "source_label", "shared", "author_name")} | {"mine": n.get("user_id") == me,
+                                                                               "photos": n.get("photos") or []}
 
 
 @router.get("/notes/folder")
@@ -226,3 +293,26 @@ async def list_notes(request: Request, head: Optional[str] = None, q: Optional[s
     # The Owner's notes for everyone first, then your own.
     out.sort(key=lambda n: (0 if n["shared"] and not n["mine"] else 1))
     return {"notes": out}
+
+
+@router.post("/notes/photo")
+async def note_photo(request: Request):
+    """A photo for a planner note: saved and its URL returned; the note keeps
+    the URL when the planner saves."""
+    user = await get_current_user(request)
+    if user.get("is_viewer"):
+        raise HTTPException(status_code=403, detail="Read-only account")
+    body = await request.json()
+    image = (body or {}).get("image") if isinstance(body, dict) else None
+    if not isinstance(image, str) or not image:
+        raise HTTPException(status_code=400, detail="Send a photo")
+    if len(image) > 12_000_000:
+        raise HTTPException(status_code=400, detail="That photo is too big")
+    from core import media_store
+    try:
+        url = await media_store.store_note_photo(str(user["id"]), image)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Couldn't read that photo. Try a JPEG or PNG.")
+    except RuntimeError:
+        raise HTTPException(status_code=502, detail="Couldn't save the photo right now. Try again.")
+    return {"url": url}

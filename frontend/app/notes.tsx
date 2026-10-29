@@ -7,7 +7,7 @@
  * Search finds any word in any note. (GET /notes/folder, GET /notes)
  */
 import React, { useMemo, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, ActivityIndicator, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { Stack, router } from 'expo-router';
@@ -17,7 +17,7 @@ import { useTabBarClearance } from '../src/customization/CustomTabBar';
 import { APP_LOCALE } from '../src/utils/appTime';
 
 type Note = { id: string; head: string; head_label: string; title: string; body: string; date: string;
-  source_label: string; shared: boolean; author_name: string; mine: boolean };
+  source_label: string; shared: boolean; author_name: string; mine: boolean; photos?: string[] };
 type View_ = { kind: 'root' } | { kind: 'stage'; stage: number } | { kind: 'head'; head: string; label: string; sub?: string };
 
 const fmt = (iso: string) => {
@@ -146,7 +146,14 @@ function NoteList({ notes, loading, empty, s, c, showHead, ownerName }: { notes?
           <Text style={s.noteT}>{n.title}</Text>
           <Text style={s.small}>{fmt(n.date)}</Text>
         </View>
-        <Text style={s.body} numberOfLines={big ? undefined : 3}>{n.body}</Text>
+        {!!n.body && <Text style={s.body} numberOfLines={big ? undefined : 3}>{n.body}</Text>}
+        {!!n.photos?.length && (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+            {n.photos.map((p, i) => (
+              <Image key={i} source={{ uri: p }} style={big ? { width: '100%', aspectRatio: 1, borderRadius: 10 } : { width: 64, height: 64, borderRadius: 8 }} resizeMode={big ? 'contain' : 'cover'} />
+            ))}
+          </View>
+        )}
         <Text style={s.small}>{showHead ? `${n.head_label} · ` : ''}{n.source_label}{n.shared ? (n.mine ? ' · posted to everyone' : ` · ${n.author_name.split(' ')[0]}`) : ''}</Text>
       </Pressable>
     );

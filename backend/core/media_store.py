@@ -40,6 +40,15 @@ MEDIA_ROUTE = "/api/media/"
 
 # avatars/<user id>/<32 hex>.jpg — the only shape the public media route serves.
 AVATAR_KEY_RE = re.compile(r"^avatars/[A-Za-z0-9_-]{1,64}/[0-9a-f]{32}\.jpg$")
+# Photos added to planner notes (the Owner, 29 Oct 2026): notes/<user id>/<32 hex>.jpg,
+# served the same way (the random part is the access control).
+NOTE_PREFIX = "notes/"
+NOTE_MAX_SIDE = 1600
+NOTE_KEY_RE = re.compile(r"^notes/[A-Za-z0-9_-]{1,64}/[0-9a-f]{32}\.jpg$")
+
+
+def servable(key: str) -> bool:
+    return bool(AVATAR_KEY_RE.match(key) or NOTE_KEY_RE.match(key))
 
 
 def enabled() -> bool:
@@ -90,7 +99,7 @@ def key_from_avatar_url(url: Optional[str]) -> Optional[str]:
     return key if AVATAR_KEY_RE.match(key) else None
 
 
-def normalize_avatar(raw: bytes) -> bytes:
+def normalize_avatar(raw: bytes, max_side: int = AVATAR_MAX_SIDE) -> bytes:
     """Square-ish avatar, longest side 512px, JPEG. Transparent areas go
     white rather than JPEG's default black."""
     from PIL import Image, ImageOps
@@ -108,8 +117,8 @@ def normalize_avatar(raw: bytes) -> bytes:
         img = bg
     elif img.mode != "RGB":
         img = img.convert("RGB")
-    if max(img.size) > AVATAR_MAX_SIDE:
-        img.thumbnail((AVATAR_MAX_SIDE, AVATAR_MAX_SIDE), Image.LANCZOS)
+    if max(img.size) > max_side:
+        img.thumbnail((max_side, max_side), Image.LANCZOS)
     out = io.BytesIO()
     img.save(out, format="JPEG", quality=85, optimize=True)
     return out.getvalue()
@@ -170,3 +179,21 @@ async def load_badge_photo_b64(badge: dict) -> Optional[str]:
     if raw is None:
         return None
     return base64.b64encode(raw).decode("ascii")
+
+
+async def store_note_photo(user_id: str, image: str) -> str:
+    """A photo for a planner note: longest side 1600px, JPEG. Returns its URL
+    (or, with no bucket configured, a data URI so local runs still work).
+    Raises ValueError for an unreadable image, RuntimeError if R2 refused it."""
+    raw = decode_image(image)
+    try:
+        jpeg = normalize_avatar(raw, NOTE_MAX_SIDE)
+    except Exception as ex:
+        raise ValueError("unreadable image") from ex
+    if not enabled():
+        return "data:image/jpeg;base64," + base64.b64encode(jpeg).decode()
+    safe_uid = re.sub(r"[^A-Za-z0-9_-]", "", str(user_id))[:64] or "user"
+    key = f"{NOTE_PREFIX}{safe_uid}/{uuid.uuid4().hex}.jpg"
+    if not await object_storage.put_bytes(key, jpeg, "image/jpeg"):
+        raise RuntimeError("storage upload failed")
+    return avatar_url(key)
