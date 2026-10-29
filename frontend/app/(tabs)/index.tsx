@@ -545,26 +545,17 @@ export default function HomeScreen() {
   // written in the Planner (the Owner, 29 Oct 2026).
   const PLANNER = A('Planner', 'Plans and notes', 'calendar-number-outline', '/weekly-planner', 'green');
   const LIBRARY = A('Library', 'Scripts and the playbook', 'library-outline', '/library', 'yellow');
-  const COD = A('My COD', 'This week\u2019s focus', 'trending-up-outline', '/(tabs)/progress', 'primary');
+  const COD = A('COD', 'This week\u2019s focus', 'trending-up-outline', '/(tabs)/progress', 'accent');
   const BELLS_A = A('Bells', 'The weekly board', 'notifications-outline', BELLS, 'yellow');
   const TOMORROW = A('Tomorrow\u2019s plan', 'Set it up tonight', 'calendar-number-outline', '/weekly-planner', 'accent');
   const MY_WEEK = A('My week', 'Where you\u2019re at', 'calendar-outline', '/ba-week', 'accent');
-  const coachActions: Record<HomeSlot, QuickAction[]> = {
-    morning: [A('Plan sectors', 'Today\u2019s areas', 'compass-outline', '/sector-plan'), A('Coaches Meeting', 'Notes and today\u2019s COD', 'people-outline', '/meeting-notes', 'accent'), BELLS_A, PLANNER],
-    prime: [A('Bells read-out', 'For the meeting', 'notifications-outline', BELLS, 'yellow'), A('Meeting notes', 'The 11:45 meeting', 'document-text-outline', '/meeting-notes'), PLANNER, COD],
-    setup: [BELLS_A, isAdmin ? A('Set up new starts', 'QR sign-up and logins', 'qr-code-outline', '/new-starts') : COD, PLANNER, LIBRARY],
-    field: [BELLS_A, PLANNER, COD, LIBRARY],
-    evening: [A('Paste WhatsApp', 'Silver, Gold and The Round', 'clipboard-outline', '/bells-paste'), TOMORROW, BELLS_A, COD],
-    sunday: [A('Bells', 'Last week', 'notifications-outline', BELLS, 'yellow'), A('Weekly review', 'Last week and this week', 'podium-outline', '/weekly-review'), A('Planner', 'Plan the week', 'calendar-number-outline', '/weekly-planner', 'green'), LIBRARY],
-  };
-  const baActions: Record<HomeSlot, QuickAction[]> = {
-    morning: [COD, PLANNER, LIBRARY, MY_WEEK],
-    prime: [COD, PLANNER, LIBRARY, MY_WEEK],
-    setup: [COD, PLANNER, LIBRARY, MY_WEEK],
-    field: [PLANNER, COD, LIBRARY, MY_WEEK],
-    evening: [TOMORROW, MY_WEEK, COD, LIBRARY],
-    sunday: [A('My week', 'Plan your week', 'calendar-outline', '/ba-week'), A('Planner', 'Your days', 'calendar-number-outline', '/weekly-planner', 'green'), COD, LIBRARY],
-  };
+  // The same four all day (the Owner, 29 Oct 2026): the Pitch tile replaces
+  // the thin pitch bar. BAs get Library in place of Bells.
+  const PITCH = A('Pitch', 'Read it before the next door', 'mic-outline', '/pitch', 'primary');
+  const coachFour = [PITCH, BELLS_A, COD, PLANNER];
+  const baFour = [PITCH, COD, PLANNER, LIBRARY];
+  const coachActions: Record<HomeSlot, QuickAction[]> = { morning: coachFour, prime: coachFour, setup: coachFour, field: coachFour, evening: coachFour, sunday: coachFour };
+  const baActions: Record<HomeSlot, QuickAction[]> = { morning: baFour, prime: baFour, setup: baFour, field: baFour, evening: baFour, sunday: baFour };
   const quickActions: QuickAction[] = (isTrainee ? baActions : coachActions)[slot];
 
   const tintColor = (t?: QuickAction['tint']) =>
@@ -1617,8 +1608,6 @@ export default function HomeScreen() {
   // Always first: search, then what's due this week, then what's waiting on you.
   const pTop = (
     <>
-      {/* In the field: the pitch on a thin bar at the very top, for everyone. */}
-      <PitchCard place="bar" />
       {/* Mon/Tue 13:30–16:00: set up today's new starts (the Owner). */}
       {isAdmin && <NewStartsButton />}
       {/* BA Academy (Days 1-2): a new start's workbook, the Owner's class. */}
@@ -1730,8 +1719,6 @@ export default function HomeScreen() {
           <MoreSection>{moreBlock}</MoreSection>
         </>
       )}
-      {/* Everyone has their pitch at the bottom of Home (the Owner, 26 Oct 2026). */}
-      <PitchCard place="bottom" />
 
       {/* ── Non-trainee: onboarding hub shortcut ── */}
       {!isTrainee && (
