@@ -43,7 +43,7 @@ const STAGE_TITLE: Record<number, { name: string; sub: string }> = {
   2: { name: 'Stage 2 · Self Management', sub: 'Operate Like a Professional' },
   3: { name: 'Stage 3 · Leader', sub: 'Creating Success in Others' },
   4: { name: 'Stage 4 · Team Builder', sub: 'Embedding Systems & Creating Independence' },
-  5: { name: 'Stage SL · Sector/Site Leader', sub: 'Performance Management' },
+  5: { name: 'Stage SL · Sector Leader', sub: 'Performance Management' },
 };
 // The sheet's boxes. Second D is Deliver — same as the PDF. The ladder
 // grows with the stage: 1-2 top out at Deliver, 3 adds Teach, 4/SL add

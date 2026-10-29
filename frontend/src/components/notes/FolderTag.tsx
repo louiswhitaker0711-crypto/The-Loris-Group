@@ -47,7 +47,7 @@ export default function FolderTag({ value, defaultHead, defaultTitle, isAdmin, o
   const set = (patch: Partial<FolderMeta>) => onChange({ ...cur, ...patch });
   const needle = q.trim().toLowerCase();
   const [level, setLevel] = useState<string>('root');
-  // Stages in the order the Owner reads them: 1, 2, 3, 4, then Sector-Site Leader.
+  // Stages in the order the Owner reads them: 1, 2, 3, 4, then Sector Leader.
   const ORDER = [1, 2, 3, 4, 5, 6];
   const stages = [...(folder.data?.cod || [])].sort((a, b) => ORDER.indexOf(a.stage) - ORDER.indexOf(b.stage));
   return (
@@ -147,7 +147,7 @@ function Row({ on, text, sub, more, onPress, s, c }: any) {
 
 function stageTitle(st?: { stage: number; name: string }) {
   if (!st) return '';
-  return st.stage === 5 ? 'Sector-Site Leader' : `Stage ${st.stage === 6 ? 5 : st.stage}`;
+  return st.stage === 5 ? 'Stage SL' : `Stage ${st.stage === 6 ? 5 : st.stage}`;
 }
 
 const styles = (c: any) => StyleSheet.create({

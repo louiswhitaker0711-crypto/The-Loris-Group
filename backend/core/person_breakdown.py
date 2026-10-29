@@ -20,7 +20,7 @@ from core.cod_stages import COD_STAGE_ORDER
 FUNNEL = ("doors_knocked", "spoken_to", "pitches_commenced", "pitches_closed", "sales")
 METRICS = FUNNEL + ("points",)
 
-COD_STAGE_NAME = {1: "Foundation", 2: "Self Management", 3: "Leader", 4: "Team Builder", 5: "Sector/Site Leader"}
+COD_STAGE_NAME = {1: "Foundation", 2: "Self Management", 3: "Leader", 4: "Team Builder", 5: "Sector Leader"}
 
 
 def cod_stage_label(stage: int) -> str:
@@ -31,7 +31,7 @@ def cod_stage_label(stage: int) -> str:
 def stage_label(value) -> Optional[str]:
     """The person's stage as OwnerIQ words it. Only the number is shown, never
     a name: COD stage names don't line up with OwnerIQ's ladder above Stage 4
-    (the COD stores Sector/Site Leader as 5; OwnerIQ's 5 is Assistant Owner)."""
+    (the COD stores Sector Leader as 5; OwnerIQ's 5 is Assistant Owner)."""
     if value is None:
         return None
     text = str(value).strip().lower()
@@ -39,7 +39,7 @@ def stage_label(value) -> Optional[str]:
     if not digits or not 1 <= int(digits) <= 9:
         return None
     if text.endswith("plus") or text.endswith("+"):
-        # The Owner's label for 3+ (Sector/Site Leader), 22 Oct 2026.
+        # The Owner's label for 3+ (Sector Leader), 22 Oct 2026.
         return "SL" if int(digits) == 3 else f"{int(digits)}+"
     return str(int(digits))
 

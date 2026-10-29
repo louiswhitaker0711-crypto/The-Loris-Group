@@ -456,7 +456,7 @@ async def _startup_work():
     except Exception:
         logger.exception("Law of Averages update failed (continuing)")
 
-    # The original COD (Foundation, Self Management, Leader, Sector/Site Leader,
+    # The original COD (Foundation, Self Management, Leader, Sector Leader,
     # Team Builder), back on 16 Oct 2026 after the Owner's COD sheet was tried:
     # once per database, restore the original items and their content, hide the
     # sheet's items and Stage 5, and clear the old ticks (copied to an archive).

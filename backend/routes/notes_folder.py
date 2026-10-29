@@ -49,7 +49,7 @@ PITCH_HEADS = [
 ]
 PITCH_LABEL = dict(PITCH_HEADS)
 STAGE_NAMES = {1: "Stage 1 · Foundation", 2: "Stage 2 · Self Management", 3: "Stage 3 · Leader",
-               5: "SL · Sector-Site Leader", 4: "Stage 4 · Team Builder", 6: "Stage 5"}
+               5: "Stage SL · Sector Leader", 4: "Stage 4 · Team Builder", 6: "Stage 5"}
 STAGE_ORDER = [1, 2, 3, 5, 4, 6]
 
 # The planner's note boxes that file into the folder, with their labels.
@@ -316,3 +316,121 @@ async def note_photo(request: Request):
     except RuntimeError:
         raise HTTPException(status_code=502, detail="Couldn't save the photo right now. Try again.")
     return {"url": url}
+
+
+# ── Editing and adding from the Notes folder (the Owner, 29 Oct 2026) ─────
+# A note opened in Notes can be changed there: the change goes back into the
+# planner box it came from (so the planner and the folder never disagree),
+# then the week re-files. "Add a note" files a new note under a heading: it
+# lands in today's big Notes box in the planner.
+
+def _parse_ref(ref: str) -> Optional[dict]:
+    """planner:<uid>:<week>:<day>:<box> | planner:<uid>:<week>:<day>:n:<note id> | planner:<uid>:<week>:x:notes"""
+    parts = str(ref or "").split(":")
+    if len(parts) < 5 or parts[0] != "planner":
+        return None
+    uid, week, day = parts[1], parts[2], parts[3]
+    if day == "x" and parts[4] == EXTRA:
+        return {"uid": uid, "week": week, "kind": "extra"}
+    if not day.isdigit():
+        return None
+    if len(parts) == 6 and parts[4] == "n":
+        return {"uid": uid, "week": week, "day": day, "kind": "slot", "note_id": parts[5]}
+    return {"uid": uid, "week": week, "day": day, "kind": "box", "box": parts[4]}
+
+
+def _clean_edit(body: dict) -> dict:
+    head = str(body.get("head") or "")
+    return {"title": " ".join(str(body.get("title") or "").split())[:MAX_TITLE],
+            "body": str(body.get("body") or "")[:MAX_BODY],
+            "head": head if _HEAD.match(head) else ""}
+
+
+async def _refile(user: dict, planner: dict) -> None:
+    await sync_planner(user, planner["week_ending"], planner.get("days") or {}, planner.get("notes") or "",
+                       planner.get("folder") or {}, planner.get("slot_notes") or {})
+
+
+@router.put("/notes/{note_id}")
+async def edit_note(note_id: str, request: Request):
+    user = await get_current_user(request)
+    if user.get("is_viewer"):
+        raise HTTPException(status_code=403, detail="Read-only account")
+    me = str(user["id"])
+    note = await db.folder_notes.find_one({"id": note_id})
+    if not note or note.get("user_id") != me:
+        raise HTTPException(status_code=404, detail="Note not found")
+    raw = await request.json()
+    e = _clean_edit(raw if isinstance(raw, dict) else {})
+    r = _parse_ref(note.get("ref"))
+    planner = await db.weekly_planners.find_one({"user_id": me, "week_ending": r["week"]}) if r and r["uid"] == me else None
+    if not planner:
+        # Not from a planner box: change the folder note itself.
+        await db.folder_notes.update_one({"id": note_id}, {"$set": {
+            "title": e["title"] or note.get("title"), "body": e["body"], "head": e["head"] or note.get("head"),
+            "updated_at": datetime.now(timezone.utc).isoformat()}})
+        return {"ok": True}
+    folder = dict(planner.get("folder") or {})
+    if r["kind"] == "box":
+        days = dict(planner.get("days") or {})
+        day = dict(days.get(r["day"]) or {})
+        day[r["box"]] = e["body"]
+        days[r["day"]] = day
+        key = f"{r['day']}:{r['box']}"
+        folder[key] = {**(folder.get(key) or {}), "title": e["title"], "head": e["head"]}
+        upd = {"days": days, "folder": folder}
+    elif r["kind"] == "extra":
+        folder[f"x:{EXTRA}"] = {**(folder.get(f"x:{EXTRA}") or {}), "title": e["title"], "head": e["head"]}
+        upd = {"notes": e["body"], "folder": folder}
+    else:
+        slot_notes = {k: list(v) for k, v in (planner.get("slot_notes") or {}).items()}
+        hit = False
+        for k, notes in slot_notes.items():
+            if not k.startswith(f"{r['day']}:"):
+                continue
+            for i, n in enumerate(notes):
+                if n.get("id") == r["note_id"]:
+                    notes[i] = {**n, "title": e["title"], "body": e["body"], "head": e["head"]}
+                    hit = True
+        if not hit:
+            raise HTTPException(status_code=404, detail="Note not found in your planner")
+        upd = {"slot_notes": clean_slot_notes(slot_notes)}
+    upd["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.weekly_planners.update_one({"_id": planner["_id"]}, {"$set": upd})
+    planner.update(upd)
+    await _refile(user, planner)
+    return {"ok": True}
+
+
+@router.post("/notes")
+async def add_note(request: Request):
+    """A new note filed under a heading, from Notes: it goes in today's big
+    Notes box on the planner (Sunday: Saturday's)."""
+    user = await get_current_user(request)
+    if user.get("is_viewer"):
+        raise HTTPException(status_code=403, detail="Read-only account")
+    me = str(user["id"])
+    raw = await request.json()
+    e = _clean_edit(raw if isinstance(raw, dict) else {})
+    if not (e["body"].strip() or e["title"]):
+        raise HTTPException(status_code=400, detail="Write something first")
+    from core.app_time import APP_TZ
+    from routes.weekly_planners import _seed
+    today = datetime.now(APP_TZ).date()
+    week = (today + timedelta(days=6 - today.weekday())).isoformat()
+    day = str(min(today.weekday(), 5))
+    planner = await db.weekly_planners.find_one({"user_id": me, "week_ending": week})
+    if not planner:
+        doc = _seed(me, user.get("office_id") or "", week)
+        await db.weekly_planners.insert_one(doc.copy())
+        planner = await db.weekly_planners.find_one({"user_id": me, "week_ending": week})
+    slot_notes = {k: list(v) for k, v in (planner.get("slot_notes") or {}).items()}
+    key = f"{day}:day"
+    nid = uuid.uuid4().hex[:16]
+    slot_notes.setdefault(key, []).append({"id": nid, "title": e["title"], "head": e["head"], "body": e["body"],
+                                           "photos": [], "label": "Day notes"})
+    upd = {"slot_notes": clean_slot_notes(slot_notes), "updated_at": datetime.now(timezone.utc).isoformat()}
+    await db.weekly_planners.update_one({"_id": planner["_id"]}, {"$set": upd})
+    planner.update(upd)
+    await _refile(user, planner)
+    return {"ok": True, "id": nid}

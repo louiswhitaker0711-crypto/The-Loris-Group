@@ -2,7 +2,7 @@
 
 The Cycle of Development runs:
     Stage 1 Foundation -> Stage 2 Self Management -> Stage 3 Leader ->
-    Stage SL Sector/Site Leader -> Stage 4 Team Builder
+    Stage SL Sector Leader -> Stage 4 Team Builder
     -> Stage 5 Assistant Owner  (NOT BUILT)
 
 The real Stage 5 is Assistant Owner and it comes after Stage 4, but its COD

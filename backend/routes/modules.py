@@ -172,7 +172,7 @@ async def _is_stage_unlocked_by_role(user: dict, stage: int) -> bool:
     if stage == 4:
         return role == "admin"
     if stage == 5:
-        # Stage SL (Sector/Site Leader) — open to every leader (the people
+        # Stage SL (Sector Leader) — open to every leader (the people
         # who run sectors) and to admins, so they can browse and grade.
         return role in ("leader", "admin")
     return False

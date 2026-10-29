@@ -268,6 +268,38 @@ async def _fix_quality_percents(db) -> int:
     return fixed
 
 
+_OLD_SL = ("Sector/Site Leader", "Sector-Site Leader", "Sector / Site Leader")
+
+
+def _swap_sl(v):
+    """The Owner calls it Stage SL / Sector Leader (29 Oct 2026)."""
+    if isinstance(v, str):
+        for old in _OLD_SL:
+            v = v.replace(old, "Sector Leader")
+        return v
+    if isinstance(v, list):
+        return [_swap_sl(x) for x in v]
+    if isinstance(v, dict):
+        return {k: _swap_sl(x) for k, x in v.items()}
+    return v
+
+
+async def _fix_sl_name(db) -> int:
+    """Rename Sector/Site Leader to Sector Leader in the live COD and Manual text."""
+    fixed = 0
+    rx = {"$regex": "Sector ?[/-] ?Site Leader"}
+    for coll in (db.training_modules, db.training_manual):
+        async for doc in coll.find({"$or": [{k: rx} for k in ("topic", "category", "trainee_content", "leader_content",
+                                                              "what_good_looks_like", "expected_outcome", "stage_name")]}):
+            upd = {k: _swap_sl(v) for k, v in doc.items() if k not in ("_id", "id") and _swap_sl(v) != v}
+            if upd:
+                await coll.update_one({"_id": doc["_id"]}, {"$set": upd})
+                fixed += 1
+    if fixed:
+        logger.info(f"content_fixes: Sector Leader name updated on {fixed} live docs")
+    return fixed
+
+
 async def run_content_fixes(db) -> dict:
     """Run every fix. Each step is individually guarded so one failure never
     blocks the rest (or the app boot — server.py wraps the call as well)."""
@@ -277,6 +309,10 @@ async def run_content_fixes(db) -> dict:
         result["quality_weeks_checked"] = await _fix_quality_percents(db)
     except Exception as e:
         logger.warning(f"content_fixes: quality percent fix failed: {e}")
+    try:
+        result["sl_renamed"] = await _fix_sl_name(db)
+    except Exception as e:
+        logger.warning(f"content_fixes: Sector Leader rename failed: {e}")
     try:
         result["gifts_fixed"] = await _fix_gifts(db)
     except Exception as e:

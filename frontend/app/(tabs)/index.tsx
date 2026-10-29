@@ -496,7 +496,7 @@ export default function HomeScreen() {
   // level, and the hero shows both (owner, 2026-09-14).
   //
   // `furthestCodStage`, never Math.max: SL is stored as 5 but sits between 3
-  // and 4, so the old `reduce` reported "Sector/Site Leader" for anyone who
+  // and 4, so the old `reduce` reported "Sector Leader" for anyone who
   // had already passed it and unlocked Team Builder.
   const codStage = (() => {
     const ss: any = stageStatusQ.data;
