@@ -14,7 +14,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useColors, fonts } from '../src/theme/ThemeContext';
 import { api } from '../src/api/client';
 import { toast } from '../src/utils/toast';
-import { useCoachingToday, dayStep, firstName, CoachItem, CoachPerson } from '../src/components/home/CoachingTodayCard';
+import { useCoachingToday, dayStep, firstName, aimOf, CoachItem, CoachPerson } from '../src/components/home/CoachingTodayCard';
 
 export default function CoachingGuideScreen() {
   const c = useColors();
@@ -66,8 +66,15 @@ export default function CoachingGuideScreen() {
             {it.taught ? <Ionicons name="checkmark" size={14} color={c.onPrimary} /> : <Text style={s.numText}>{i + 1}</Text>}
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={s.topicTitle}>{it.topic}</Text>
-            <Text style={s.small}>{[it.category, it.confidence_expected ? `aim: ${it.confidence_expected}` : '', it.taught ? 'taught' : ''].filter(Boolean).join(' · ')}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <Text style={s.topicTitle}>{it.topic}</Text>
+              {!!aimOf(it.confidence_expected, c) && (
+                <View style={[s.aim, { backgroundColor: aimOf(it.confidence_expected, c)!.bg }]}>
+                  <Text style={[s.aimText, { color: aimOf(it.confidence_expected, c)!.fg }]}>{aimOf(it.confidence_expected, c)!.label}</Text>
+                </View>
+              )}
+            </View>
+            <Text style={s.small}>{[aimOf(it.confidence_expected, c)?.todo, it.taught ? 'taught' : ''].filter(Boolean).join(' · ')}</Text>
           </View>
           {it.ahead && <View style={s.ahead}><Text style={s.aheadText}>Ahead</Text></View>}
           <Ionicons name={isOpen ? 'chevron-up' : 'chevron-down'} size={18} color={c.textMuted} />
@@ -197,6 +204,8 @@ const styles = (c: any) => StyleSheet.create({
   label: { fontFamily: fonts.bodySemibold, fontSize: 11, letterSpacing: 0.5, textTransform: 'uppercase', color: c.textMuted },
   text: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: c.text },
   small: { fontFamily: fonts.body, fontSize: 12.5, color: c.textMuted },
+  aim: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
+  aimText: { fontFamily: fonts.bodyBold, fontSize: 11 },
   ahead: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, backgroundColor: c.greenBg },
   aheadText: { fontFamily: fonts.bodyBold, fontSize: 11, color: c.green },
   taughtBtn: { minHeight: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: c.primary, marginTop: 4 },
