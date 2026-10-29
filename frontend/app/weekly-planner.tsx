@@ -36,6 +36,7 @@ import { useKeyboardInset } from '../src/hooks/useKeyboardInset';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDeviceInsets } from '../src/nav/AppShell';
 import { goalVsBreakeven } from '../src/utils/breakeven';
+import SlotNotesEditor, { SlotNote } from '../src/components/planner/SlotNotesEditor';
 import { APP_LOCALE, formatMoney } from '../src/utils/appTime';
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -131,6 +132,9 @@ type Planner = {
   times?: Record<string, Record<string, string>>;
   // Where each note box files in the Notes folder: "<day>:<box>" | "x:notes".
   folder?: Record<string, FolderMeta>;
+  // Extra notes on any slot, several each, with title, heading and photos
+  // (the Owner, 29 Oct 2026): "<day>:<slot>" | "<day>:day" (the big box).
+  slot_notes?: Record<string, SlotNote[]>;
 };
 
 function makeId(): string { return Math.random().toString(36).slice(2, 11); }
@@ -440,7 +444,7 @@ export default function WeeklyPlannerScreen() {
 
   const saveMut = useMutation({
     mutationFn: (p: Planner) =>
-      apiService.upsertWeeklyPlanner(p.week_ending, { review: p.review, days: p.days, times: p.times || {}, notes: p.notes, folder: p.folder || {} }).then((r) => r.data),
+      apiService.upsertWeeklyPlanner(p.week_ending, { review: p.review, days: p.days, times: p.times || {}, notes: p.notes, folder: p.folder || {}, slot_notes: p.slot_notes || {} }).then((r) => r.data),
     onMutate: () => setSavingState('saving'),
     onSuccess: (data: Planner) => {
       setSavingState('saved');
@@ -479,7 +483,31 @@ export default function WeeklyPlannerScreen() {
     update((c) => ({ ...c, days: { ...c.days, [String(day)]: { ...(c.days[String(day)] || {}), [key]: v } } }));
 
   // Near-full-screen note editor — which box is open (null = closed).
-  const [editorField, setEditorField] = useState<null | { where: 'day' | 'notes'; tab?: number; key?: string; title: string }>(null);
+  const [editorField, setEditorFieldRaw] = useState<null | { where: 'day' | 'notes'; tab?: number; key?: string; title: string; notesOnly?: boolean }>(null);
+  // Plan | Notes in the editor (the Owner, 29 Oct 2026): Plan is the slot's own
+  // text; Notes are extra notes on it, each filed under a heading.
+  const [editorMode, setEditorMode] = useState<'plan' | 'notes'>('plan');
+  const setEditorField = (f: typeof editorField, mode: 'plan' | 'notes' = 'plan') => {
+    setEditorMode(f?.notesOnly ? 'notes' : mode);
+    setEditorFieldRaw(f);
+  };
+  const slotKey = editorField?.where === 'day' && editorField.tab != null && editorField.key ? `${editorField.tab}:${editorField.key}` : '';
+  const slotNotes: SlotNote[] = (slotKey && draft?.slot_notes?.[slotKey]) || [];
+  const setSlotNotes = (k: string, v: SlotNote[]) =>
+    update((cur) => ({ ...cur, slot_notes: { ...(cur.slot_notes || {}), [k]: v } }));
+  const notesCount = (tab: number, key: string) => (draft?.slot_notes?.[`${tab}:${key}`] || []).length;
+  // Under a slot: how many notes it holds; tap to open them.
+  const notesChip = (tab: number, key: string, title: string) => {
+    const n = notesCount(tab, key);
+    if (!n) return null;
+    return (
+      <TouchableOpacity onPress={() => setEditorField({ where: 'day', tab, key, title }, 'notes')} style={styles.notesChip}
+        accessibilityRole="button" testID={`notes-chip-${tab}-${key}`}>
+        <Ionicons name="document-text-outline" size={14} color={colors.primary} />
+        <Text style={styles.notesChipText}>{n} note{n === 1 ? '' : 's'}</Text>
+      </TouchableOpacity>
+    );
+  };
   const editorValue = !editorField ? ''
     : editorField.where === 'notes' ? (draft?.notes || '')
     : (draft?.days[String(editorField.tab)]?.[editorField.key!] || '');
@@ -609,6 +637,7 @@ export default function WeeklyPlannerScreen() {
         placeholder="Notes…"
         onOpen={() => setEditorField({ where: 'day', tab: dayIdx, key: f.key, title: f.label })}
       />
+      {notesChip(dayIdx, f.key, f.label)}
       {canEdit && NOTE_FIELDS.some((n) => n.key === f.key) && (
         <FolderTag value={draft?.folder?.[`${dayIdx}:${f.key}`]}
           defaultHead={draft?.days[String(dayIdx)]?.[`${f.key}_cod`] ? `cod:${draft?.days[String(dayIdx)]?.[`${f.key}_cod`]}` : 'pitch:other'}
@@ -1329,6 +1358,7 @@ export default function WeeklyPlannerScreen() {
                       placeholder={`Plan ${f.label.toLowerCase()}…`}
                       onOpen={() => setEditorField({ where: 'day', tab, key: f.key, title: f.label })}
                     />
+                    {notesChip(tab, f.key, f.label)}
                     {/* The box above stays what it always was: the leader's own
                         note to self. Underneath it, the structured version for the
                         same day — the crew who are actually in, each with
@@ -1383,6 +1413,7 @@ export default function WeeklyPlannerScreen() {
                       placeholder="Notes…"
                       onOpen={() => setEditorField({ where: 'day', tab, key: f.key, title: f.label })}
                     />
+                    {notesChip(tab, f.key, f.label)}
                     {/* Files itself into the Notes folder (the Owner, 29 Oct 2026). */}
                     {canEdit && (
                       <FolderTag value={draft.folder?.[`${tab}:${f.key}`]}
@@ -1393,6 +1424,23 @@ export default function WeeklyPlannerScreen() {
                   </Card>
                 ))}
                 </View>
+
+                {/* The big Notes box for the day (the Owner, 29 Oct 2026): as many
+                    notes as you like, each with a title, a heading and photos. */}
+                <Card icon="create-outline" title="Notes">
+                  {(draft.slot_notes?.[`${tab}:day`] || []).map((n) => (
+                    <TouchableOpacity key={n.id} onPress={() => setEditorField({ where: 'day', tab: tab as number, key: 'day', title: 'Day notes', notesOnly: true })}
+                      style={styles.dayNoteRow} accessibilityRole="button">
+                      <Text style={styles.dayNoteTitle} numberOfLines={1}>{n.title || 'Note'}</Text>
+                      <Text style={styles.dayNoteBody} numberOfLines={2}>{n.body || (n.photos.length ? `${n.photos.length} photo${n.photos.length === 1 ? '' : 's'}` : '')}</Text>
+                    </TouchableOpacity>
+                  ))}
+                  <TouchableOpacity onPress={() => setEditorField({ where: 'day', tab: tab as number, key: 'day', title: 'Day notes', notesOnly: true })}
+                    style={styles.dayNoteAdd} accessibilityRole="button" testID="day-notes-open">
+                    <Ionicons name={(draft.slot_notes?.[`${tab}:day`] || []).length ? 'create-outline' : 'add'} size={18} color={colors.primary} />
+                    <Text style={styles.notesChipText}>{(draft.slot_notes?.[`${tab}:day`] || []).length ? 'Open your notes' : 'Write a note · add a photo'}</Text>
+                  </TouchableOpacity>
+                </Card>
               </>
             )}
           </>
@@ -1436,19 +1484,46 @@ export default function WeeklyPlannerScreen() {
               <Text style={styles.editorDoneText}>Done</Text>
             </TouchableOpacity>
           </View>
+          {/* Plan | Notes (the Owner, 29 Oct 2026): any slot can hold its plan and
+              several notes, each filed under a heading with photos. */}
+          {editorField?.where === 'day' && !editorField.notesOnly && (
+            <View style={styles.editorModes}>
+              {(['plan', 'notes'] as const).map((m) => (
+                <TouchableOpacity key={m} onPress={() => setEditorMode(m)} style={[styles.editorModeBtn, editorMode === m && styles.editorModeOn]}
+                  accessibilityRole="button" testID={`editor-mode-${m}`}>
+                  <Text style={[styles.editorModeText, editorMode === m && styles.editorModeTextOn]}>
+                    {m === 'plan' ? 'Plan' : `Notes${slotNotes.length ? ` · ${slotNotes.length}` : ''}`}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+          {editorField?.where === 'day' && editorMode === 'notes' ? (
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: (kbInset || 0) + 40 }} keyboardShouldPersistTaps="handled">
+              <SlotNotesEditor
+                notes={slotNotes}
+                label={editorField.title}
+                defaultHead={draft?.days[String(editorField.tab)]?.[`${editorField.key}_cod`] ? `cod:${draft?.days[String(editorField.tab)]?.[`${editorField.key}_cod`]}` : 'pitch:other'}
+                isAdmin={isAdmin}
+                canEdit={canEdit}
+                onChange={(v) => slotKey && setSlotNotes(slotKey, v)}
+              />
+            </ScrollView>
+          ) : (
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-            <TextInput
-              value={editorValue}
-              onChangeText={setEditorValue}
-              style={[styles.editorInput, Platform.OS === 'web' && kbInset > 0 ? { paddingBottom: kbInset + 16 } : null]}
-              placeholder={canEdit ? 'Write your notes…' : 'No notes yet.'}
-              placeholderTextColor={colors.textMuted}
-              multiline
-              autoFocus={canEdit}
-              editable={canEdit}
-              textAlignVertical="top"
-            />
-          </KeyboardAvoidingView>
+              <TextInput
+                value={editorValue}
+                onChangeText={setEditorValue}
+                style={[styles.editorInput, Platform.OS === 'web' && kbInset > 0 ? { paddingBottom: kbInset + 16 } : null]}
+                placeholder={canEdit ? (editorField?.where === 'day' ? 'Write your plan…' : 'Write your notes…') : 'Nothing yet.'}
+                placeholderTextColor={colors.textMuted}
+                multiline
+                autoFocus={canEdit}
+                editable={canEdit}
+                textAlignVertical="top"
+              />
+            </KeyboardAvoidingView>
+          )}
         </View>
       </Modal>
 
@@ -1932,6 +2007,17 @@ const createStyles = (colors: any) => StyleSheet.create({
   readoutSub: { fontFamily: fonts.bodyBold, fontSize: 10, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.4, marginTop: 6, marginBottom: 2 },
   readoutLine: { fontFamily: fonts.body, fontSize: 13, color: colors.text, lineHeight: 20 },
   editorRoot: { flex: 1, backgroundColor: colors.background },
+  notesChip: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingVertical: 6 },
+  notesChipText: { fontFamily: fonts.bodySemibold, fontSize: 13.5, color: colors.primary },
+  dayNoteRow: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border, gap: 2 },
+  dayNoteTitle: { fontFamily: fonts.bodySemibold, fontSize: 15, color: colors.text },
+  dayNoteBody: { fontFamily: fonts.body, fontSize: 13.5, color: colors.textMuted },
+  dayNoteAdd: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 64, marginTop: 8, borderRadius: 12, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.primary },
+  editorModes: { flexDirection: 'row', gap: 6, marginHorizontal: 16, marginTop: 10, padding: 4, borderRadius: 12, backgroundColor: colors.surface },
+  editorModeBtn: { flex: 1, minHeight: 40, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  editorModeOn: { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border },
+  editorModeText: { fontFamily: fonts.bodySemibold, fontSize: 14.5, color: colors.textMuted },
+  editorModeTextOn: { color: colors.text },
   editorHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
   editorTitle: { fontFamily: fonts.bodyBold, fontSize: 17, color: colors.text },
   editorSub: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, marginTop: 1 },
