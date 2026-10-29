@@ -124,3 +124,11 @@ def test_the_breakdown_message_carries_tomorrows_primetime(monkeypatch):
     assert lines == ["*Primetime Wednesday*", "🎤 Sam: Closing (Ayo)", "Free to work with: Kim"]
     assert sec.breakdown_text([], day, primetime=lines).endswith("\n\n*Primetime Wednesday*\n🎤 Sam: Closing (Ayo)\nFree to work with: Kim")
     assert run(pt.plan_lines("o1", day, [str(ObjectId())])) == []
+
+
+def test_not_in_that_day_means_not_in_primetime():
+    from routes import primetime as pt
+    for st in ("ab", "ns", "off", "ex"):
+        assert pt.is_not_in(st)
+    for st in ("", None, "in", "pc", "sd", "rt"):
+        assert not pt.is_not_in(st)

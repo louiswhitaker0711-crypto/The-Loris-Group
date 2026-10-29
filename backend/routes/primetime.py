@@ -64,6 +64,10 @@ MODES = ("learning", "teaching", "watching", "free")
 MAX_TOPIC = 200
 MAX_WITH_TEXT = 200
 MAX_WITH_IDS = 25
+# Not in that day, so not in Primetime (the Owner, 29 Oct 2026): not scheduled
+# (grey), no-show (black), off, or exited.
+NOT_IN = ("ab", "ns", "off", "ex")
+
 # An office roster is dozens of people, not thousands. The cap is a runaway
 # guard, not a real limit.
 MAX_ROSTER = 2000
@@ -71,6 +75,10 @@ MAX_ROSTER = 2000
 # "Still works here" — the app-wide predicate, used here only for the fast
 # path (who is definitely on the grid). Per-day truth comes from `_left_on`.
 _ACTIVE_USER = {"is_active": {"$ne": False}, "deleted": {"$ne": True}, "is_demo": {"$ne": True}}
+
+
+def is_not_in(status: Optional[str]) -> bool:
+    return (status or "") in NOT_IN
 
 
 def _now_iso() -> str:
@@ -456,7 +464,7 @@ async def get_primetime_week(request: Request, week: Optional[str] = None, offic
             "day_statuses": day_st,
             # Only an explicit `ab` counts. A blank Bells cell means nobody has
             # filled the sheet in yet, not that the person is away.
-            "absent_days": [d for d in DAYS if day_st[d] == "ab"],
+            "absent_days": [d for d in DAYS if day_st[d] in NOT_IN],
         })
     people.sort(key=lambda p: ((p.get("name") or "").lower()))
 
@@ -520,7 +528,7 @@ async def get_primetime_home(request: Request, office: Optional[str] = None):
         office_id, week_ending,
         list({p["user_id"] for p in roster} | {e["subject_user_id"] for e in entries}),
     )
-    absent_ids = {uid for uid, st in statuses.items() if st[day_index] == "ab"}
+    absent_ids = {uid for uid, st in statuses.items() if st[day_index] in NOT_IN}
 
     # Who on MY OWN team still has nothing set. Deliberately my team and not
     # the office: the office-wide list above is for seeing what's on offer,
@@ -678,7 +686,7 @@ async def primetime_nudge_tick(now: Optional[datetime] = None) -> int:
         ).to_list(MAX_ROSTER)
         planned = {e["subject_user_id"] for e in entries if e.get("mode")}
         statuses = await _day_statuses(office_id, week_ending, list(on_grid))
-        absent = {uid for uid, st in statuses.items() if st[day_index] == "ab"}
+        absent = {uid for uid, st in statuses.items() if st[day_index] in NOT_IN}
 
         for leader_id in leader_ids:
             # A leader who is off themselves doesn't need chasing.
@@ -1150,6 +1158,8 @@ async def plan_lines(office_id: str, sector_date: str, user_ids: list) -> list[s
     ids = [str(u) for u in user_ids]
     entries = _dedupe_entries([e async for e in db.primetime_entries.find(
         {"office_id": office_id, "week_ending": week_ending, "day_index": day_index})])
+    statuses = await _day_statuses(office_id, week_ending, ids)
+    ids = [i for i in ids if not is_not_in((statuses.get(i) or [""] * len(DAYS))[day_index])]
     mine = [e for e in entries if e.get("subject_user_id") in ids and e.get("mode")]
     if not mine:
         return []
@@ -1190,6 +1200,10 @@ async def sector_primetime(request: Request, date: Optional[str] = None, scope: 
     entries = _dedupe_entries([_entry_out(_scrub(e)) async for e in db.primetime_entries.find(
         {"office_id": office_id, "week_ending": week_ending, "day_index": day_index})])
     rows = {e["subject_user_id"]: e for e in entries}
+    # Nobody who isn't in that day: not scheduled, no-show, off (the Owner, 29 Oct 2026).
+    statuses = await _day_statuses(office_id, week_ending, [p["user_id"] for p in people])
+    people = [p for p in people if p["user_id"] == str(me["id"])
+              or not is_not_in((statuses.get(p["user_id"]) or [""] * len(DAYS))[day_index])]
     ids = {p["user_id"] for p in people}
     out = []
     for p in people:
