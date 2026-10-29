@@ -361,6 +361,7 @@ export default function WeeklyPlannerScreen() {
   // otherwise open on the day being planned, so after 6pm you land on
   // tomorrow ready to fill it in.
   const [tab, setTab] = useState<'week' | number | 'notes'>(() => {
+    if (params.day === 'notes') return 'notes';   // from Notes → Write a note
     const d = parseInt(String(params.day ?? ''), 10);
     if (Number.isFinite(d) && d >= 0 && d <= 5) return d;
     if (targetUserId) return 'week';

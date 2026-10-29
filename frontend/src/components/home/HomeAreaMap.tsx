@@ -103,7 +103,8 @@ export default function HomeAreaMap() {
   if (!show) return null;
   const done = marks.filter((m) => !m.other && m.status === 'draft' && (!mine || m.colour === mine)).length;
   return (
-    <Pressable onPress={() => router.push('/sector-orient' as never)} style={s.card} accessibilityRole="button"
+    <View style={s.card}>
+    <Pressable onPress={() => router.push('/sector-orient' as never)} style={s.mapTap} accessibilityRole="button"
       accessibilityLabel="Your area today, open the map" testID="home-area-map">
       <View style={s.head}>
         {mine ? <View style={[s.dot, { backgroundColor: hopHex(mine) }]} /> : <Ionicons name="map" size={16} color={c.primary} />}
@@ -120,11 +121,20 @@ export default function HomeAreaMap() {
         <Ionicons name="expand-outline" size={16} color={c.primary} />
       </View>
     </Pressable>
+    {/* The one way into the sector from Home (the Owner, 29 Oct 2026). */}
+    <Pressable onPress={() => router.push('/my-sector' as never)} style={s.go} accessibilityRole="button" testID="home-go-to-sector">
+      <Text style={s.goText}>Go to sector</Text>
+      <Ionicons name="arrow-forward" size={17} color={c.onPrimary} />
+    </Pressable>
+    </View>
   );
 }
 
 const styles = (c: any) => StyleSheet.create({
   card: { backgroundColor: c.background, borderRadius: 16, borderWidth: 1, borderColor: c.border, padding: 10, gap: 8, marginBottom: 12 },
+  mapTap: { gap: 8 },
+  go: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 46, borderRadius: 12, backgroundColor: c.primary },
+  goText: { fontFamily: fonts.bodySemibold, fontSize: 15, color: c.onPrimary },
   head: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4, paddingTop: 2 },
   dot: { width: 14, height: 14, borderRadius: 7 },
   title: { fontFamily: fonts.bodyBold, fontSize: 15.5, color: c.text, flex: 1 },

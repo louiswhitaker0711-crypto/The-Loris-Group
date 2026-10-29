@@ -35,7 +35,8 @@ export type TabItem = {
 };
 
 // The streamlined side menu (the Owner, 29 Oct 2026): Home · Bells · Sector ·
-// COD · Library · Notes · Admin. Everything that used to have its
+// COD · Library · Planner (notes are written there; the Notes folder opens
+// from it) · MGP · KPIs · Inbox · Admin, all showing, no "More". Everything that used to have its
 // own item still exists, in one of these:
 //   Performance Hub → Bells (Bells | Spider); the BAs list → tap a name on Bells;
 //   Coaching library + Manual + Campaign Knowledge → Library; Coaching's
@@ -79,9 +80,35 @@ export const TAB_REGISTRY: TabItem[] = [
     visibleFor: ['trainee', 'leader', 'admin'],
     defaultVisibleByRole: { trainee: true, leader: true, admin: true },
   },
+
+  // Everything on the side menu, no "More" (the Owner, 29 Oct 2026).
   {
-    id: 'notes', label: 'Notes', longLabel: 'Notes — everything you have written',
-    icon: 'folder-open-outline', kind: 'route', target: '/notes',
+    id: 'weekly-planner', label: 'Planner', longLabel: 'Daily / Weekly Planner',
+    icon: 'calendar-number-outline', kind: 'route', target: '/weekly-planner',
+    visibleFor: ['trainee', 'leader', 'admin'],
+    defaultVisibleByRole: { trainee: true, leader: true, admin: true },
+  },
+  {
+    id: 'mgp', label: 'MGP', longLabel: 'Monthly Goal Planners',
+    icon: 'bar-chart-outline', kind: 'route', target: '/monthly-planner',
+    visibleFor: ['trainee', 'leader', 'admin'],
+    defaultVisibleByRole: { trainee: true, leader: true, admin: true },
+  },
+  {
+    id: 'field-kpis', label: 'KPIs', longLabel: 'Field KPIs',
+    icon: 'speedometer-outline', kind: 'route', target: '/field-kpis',
+    visibleFor: ['trainee', 'leader', 'admin'],
+    defaultVisibleByRole: { trainee: true, leader: true, admin: true },
+  },
+  {
+    id: 'live-ops', label: 'Live Operations', short: 'Live Ops', longLabel: 'Live Operations — sectors in the field, door by door',
+    icon: 'radio-outline', kind: 'route', target: '/live-ops',
+    visibleFor: ['trainee', 'leader', 'admin'], needsOwnerIQ: true,
+    defaultVisibleByRole: { trainee: true, leader: true, admin: true },
+  },
+  {
+    id: 'notifications', label: 'Inbox', longLabel: 'Inbox — Notification History',
+    icon: 'mail-outline', kind: 'route', target: '/notifications',
     visibleFor: ['trainee', 'leader', 'admin'],
     defaultVisibleByRole: { trainee: true, leader: true, admin: true },
   },
@@ -91,43 +118,11 @@ export const TAB_REGISTRY: TabItem[] = [
     visibleFor: ['admin'],
     defaultVisibleByRole: { admin: true },
   },
-
-  // ── Under "More" (off by default; anyone can pin them in Customise) ──
-  {
-    id: 'weekly-planner', label: 'Planner', longLabel: 'Daily / Weekly Planner',
-    icon: 'calendar-number-outline', kind: 'route', target: '/weekly-planner',
-    visibleFor: ['trainee', 'leader', 'admin'],
-    defaultVisibleByRole: { trainee: false, leader: false, admin: false },
-  },
-  {
-    id: 'mgp', label: 'MGP', longLabel: 'Monthly Goal Planners',
-    icon: 'bar-chart-outline', kind: 'route', target: '/monthly-planner',
-    visibleFor: ['trainee', 'leader', 'admin'],
-    defaultVisibleByRole: { trainee: false, leader: false, admin: false },
-  },
-  {
-    id: 'field-kpis', label: 'KPIs', longLabel: 'Field KPIs',
-    icon: 'speedometer-outline', kind: 'route', target: '/field-kpis',
-    visibleFor: ['trainee', 'leader', 'admin'],
-    defaultVisibleByRole: { trainee: false, leader: false, admin: false },
-  },
-  {
-    id: 'live-ops', label: 'Live Operations', short: 'Live Ops', longLabel: 'Live Operations — sectors in the field, door by door',
-    icon: 'radio-outline', kind: 'route', target: '/live-ops',
-    visibleFor: ['trainee', 'leader', 'admin'], needsOwnerIQ: true,
-    defaultVisibleByRole: { trainee: false, leader: true, admin: true },
-  },
-  {
-    id: 'notifications', label: 'Inbox', longLabel: 'Inbox — Notification History',
-    icon: 'mail-outline', kind: 'route', target: '/notifications',
-    visibleFor: ['trainee', 'leader', 'admin'],
-    defaultVisibleByRole: { trainee: false, leader: false, admin: false },
-  },
 ];
 
 /** Menus saved before the streamline (29 Oct 2026) are set back to the new
  *  default once, so everyone gets the same short menu in the same order. */
-export const MENU_RESET_AT = '2026-10-29T15:00:00Z';
+export const MENU_RESET_AT = '2026-10-29T15:30:00Z';
 
 
 /** Items eligible for a given user role. */

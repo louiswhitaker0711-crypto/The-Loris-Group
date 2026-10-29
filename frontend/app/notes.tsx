@@ -10,7 +10,7 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { useColors, fonts } from '../src/theme/ThemeContext';
 import { api } from '../src/api/client';
 import { useTabBarClearance } from '../src/customization/CustomTabBar';
@@ -55,6 +55,11 @@ export default function NotesScreen() {
       <Stack.Screen options={{ title: 'Notes' }} />
       <ScrollView contentContainerStyle={[s.content, { paddingBottom: 32 + tabClear }]} keyboardShouldPersistTaps="handled">
         <View style={s.shell}>
+          {/* Notes are written in the planner; this opens its notes page (the Owner, 29 Oct 2026). */}
+          <Pressable onPress={() => router.push('/weekly-planner?day=notes' as never)} style={s.write} accessibilityRole="button" testID="notes-write">
+            <Ionicons name="add" size={18} color={c.onPrimary} />
+            <Text style={s.writeT}>Write a note</Text>
+          </Pressable>
           <View style={s.search}>
             <Ionicons name="search" size={16} color={c.textMuted} />
             <TextInput value={q} onChangeText={setQ} placeholder="Search all your notes" placeholderTextColor={c.textMuted} style={s.searchInput} accessibilityLabel="Search all your notes" />
@@ -160,6 +165,8 @@ const styles = (c: any) => StyleSheet.create({
   page: { flex: 1, backgroundColor: c.page || c.surface },
   content: { padding: 16 },
   shell: { width: '100%', maxWidth: 680, alignSelf: 'center', gap: 12 },
+  write: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 46, borderRadius: 12, backgroundColor: c.primary },
+  writeT: { fontFamily: fonts.bodySemibold, fontSize: 15, color: c.onPrimary },
   search: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: c.background, borderWidth: 1, borderColor: c.border, borderRadius: 12, paddingHorizontal: 12, minHeight: 44 },
   searchInput: { flex: 1, fontFamily: fonts.body, fontSize: 16, color: c.text, paddingVertical: 10 },
   latest: { backgroundColor: c.yellowBg, borderWidth: 1, borderColor: c.yellow, borderRadius: 14, padding: 12, gap: 3 },

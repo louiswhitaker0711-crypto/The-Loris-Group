@@ -55,7 +55,6 @@ import CoachingTodayCard from '../../src/components/home/CoachingTodayCard';
 import AcademyWorkbookCard from '../../src/components/home/AcademyWorkbookCard';
 import AcademyClassCard from '../../src/components/home/AcademyClassCard';
 import NewStartsButton from '../../src/components/home/NewStartsButton';
-import EarningsPlanCard from '../../src/components/home/EarningsPlanCard';
 import PitchCard from '../../src/components/home/PitchCard';
 import CodWeekCard from '../../src/components/cod/CodWeekCard';
 import SectorPromptCard from '../../src/components/home/SectorPromptCard';
@@ -541,34 +540,30 @@ export default function HomeScreen() {
   // the Owner sets up new starts); BAs have their own.
   const BELLS = '/(tabs)/hires?view=bells';
   const A = (label: string, sub: string, icon: QuickAction['icon'], route: string, tint: QuickAction['tint'] = 'primary'): QuickAction => ({ label, sub, icon, route, tint });
+  // No Pitch or sector buttons here: the pitch card and the map's "Go to
+  // sector" already sit on Home at those times. No Notes either: notes are
+  // written in the Planner (the Owner, 29 Oct 2026).
+  const PLANNER = A('Planner', 'Plans and notes', 'calendar-number-outline', '/weekly-planner', 'green');
+  const LIBRARY = A('Library', 'Scripts and the playbook', 'library-outline', '/library', 'yellow');
+  const COD = A('My COD', 'This week\u2019s focus', 'trending-up-outline', '/(tabs)/progress', 'primary');
+  const BELLS_A = A('Bells', 'The weekly board', 'notifications-outline', BELLS, 'yellow');
+  const TOMORROW = A('Tomorrow\u2019s plan', 'Set it up tonight', 'calendar-number-outline', '/weekly-planner', 'accent');
+  const MY_WEEK = A('My week', 'Where you\u2019re at', 'calendar-outline', '/ba-week', 'accent');
   const coachActions: Record<HomeSlot, QuickAction[]> = {
-    morning: [A('Plan sectors', 'Today\u2019s areas', 'compass-outline', '/sector-plan'), A('Coaches Meeting', 'Notes and today\u2019s COD', 'people-outline', '/meeting-notes', 'accent'),
-      A('Bells', 'The weekly board', 'notifications-outline', BELLS, 'yellow'), A('Planner', 'Today\u2019s plan', 'calendar-number-outline', '/weekly-planner', 'green')],
-    prime: [A('Pitch', 'Primetime run-through', 'mic-outline', '/pitch'), A('Bells read-out', 'For the meeting', 'notifications-outline', BELLS, 'yellow'),
-      A('Meeting notes', 'The 11:45 meeting', 'document-text-outline', '/meeting-notes', 'accent'), A('Planner', 'Today\u2019s plan', 'calendar-number-outline', '/weekly-planner', 'green')],
-    setup: [A('Sector set-up', 'Hops and goals', 'people-circle-outline', '/my-sector'), A('Sector map', 'Today\u2019s streets', 'map-outline', '/sector-map', 'green'),
-      isAdmin ? A('Set up new starts', 'QR sign-up and logins', 'qr-code-outline', '/new-starts', 'accent') : A('Notes', 'Jot it down', 'folder-open-outline', '/notes', 'accent'),
-      A('Pitch', 'Quick refresh', 'mic-outline', '/pitch', 'yellow')],
-    field: [A('Pitch', 'On the doors', 'mic-outline', '/pitch'), A('My sector', 'Hops and the map', 'people-circle-outline', '/my-sector', 'green'),
-      A('Bells', 'Today so far', 'notifications-outline', BELLS, 'yellow'), A('Notes', 'Jot it down', 'folder-open-outline', '/notes', 'accent')],
-    evening: [A('Breakdown', 'Today\u2019s numbers', 'stats-chart-outline', '/my-sector'), A('Paste WhatsApp', 'Silver, Gold and The Round', 'clipboard-outline', '/bells-paste', 'green'),
-      A('Tomorrow\u2019s plan', 'Set it up tonight', 'calendar-number-outline', '/weekly-planner', 'accent'), A('Bells', 'End of the day', 'notifications-outline', BELLS, 'yellow')],
-    sunday: [A('Bells', 'Last week', 'notifications-outline', BELLS, 'yellow'), A('Weekly review', 'Last week and this week', 'podium-outline', '/weekly-review'),
-      A('Planner', 'Plan the week', 'calendar-number-outline', '/weekly-planner', 'green'), A('Notes', 'Your notes', 'folder-open-outline', '/notes', 'accent')],
+    morning: [A('Plan sectors', 'Today\u2019s areas', 'compass-outline', '/sector-plan'), A('Coaches Meeting', 'Notes and today\u2019s COD', 'people-outline', '/meeting-notes', 'accent'), BELLS_A, PLANNER],
+    prime: [A('Bells read-out', 'For the meeting', 'notifications-outline', BELLS, 'yellow'), A('Meeting notes', 'The 11:45 meeting', 'document-text-outline', '/meeting-notes'), PLANNER, COD],
+    setup: [BELLS_A, isAdmin ? A('Set up new starts', 'QR sign-up and logins', 'qr-code-outline', '/new-starts') : COD, PLANNER, LIBRARY],
+    field: [BELLS_A, PLANNER, COD, LIBRARY],
+    evening: [A('Paste WhatsApp', 'Silver, Gold and The Round', 'clipboard-outline', '/bells-paste'), TOMORROW, BELLS_A, COD],
+    sunday: [A('Bells', 'Last week', 'notifications-outline', BELLS, 'yellow'), A('Weekly review', 'Last week and this week', 'podium-outline', '/weekly-review'), A('Planner', 'Plan the week', 'calendar-number-outline', '/weekly-planner', 'green'), LIBRARY],
   };
   const baActions: Record<HomeSlot, QuickAction[]> = {
-    morning: [A('Pitch', 'Practise it out loud', 'mic-outline', '/pitch'), A('My COD', 'This week\u2019s focus', 'trending-up-outline', '/(tabs)/progress', 'accent'),
-      A('Library', 'Scripts and the playbook', 'library-outline', '/library', 'yellow'), A('Notes', 'Your notes', 'folder-open-outline', '/notes', 'green')],
-    prime: [A('Pitch', 'Primetime run-through', 'mic-outline', '/pitch'), A('My COD', 'This week\u2019s focus', 'trending-up-outline', '/(tabs)/progress', 'accent'),
-      A('Notes', 'From the meeting', 'folder-open-outline', '/notes', 'green'), A('Library', 'Scripts and the playbook', 'library-outline', '/library', 'yellow')],
-    setup: [A('Sector set-up', 'Your goal and hop', 'people-circle-outline', '/my-sector'), A('Sector map', 'Today\u2019s streets', 'map-outline', '/sector-map', 'green'),
-      A('Pitch', 'Quick refresh', 'mic-outline', '/pitch', 'yellow'), A('My COD', 'What to learn today', 'trending-up-outline', '/(tabs)/progress', 'accent')],
-    field: [A('Pitch', 'On the doors', 'mic-outline', '/pitch'), A('My sector', 'Your hop and the map', 'people-circle-outline', '/my-sector', 'green'),
-      A('Notes', 'Jot it down', 'folder-open-outline', '/notes', 'accent'), A('Library', 'Scripts and the playbook', 'library-outline', '/library', 'yellow')],
-    evening: [A('Breakdown', 'Today\u2019s numbers', 'stats-chart-outline', '/my-sector'), A('Tomorrow\u2019s plan', 'Set it up tonight', 'calendar-number-outline', '/weekly-planner', 'accent'),
-      A('My week', 'Where you\u2019re at', 'calendar-outline', '/ba-week', 'green'), A('Notes', 'Your notes', 'folder-open-outline', '/notes', 'yellow')],
-    sunday: [A('My week', 'Plan your week', 'calendar-outline', '/ba-week'), A('Planner', 'Your days', 'calendar-number-outline', '/weekly-planner', 'green'),
-      A('Library', 'Scripts and the playbook', 'library-outline', '/library', 'yellow'), A('Notes', 'Your notes', 'folder-open-outline', '/notes', 'accent')],
+    morning: [COD, PLANNER, LIBRARY, MY_WEEK],
+    prime: [COD, PLANNER, LIBRARY, MY_WEEK],
+    setup: [COD, PLANNER, LIBRARY, MY_WEEK],
+    field: [PLANNER, COD, LIBRARY, MY_WEEK],
+    evening: [TOMORROW, MY_WEEK, COD, LIBRARY],
+    sunday: [A('My week', 'Plan your week', 'calendar-outline', '/ba-week'), A('Planner', 'Your days', 'calendar-number-outline', '/weekly-planner', 'green'), COD, LIBRARY],
   };
   const quickActions: QuickAction[] = (isTrainee ? baActions : coachActions)[slot];
 
@@ -1633,10 +1628,8 @@ export default function HomeScreen() {
       <PitchCard place="top" />
       {/* Stage 2-3: this week's COD focus and what to do on it, or a prompt to pick one (the Owner, 27 Oct 2026). */}
       {(codStage === 2 || codStage === 3) && !(isTrainee && nextPending) && !(user as any)?.is_viewer && <CodWeekCard />}
-      {/* Breakeven lives in Profile now (the Owner, 29 Oct 2026). Home only nudges a
-          Coach whose plan is missing or over a month old, and a new start in their
-          first week once the Academy days are done. */}
-      {!(user as any)?.is_viewer && (isLeader || (isTrainee && nextPending && nextPending.day_number > 2)) && <EarningsPlanCard />}
+      {/* No breakeven card: it's kept up to date in the Monthly Goal Planner and
+          opens from Profile (the Owner, 29 Oct 2026). */}
       {/* The week's quality, for a week after the report is added. */}
       <QualityNewCard />
       {pReviewCard}

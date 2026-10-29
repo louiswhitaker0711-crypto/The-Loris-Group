@@ -43,12 +43,6 @@ export default function SectorSetupsCard({ mode = 'setups' }: { mode?: 'setups' 
     <View style={s.card} testID="home-sector-setups">
       <View style={s.head}>
         <Text style={[s.title, breakdowns && s.titleBig]}>{breakdowns ? 'Breakdowns' : "Today's sectors"}</Text>
-        {inSector ? (
-          <Pressable onPress={() => router.push('/my-sector' as never)} style={s.link} accessibilityRole="button" hitSlop={6}>
-            <Text style={s.linkText}>My sector</Text>
-            <Ionicons name="chevron-forward" size={14} color={c.primary} />
-          </Pressable>
-        ) : null}
       </View>
 
       {sectors.length === 0 ? (
