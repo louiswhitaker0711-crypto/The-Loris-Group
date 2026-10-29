@@ -1346,8 +1346,27 @@ async def admin_set_user_team_name(user_id: str, request: Request):
     return {"ok": True, "team_name": raw or None}
 
 
+def exit_left_on(left_on: Optional[str], today) -> str:
+    """The exit day: `left_on` when it's a real date from 60 days back to
+    today, else today. Never in the future."""
+    from datetime import date as _date, timedelta as _td
+    if left_on:
+        try:
+            d = _date.fromisoformat(str(left_on)[:10])
+        except ValueError:
+            raise HTTPException(status_code=400, detail="left_on must be a date (YYYY-MM-DD)")
+        if d > today:
+            raise HTTPException(status_code=400, detail="You can't exit someone from a day that hasn't happened yet")
+        if d < today - _td(days=60):
+            raise HTTPException(status_code=400, detail="That's more than 60 days ago")
+        return d.isoformat()
+    return today.isoformat()
+
+
 @router.delete("/admin/users/{user_id}")
-async def delete_user(user_id: str, request: Request):
+async def delete_user(user_id: str, request: Request, left_on: Optional[str] = None):
+    """Exit someone. `left_on` (YYYY-MM-DD) exits them from that day (Exited
+    on a Bells day): today or up to 60 days back, never ahead. Default today."""
     admin = await require_admin(request)
     user = await _guard_target_user(admin, user_id)
     if user.get("role") == "leader":
@@ -1374,17 +1393,18 @@ async def delete_user(user_id: str, request: Request):
     # that plans day by day (Office Primetime) reads `left_on`: the person stays
     # on the plan up to and including that date, and drops off after it.
     now = datetime.now(timezone.utc)
+    exit_day = exit_left_on(left_on, now.astimezone(APP_TZ).date())
     await db.users.update_one(
         {"_id": ObjectId(user_id)},
         {"$set": {
             "deleted": True,
             "deleted_at": now.isoformat(),
-            "left_on": now.astimezone(APP_TZ).date().isoformat(),
+            "left_on": exit_day,
         }},
     )
-    # Out of any sector planned after today; past sectors stay exactly as they were.
+    # Out of any sector planned after the exit day; past sectors stay exactly as they were.
     await db.sectors.update_many(
-        {"office_id": user.get("office_id"), "date": {"$gt": now.astimezone(APP_TZ).date().isoformat()},
+        {"office_id": user.get("office_id"), "date": {"$gt": exit_day},
          "member_ids": user_id},
         {"$pull": {"member_ids": user_id}})
     # OwnerIQ — a binned rep keeps their ghost record here but should be

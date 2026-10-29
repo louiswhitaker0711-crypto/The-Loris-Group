@@ -664,6 +664,8 @@ export interface PrimetimeEntry {
   topic: string;
   // Rows sharing a session_id are the same session; the teaching row hosts it.
   session_id: string;
+  // A host's row: 'triangle' (a topic) or 'list' (Pitch practice).
+  layout?: string;
   with_ids: string[];
   with_names: string[];
   with_text: string;
@@ -701,6 +703,9 @@ export interface PrimetimeSession {
   topic: string;
   host_user_id: string;
   host_name: string;
+  // 'triangle': running it on top, topic in the middle, Watching | Learning.
+  // 'list': Pitch practice, just who's in it.
+  layout?: 'triangle' | 'list';
   attendees: Array<{ user_id: string; name: string; mode: PrimetimeMode }>;
 }
 
@@ -1015,6 +1020,11 @@ export const apiService = {
     session_id: string; subject_user_id: string;
     mode?: 'learning' | 'watching'; office?: string;
   }) => api.post<{ ok: boolean; entry: PrimetimeEntry }>('/primetime/session/join', body),
+  // The day's board, saved at once (triangles and Pitch practice lists).
+  savePrimetimeDay: (body: {
+    week_ending: string; day_index: number; office?: string;
+    sessions: Array<{ host_id: string; topic: string; layout: 'triangle' | 'list'; watching: string[]; learning: string[] }>;
+  }) => api.put<{ ok: boolean; written: number; cleared: number; skipped: string[] }>('/primetime/day', body),
   // Primetime at the sector breakdown: tomorrow's plan for you and your sector.
   getSectorPrimetime: (date: string, scope: 'breakdown' | 'morning' = 'breakdown') =>
     api.get('/primetime/sector', { params: { date, scope } }),
@@ -1144,7 +1154,8 @@ export const apiService = {
   // Admin: make a Coach a Coach+ (whole-office numbers and ID badges), or take it back.
   setCoachPlus: (userId: string, enabled: boolean) =>
     api.put(`/admin/users/${userId}/coach-plus`, { enabled }),
-  deleteUser: (userId: string) => api.delete(`/admin/users/${userId}`),
+  // leftOn (YYYY-MM-DD): exit from that day (Exited on a Bells day); default today.
+  deleteUser: (userId: string, leftOn?: string) => api.delete(`/admin/users/${userId}`, { params: leftOn ? { left_on: leftOn } : undefined }),
   // Admin: give one person a temporary password; they choose their own on sign-in.
   resetUserPassword: (userId: string, password: string) =>
     api.post(`/admin/users/${userId}/reset-password`, { password }),

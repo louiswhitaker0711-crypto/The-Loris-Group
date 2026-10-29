@@ -1,35 +1,43 @@
 /**
- * Bells day statuses, worded for self-employed BAs and coloured like
- * OwnerIQ's day squares:
- *   • ab = Not scheduled — they planned the day off (grey square). Their own
- *     call: nobody approves it, and it never counts against them.
- *   • ns = No show — planned in but didn't go out (black square).
- *   • pc = In office — product coaching or office work, not in the field.
+ * Bells day statuses (the Owner, 29 Oct 2026): five to choose from, worded
+ * for self-employed BAs and coloured like the Roll Call sheet.
+ *   • in = Scheduled in — out in the field (their sign-ups go on the day).
+ *   • ab = Scheduled off — they planned the day off (grey). Their own call:
+ *     nobody approves it, and it never counts against them.
+ *   • ns = No show — scheduled in but didn't come in (black).
+ *   • pc = In office — Academy, product coaching or office work (yellow).
  *     Never an absence; left out of reliability and scoring.
- *   • sd = Shadow day — out in the field watching a bunny hop (a new start's
- *     first field day): no sales goal, left out of scoring and piece average.
- * Codes stay as they are in the data (`ab`, `ns`, …).
+ *   • Exited (red) — not a day status: Admin → Exit, or Exited on a Bells
+ *     day, which exits them from that day.
+ * Older codes stay readable on past weeks (rt Retrain, nc Not counted, sd
+ * Shadow day, which the bunny hop still sets and Bells shows as In office)
+ * but can't be picked any more. Codes stay as they are in the data.
  */
+/** The four a day can be set to; Exited is the fifth, set by exiting. */
+export const DAY_STATUS_PICK = ['in', 'ab', 'ns', 'pc'] as const;
+
 export const DAY_STATUS_LABEL: Record<string, string> = {
-  in: 'In',
-  off: 'Off',
-  ab: 'Not scheduled',
+  in: 'Scheduled in',
+  off: 'Not filled in',
+  ab: 'Scheduled off',
   ns: 'No show',
   rt: 'Retrain',
   nc: 'Not counted',
   pc: 'In office',
-  sd: 'Shadow day',
+  sd: 'In office (shadow day)',
+  ex: 'Exited',
 };
 
 export const DAY_STATUS_SHORT: Record<string, string> = {
   in: 'IN',
   off: 'OFF',
-  ab: 'NS',
+  ab: 'OFF',
   ns: 'X',
   rt: 'RT',
   nc: 'NC',
   pc: 'IO',
-  sd: 'SD',
+  sd: 'IO',
+  ex: 'EX',
 };
 
 /** The grey and black squares (fill + text), in both themes. */

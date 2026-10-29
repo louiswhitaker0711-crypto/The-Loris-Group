@@ -111,7 +111,7 @@ export default function RollcallImportScreen() {
         <Text style={[styles.body, { color: colors.textSecondary }]}>
           Fills the gaps in Bells from your roll call spreadsheet. Anything already in the app stays as it is:
           only days nobody has filled in are written. In the sheet, a number (0 too) is a day in the field,
-          black is No show, grey is Not scheduled, yellow is In office, and red rows are left alone. People
+          black is No show, grey is Scheduled off, yellow is In office, and red rows are left alone. People
           who aren't in the app any more come in as view-only rows, and each imported week shows in Bells
           under the sheet's teams, in the sheet's order.
         </Text>

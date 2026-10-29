@@ -1547,7 +1547,7 @@ export default function WeeklyPlannerScreen() {
                 entered, so it can never count as a 0-scoring In-day); only
                 Ab lands on the Bells sheet. For leaders, a NEW Ab becomes a
                 pending request (amber) until the owner approves it. */}
-            <Text style={styles.smallFieldLabel}>Week plan — tap a day to switch In / Not scheduled / In office</Text>
+            <Text style={styles.smallFieldLabel}>Week plan — tap a day to switch Scheduled in / Scheduled off / In office</Text>
             <View style={styles.sheetDaysRow}>
               {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((l, i) => {
                 const ab = crewDays[i] === 'ab';
@@ -1582,7 +1582,7 @@ export default function WeeklyPlannerScreen() {
               })}
             </View>
             <Text style={styles.sheetLockNote}>
-              {'"In" is the plan: the Bells day stays blank until sign-ups are entered, so it never counts as a 0. Not scheduled shows grey on Bells and never counts against them. "In office" is for product coaching or office work: never an absence, left out of reliability and scoring, and no field notifications that day. Goals lock Monday 10:30; days can change any time.'}
+              {'"Scheduled in" is the plan: the Bells day stays blank until sign-ups are entered, so it never counts as a 0. Scheduled off shows grey on Bells and never counts against them. "In office" is for product coaching or office work: never an absence, left out of reliability and scoring, and no field notifications that day. Goals lock Monday 10:30; days can change any time.'}
             </Text>
 
             {/* Reason — required context for the owner's approve/deny call */}

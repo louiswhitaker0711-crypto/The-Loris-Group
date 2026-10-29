@@ -676,7 +676,7 @@ function Legend({ open, onClose }: { open: boolean; onClose: () => void }) {
   const items: { d: Day; i: number; title: string; text: string }[] = [
     { d: { date: '', weekday: '', phase: 'past', status: 'present', has_sale: true, sales_count: 4 }, i: 0, title: 'In & made sales', text: 'The BA was in the field. The green number is their sign-ups.' },
     { d: { date: '', weekday: '', phase: 'past', status: 'present', has_sale: false, sales_count: 0 }, i: 1, title: 'In & no sales', text: 'The BA was in the field. A red 0 means no sign-ups.' },
-    { d: { date: '', weekday: '', phase: 'past', status: 'not_present' }, i: 2, title: 'Not scheduled', text: 'Planned the day off (grey).' },
+    { d: { date: '', weekday: '', phase: 'past', status: 'not_present' }, i: 2, title: 'Scheduled off', text: 'Planned the day off (grey).' },
     { d: { date: '', weekday: '', phase: 'past', status: 'absent' }, i: 3, title: 'No show', text: 'Planned in but did not go out (black).' },
     { d: { date: '', weekday: '', phase: 'past', status: 'na' }, i: 4, title: 'Not applicable', text: 'The BA could not set this day. Left out of the figures.' },
     { d: { date: '', weekday: '', phase: 'past', status: 'not_set', in_field: true, sales_count: 1 }, i: 5, title: 'Not set', text: 'No plan was set. A red number means they went out and that is their sign-ups.' },
