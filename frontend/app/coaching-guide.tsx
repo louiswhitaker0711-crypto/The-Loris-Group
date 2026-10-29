@@ -14,7 +14,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useColors, fonts } from '../src/theme/ThemeContext';
 import { api } from '../src/api/client';
 import { toast } from '../src/utils/toast';
-import { useCoachingToday, dayStep, firstName, aimOf, CoachItem, CoachPerson } from '../src/components/home/CoachingTodayCard';
+import { useCoachingToday, dayStep, firstName, aimOf, detailOf, CoachItem, CoachPerson } from '../src/components/home/CoachingTodayCard';
 
 export default function CoachingGuideScreen() {
   const c = useColors();
@@ -74,7 +74,7 @@ export default function CoachingGuideScreen() {
                 </View>
               )}
             </View>
-            <Text style={s.small}>{[aimOf(it.confidence_expected, c)?.todo, it.taught ? 'taught' : ''].filter(Boolean).join(' · ')}</Text>
+            <Text style={s.small} numberOfLines={isOpen ? undefined : 1}>{[detailOf(it), it.taught ? 'taught' : ''].filter(Boolean).join(' · ')}</Text>
           </View>
           {it.ahead && <View style={s.ahead}><Text style={s.aheadText}>Ahead</Text></View>}
           <Ionicons name={isOpen ? 'chevron-up' : 'chevron-down'} size={18} color={c.textMuted} />
