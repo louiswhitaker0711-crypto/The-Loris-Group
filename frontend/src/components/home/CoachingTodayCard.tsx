@@ -3,8 +3,8 @@
  * the guide, 29 Oct 2026).
  *
  * For each new start (Days 1-8) in your bunny hop today (or your sector if
- * you're not in a hop): who, which day, and the day in four steps (before the
- * doors, on the doors, the sector break, grade after the field), with one
+ * you're not in a hop): who, which day, and what to teach today (Behind first,
+ * then today's new topics, and what changed since yesterday), with one
  * button into today's guide (app/coaching-guide.tsx). The guide holds what to
  * teach: only today's new topics in full, what carries on from yesterday, and
  * anything Behind or Ahead. Same for every Coach, new or experienced.
@@ -66,13 +66,7 @@ function PersonCard({ p, s, c }: { p: CoachPerson; s: any; c: any }) {
   const changed = kept.filter((i) => i.changed_from).length;
   const behind = p.behind?.length || 0;
   const who = firstName(p.name);
-  const steps = [
-    { when: 'Before the doors', what: `Set ${who}’s goal and what they’re learning`, sub: 'In their sector set-up' },
-    { when: 'On the doors', what: fresh.length ? `${fresh.length} new to teach${kept.length ? `, build on ${kept.length}` : ''}` : kept.length ? `Build on ${kept.length} from yesterday` : 'Their day plan',
-      sub: [fresh.length ? `${taughtNew} of ${fresh.length} taught` : '', behind ? `${behind} behind` : '', changed ? `${changed} changed since yesterday` : ''].filter(Boolean).join(' · ') || ' ' },
-    { when: 'Sector break · 16:30', what: 'Check in with the sector', sub: 'Doors, pitches, one focus for the second half' },
-    { when: 'After the field', what: p.done ? 'Graded' : `Grade ${who}’s day`, sub: p.done ? 'Done' : 'Opens at the end of the field' },
-  ];
+  const changedItems = kept.filter((i) => i.changed_from);
   const guide = () => router.push(`/coaching-guide?hire=${encodeURIComponent(p.hire_id)}` as never);
 
   return (
@@ -86,27 +80,25 @@ function PersonCard({ p, s, c }: { p: CoachPerson; s: any; c: any }) {
       </View>
       {!!p.objective && <Text style={s.body}>{p.objective}</Text>}
 
-      <View style={{ marginTop: 4 }}>
-        {steps.map((st, i) => {
-          const done = i < step || (i === 3 && p.done);
-          const now = i === step && !done;
-          return (
-            <View key={st.when} style={s.step}>
-              <View style={s.rail}>
-                <View style={[s.dot, done && s.dotDone, now && s.dotNow]}>
-                  {done ? <Ionicons name="checkmark" size={14} color={c.onPrimary} /> : <Text style={[s.dotText, now && { color: c.onPrimary }]}>{i + 1}</Text>}
-                </View>
-                {i < steps.length - 1 && <View style={s.line} />}
-              </View>
-              <View style={{ flex: 1, paddingBottom: i < steps.length - 1 ? 12 : 0 }}>
-                <Text style={[s.when, now && { color: c.primary }]}>{st.when}{now ? ' · now' : ''}</Text>
-                <Text style={s.what}>{st.what}</Text>
-                {!!st.sub.trim() && <Text style={[s.sub, i === 1 && behind ? { color: c.red } : null]}>{st.sub}</Text>}
-              </View>
-            </View>
-          );
-        })}
-      </View>
+      {/* What to teach today (the Owner, 29 Oct 2026): no ladder, just today. */}
+      {behind > 0 && (
+        <View style={s.behind}>
+          <Text style={s.behindTitle}>Behind · go back over first</Text>
+          {(p.behind || []).map((b) => <Text key={b.topic} style={s.behindItem}>{`${b.topic} · graded ${b.grade}`}</Text>)}
+        </View>
+      )}
+      <Text style={s.section}>{fresh.length ? `What to teach today · ${taughtNew} of ${fresh.length}` : 'What to teach today'}</Text>
+      {fresh.length ? fresh.map((it) => (
+        <Pressable key={it.id} onPress={guide} style={s.teach} accessibilityRole="button">
+          <Ionicons name={it.taught ? 'checkmark-circle' : 'ellipse-outline'} size={20} color={it.taught ? c.green : c.textMuted} />
+          <Text style={[s.teachText, it.taught && s.teachDone]} numberOfLines={1}>{it.topic}</Text>
+          {it.ahead && <Text style={s.aheadText}>Ahead</Text>}
+        </Pressable>
+      )) : <Text style={s.sub}>{kept.length ? `Nothing new: build on ${kept.length} from yesterday` : 'Their day plan is on the guide.'}</Text>}
+      {changedItems.length > 0 && (
+        <Text style={s.changed}>{`Changed since yesterday: ${changedItems.map((i) => `${i.topic} (${i.changed_from} \u2192 ${i.confidence_expected})`).join(', ')}`}</Text>
+      )}
+      {fresh.length > 0 && kept.length > 0 && <Text style={s.sub}>{`Plus ${kept.length} to keep building from yesterday`}</Text>}
 
       {step === 3 && p.can_grade && !!p.assessment_id && !p.done ? (
         <Pressable onPress={() => router.push(`/assessment/${p.assessment_id}` as never)} style={s.cta} accessibilityRole="button" testID={`coaching-grade-${p.hire_id}`}>
@@ -147,6 +139,15 @@ const styles = (c: any) => StyleSheet.create({
   kicker: { fontFamily: fonts.bodySemibold, fontSize: 11, letterSpacing: 0.6, textTransform: 'uppercase', color: c.primary },
   title: { fontFamily: fonts.bodyBold, fontSize: 18, color: c.text },
   body: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: c.text },
+  section: { fontFamily: fonts.bodySemibold, fontSize: 11.5, letterSpacing: 0.6, textTransform: 'uppercase', color: c.primary, marginTop: 6 },
+  teach: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 40, borderBottomWidth: 1, borderBottomColor: c.border },
+  teachText: { flex: 1, fontFamily: fonts.bodySemibold, fontSize: 15, color: c.text },
+  teachDone: { color: c.textMuted, textDecorationLine: 'line-through' },
+  aheadText: { fontFamily: fonts.bodyBold, fontSize: 11, color: c.green },
+  behind: { borderRadius: 12, padding: 10, backgroundColor: c.redBg, gap: 2 },
+  behindTitle: { fontFamily: fonts.bodyBold, fontSize: 13, color: c.red },
+  behindItem: { fontFamily: fonts.body, fontSize: 13.5, color: c.text },
+  changed: { fontFamily: fonts.bodySemibold, fontSize: 12.5, color: c.yellow, marginTop: 4 },
   step: { flexDirection: 'row', gap: 12 },
   rail: { width: 26, alignItems: 'center' },
   dot: { width: 26, height: 26, borderRadius: 13, backgroundColor: c.surface, borderWidth: 1, borderColor: c.border, alignItems: 'center', justifyContent: 'center' },
