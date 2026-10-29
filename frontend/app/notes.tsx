@@ -10,7 +10,7 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { useColors, fonts } from '../src/theme/ThemeContext';
 import { api } from '../src/api/client';
 import { useTabBarClearance } from '../src/customization/CustomTabBar';
