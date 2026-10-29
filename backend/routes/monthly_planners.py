@@ -202,6 +202,33 @@ def _empty_learning_item() -> dict:
     return {"id": str(uuid.uuid4()), "topic": "", "mentor": "", "notes": ""}
 
 
+async def _fill_budget_from_plan(seed: dict, user_id: str) -> dict:
+    """A new month starts with last month's breakeven filled in (the Owner,
+    29 Oct 2026): their current Plan your earnings rows, to review and change.
+    Marks budget.from_plan so the page can say so."""
+    try:
+        u = await db.users.find_one({"_id": ObjectId(str(user_id))}, {"earnings_plan": 1, "office_id": 1})
+    except Exception:
+        u = None
+    plan = (u or {}).get("earnings_plan") or {}
+    rows = lambda key: [{"id": str(uuid.uuid4()), "label": str(r.get("label") or ""), "amount": str(r.get("amount") or ""),
+                         "sales": "", "per": r.get("per") if r.get("per") in ("week", "month") else "month"}
+                        for r in plan.get(key) or [] if _safe_num(r.get("amount"))]
+    needs, wants = rows("needs"), rows("wants")
+    if not needs and not wants:
+        return seed
+    from core.earnings_plan import compute
+    fees = (await db.commission_fees.find_one({"office_id": (u or {}).get("office_id")}, {"_id": 0})
+            or await db.commission_fees.find_one({}, {"_id": 0}))
+    b = dict(seed.get("budget") or {})
+    b["needs"] = needs or b.get("needs") or []
+    b["wants"] = wants or b.get("wants") or []
+    b = _compute_budget_totals(b)
+    b["from_plan"] = {"breakeven": compute(plan, fees).get("breakeven"), "updated_at": plan.get("updated_at")}
+    seed["budget"] = b
+    return seed
+
+
 def _seed_planner(user_id: str, office_id: str, month: str, role: str) -> dict:
     now = datetime.now(timezone.utc).isoformat()
     gap_scores = {t: 0 for t in GAP_TRAITS} if role in ("leader", "admin") else {}
@@ -430,7 +457,8 @@ async def get_planner(month: str, request: Request, user_id: Optional[str] = Non
         if target["id"] != me["id"]:
             raise HTTPException(status_code=404, detail=f"No planner exists for {coerced}")
         # Owner viewing their own non-existent month — return seed + flag
-        seed = _seed_planner(me["id"], me.get("office_id") or "", coerced, me.get("role") or "trainee")
+        seed = await _fill_budget_from_plan(
+            _seed_planner(me["id"], me.get("office_id") or "", coerced, me.get("role") or "trainee"), me["id"])
         return {
             "exists": False,
             "can_edit": True,
@@ -727,6 +755,9 @@ async def start_new_month(month: str, request: Request):
             seed["goals"] = carried
         else:
             seed["goals"] = _default_goals()
+
+    # Their latest breakeven (Plan your earnings) beats last month's copy.
+    seed = await _fill_budget_from_plan(seed, user_id)
 
     # Lock all earlier months
     await db.monthly_planners.update_many(

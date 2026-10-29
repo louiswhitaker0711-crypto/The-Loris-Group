@@ -19,7 +19,9 @@ import { toast } from '../../utils/toast';
 type Item = { id: string; topic: string; category: string; confidence_expected: string; taught: boolean;
   what_good_looks_like?: string | null; expected_outcome?: string | null };
 type Person = { hire_id: string; name: string; day_number: number; day_label: string; objective: string;
-  assessment_id: string | null; done: boolean; can_grade: boolean; checklist: Item[] };
+  assessment_id: string | null; done: boolean; can_grade: boolean; checklist: Item[];
+  /** From field day 2 (Day 4): their breakeven, or null when not worked out yet. */
+  trainee_user_id?: string; breakeven_due?: boolean; breakeven?: number | null };
 
 const first = (n: string) => (n || '').trim().split(/\s+/)[0] || n;
 
@@ -102,6 +104,17 @@ function PersonCard({ p, s, c }: { p: Person; s: any; c: any }) {
             );
           })}
         </>
+      )}
+
+      {/* Field day 2 (Day 4) onwards: work out their breakeven with them
+          (the Owner, 29 Oct 2026). It fills Bells and their weekly goal. */}
+      {!!p.breakeven_due && !!p.trainee_user_id && (
+        <Pressable onPress={() => router.push(`/earnings-plan?user=${encodeURIComponent(p.trainee_user_id!)}` as never)}
+          style={s.link} accessibilityRole="button" testID={`coaching-breakeven-${p.hire_id}`}>
+          <Ionicons name={p.breakeven ? 'checkmark-circle' : 'calculator-outline'} size={15} color={c.primary} />
+          <Text style={s.linkText}>{p.breakeven ? `Breakeven ${p.breakeven} a week · change` : `Calculate ${first(p.name)}\u2019s breakeven`}</Text>
+          <Ionicons name="chevron-forward" size={14} color={c.primary} />
+        </Pressable>
       )}
 
       {p.can_grade && !!p.assessment_id && (

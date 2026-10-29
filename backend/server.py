@@ -807,8 +807,26 @@ async def _startup_work():
                 await zero_alerts_run(db)
             except Exception as ex:
                 logger.error(f"zero alerts job failed: {ex}")
+            # Breakeven hit this week → a push to them and their Coach, once
+            # a week (core/breakeven_alerts.py).
+            try:
+                from core.breakeven_alerts import run_hits as breakeven_hits_run
+                await breakeven_hits_run(db)
+            except Exception as ex:
+                logger.error(f"breakeven hit job failed: {ex}")
 
         scheduler.add_job(_field_days_job, "interval", minutes=10, id="field_days_tick",
+                          replace_existing=True, max_instances=1, coalesce=True)
+
+        # ── New month: everyone checks their breakeven (1st, 09:12 UK) ────────
+        async def _breakeven_month_job():
+            try:
+                from core.breakeven_alerts import run_month as breakeven_month_run
+                await breakeven_month_run(db)
+            except Exception as ex:
+                logger.error(f"monthly breakeven job failed: {ex}")
+
+        scheduler.add_job(_breakeven_month_job, "cron", day=1, hour=9, minute=12, id="breakeven_month",
                           replace_existing=True, max_instances=1, coalesce=True)
 
         # ── Weekly Bulletin reminder push (Monday 9:00 AM UK time) ───────────

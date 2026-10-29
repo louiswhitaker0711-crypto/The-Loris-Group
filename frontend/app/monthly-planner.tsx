@@ -739,6 +739,12 @@ function BudgetSection({ budget, canEdit, onChange }: { budget: any; canEdit: bo
 
   return (
     <Section icon="calculator" title="Budget · Break-Even Calculator">
+      {/* A new month starts from last month's breakeven (the Owner, 29 Oct 2026). */}
+      {!!budget.from_plan && (
+        <Text style={[s.summaryLabel, { marginBottom: 10 }]}>
+          {`Filled in from last month${budget.from_plan.breakeven ? ` (breakeven ${budget.from_plan.breakeven} a week)` : ''}. Review it and change anything that's moved, then save.`}
+        </Text>
+      )}
       {(['needs', 'wants'] as const).map((group) => (
         <View key={group} style={{ marginBottom: 14 }}>
           <Text style={s.subSect}>{group === 'needs' ? 'NEEDS' : 'WANTS'}</Text>

@@ -24,7 +24,7 @@ import PrimetimeDayBlock from '../src/components/planner/PrimetimeDayBlock';
 import { RowEditor, dayOrder, DayTimeInput, type SheetRow } from '../src/components/planner/DayLayout';
 import { planningTarget } from '../src/utils/officeDay';
 import { useAuth } from '../src/auth/AuthContext';
-import { apiService } from '../src/api/client';
+import { apiService, api } from '../src/api/client';
 import { showAlert } from '../src/utils/showAlert';
 import { toast } from '../src/utils/toast';
 import { invalidateGoalQueries } from '../src/utils/goalSync';
@@ -35,6 +35,7 @@ import { useTabBarClearance } from '../src/customization/CustomTabBar';
 import { useKeyboardInset } from '../src/hooks/useKeyboardInset';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDeviceInsets } from '../src/nav/AppShell';
+import { goalVsBreakeven } from '../src/utils/breakeven';
 import { APP_LOCALE, formatMoney } from '../src/utils/appTime';
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -628,6 +629,13 @@ export default function WeeklyPlannerScreen() {
   // change goals or clear approved absences (server-enforced) — but they
   // can STILL request new absences; those need the owner's approval anyway.
   const crewLocked = !!statsQ.data?.crew_locked && !isAdmin;
+  const crewBeQ = useQuery({
+    queryKey: ['earnings-plan', crewEdit?.user_id || 'none'],
+    queryFn: () => api.get(`/earnings-plan?user_id=${encodeURIComponent(crewEdit!.user_id)}`).then((r) => r.data),
+    enabled: !!crewEdit?.user_id, retry: false,
+  });
+  const crewBeLine = goalVsBreakeven(crewGoal, crewBeQ.data?.breakeven ?? null,
+    crewEdit?.user_id && crewEdit.user_id === (user as any)?.id ? 'your' : 'their');
   const canCrewEdit = canEdit;
   // Which selected Ab days are new requests (not yet on Bells)?
   const approvedAb = (i: number) => crewEdit?.day_statuses?.[i] === 'ab';
@@ -1543,6 +1551,10 @@ export default function WeeklyPlannerScreen() {
               keyboardType="numeric"
               editable={!crewLocked}
             />
+            {/* Their breakeven against the goal (the Owner, 29 Oct 2026). */}
+            {!!crewBeLine && (
+              <Text style={[styles.smallFieldLabel, { marginTop: 6, textTransform: 'none' as const }]}>{crewBeLine}</Text>
+            )}
 
             <View style={styles.sheetBtnRow}>
               <TouchableOpacity style={styles.sheetBtnGhost} onPress={() => setCrewEdit(null)}>

@@ -49,6 +49,7 @@ import MoreSection from '../../src/components/home/today/MoreSection';
 import SuggestionsCard from '../../src/components/home/today/SuggestionsCard';
 import MeetingsTodayCard from '../../src/components/home/today/MeetingsTodayCard';
 import QualityNewCard from '../../src/components/home/QualityNewCard';
+import EarningsPlanCard from '../../src/components/home/EarningsPlanCard';
 import { dayTargetChips } from '../../src/utils/dayTargets';
 import PrimetimeCard from '../../src/components/home/PrimetimeCard';
 import CoachingTodayCard from '../../src/components/home/CoachingTodayCard';
@@ -1617,8 +1618,9 @@ export default function HomeScreen() {
       <PitchCard place="top" />
       {/* Stage 2-3: this week's COD focus and what to do on it, or a prompt to pick one (the Owner, 27 Oct 2026). */}
       {(codStage === 2 || codStage === 3) && !(isTrainee && nextPending) && !(user as any)?.is_viewer && <CodWeekCard />}
-      {/* No breakeven card: it's kept up to date in the Monthly Goal Planner and
-          opens from Profile (the Owner, 29 Oct 2026). */}
+      {/* Breakeven: kept up to date in the Monthly Goal Planner (opens from Profile).
+          Home only asks a new start from field day 2 (Day 4) until it's done. */}
+      {isTrainee && !!nextPending && nextPending.day_number >= 4 && <EarningsPlanCard onlyMissing />}
       {/* The week's quality, for a week after the report is added. */}
       <QualityNewCard />
       {pReviewCard}
