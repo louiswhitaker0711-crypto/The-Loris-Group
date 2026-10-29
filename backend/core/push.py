@@ -157,12 +157,42 @@ def _read_ticket(r) -> tuple:
     except Exception:
         return None, None
 
+# Every notification opens a page (the Owner, 29 Oct 2026). Most senders set
+# data["url"]; for the few that only set a type, this fills the page in so a
+# tap (web push, native push or the Inbox) lands somewhere specific.
+_TYPE_URL = {
+    "badge_earned": "/(tabs)/profile",
+    "promotion": "/(tabs)/progress",
+    "grading_reminder": "/(tabs)",
+    "weekly_bulletins": "/share-bulletins",
+    "absence_request": "/bells",
+    "absence_decision": "/(tabs)/schedule",
+}
+
+
+def with_target(data: dict = None) -> dict:
+    d = dict(data or {})
+    if d.get("url"):
+        return d
+    t = d.get("type") or ""
+    if t == "assessment_complete":
+        d["url"] = f"/assessment/{d['assessment_id']}" if d.get("assessment_id") else "/assessments"
+    elif t == "new_hire" and d.get("hire_user_id"):
+        d["url"] = f"/person/{d['hire_user_id']}"
+    elif d.get("person_id"):
+        d["url"] = f"/person/{d['person_id']}"
+    elif t in _TYPE_URL:
+        d["url"] = _TYPE_URL[t]
+    return d
+
+
 async def send_push_to_user(user_id: str, title: str, body: str, data: dict = None):
     """Notify a user across every channel they have — native Expo push (Expo Go
     app) AND web push (installed PWA on iOS/Android). Best-effort; fails silently.
 
     All existing notification triggers call this, so wiring web push in here
     lights it up everywhere without touching call sites."""
+    data = with_target(data)
     user = None
     found = False
     try:

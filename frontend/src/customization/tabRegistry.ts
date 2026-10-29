@@ -35,8 +35,7 @@ export type TabItem = {
 };
 
 // The streamlined side menu (the Owner, 29 Oct 2026): Home · Bells · Sector ·
-// COD · Library · Planner (notes are written there; the Notes folder opens
-// from it) · MGP · KPIs · Inbox · Admin, all showing, no "More". Everything that used to have its
+// COD · Library · Planner · Notes · MGP · KPIs · Inbox · Admin, all showing, no "More". Everything that used to have its
 // own item still exists, in one of these:
 //   Performance Hub → Bells (Bells | Spider); the BAs list → tap a name on Bells;
 //   Coaching library + Manual + Campaign Knowledge → Library; Coaching's
@@ -89,6 +88,14 @@ export const TAB_REGISTRY: TabItem[] = [
     defaultVisibleByRole: { trainee: true, leader: true, admin: true },
   },
   {
+    // Every note in one place (the Owner, 29 Oct 2026): the Notes folder,
+    // by heading, with search. Notes are written in the Planner.
+    id: 'notes', label: 'Notes', longLabel: 'Notes — every note, by heading',
+    icon: 'folder-open-outline', kind: 'route', target: '/notes',
+    visibleFor: ['trainee', 'leader', 'admin'],
+    defaultVisibleByRole: { trainee: true, leader: true, admin: true },
+  },
+  {
     id: 'mgp', label: 'MGP', longLabel: 'Monthly Goal Planners',
     icon: 'bar-chart-outline', kind: 'route', target: '/monthly-planner',
     visibleFor: ['trainee', 'leader', 'admin'],
@@ -122,7 +129,7 @@ export const TAB_REGISTRY: TabItem[] = [
 
 /** Menus saved before the streamline (29 Oct 2026) are set back to the new
  *  default once, so everyone gets the same short menu in the same order. */
-export const MENU_RESET_AT = '2026-10-29T15:30:00Z';
+export const MENU_RESET_AT = '2026-10-29T18:50:00Z';
 
 
 /** Items eligible for a given user role. */
