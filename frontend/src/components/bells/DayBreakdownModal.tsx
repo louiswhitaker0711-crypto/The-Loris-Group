@@ -24,7 +24,7 @@ export default function DayBreakdownModal({ dayIdx, entries, weekEnding, onClose
   const [editMode, setEditMode] = useState(false);
   const editLock = useBellsEditLock();
   const { user } = useAuth();
-  // Not scheduled is everyone's own call (self-employed): no approval step.
+  // Scheduled off is everyone's own call (self-employed): no approval step.
   const isAdminUser = true || user?.role === 'admin';
 
   // AB request sheet (non-admins). Absences are the office owner's call, so
@@ -441,8 +441,8 @@ function ReadOnlyPersonDayRow({ name, day, total }: { name: string; day: Day; to
       <View style={{ flex: 1 }}>
         <Text style={styles.personName}>{name}</Text>
         <Text style={styles.personMeta}>
-          {day.status === 'off' ? 'Day off' :
-            day.status === 'ab' ? 'Not scheduled' :
+          {day.status === 'off' ? DAY_STATUS_LABEL.off :
+            day.status === 'ab' ? DAY_STATUS_LABEL.ab :
             day.status === 'ns' ? 'No show' :
             day.status === 'nc' ? 'Not counted' :
             day.status === 'pc' ? 'In office' :
@@ -499,13 +499,14 @@ function EditablePersonDayRow({ name, role, dayName, day, saveState, onChange }:
       </View>
 
       <View style={styles.editStatusRow}>
-        <EditStatusChip active={inStatus} label="In" onPress={() => onChange('status', 'in')} />
-        <EditStatusChip active={off} label="Off" onPress={() => onChange('status', off ? 'in' : 'off')} />
-        <EditStatusChip active={ab} label="Not scheduled" onPress={() => onChange('status', ab ? 'in' : 'ab')} />
-        <EditStatusChip active={ns} label="No show" onPress={() => onChange('status', ns ? 'in' : 'ns')} />
-        <EditStatusChip active={pc} label="In office" onPress={() => onChange('status', pc ? 'in' : 'pc')} />
-        <EditStatusChip active={rt} label="RT" onPress={() => onChange('status', rt ? 'in' : 'rt')} />
-        <EditStatusChip active={nc} label="NC" onPress={() => onChange('status', nc ? 'in' : 'nc')} />
+        {/* The five (the Owner, 29 Oct 2026); Exited is set from Admin → Exit
+            or Exited on the Bells day. An older status still shows, selected. */}
+        <EditStatusChip active={inStatus || off} label={DAY_STATUS_LABEL.in} onPress={() => onChange('status', 'in')} />
+        <EditStatusChip active={ab} label={DAY_STATUS_LABEL.ab} onPress={() => onChange('status', ab ? 'in' : 'ab')} />
+        <EditStatusChip active={ns} label={DAY_STATUS_LABEL.ns} onPress={() => onChange('status', ns ? 'in' : 'ns')} />
+        <EditStatusChip active={pc} label={DAY_STATUS_LABEL.pc} onPress={() => onChange('status', pc ? 'in' : 'pc')} />
+        {rt && <EditStatusChip active label={DAY_STATUS_LABEL.rt} onPress={() => onChange('status', 'in')} />}
+        {nc && <EditStatusChip active label={DAY_STATUS_LABEL.nc} onPress={() => onChange('status', 'in')} />}
       </View>
     </View>
   );

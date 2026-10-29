@@ -13,10 +13,11 @@ import { useAuth } from '../../auth/AuthContext';
 import { teamColor, NO_TEAM_TINT } from '../../utils/teamColors';
 import { toast } from '../../utils/toast';
 import { Day, Entry, MIN_AB_REASON, TIER, isInDay, dayTotal, exitedBy, appWeekEndingISO } from './types';
-import { DAY_STATUS_LABEL, NO_NUMBER_STATUSES } from '../../utils/dayStatus';
+import { DAY_STATUS_LABEL, DAY_STATUS_PICK, NO_NUMBER_STATUSES } from '../../utils/dayStatus';
 import { dayBand, dayBandLook } from '../../utils/dayBands';
 import { APP_LOCALE, APP_TZ, formatMoney } from '../../utils/appTime';
 import { centerNotice } from '../../utils/centerNotice';
+import { showAlert } from '../../utils/showAlert';
 import { APP_SHORT_NAME } from '../../theme/brand';
 import { SUPER_GREEN_WEEK_MIN, GREEN_WEEK_MIN, AMBER_WEEK_MIN, RED_WEEK_MAX, weekBandLook } from '../../utils/weekBands';
 
@@ -354,8 +355,8 @@ function absDateTime(iso?: string | null): string {
 // A day in the field shows its Gold and Silver sign-ups side by side on gold
 // and silver, with a bar under them in the day's colour (1 red, 2 amber,
 // 3 light green, 4+ dark green). A day not in the field is a plain block of
-// the sheet's colour, no letters: grey Not scheduled, black No show, yellow
-// In office, red not current (exited), purple Shadow day. On a phone the day
+// the sheet's colour, no letters: grey Scheduled off, black No show, yellow
+// In office (a shadow day too), red Exited. On a phone the day
 // is one number on its colour, with a tally under it: a gold mark per Gold
 // sign-up and a silver mark per Silver.
 const GOLD = { bg: '#f6e3a9', fg: '#4a3608', darkBg: 'rgba(234,179,8,0.28)', darkFg: '#fde68a', strip: '#e8c25a', mark: '#c99a1e', markOnDark: '#fcd34d' };
@@ -369,7 +370,7 @@ type SheetDay =
   | { kind: 'nums'; gold: number; silver: number; n: number; bar: string; label: string };
 
 function sheetDay(d: Day | undefined, dark: boolean, exited: false | 'first' | 'after' = false): SheetDay {
-  if (exited) return { kind: 'block', bg: exited === 'first' ? '#dc2626' : (dark ? 'rgba(220,38,38,0.55)' : 'rgba(220,38,38,0.6)'), label: 'Not current' };
+  if (exited) return { kind: 'block', bg: exited === 'first' ? '#dc2626' : (dark ? 'rgba(220,38,38,0.55)' : 'rgba(220,38,38,0.6)'), label: 'Exited' };
   const st = d?.status || 'off';
   const gold = Number(d?.over30 || 0), silver = Number(d?.under30 || 0), n = gold + silver;
   const label = DAY_STATUS_LABEL[st] || st;
@@ -377,7 +378,7 @@ function sheetDay(d: Day | undefined, dark: boolean, exited: false | 'first' | '
     case 'ab': return { kind: 'block', bg: dark ? '#6b7280' : '#9aa1aa', label };
     case 'ns': return { kind: 'block', bg: dark ? '#000000' : '#111111', label };
     case 'pc': return { kind: 'block', bg: '#fde047', label };
-    case 'sd': return { kind: 'block', bg: '#c4b5fd', label };
+    case 'sd': return { kind: 'block', bg: '#fde047', label };
     case 'nc': return { kind: 'block', bg: dark ? '#374151' : '#e5e7eb', label };
     case 'in': return { kind: 'nums', gold, silver, n, bar: BAR[dayBand(n)], label: `${n} sign-up${n === 1 ? '' : 's'}` };
     case 'rt': return { kind: 'nums', gold, silver, n, bar: dark ? '#4b5563' : '#cbd5e1', label: `Retrain${n ? `, ${n} (not scored)` : ''}` };
@@ -566,6 +567,32 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
     } finally {
       setCellSaving(false);
     }
+  };
+  // Exited (the fifth status): an Admin exits them from this day. Same as
+  // Admin → Exit, dated this day: red from it, off the sheet from next week.
+  const realAdmin = user?.role === 'admin' || !!(user as any)?.is_super_admin;
+  const exitFromCell = () => {
+    if (!cellEdit || !weekEnding || !cellEdit.entry.user_id) return;
+    const { entry, dayIdx } = cellEdit;
+    const [y, m, d] = weekEnding.split('-').map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d - (6 - dayIdx)));
+    const day = dt.toISOString().slice(0, 10);
+    showAlert(`Exit ${entry.user_name}?`, `From ${DAYS_LONG[dayIdx]}: their Bells read red from that day and they come off the sheet next week. Nothing in the past changes.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Exit', style: 'destructive', onPress: async () => {
+        setCellSaving(true);
+        try {
+          await apiService.deleteUser(entry.user_id!, day);
+          toast.success(`${entry.user_name} exited`);
+          setCellEdit(null);
+          onRefresh?.();
+        } catch (e: any) {
+          showAlert('Could not exit', e?.response?.data?.detail || 'Try again');
+        } finally {
+          setCellSaving(false);
+        }
+      } },
+    ]);
   };
   const sendAbRequestFromCell = async () => {
     if (!cellEdit || !weekEnding || !cellEdit.entry.user_id) return;
@@ -851,7 +878,7 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
               <View style={styles.abDetailBox}>
                 <View style={styles.abDetailHead}>
                   <Ionicons name="calendar-outline" size={13} color="#b45309" />
-                  <Text style={styles.abDetailHeadText}>Not scheduled</Text>
+                  <Text style={styles.abDetailHeadText}>Scheduled off</Text>
                 </View>
                 {!!abDetail.reason && <Text style={styles.abDetailReason}>“{abDetail.reason}”</Text>}
                 <Text style={styles.abDetailMeta}>
@@ -895,15 +922,31 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
                   ))}
                 </View>
                 <View style={styles.ceStatusRow}>
-                  {(['in', 'off', 'ab', 'ns', 'rt', 'nc', 'pc', 'sd'] as string[]).map((s) => (
+                  {/* The five (the Owner, 29 Oct 2026): Scheduled in, Scheduled
+                      off, No show, In office, and Exited (Admins only). An
+                      older status on a past day still shows, selected. */}
+                  {([...DAY_STATUS_PICK, ...(DAY_STATUS_PICK as readonly string[]).includes(cellStatus) || cellStatus === 'off' ? [] : [cellStatus]] as string[]).map((s) => {
+                    const on = cellStatus === s || (s === 'in' && cellStatus === 'off');
+                    return (
+                      <TouchableOpacity
+                        key={s}
+                        style={[styles.ceStatusChip, on && styles.ceStatusChipActive]}
+                        onPress={() => setCellStatus(s)}
+                      >
+                        <Text style={[styles.ceStatusChipText, on && { color: colors.onPrimary }]}>{DAY_STATUS_LABEL[s] || s.toUpperCase()}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                  {realAdmin && cellEdit && !!cellEdit.entry.user_id && (
                     <TouchableOpacity
-                      key={s}
-                      style={[styles.ceStatusChip, cellStatus === s && styles.ceStatusChipActive]}
-                      onPress={() => setCellStatus(s)}
+                      style={[styles.ceStatusChip, { borderColor: '#dc2626' }]}
+                      onPress={() => exitFromCell()}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Exit ${cellEdit.entry.user_name} from ${DAYS_LONG[cellEdit.dayIdx]}`}
                     >
-                      <Text style={[styles.ceStatusChipText, cellStatus === s && { color: colors.onPrimary }]}>{s === 'ab' || s === 'ns' || s === 'pc' || s === 'sd' ? DAY_STATUS_LABEL[s] : s.toUpperCase()}</Text>
+                      <Text style={[styles.ceStatusChipText, { color: '#dc2626' }]}>Exited</Text>
                     </TouchableOpacity>
-                  ))}
+                  )}
                 </View>
                 {/* Non-admins request absences instead of writing them —
                     with a reason box so the owner gets the why. */}

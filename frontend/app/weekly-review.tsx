@@ -385,7 +385,7 @@ export default function WeeklyReviewScreen() {
                       <Tile key={dn} label={dn} value={`${d.office_week!.scheduled[i] ?? 0}`} s={s} />
                     ))}
                   </View>
-                  <Text style={s.barSub}>Out of {d.office_week.people}. Not scheduled and in-office days don't count.</Text>
+                  <Text style={s.barSub}>Out of {d.office_week.people}. Scheduled off and in-office days don't count.</Text>
                   {d.office_week.goals_missing.length > 0 && (
                     <>
                       <Text style={[s.cardHead, { marginTop: 12 }]}>No goal set yet ({d.office_week.goals_missing.length})</Text>
@@ -620,7 +620,7 @@ function PersonRow({ x, dark, expanded, onToggle, onOpen, colors, s }: {
           <Text style={s.winText}>COD focus: {x.this_week.cod_focus || 'not picked'}</Text>
           <Text style={s.winText}>Plan: {x.this_week.plan_in ? 'in' : 'not in yet'}</Text>
           {x.this_week.not_scheduled_days.length > 0 && (
-            <Text style={s.winText}>Not scheduled: {x.this_week.not_scheduled_days.map((i) => DAY3[i]).join(', ')}</Text>
+            <Text style={s.winText}>Scheduled off: {x.this_week.not_scheduled_days.map((i) => DAY3[i]).join(', ')}</Text>
           )}
           <TouchableOpacity onPress={onOpen} style={[s.expandAll, { alignSelf: 'flex-start', marginTop: 10 }]}>
             <Text style={s.expandAllText}>Full breakdown</Text>

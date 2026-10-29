@@ -321,6 +321,7 @@ def _entry_out(e: dict) -> dict:
         "mode": e.get("mode"),
         "topic": e.get("topic") or "",
         "session_id": e.get("session_id") or "",
+        "layout": e.get("layout") or "",
         "with_ids": list(e.get("with_ids") or []),
         "with_names": list(e.get("with_names") or []),
         "with_text": e.get("with_text") or "",
@@ -375,6 +376,8 @@ def _build_sessions(entries: list) -> list:
             "topic": host.get("topic") or "",
             "host_user_id": host["subject_user_id"],
             "host_name": host.get("subject_name") or "",
+            # "triangle" (a topic: Watching | Learning) or "list" (Pitch practice).
+            "layout": host.get("layout") or "triangle",
             "attendees": attendees,
         })
     out.sort(key=lambda s: (s["day_index"] or 0, s["topic"].lower()))
@@ -1295,3 +1298,129 @@ async def save_sector_primetime(body: SectorEntryBody, request: Request):
         doc["created_by_id"] = me["id"]
         await db.primetime_entries.insert_one(dict(doc))
     return {"ok": True, "entry": _entry_out(doc)}
+
+
+# ---------------------------------------------------------------------------
+# The day's board (the Owner, 29 Oct 2026)
+# ---------------------------------------------------------------------------
+# Primetime is planned like the sectors: a triangle per topic, whoever is
+# running it at the top, the topic in the middle, Watching on the left corner
+# and Learning on the right. Pitch practice is just a list. The whole day is
+# edited as one board and saved at once.
+
+LAYOUTS = ("triangle", "list")
+
+
+class BoardSession(BaseModel):
+    host_id: str
+    topic: Optional[str] = ""
+    layout: Optional[str] = "triangle"
+    watching: Optional[list] = None
+    learning: Optional[list] = None
+
+
+class DayBoardBody(BaseModel):
+    week_ending: str
+    day_index: int
+    sessions: list[BoardSession] = []
+    office: Optional[str] = None
+
+
+def board_rows(sessions: list, week_ending: str, day_index: int) -> dict:
+    """uid -> the row the board wants for them: {mode, topic, session_id,
+    layout, with_ids}. Each person once (the first place they appear wins);
+    a host can't also be in their own corners. Pure, for tests."""
+    want: dict = {}
+    for b in sessions:
+        host = str(b.get("host_id") or "")
+        if not host or host in want:
+            continue
+        layout = b.get("layout") if b.get("layout") in LAYOUTS else "triangle"
+        topic = _s(b.get("topic"), MAX_TOPIC) or ("Pitch practice" if layout == "list" else "")
+        sid = _session_id(week_ending, day_index, host)
+        want[host] = {"mode": "teaching", "topic": topic, "session_id": sid, "layout": layout, "with_ids": []}
+        corners = [("watching", x) for x in (b.get("watching") or [])] if layout == "triangle" else []
+        corners += [("learning", x) for x in (b.get("learning") or [])]
+        for mode, uid in corners:
+            uid = str(uid or "")
+            if not uid or uid in want:
+                continue
+            want[uid] = {"mode": mode, "topic": topic, "session_id": sid, "layout": layout, "with_ids": [host]}
+            want[host]["with_ids"].append(uid)
+    return want
+
+
+@router.put("/primetime/day")
+async def save_primetime_day(body: DayBoardBody, request: Request):
+    """Save the whole day's board at once.
+
+    You place the people you plan for (your own tree; an Admin, anyone) plus
+    anyone who said they're free to work with. Everyone else's rows are left
+    as they are, so two Coaches can each put their people into the same
+    triangle. Someone you plan for who's no longer on the board loses their
+    Primetime for the day (a solo note with no session is kept)."""
+    me = await require_admin_or_leader(request)
+    office_id = await resolve_office_id(request, me, body.office)
+    wk = _coerce_to_sunday(body.week_ending) if body.week_ending else None
+    if not wk or wk != body.week_ending:
+        raise HTTPException(status_code=400, detail="week_ending must be the Sunday that ends the week")
+    if body.day_index not in DAYS:
+        raise HTTPException(status_code=400, detail="day_index must be 0 (Mon) through 4 (Fri)")
+    if len(body.sessions) > 60:
+        raise HTTPException(status_code=400, detail="Too many sessions")
+
+    day_date = _day_date(wk, body.day_index)
+    editable = await _editable_ids(me, office_id)
+    existing = _dedupe_entries([_scrub(e) for e in await db.primetime_entries.find(
+        {"office_id": office_id, "week_ending": wk, "day_index": body.day_index}).to_list(MAX_ROSTER)])
+    by_uid = {e["subject_user_id"]: e for e in existing}
+    free = {e["subject_user_id"] for e in existing if e.get("mode") == "free"}
+
+    def mine(uid: str) -> bool:
+        return editable is None or uid in editable or uid in free
+
+    want = board_rows([b.model_dump() for b in body.sessions], wk, body.day_index)
+    roster = {p["user_id"]: p for p in await _office_roster(office_id, wk)}
+    names = {uid: (roster.get(uid) or {}).get("name") or "" for uid in want}
+    now = _now_iso()
+    written, skipped = 0, []
+    for uid, w in want.items():
+        p = roster.get(uid)
+        if not p or not _on_grid(p.get("left_on"), day_date):
+            continue
+        if not mine(uid):
+            # Not yours to place: fine if the board already says the same thing.
+            cur = by_uid.get(uid) or {}
+            if cur.get("session_id") != w["session_id"] or cur.get("mode") != w["mode"]:
+                skipped.append(names.get(uid) or "")
+            continue
+        await _write_row({
+            "office_id": office_id, "week_ending": wk, "day_index": body.day_index, "day_date": day_date,
+            "subject_user_id": uid, "subject_name": names.get(uid) or "",
+            "mode": w["mode"], "topic": w["topic"], "session_id": w["session_id"], "layout": w["layout"],
+            "with_ids": w["with_ids"], "with_names": [names.get(x) or (roster.get(x) or {}).get("name") or "" for x in w["with_ids"]],
+            "with_text": "", "updated_at": now, "updated_by_id": me["id"], "updated_by_name": me.get("name") or "",
+        })
+        written += 1
+
+    # Yours, on a session last time, and not on the board now: cleared.
+    cleared = 0
+    for uid, e in by_uid.items():
+        if uid in want or not mine(uid) or uid in free:
+            continue
+        if e.get("session_id") or e.get("mode") == "teaching":
+            await db.primetime_entries.delete_many({"office_id": office_id, "week_ending": wk,
+                                                    "day_index": body.day_index, "subject_user_id": uid})
+            cleared += 1
+
+    # Every host's list of who's in their session, from the rows as they now are.
+    rows = await db.primetime_entries.find({"office_id": office_id, "week_ending": wk,
+                                            "day_index": body.day_index}).to_list(MAX_ROSTER)
+    for h in [r for r in rows if r.get("mode") == "teaching" and r.get("session_id")]:
+        ids = [r["subject_user_id"] for r in rows
+               if r.get("session_id") == h["session_id"] and r["subject_user_id"] != h["subject_user_id"]]
+        if ids != list(h.get("with_ids") or []):
+            nm = {r["subject_user_id"]: r.get("subject_name") or "" for r in rows}
+            await db.primetime_entries.update_one({"_id": h["_id"]}, {"$set": {
+                "with_ids": ids, "with_names": [nm.get(x, "") for x in ids]}})
+    return {"ok": True, "written": written, "cleared": cleared, "skipped": [n for n in skipped if n]}

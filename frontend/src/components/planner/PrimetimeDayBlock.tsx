@@ -34,8 +34,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiService, PrimetimeMode, PrimetimePerson } from '../../api/client';
 import { useColors, fonts } from '../../theme/ThemeContext';
 import { useActiveOffice } from '../../office/ActiveOfficeContext';
-import { useAuth } from '../../auth/AuthContext';
-import ImpactSummary from '../primetime/ImpactSummary';
+import PrimetimeBoard from '../primetime/PrimetimeBoard';
 import { toast } from '../../utils/toast';
 
 const MODES: { key: PrimetimeMode; label: string; icon: any }[] = [
@@ -233,40 +232,8 @@ export default function PrimetimeDayBlock({
     };
   }, [people, dayIndex]);
 
-
-  // Every impact running today, whoever is hosting — the same grouped view as
-  // Home. For an admin the editable list below is the whole office and is
-  // genuinely hard to read; this is the part worth seeing first.
-  const daySessions = useMemo(
-    () => (data?.sessions || []).filter((s) => s.day_index === dayIndex),
-    [data, dayIndex],
-  );
-
-  const daySolo = useMemo(() => {
-    const grouped = new Set<string>();
-    for (const s of daySessions) {
-      grouped.add(s.host_user_id);
-      for (const a of s.attendees) grouped.add(a.user_id);
-    }
-    return (data?.entries || [])
-      .filter((e) => e.day_index === dayIndex && e.mode && !grouped.has(e.subject_user_id))
-      .map((e) => ({
-        user_id: e.subject_user_id,
-        name: e.subject_name,
-        mode: e.mode as string,
-        topic: e.topic,
-        with_label: (e.with_names || []).join(', ') || e.with_text,
-      }));
-  }, [data, dayIndex, daySessions]);
-
-  const [joinFor, setJoinFor] = useState<string | null>(null);
-
-  // An admin's "team" is the whole office, so the editable list is long enough
-  // to bury the summary above it. Leaders have a handful of people and want to
-  // type straight away.
-  const { user } = useAuth();
-  const isAdmin = (user?.role || '').toLowerCase() === 'admin';
-  const [editOpen, setEditOpen] = useState(!isAdmin);
+  // The board does the planning now; one by one is folded away for everyone.
+  const [editOpen, setEditOpen] = useState(false);
 
   const joinMut = useMutation({
     mutationFn: (v: { session_id: string; subject_user_id: string; mode?: 'learning' | 'watching' }) =>
@@ -274,17 +241,11 @@ export default function PrimetimeDayBlock({
     onSuccess: (_r, v) => {
       qc.invalidateQueries({ queryKey: ['primetime-week'] });
       qc.invalidateQueries({ queryKey: ['primetime-home'] });
-      setJoinFor(null);
       toast.success(`${present.find((p) => p.user_id === v.subject_user_id)?.name || 'They'} added`);
     },
     onError: (e: any) => toast.error(e?.response?.data?.detail || 'Could not join'),
   });
 
-  const candidatesFor = (sessionId: string) => {
-    const s = daySessions.find((x) => x.session_id === sessionId);
-    const taken = new Set([s?.host_user_id, ...(s?.attendees || []).map((a) => a.user_id)]);
-    return present.filter((p) => !taken.has(p.user_id));
-  };
 
   // ── Suggestions ──────────────────────────────────────────────────────
   // Everyone teaching something on this day, so typing "Malik" can pull his
@@ -404,7 +365,7 @@ export default function PrimetimeDayBlock({
     <View style={styles.block}>
       <View style={styles.head}>
         <Ionicons name="people-outline" size={15} color={colors.primary} />
-        <Text style={styles.headTitle}>Who's on Primetime</Text>
+        <Text style={styles.headTitle}>Primetime plan</Text>
         <Text style={styles.headCount}>
           {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved' : `${plannedCount}/${present.length} set`}
         </Text>
@@ -437,51 +398,17 @@ export default function PrimetimeDayBlock({
 
 
 
-      {/* The grouped picture of the day first — same rendering as Home. For
-          an admin this is the readable version; the editable list underneath
-          is the whole office. */}
-      {daySessions.length > 0 && (
-        <ImpactSummary
-          sessions={daySessions}
-          solo={daySolo}
-          compact
-          renderSessionAction={(s) => {
-            if (!canEdit) return null;
-            const candidates = candidatesFor(s.session_id);
-            if (!candidates.length) return null;
-            const isOpen = joinFor === s.session_id;
-            return (
-              <View>
-                <TouchableOpacity style={styles.addBtn} onPress={() => setJoinFor(isOpen ? null : s.session_id)}>
-                  <Ionicons name={isOpen ? 'close' : 'person-add-outline'} size={13} color={colors.primary} />
-                  <Text style={styles.addBtnTxt}>{isOpen ? 'Cancel' : 'Add my person'}</Text>
-                </TouchableOpacity>
-                {isOpen && (
-                  <View style={styles.candidates}>
-                    {candidates.map((p) => (
-                      <TouchableOpacity
-                        key={p.user_id}
-                        style={styles.candidate}
-                        disabled={joinMut.isPending}
-                        onPress={() => joinMut.mutate({ session_id: s.session_id, subject_user_id: p.user_id })}
-                      >
-                        <Text style={styles.candidateTxt}>{p.name}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
-              </View>
-            );
-          }}
-        />
-      )}
+      {/* The day's board: a triangle per topic (running it on top, the
+          topic in the middle, Watching | Learning on the corners) and Pitch
+          practice as a list, planned like the sectors (the Owner, 29 Oct 2026). */}
+      {data && <PrimetimeBoard data={data} week={week} dayIndex={dayIndex} office={office} canEdit={canEdit} />}
 
       {/* Editing is the noisy part, so it folds away. Collapsed by default for
           admins, whose "team" is the entire office. */}
       <TouchableOpacity style={styles.editHead} onPress={() => setEditOpen(!editOpen)}>
         <Ionicons name={editOpen ? 'chevron-up' : 'chevron-down'} size={14} color={colors.textMuted} />
         <Text style={styles.editHeadTxt}>
-          {editOpen ? 'Hide' : 'Set'} my team's Primetime
+          One by one (free to work with, a note of their own)
         </Text>
         <Text style={styles.editHeadCount}>{plannedCount}/{present.length}</Text>
       </TouchableOpacity>
@@ -515,7 +442,7 @@ export default function PrimetimeDayBlock({
         <View style={styles.absentRow}>
           <Ionicons name="remove-circle-outline" size={13} color={colors.textMuted} />
           <Text style={styles.absentTxt}>
-            Not scheduled: {absent.map((p) => p.name).join(', ')}
+            Not in: {absent.map((p) => p.name).join(', ')}
           </Text>
         </View>
       )}

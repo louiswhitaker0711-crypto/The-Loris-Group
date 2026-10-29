@@ -53,7 +53,7 @@ PRIVATE_KEYS = {
 
 DAY_NAMES = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 DAY_STATUS = {
-    "in": "In", "off": "Off", "ab": "Not scheduled", "ns": "No show", "rt": "Retrain",
+    "in": "Scheduled in", "off": "Not filled in", "ab": "Scheduled off", "ns": "No show", "rt": "Retrain",
     "nc": "Not counted", "pc": "In office", "sd": "Shadow day",
 }
 

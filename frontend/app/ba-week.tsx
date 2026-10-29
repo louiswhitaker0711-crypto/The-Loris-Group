@@ -148,7 +148,7 @@ export default function BaWeekScreen() {
                 style={[s.day, off ? s.dayOff : s.dayOn]} testID={`ba-week-day-${i}`}>
                 <Text style={[s.dayName, off && s.dayNameOff]}>{d}</Text>
                 <Text style={[s.dayState, off && s.dayNameOff]} numberOfLines={1}>
-                  {off ? 'Not scheduled' : fixed ? (DAY_STATUS_LABEL as any)[st] || st.toUpperCase() : 'In'}
+                  {off ? 'Scheduled off' : fixed ? (DAY_STATUS_LABEL as any)[st] || st.toUpperCase() : 'Scheduled in'}
                 </Text>
               </TouchableOpacity>
             );
