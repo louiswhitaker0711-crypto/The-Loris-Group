@@ -66,6 +66,7 @@ from routes.academy import router as academy_router
 from routes.new_starts import router as new_starts_router
 from routes.earnings_plan import router as earnings_plan_router
 from routes.pitch import router as pitch_router
+from routes.notes_folder import router as notes_folder_router
 from routes.orientation import router as orientation_router
 from routes.streak import router as streak_router
 from routes.achievements import router as achievements_router
@@ -176,6 +177,7 @@ api_router.include_router(academy_router)
 api_router.include_router(new_starts_router)
 api_router.include_router(earnings_plan_router)
 api_router.include_router(pitch_router)
+api_router.include_router(notes_folder_router)
 api_router.include_router(orientation_router)
 api_router.include_router(achievements_router)
 api_router.include_router(owneriq_router)

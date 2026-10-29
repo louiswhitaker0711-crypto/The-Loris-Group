@@ -48,6 +48,7 @@ const ROUTE_TITLES: Record<string, [string, IconName]> = {
   welcome: ['Welcome', 'sparkles-outline'],
   'earnings-plan': ['Plan your earnings', 'calculator-outline'],
   pitch: ['Your pitch', 'mic-outline'],
+  notes: ['Notes', 'folder-open-outline'],
   'owneriq-connect': ['OwnerIQ', 'flash-outline'],
   'cod-signoff': ['Sign off COD', 'checkmark-done-outline'],
   territory: ['Territory', 'earth-outline'],

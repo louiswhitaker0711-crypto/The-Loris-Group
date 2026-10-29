@@ -540,6 +540,7 @@ export default function HomeScreen() {
         { label: 'Earnings', sub: 'What a week is worth', icon: 'calculator-outline', route: '/(tabs)/pay', tint: 'green' },
         { label: 'My progress', sub: 'Scores & journey', icon: 'stats-chart-outline', route: '/(tabs)/progress', tint: 'accent' },
         { label: 'Campaign training', sub: 'Playbook + quiz', icon: 'school-outline', route: '/product-knowledge', tint: 'yellow' },
+        { label: 'Notes', sub: 'Everything you’ve written', icon: 'folder-open-outline', route: '/notes', tint: 'green' },
       ]
     : isLeader
     ? [
@@ -548,12 +549,14 @@ export default function HomeScreen() {
         { label: 'COD', sub: 'Coaching & development', icon: 'school-outline', route: '/coaching', tint: 'accent' },
         { label: 'Bells', sub: 'Weekly sign-ups board', icon: 'notifications-outline', route: '/(tabs)/hires?view=bells', tint: 'yellow' },
         { label: 'Campaign Knowledge', sub: 'Product, pitch & playbook', icon: 'library-outline', route: '/product-knowledge', tint: 'primary' },
+        { label: 'Notes', sub: 'Your notes, by heading', icon: 'folder-open-outline', route: '/notes', tint: 'green' },
       ]
     : [
         { label: 'Bells', sub: 'Weekly sign-ups board', icon: 'notifications-outline', route: '/(tabs)/hires?view=bells', tint: 'primary' },
         { label: 'Bulletins', sub: 'Share last week', icon: 'megaphone-outline', route: '/weekly-share', tint: 'green' },
         { label: 'Set up new starts', testKey: 'Add trainee', sub: 'App QR code and their logins', icon: 'qr-code-outline', route: '/new-starts', tint: 'accent' },
         { label: 'Campaign Knowledge', sub: 'Product, pitch & playbook', icon: 'library-outline', route: '/product-knowledge', tint: 'yellow' },
+        { label: 'Notes', sub: 'Yours, and posting to everyone', icon: 'folder-open-outline', route: '/notes', tint: 'green' },
       ];
 
   const tintColor = (t?: QuickAction['tint']) =>

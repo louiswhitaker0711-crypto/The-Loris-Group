@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { lightColors } from '../src/theme/ThemeContext';
 import { Kicker } from '../src/components/ui/PillTabs';
@@ -18,6 +18,7 @@ import { Breathe } from '../src/components/ui/Breathe';
 import PressableScale from '../src/components/ui/PressableScale';
 import MeetingCodPick from '../src/components/planner/MeetingCodPick';
 import CodWeekCard from '../src/components/cod/CodWeekCard';
+import FolderTag, { FolderMeta } from '../src/components/notes/FolderTag';
 import PlannerLoaReview from '../src/components/planner/PlannerLoaReview';
 import PrimetimeDayBlock from '../src/components/planner/PrimetimeDayBlock';
 import { RowEditor, dayOrder, DayTimeInput, type SheetRow } from '../src/components/planner/DayLayout';
@@ -126,6 +127,8 @@ type Planner = {
   // A time for one box on one day ("HH:MM"); a timed box also goes on the
   // owner's own Schedule.
   times?: Record<string, Record<string, string>>;
+  // Where each note box files in the Notes folder: "<day>:<box>" | "x:notes".
+  folder?: Record<string, FolderMeta>;
 };
 
 function makeId(): string { return Math.random().toString(36).slice(2, 11); }
@@ -434,7 +437,7 @@ export default function WeeklyPlannerScreen() {
 
   const saveMut = useMutation({
     mutationFn: (p: Planner) =>
-      apiService.upsertWeeklyPlanner(p.week_ending, { review: p.review, days: p.days, times: p.times || {}, notes: p.notes }).then((r) => r.data),
+      apiService.upsertWeeklyPlanner(p.week_ending, { review: p.review, days: p.days, times: p.times || {}, notes: p.notes, folder: p.folder || {} }).then((r) => r.data),
     onMutate: () => setSavingState('saving'),
     onSuccess: (data: Planner) => {
       setSavingState('saved');
@@ -602,6 +605,12 @@ export default function WeeklyPlannerScreen() {
         placeholder="Notes…"
         onOpen={() => setEditorField({ where: 'day', tab: dayIdx, key: f.key, title: f.label })}
       />
+      {canEdit && NOTE_FIELDS.some((n) => n.key === f.key) && (
+        <FolderTag value={draft?.folder?.[`${dayIdx}:${f.key}`]}
+          defaultHead={draft?.days[String(dayIdx)]?.[`${f.key}_cod`] ? `cod:${draft?.days[String(dayIdx)]?.[`${f.key}_cod`]}` : 'pitch:other'}
+          defaultTitle={f.label} isAdmin={isAdmin}
+          onChange={(v) => update((cur) => ({ ...cur, folder: { ...(cur.folder || {}), [`${dayIdx}:${f.key}`]: v } }))} />
+      )}
       {f.key === 'primetime' && showWeekTab && (
         <PrimetimeDayBlock week={week} dayIndex={dayIdx} canEdit={canEdit} />
       )}
@@ -1322,7 +1331,12 @@ export default function WeeklyPlannerScreen() {
                 ))}
                 </View>
 
-                <Kicker style={styles.kicker}>Notes</Kicker>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Kicker style={styles.kicker}>Notes</Kicker>
+                  <TouchableOpacity onPress={() => router.push('/notes' as never)} hitSlop={8} accessibilityRole="link" testID="planner-open-notes">
+                    <Text style={{ fontFamily: fonts.bodySemibold, fontSize: 13, color: colors.primary }}>Open your Notes folder ›</Text>
+                  </TouchableOpacity>
+                </View>
                 <View style={styles.cardGrid}>
                 {NOTE_FIELDS.map((f) => (
                   <Card
@@ -1358,6 +1372,13 @@ export default function WeeklyPlannerScreen() {
                       placeholder="Notes…"
                       onOpen={() => setEditorField({ where: 'day', tab, key: f.key, title: f.label })}
                     />
+                    {/* Files itself into the Notes folder (the Owner, 29 Oct 2026). */}
+                    {canEdit && (
+                      <FolderTag value={draft.folder?.[`${tab}:${f.key}`]}
+                        defaultHead={draft.days[String(tab)]?.[`${f.key}_cod`] ? `cod:${draft.days[String(tab)]?.[`${f.key}_cod`]}` : 'pitch:other'}
+                        defaultTitle={f.label} isAdmin={isAdmin}
+                        onChange={(v) => update((cur) => ({ ...cur, folder: { ...(cur.folder || {}), [`${tab}:${f.key}`]: v } }))} />
+                    )}
                   </Card>
                 ))}
                 </View>
@@ -1375,6 +1396,10 @@ export default function WeeklyPlannerScreen() {
               previewLines={14}
               onOpen={() => setEditorField({ where: 'notes', title: 'Extra Notes' })}
             />
+            {canEdit && (
+              <FolderTag value={draft.folder?.['x:notes']} defaultHead="pitch:other" defaultTitle="Extra notes" isAdmin={isAdmin}
+                onChange={(v) => update((cur) => ({ ...cur, folder: { ...(cur.folder || {}), 'x:notes': v } }))} />
+            )}
           </Card>
         )}
         </View>
