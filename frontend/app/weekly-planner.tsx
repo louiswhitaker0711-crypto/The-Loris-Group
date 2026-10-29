@@ -486,8 +486,9 @@ export default function WeeklyPlannerScreen() {
   const [editorField, setEditorFieldRaw] = useState<null | { where: 'day' | 'notes'; tab?: number; key?: string; title: string; notesOnly?: boolean }>(null);
   // Plan | Notes in the editor (the Owner, 29 Oct 2026): Plan is the slot's own
   // text; Notes are extra notes on it, each filed under a heading.
-  const [editorMode, setEditorMode] = useState<'plan' | 'notes'>('plan');
-  const setEditorField = (f: typeof editorField, mode: 'plan' | 'notes' = 'plan') => {
+  const [editorMode, setEditorMode] = useState<'plan' | 'notes'>('notes');
+  // Opens on Notes every time (the Owner, 29 Oct 2026); Plan is one tap away.
+  const setEditorField = (f: typeof editorField, mode: 'plan' | 'notes' = 'notes') => {
     setEditorMode(f?.notesOnly ? 'notes' : mode);
     setEditorFieldRaw(f);
   };
@@ -1488,7 +1489,7 @@ export default function WeeklyPlannerScreen() {
               several notes, each filed under a heading with photos. */}
           {editorField?.where === 'day' && !editorField.notesOnly && (
             <View style={styles.editorModes}>
-              {(['plan', 'notes'] as const).map((m) => (
+              {(['notes', 'plan'] as const).map((m) => (
                 <TouchableOpacity key={m} onPress={() => setEditorMode(m)} style={[styles.editorModeBtn, editorMode === m && styles.editorModeOn]}
                   accessibilityRole="button" testID={`editor-mode-${m}`}>
                   <Text style={[styles.editorModeText, editorMode === m && styles.editorModeTextOn]}>
