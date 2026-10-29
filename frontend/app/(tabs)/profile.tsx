@@ -494,8 +494,8 @@ export default function ProfileScreen() {
         )}
 
         {/* My money: breakeven and the earnings calculator moved here off Home
-            (the Owner, 29 Oct 2026). A BA's own schedule too: Schedule is on
-            the menu for Coaches and Admins only. Viewers can't plan. */}
+            (the Owner, 29 Oct 2026), and Schedule, which came off the menu.
+            Viewers can't plan. */}
         {!(user as any)?.is_viewer && (
           <ScrollReveal scrollY={scrollY}>
           <DepthCard style={styles.section}>
@@ -509,13 +509,11 @@ export default function ProfileScreen() {
               <Text style={styles.menuItemText}>Earnings calculator</Text>
               <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </TouchableOpacity>
-            {user?.role === 'trainee' && (
-              <TouchableOpacity style={styles.menuItem} onPress={() => router.navigate('/(tabs)/schedule' as any)} testID="profile-schedule">
-                <IconWell><Ionicons name="calendar-outline" size={20} color={colors.primary} /></IconWell>
-                <Text style={styles.menuItemText}>My schedule</Text>
-                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity style={styles.menuItem} onPress={() => router.navigate('/(tabs)/schedule' as any)} testID="profile-schedule">
+              <IconWell><Ionicons name="calendar-outline" size={20} color={colors.primary} /></IconWell>
+              <Text style={styles.menuItemText}>Schedule</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            </TouchableOpacity>
           </DepthCard>
           </ScrollReveal>
         )}

@@ -35,13 +35,13 @@ export type TabItem = {
 };
 
 // The streamlined side menu (the Owner, 29 Oct 2026): Home · Bells · Sector ·
-// Schedule · COD · Library · Notes · Admin. Everything that used to have its
+// COD · Library · Notes · Admin. Everything that used to have its
 // own item still exists, in one of these:
 //   Performance Hub → Bells (Bells | Spider); the BAs list → tap a name on Bells;
 //   Coaching library + Manual + Campaign Knowledge → Library; Coaching's
 //   The Cycle and My Progress → COD; Quality → a Home card when the week's
 //   report lands; Earnings + breakeven → Profile; Territory → Admin › Office
-//   tools; Schedule is for Coaches and Admins (a BA's own events: Profile).
+//   tools; Schedule opens from Profile (everyone knows the timetable).
 export const TAB_REGISTRY: TabItem[] = [
   {
     id: 'home', label: 'Home', longLabel: 'Home Dashboard',
@@ -63,13 +63,6 @@ export const TAB_REGISTRY: TabItem[] = [
     icon: 'people-circle-outline', kind: 'route', target: '/my-sector',
     visibleFor: ['trainee', 'leader', 'admin'],
     defaultVisibleByRole: { trainee: true, leader: true, admin: true },
-  },
-  {
-    // For planning: Coaches and Admins. A BA's own events open from Profile.
-    id: 'schedule', label: 'Schedule', longLabel: 'Schedule',
-    icon: 'calendar-outline', kind: 'tab', target: 'schedule',
-    visibleFor: ['leader', 'admin'],
-    defaultVisibleByRole: { leader: true, admin: true },
   },
   {
     // One surface for the whole Cycle of Development, a BA's journey included.
