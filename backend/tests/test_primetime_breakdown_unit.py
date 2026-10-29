@@ -128,7 +128,8 @@ def test_the_breakdown_message_carries_tomorrows_primetime(monkeypatch):
 
 def test_not_in_that_day_means_not_in_primetime():
     from routes import primetime as pt
-    for st in ("ab", "ns", "off", "ex"):
+    for st in ("ab", "ns", "ex"):
         assert pt.is_not_in(st)
-    for st in ("", None, "in", "pc", "sd", "rt"):
+    # 'off' is what an unfilled Bells day reads as: still in.
+    for st in ("", None, "in", "off", "pc", "sd", "rt"):
         assert not pt.is_not_in(st)
