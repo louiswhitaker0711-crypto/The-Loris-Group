@@ -9,8 +9,8 @@ day's Manual page is compared with yesterday's, and each of today's topics is
 
 Two flags come from how they were graded on earlier days:
 
-  * behind     — a topic whose latest grade was below what that day expected
-                 (or Not Learnt): go back over it first ("Didn't land yesterday").
+  * behind     — a topic whose latest grade is Not Learnt: go back over it
+                 first ("Didn't land yet"). A pass is never behind.
   * ahead      — a topic of today's already graded above today's expectation.
 
 Topics are matched by name, ignoring case, so a Manual page edited in the app
@@ -67,24 +67,28 @@ def latest_grades(past: Iterable[dict]) -> dict[str, dict]:
     return best
 
 
+_SCALE = {"know", "do", "deliver"}      # the field-day grades; Academy days are Learnt / Not Learnt
+
+
 def flags(today: list[dict], past: Iterable[dict]) -> tuple[list[dict], list[dict]]:
     """(today's items with `ahead` set, the behind list).
 
-    behind: topics whose latest grade was below what that day expected, or
-    Not Learnt — whether or not they're on today's page.
-    ahead: today's topics already graded above today's expectation."""
+    behind: topics whose latest grade is Not Learnt — a real miss. A pass
+    ("Learnt" on an Academy day, or any Know/Do/Deliver) is never behind.
+    ahead: today's topics already graded on the field scale (Know/Do/Deliver)
+    above today's aim."""
     latest = latest_grades(past)
     behind = []
     for k, p in latest.items():
-        g = level(p.get("grade"))
-        if g == 0 or g < level(p.get("expected")):
+        if level(p.get("grade")) == 0:
             behind.append({"topic": p.get("topic") or k, "grade": p.get("grade"), "expected": p.get("expected") or None,
                            "day": p.get("day")})
     behind.sort(key=lambda b: (b.get("day") or 0))
     out = []
     for it in today:
         p = latest.get(_key(it.get("topic")))
+        g = str((p or {}).get("grade") or "").strip().lower()
         row = dict(it)
-        row["ahead"] = bool(p and level(p.get("grade")) > level(it.get("confidence_expected")) and level(p.get("grade")) > 0)
+        row["ahead"] = bool(p and g in _SCALE and level(g) > level(it.get("confidence_expected")))
         out.append(row)
     return out, behind

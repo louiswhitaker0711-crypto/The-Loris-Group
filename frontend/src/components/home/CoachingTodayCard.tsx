@@ -103,7 +103,8 @@ function PersonCard({ p, s, c }: { p: CoachPerson; s: any; c: any }) {
       {behind > 0 && (
         <View style={s.behind}>
           <Text style={s.behindTitle}>Behind · go back over first</Text>
-          {(p.behind || []).map((b) => <Text key={b.topic} style={s.behindItem}>{`${b.topic} · graded ${b.grade}`}</Text>)}
+          {(p.behind || []).slice(0, 5).map((b) => <Text key={b.topic} style={s.behindItem}>{`${b.topic} · ${b.grade}`}</Text>)}
+          {behind > 5 && <Text style={s.behindItem}>{`+ ${behind - 5} more on the guide`}</Text>}
         </View>
       )}
       <Text style={s.section}>{fresh.length ? `What to teach today · ${taughtNew} of ${fresh.length}` : 'What to teach today'}</Text>
