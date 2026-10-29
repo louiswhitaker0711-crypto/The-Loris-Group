@@ -46,9 +46,13 @@ export default function FolderTag({ value, defaultHead, defaultTitle, isAdmin, o
   const head = cur.head || defaultHead;
   const set = (patch: Partial<FolderMeta>) => onChange({ ...cur, ...patch });
   const needle = q.trim().toLowerCase();
+  const [level, setLevel] = useState<string>('root');
+  // Stages in the order the Owner reads them: 1, 2, 3, 4, then Sector-Site Leader.
+  const ORDER = [1, 2, 3, 4, 5, 6];
+  const stages = [...(folder.data?.cod || [])].sort((a, b) => ORDER.indexOf(a.stage) - ORDER.indexOf(b.stage));
   return (
     <>
-      <Pressable onPress={() => setOpen(true)} style={s.tag} accessibilityRole="button" accessibilityLabel="Where this note files">
+      <Pressable onPress={() => { setLevel('root'); setQ(''); setOpen(true); }} style={s.tag} accessibilityRole="button" accessibilityLabel="Where this note files">
         <Ionicons name="folder-outline" size={14} color={c.primary} />
         <Text style={s.tagText} numberOfLines={1}>
           {headLabel(folder.data, head)} · {cur.title || defaultTitle}{cur.share ? ' · for everyone' : ''}
@@ -78,26 +82,48 @@ export default function FolderTag({ value, defaultHead, defaultTitle, isAdmin, o
             )}
             <Text style={s.label}>Heading</Text>
             <TextInput value={q} onChangeText={setQ} placeholder="Search the headings" placeholderTextColor={c.textMuted} style={s.input} />
-            <ScrollView style={{ maxHeight: 340 }} keyboardShouldPersistTaps="handled">
-              {(folder.data?.pitch || []).filter((p) => !needle || p.label.toLowerCase().includes(needle)).map((p) => (
-                <Row key={p.head} on={head === p.head} text={p.label} onPress={() => set({ head: p.head })} s={s} c={c} />
-              ))}
-              {(folder.data?.cod || []).map((st) => {
-                const secs = st.sections.map((sec) => ({ ...sec, topics: sec.topics.filter((t) => !needle || t.topic.toLowerCase().includes(needle) || sec.category.toLowerCase().includes(needle)) }))
-                  .filter((sec) => sec.topics.length);
-                if (!secs.length) return null;
-                return (
-                  <View key={st.stage}>
-                    <Text style={s.group}>{st.name}</Text>
-                    {secs.map((sec) => (
-                      <View key={sec.category}>
+            <ScrollView style={{ maxHeight: 380 }} keyboardShouldPersistTaps="handled">
+              {needle ? (
+                // Searching: everything that matches, in one list.
+                <>
+                  {(folder.data?.pitch || []).filter((p) => p.label.toLowerCase().includes(needle)).map((p) => (
+                    <Row key={p.head} on={head === p.head} text={p.label} onPress={() => set({ head: p.head })} s={s} c={c} />
+                  ))}
+                  {stages.map((st) => st.sections.map((sec) => sec.topics
+                    .filter((t) => t.topic.toLowerCase().includes(needle) || sec.category.toLowerCase().includes(needle))
+                    .map((t) => <Row key={t.head} on={head === t.head} text={`${stageTitle(st)} · ${t.topic}`} onPress={() => set({ head: t.head })} s={s} c={c} />)))}
+                </>
+              ) : level === 'root' ? (
+                // Step 1 (the Owner, 29 Oct 2026): Sales, each stage, or Other.
+                <>
+                  <Row more text="Sales" sub={head.startsWith('pitch:') && head !== 'pitch:other' ? headLabel(folder.data, head) : undefined}
+                    onPress={() => setLevel('sales')} s={s} c={c} />
+                  {stages.map((st) => {
+                    const picked = st.sections.some((sec) => sec.topics.some((t) => t.head === head));
+                    return <Row key={st.stage} more text={stageTitle(st)} sub={picked ? headLabel(folder.data, head).split(' · ').slice(1).join(' · ') : undefined}
+                      onPress={() => setLevel(`stage:${st.stage}`)} s={s} c={c} />;
+                  })}
+                  <Row on={head === 'pitch:other' || !head} text="Other" onPress={() => set({ head: 'pitch:other' })} s={s} c={c} />
+                </>
+              ) : (
+                <>
+                  <Pressable onPress={() => setLevel('root')} style={s.backRow} accessibilityRole="button">
+                    <Ionicons name="chevron-back" size={16} color={c.primary} />
+                    <Text style={s.backText}>{level === 'sales' ? 'Sales' : stageTitle(stages.find((x) => `stage:${x.stage}` === level))}</Text>
+                  </Pressable>
+                  {level === 'sales'
+                    ? (folder.data?.pitch || []).filter((p) => p.head !== 'pitch:other').map((p) => (
+                      <Row key={p.head} on={head === p.head} text={p.label} onPress={() => set({ head: p.head })} s={s} c={c} />
+                    ))
+                    : (stages.find((x) => `stage:${x.stage}` === level)?.sections || []).map((sec) => (
+                      // Each COD section with its topics, then a gap: laid out like the COD.
+                      <View key={sec.category} style={s.secBlock}>
                         <Text style={s.section}>{sec.category}</Text>
                         {sec.topics.map((t) => <Row key={t.head} on={head === t.head} text={t.topic} onPress={() => set({ head: t.head })} s={s} c={c} />)}
                       </View>
                     ))}
-                  </View>
-                );
-              })}
+                </>
+              )}
             </ScrollView>
           </Pressable>
         </Pressable>
@@ -106,13 +132,22 @@ export default function FolderTag({ value, defaultHead, defaultTitle, isAdmin, o
   );
 }
 
-function Row({ on, text, onPress, s, c }: any) {
+function Row({ on, text, sub, more, onPress, s, c }: any) {
   return (
-    <Pressable onPress={onPress} style={[s.row, on && s.rowOn]} accessibilityRole="button" accessibilityState={{ selected: on }}>
-      <Text style={[s.opt, on && { color: c.primary }]}>{text}</Text>
+    <Pressable onPress={onPress} style={[s.row, on && s.rowOn]} accessibilityRole="button" accessibilityState={{ selected: !!on }}>
+      <View style={{ flex: 1 }}>
+        <Text style={[s.opt, on && { color: c.primary }]}>{text}</Text>
+        {!!sub && <Text style={[s.small, { color: c.primary }]} numberOfLines={1}>{sub}</Text>}
+      </View>
       {on && <Ionicons name="checkmark" size={17} color={c.primary} />}
+      {more && <Ionicons name="chevron-forward" size={17} color={c.textMuted} />}
     </Pressable>
   );
+}
+
+function stageTitle(st?: { stage: number; name: string }) {
+  if (!st) return '';
+  return st.stage === 5 ? 'Sector-Site Leader' : `Stage ${st.stage === 6 ? 5 : st.stage}`;
 }
 
 const styles = (c: any) => StyleSheet.create({
@@ -129,6 +164,9 @@ const styles = (c: any) => StyleSheet.create({
   small: { fontFamily: fonts.body, fontSize: 12.5, color: c.textMuted },
   group: { fontFamily: fonts.mono, fontSize: 11, letterSpacing: 0.9, textTransform: 'uppercase', color: c.textMuted, marginTop: 12, marginBottom: 2 },
   section: { fontFamily: fonts.bodyBold, fontSize: 13, color: c.text, marginTop: 8, marginBottom: 2 },
+  secBlock: { marginBottom: 14 },
+  backRow: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 10 },
+  backText: { fontFamily: fonts.bodyBold, fontSize: 15, color: c.primary },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11, paddingHorizontal: 6, borderBottomWidth: 1, borderBottomColor: c.border },
   rowOn: { backgroundColor: c.primary + '10' },
   opt: { flex: 1, fontFamily: fonts.bodySemibold, fontSize: 15, color: c.text },
