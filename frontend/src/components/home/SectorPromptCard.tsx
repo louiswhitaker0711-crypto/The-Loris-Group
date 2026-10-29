@@ -86,12 +86,8 @@ export default function SectorPromptCard() {
   }
 
   const m = data.my_setup;
-  const mapLink = data.in_sector && data.phase ? (
-    <Pressable onPress={() => router.push('/sector-map' as never)} style={s.mapLink} accessibilityRole="button" testID="home-sector-map">
-      <Ionicons name="map-outline" size={16} color={c.primary} />
-      <Text style={s.mapLinkText}>Your sector map</Text>
-    </Pressable>
-  ) : null;
+  // No separate map link: the map card's "Go to sector" is the way in (the Owner, 29 Oct 2026).
+  const mapLink = null;
   if (m && data.phase) {
     const bits = [m.goal != null ? `Goal ${m.goal}` : '', m.kpi ? `KPI ${m.kpi}` : '', m.focus ? `Focus: ${m.focus}` : '', m.positive ? `💪 ${m.positive}` : ''].filter(Boolean);
     if (!bits.length) return mapLink;
