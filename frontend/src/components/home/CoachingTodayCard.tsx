@@ -38,13 +38,13 @@ export function aimOf(conf: string | undefined | null, c: any) {
   return conf ? { label: String(conf), bg: c.surface, fg: c.textMuted, todo: '' } : null;
 }
 
-// One line of detail under a topic (the Owner, 29 Oct 2026): what exactly they
-// should know, from the Manual (By the end of the day, else What good looks like).
+// One sentence of detail under a topic, shown in full (the Owner, 29 Oct 2026):
+// what exactly they should know, from the Manual (By the end of the day, else What good looks like).
 export function detailOf(it: { expected_outcome?: string | null; what_good_looks_like?: string | null }): string {
   const raw = String(it.expected_outcome || it.what_good_looks_like || '').replace(/\s+/g, ' ').trim();
   if (!raw) return '';
   const first = raw.split(/(?<=[.!?])\s/)[0];
-  return first.length > 140 ? `${first.slice(0, 137)}\u2026` : first;
+  return first;
 }
 
 export const firstName = (n: string) => (n || '').trim().split(/\s+/)[0] || n;
@@ -119,7 +119,7 @@ function PersonCard({ p, s, c }: { p: CoachPerson; s: any; c: any }) {
                 {!!aim && <View style={[s.aim, { backgroundColor: aim.bg }]}><Text style={[s.aimText, { color: aim.fg }]}>{aim.label}</Text></View>}
                 {it.ahead && <Text style={s.aheadText}>Ahead</Text>}
               </View>
-              {!!detailOf(it) && <Text style={s.aimDo} numberOfLines={1}>{detailOf(it)}</Text>}
+              {!!detailOf(it) && <Text style={s.aimDo}>{detailOf(it)}</Text>}
             </View>
           </Pressable>
         );
