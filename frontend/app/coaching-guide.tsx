@@ -74,7 +74,7 @@ export default function CoachingGuideScreen() {
                 </View>
               )}
             </View>
-            <Text style={s.small} numberOfLines={isOpen ? undefined : 1}>{[detailOf(it), it.taught ? 'taught' : ''].filter(Boolean).join(' · ')}</Text>
+            <Text style={s.small}>{[detailOf(it), it.taught ? 'taught' : ''].filter(Boolean).join(' · ')}</Text>
           </View>
           {it.ahead && <View style={s.ahead}><Text style={s.aheadText}>Ahead</Text></View>}
           <Ionicons name={isOpen ? 'chevron-up' : 'chevron-down'} size={18} color={c.textMuted} />
