@@ -10,13 +10,15 @@ Set-up (morning / sector):        Breakdown (end of day):
 The breakdown's doors / spoken / pitched / closed come from OwnerIQ for that
 day and "hit" from Bells (or OwnerIQ), so a Coach only adds the words. The
 next day's set-up is prompted from the breakdown: the focus suggestion is
-yesterday's "Change" (a suggestion, never filled in), and the KPI suggestion is the step furthest behind the
-Law of Averages. Each person can be sent their own set-up as a push.
+yesterday's "Change" and the KPI is yesterday's "How I'll know" (both filled
+into a new set-up, the Owner, 30 Oct 2026); with no "How I'll know", the KPI
+suggestion is the step furthest behind the Law of Averages. Each person can be sent their own set-up as a push.
 
 Collection `sector_days`, one per (user_id, date):
     {office_id, user_id, user_name, date,
      setup: {goal, kpi_metric, kpi_target, focus, by_id, at},
-     breakdown: {doors, spoken, pitched, closed, note, goal, hit, proud, change, by_id, at}}
+     breakdown: {doors, spoken, pitched, closed, note, goal, hit, proud, proud2, proud3,
+                 gap, why, change, primetime, know_metric, know_target, by_id, at}}
 Coaches edit their team (and themselves), Admins the office; a BA can fill in
 their own.
 """
@@ -51,6 +53,10 @@ CHANGE_OPTIONS = [
     "Qualifying early", "Call backs", "Intro",
 ]
 MAX_TEXT = 160
+# The breakdown's biggest gap (the Owner, 30 Oct 2026): low volume, or the
+# step between two numbers that's furthest behind the Law of Averages.
+GAP_LABELS = {"volume": "Low volume", "doors_spoken": "Doors → spoken", "spoken_pitched": "Spoken → pitched",
+              "pitched_closed": "Pitched → closed", "closed_signup": "Closed → sign-up"}
 
 
 def today_iso() -> str:
@@ -150,11 +156,21 @@ async def cod_options(office_id) -> list[dict]:
 
 
 def clean_breakdown(body: dict) -> dict:
+    gap = str(body.get("gap") or "").strip()
+    gap = gap if gap in GAP_LABELS else ""
+    know = str(body.get("know_metric") or "").strip().lower()
+    know = know if know in KPI_METRICS else ""
     out = {"doors": _int(body.get("doors")), "spoken": _int(body.get("spoken")),
            "pitched": _int(body.get("pitched")), "closed": _int(body.get("closed")),
            "note": _text(body.get("note")), "goal": _int(body.get("goal"), 0, 30),
            "hit": _int(body.get("hit"), 0, 30), "proud": _text(body.get("proud")),
            "change": _text(body.get("change")),
+           # Up to three positives, the biggest gap, why, the Primetime topic and
+           # how they'll know it worked (the Owner, 30 Oct 2026). "How I'll know"
+           # becomes tomorrow's KPI, and "change" tomorrow's focus.
+           "proud2": _text(body.get("proud2")), "proud3": _text(body.get("proud3")),
+           "gap": gap, "why": _text(body.get("why")), "primetime": _text(body.get("primetime")),
+           "know_metric": know, "know_target": _int(body.get("know_target"), 0, 500) if know else None,
            # Silver / Gold / took The Round, from Field IQ (sign-ups = Silver + Gold).
            "silver": _int(body.get("silver"), 0, 30), "gold": _int(body.get("gold"), 0, 30),
            "round": _int(body.get("round"), 0, 30),
@@ -281,7 +297,7 @@ def breakdown_text(rows: list, iso: str, sector_goal: Optional[int] = None, post
         b = r.get("breakdown") or {}
         nums = [b.get(k) for k in ("doors", "spoken", "pitched", "closed")]
         if not any(v is not None for v in nums) and b.get("hit") is None and not b.get("proud") and not b.get("change") \
-                and not b.get("cod_note"):
+                and not b.get("cod_note") and not b.get("gap") and not b.get("why") and not b.get("primetime"):
             continue
         out += ["", f"*{_first(r.get('user_name'))}*"]
         if any(v is not None for v in nums):
@@ -293,10 +309,20 @@ def breakdown_text(rows: list, iso: str, sector_goal: Optional[int] = None, post
         if goal is not None or hit is not None:
             fire = "🔥" if goal is not None and hit is not None and hit >= goal and hit > 0 else ""
             out.append(f"Goal: {'-' if goal is None else goal} hit: {'-' if hit is None else hit}{fire}")
-        if b.get("proud"):
-            out.append(f"Proud of: {b['proud']}")
+        proud = [x for x in (b.get("proud"), b.get("proud2"), b.get("proud3")) if x]
+        if proud:
+            out.append(f"Proud of: {', '.join(proud)}")
+        if b.get("gap") in GAP_LABELS:
+            out.append(f"Biggest gap: {GAP_LABELS[b['gap']]}")
+        if b.get("why"):
+            out.append(f"Why: {b['why']}")
         if b.get("change"):
             out.append(f"Change: {b['change']}")
+        if b.get("primetime"):
+            out.append(f"Primetime: {b['primetime']}")
+        if b.get("know_metric") in KPI_METRICS:
+            t = b.get("know_target")
+            out.append(f"How I'll know: {f'{t} ' if t is not None else ''}{KPI_METRICS[b['know_metric']]}")
         if b.get("cod_note"):
             topic = (r.get("week_focus") or {}).get("topic")
             out.append(f"COD{f' ({topic})' if topic else ''}: {b['cod_note']}")
@@ -466,7 +492,11 @@ async def sector_day(request: Request, date: Optional[str] = None):
             "prefill": pre.get(p["user_id"]) or {},
             "yesterday": {"change": yb.get("change") or "", "proud": yb.get("proud") or "",
                           "goal": (y.get("setup") or {}).get("goal") or yb.get("goal"),
-                          "kpi": suggest_kpi(yb)},
+                          # "How I'll know" from yesterday's breakdown is tomorrow's KPI;
+                          # otherwise the step furthest behind the Law of Averages.
+                          "kpi": ({"kpi_metric": yb["know_metric"], "kpi_target": yb.get("know_target")}
+                                  if yb.get("know_metric") in KPI_METRICS else suggest_kpi(yb)),
+                          "from_breakdown": yb.get("know_metric") in KPI_METRICS},
         })
     return {
         "date": iso, "previous_date": prev,

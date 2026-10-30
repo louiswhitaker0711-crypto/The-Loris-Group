@@ -29,7 +29,9 @@ type CodItem = { id: string; stage: number; topic: string; category?: string };
 type CodDay = { stages: number[]; pick: CodItem | null; observed: { by_name: string; date: string } | null };
 type Breakdown = { doors: number | null; spoken: number | null; pitched: number | null; closed: number | null;
   note: string; goal: number | null; hit: number | null; proud: string; change: string;
-  silver?: number | null; gold?: number | null; round?: number | null; cod_note?: string };
+  silver?: number | null; gold?: number | null; round?: number | null; cod_note?: string;
+  proud2?: string; proud3?: string; gap?: string; why?: string; primetime?: string;
+  know_metric?: string | null; know_target?: number | null };
 type Person = { user_id: string; user_name: string; setup: Setup | null; breakdown: Breakdown | null;
   prefill: Partial<Record<'doors' | 'spoken' | 'pitched' | 'closed' | 'hit' | 'silver' | 'gold' | 'round', number>>;
   yesterday: { change: string; proud: string; goal: number | null; kpi: { kpi_metric: string; kpi_target: number } | null };
@@ -380,9 +382,13 @@ function SetupCard({ p, date, opts, codOptions, sectorPeople, open, onToggle, on
   const [exText, setExText] = useState<string>(cur.example_text || '');
   const teachers: Array<{ user_id: string; user_name: string }> = (sectorPeople || []).filter((x: any) => x.user_id !== p.user_id);
   const [goal, setGoal] = useState(cur.goal != null ? String(cur.goal) : '');
-  const [metric, setMetric] = useState<string>(cur.kpi_metric || '');
-  const [target, setTarget] = useState(cur.kpi_target != null ? String(cur.kpi_target) : '');
-  const [focus, setFocus] = useState(cur.focus || '');
+  // A new set-up starts from yesterday's breakdown (the Owner, 30 Oct 2026):
+  // "What will change" is the focus and "How I'll know" the KPI.
+  const yb0 = p.yesterday || {};
+  const fromBd = !p.setup && !shadow && yb0.from_breakdown && yb0.kpi;
+  const [metric, setMetric] = useState<string>(cur.kpi_metric || (fromBd ? yb0.kpi.kpi_metric : ''));
+  const [target, setTarget] = useState(cur.kpi_target != null ? String(cur.kpi_target) : fromBd && yb0.kpi.kpi_target != null ? String(yb0.kpi.kpi_target) : '');
+  const [focus, setFocus] = useState(cur.focus || (!p.setup ? yb0.change || '' : ''));
   const [positive, setPositive] = useState(cur.positive || '');
   const [busy, setBusy] = useState(false);
   const y = p.yesterday || {};
@@ -564,6 +570,36 @@ function CodObserved({ p, date, canMark, onSaved, s, c }: any) {
   );
 }
 
+// Biggest gap (the Owner, 30 Oct 2026): each step's rate against the Law of
+// Averages (120 doors · 70 spoken · 25 pitched · 15 closed · 4 sign-ups), plus
+// "Low volume" when they simply didn't talk to enough people. A score under 1
+// is behind; the lowest is suggested.
+const LOA_DAY = { doors: 120, spoken: 70, pitched: 25, closed: 15, signups: 4 };
+const GAP_KNOW: Record<string, string> = { volume: 'doors', doors_spoken: 'spoken', spoken_pitched: 'pitched', pitched_closed: 'closes', closed_signup: 'closes' };
+type Gap = { key: string; label: string; detail: string; score: number | null };
+function gapsFor(v: Record<string, string>, signups: number | null): Gap[] {
+  const n = (k: string) => (v[k] === '' || v[k] == null ? null : Number(v[k]));
+  const d = n('doors'), sp = n('spoken'), pi = n('pitched'), cl = n('closed');
+  const pct = (a: number) => `${Math.round(a * 100)}%`;
+  const step = (key: string, label: string, top: number | null, bot: number | null, aim: number, unit: string): Gap => {
+    if (top == null || bot == null || !bot) return { key, label, detail: label, score: null };
+    const r = top / bot;
+    const short = Math.max(0, Math.round(aim * bot - top));
+    return { key, label, score: r / aim, detail: `${label} ${pct(r)} (aim ${pct(aim)})${short ? ` · ${short} ${unit} short` : ''}` };
+  };
+  const vol: Gap = d == null
+    ? { key: 'volume', label: 'Low volume', detail: 'Low volume', score: null }
+    : { key: 'volume', label: 'Low volume', score: Math.min(d / LOA_DAY.doors, sp != null ? sp / LOA_DAY.spoken : 1),
+        detail: `Doors ${d} (aim ${LOA_DAY.doors})${sp != null ? ` · spoken ${sp} (aim ${LOA_DAY.spoken})` : ''}` };
+  return [
+    vol,
+    step('doors_spoken', 'Doors → spoken', sp, d, LOA_DAY.spoken / LOA_DAY.doors, 'spoken'),
+    step('spoken_pitched', 'Spoken → pitched', pi, sp, LOA_DAY.pitched / LOA_DAY.spoken, 'pitches'),
+    step('pitched_closed', 'Pitched → closed', cl, pi, LOA_DAY.closed / LOA_DAY.pitched, 'closes'),
+    step('closed_signup', 'Closed → sign-up', signups, cl, LOA_DAY.signups / LOA_DAY.closed, 'sign-ups'),
+  ];
+}
+
 function BreakdownCard({ p, date, opts, canMarkCod, open, onToggle, onSaved, s, c }: any) {
   const cur: Partial<Breakdown> = p.breakdown || {};
   const pre = p.prefill || {};
@@ -576,12 +612,44 @@ function BreakdownCard({ p, date, opts, canMarkCod, open, onToggle, onSaved, s, 
   const [note, setNote] = useState(cur.note || '');
   const [proud, setProud] = useState(cur.proud || '');
   const [change, setChange] = useState(cur.change || '');
+  const [proud2, setProud2] = useState(cur.proud2 || '');
+  const [proud3, setProud3] = useState(cur.proud3 || '');
+  const [extraProud, setExtraProud] = useState((cur.proud3 ? 2 : cur.proud2 ? 1 : 0));
+  const [gap, setGap] = useState<string>(cur.gap || '');
+  const [why, setWhy] = useState(cur.why || '');
+  const [pt, setPt] = useState(cur.primetime || '');
+  const [know, setKnow] = useState<string>(cur.know_metric || '');
+  const [knowTarget, setKnowTarget] = useState(cur.know_target != null ? String(cur.know_target) : '');
+  const metrics: Array<{ key: string; label: string; loa: number | null }> = opts?.kpi_metrics || [];
   const [codNote, setCodNote] = useState(cur.cod_note || '');
   const [busy, setBusy] = useState(false);
   useEffect(() => { if (!p.breakdown) setVals(fresh()); }, [p.prefill]); // eslint-disable-line react-hooks/exhaustive-deps
   // Sign-ups are Silver + Gold once either is typed.
   const split = vals.silver !== '' || vals.gold !== '';
   const signups = split ? (num(vals.silver) || 0) + (num(vals.gold) || 0) : num(vals.hit);
+
+  const gaps = gapsFor(vals, signups);
+  const suggested = gaps.filter((g) => g.score != null).sort((a, b) => (a.score as number) - (b.score as number))[0];
+  const gapNow = gap || (suggested && (suggested.score as number) < 1 ? suggested.key : '');
+  // With nothing chosen yet, "How I'll know" starts from the suggested gap.
+  useEffect(() => {
+    if (p.breakdown?.know_metric || know || !gapNow) return;
+    const m = GAP_KNOW[gapNow];
+    if (!m) return;
+    setKnow(m);
+    const loa = metrics.find((x) => x.key === m)?.loa;
+    setKnowTarget(loa ? String(loa) : '');
+  }, [gapNow]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pickGap = (k: string) => {
+    setGap(k);
+    // "How I'll know" follows the gap until they choose one themselves.
+    const m = GAP_KNOW[k];
+    if (!cur.know_metric && m && (!know || know === GAP_KNOW[gapNow])) {
+      setKnow(m);
+      const loa = metrics.find((x) => x.key === m)?.loa;
+      setKnowTarget(loa ? String(loa) : '');
+    }
+  };
 
   const nums = p.breakdown ? [cur.doors, cur.spoken, cur.pitched, cur.closed].map((v) => (v == null ? '-' : v)).join('/') : '';
   const tiers = p.breakdown && (cur.silver != null || cur.gold != null) ? ` (🥈${cur.silver ?? 0} 🥇${cur.gold ?? 0} ⭕️${cur.round ?? 0})` : '';
@@ -592,7 +660,9 @@ function BreakdownCard({ p, date, opts, canMarkCod, open, onToggle, onSaved, s, 
     try {
       await apiService.saveSectorDay(p.user_id, date, { breakdown: {
         doors: num(vals.doors), spoken: num(vals.spoken), pitched: num(vals.pitched), closed: num(vals.closed),
-        hit: signups, silver: num(vals.silver), gold: num(vals.gold), round: num(vals.round), goal: num(goal), note, proud, change, cod_note: codNote } });
+        hit: signups, silver: num(vals.silver), gold: num(vals.gold), round: num(vals.round), goal: num(goal), note, proud, change, cod_note: codNote,
+        proud2: extraProud >= 1 ? proud2 : '', proud3: extraProud >= 2 ? proud3 : '',
+        gap: gapNow, why, primetime: pt, know_metric: know || null, know_target: know ? num(knowTarget) : null } });
       toast.success('Saved'); onSaved(); onToggle();
     } catch (e) { showAlert('Could not save', errText(e, 'Try again.')); }
     finally { setBusy(false); }
@@ -645,10 +715,46 @@ function BreakdownCard({ p, date, opts, canMarkCod, open, onToggle, onSaved, s, 
           </Text>
           <Text style={s.label}>Proud of</Text>
           <Chips items={opts?.proud || []} value={proud} onPick={setProud} s={s} c={c} />
-          <TextInput value={proud} onChangeText={setProud} placeholder="Or type it" placeholderTextColor={c.textMuted} style={s.input} />
-          <Text style={s.label}>Change (becomes tomorrow's focus)</Text>
+          <TextInput value={proud} onChangeText={setProud} placeholder="A positive from today" placeholderTextColor={c.textMuted} style={s.input} testID="bd-proud" />
+          {extraProud >= 1 && <TextInput value={proud2} onChangeText={setProud2} placeholder="Another positive" placeholderTextColor={c.textMuted} style={s.input} testID="bd-proud2" />}
+          {extraProud >= 2 && <TextInput value={proud3} onChangeText={setProud3} placeholder="And another" placeholderTextColor={c.textMuted} style={s.input} testID="bd-proud3" />}
+          {extraProud < 2 && (
+            <Pressable onPress={() => setExtraProud(extraProud + 1)} style={[s.ghost, { alignSelf: 'flex-start' }]} accessibilityRole="button" testID="bd-proud-add">
+              <Ionicons name="add" size={14} color={c.primary} />
+              <Text style={s.ghostText}>Add a positive</Text>
+            </Pressable>
+          )}
+
+          <Text style={s.label}>Biggest gap</Text>
+          <View style={s.chips}>
+            {gaps.map((g) => (
+              <Pressable key={g.key} onPress={() => pickGap(g.key)} style={[s.chip, gapNow === g.key && s.chipOn]} accessibilityRole="button" testID={`bd-gap-${g.key}`}>
+                <Text style={[s.chipText, gapNow === g.key && { color: c.onPrimary }]}>{g.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+          {!!gapNow && (
+            <Text style={[s.muted, { color: c.red || c.textMuted }]}>
+              {gaps.find((g) => g.key === gapNow)?.detail}{!gap && gapNow ? ' · suggested from the numbers' : ''}
+            </Text>
+          )}
+          <Text style={s.label}>Why?</Text>
+          <TextInput value={why} onChangeText={setWhy} placeholder="What happened at that step" placeholderTextColor={c.textMuted} style={s.input} testID="bd-why" />
+          <Text style={s.label}>What will change (tomorrow's focus)</Text>
           <Chips items={opts?.change || []} value={change} onPick={setChange} s={s} c={c} />
           <TextInput value={change} onChangeText={setChange} placeholder="Or type it" placeholderTextColor={c.textMuted} style={s.input} />
+          <Text style={s.label}>Primetime topic</Text>
+          <TextInput value={pt} onChangeText={setPt} placeholder="What you'll work on in Primetime" placeholderTextColor={c.textMuted} style={s.input} testID="bd-primetime" />
+          <Text style={s.label}>How will I know it's worked? (tomorrow's KPI)</Text>
+          <View style={s.chips}>
+            {metrics.map((m) => (
+              <Pressable key={m.key} onPress={() => { setKnow(know === m.key ? '' : m.key); if (know !== m.key) setKnowTarget(m.loa ? String(m.loa) : ''); }}
+                style={[s.chip, know === m.key && s.chipOn]} accessibilityRole="button" testID={`bd-know-${m.key}`}>
+                <Text style={[s.chipText, know === m.key && { color: c.onPrimary }]}>{m.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+          {!!know && <TextInput value={knowTarget} onChangeText={setKnowTarget} keyboardType="number-pad" placeholder="Target" placeholderTextColor={c.textMuted} style={[s.input, s.small]} testID="bd-know-target" />}
           <Pressable onPress={save} disabled={busy} style={s.btn} accessibilityRole="button">
             {busy ? <ActivityIndicator size="small" color={c.onPrimary} /> : <Ionicons name="checkmark" size={16} color={c.onPrimary} />}
             <Text style={s.btnText}>Save</Text>
