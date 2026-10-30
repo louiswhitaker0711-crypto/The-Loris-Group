@@ -162,16 +162,25 @@ export default function PrimetimeBoard({ data, week, dayIndex, office, canEdit }
     <View style={s.wrap}>
       {board.length === 0 && <Text style={s.muted}>Nothing planned yet. Add a topic: who's running it, the topic, then who's watching and who's learning.</Text>}
 
-      {board.map((b) => (b.layout === 'list'
-        ? <ListCard key={b.key} b={b} s={s} c={c} nameOf={shortOf} canPlace={canPlace} canEdit={canEdit}
-            onHost={() => setPick({ kind: 'host', key: b.key })} onAdd={() => setPick({ kind: 'corner', key: b.key, corner: 'learning' })}
-            onRemove={(id) => removeFrom(b.key, id)} onDelete={() => removeSession(b.key)}
-            picker={<Picker here={(p) => !!p && p.kind !== 'new' && p.key === b.key} />} />
-        : <TriangleCard key={b.key} b={b} s={s} c={c} nameOf={shortOf} canPlace={canPlace} canEdit={canEdit}
-            onHost={() => setPick({ kind: 'host', key: b.key })} onTopic={(t) => setTopic(b.key, t)}
-            onAdd={(corner) => setPick({ kind: 'corner', key: b.key, corner })}
-            onRemove={(id) => removeFrom(b.key, id)} onDelete={() => removeSession(b.key)}
-            picker={<Picker here={(p) => !!p && p.kind !== 'new' && p.key === b.key} />} />))}
+      {/* Triangles sit side by side on one line, like the whiteboard; they wrap
+          only when the screen runs out of room. Pitch practice lists go under. */}
+      {board.some((b) => b.layout !== 'list') && (
+        <View style={s.triRow}>
+          {board.filter((b) => b.layout !== 'list').map((b) => (
+            <TriangleCard key={b.key} b={b} s={s} c={c} nameOf={shortOf} canPlace={canPlace} canEdit={canEdit}
+              onHost={() => setPick({ kind: 'host', key: b.key })} onTopic={(t) => setTopic(b.key, t)}
+              onAdd={(corner) => setPick({ kind: 'corner', key: b.key, corner })}
+              onRemove={(id) => removeFrom(b.key, id)} onDelete={() => removeSession(b.key)}
+              picker={<Picker here={(p) => !!p && p.kind !== 'new' && p.key === b.key} />} />
+          ))}
+        </View>
+      )}
+      {board.filter((b) => b.layout === 'list').map((b) => (
+        <ListCard key={b.key} b={b} s={s} c={c} nameOf={shortOf} canPlace={canPlace} canEdit={canEdit}
+          onHost={() => setPick({ kind: 'host', key: b.key })} onAdd={() => setPick({ kind: 'corner', key: b.key, corner: 'learning' })}
+          onRemove={(id) => removeFrom(b.key, id)} onDelete={() => removeSession(b.key)}
+          picker={<Picker here={(p) => !!p && p.kind !== 'new' && p.key === b.key} />} />
+      ))}
 
       {canEdit && (
         <>
@@ -222,8 +231,8 @@ function TriangleCard({ b, s, c, nameOf, canPlace, canEdit, onHost, onTopic, onA
 }) {
   const [w, setW] = useState(0);
   // A small triangle: the topic sits in its wide lower half and wraps to two lines.
-  const tw = Math.min(w, 300);
-  const h = Math.round(Math.min(tw * 0.42, 120));
+  const tw = Math.min(w, 150);
+  const h = Math.round(Math.min(tw * 0.5, 72));
   const x0 = (w - tw) / 2;
   const onLayout = (e: LayoutChangeEvent) => setW(e.nativeEvent.layout.width);
   const mine = canEdit && canPlace(b.host_id);
@@ -240,7 +249,7 @@ function TriangleCard({ b, s, c, nameOf, canPlace, canEdit, onHost, onTopic, onA
     </View>
   );
   return (
-    <View style={s.card}>
+    <View style={[s.card, s.triCard]}>
       {canEdit && mine && (
         <Pressable onPress={onDelete} hitSlop={8} style={s.remove} accessibilityRole="button" accessibilityLabel="Remove this topic">
           <Ionicons name="trash-outline" size={16} color={c.textMuted} />
@@ -254,7 +263,7 @@ function TriangleCard({ b, s, c, nameOf, canPlace, canEdit, onHost, onTopic, onA
           {mine && <Ionicons name="swap-horizontal" size={13} color={c.onPrimary} />}
         </Pressable>
       </View>
-      <View onLayout={onLayout} style={{ height: h || 110, marginTop: 2 }}>
+      <View onLayout={onLayout} style={{ height: h || 64, marginTop: 2 }}>
         {w > 0 && (
           <Svg width={w} height={h} style={StyleSheet.absoluteFill as any}>
             <Polygon points={`${x0 + tw / 2},2 ${x0 + tw - 2},${h - 2} ${x0 + 2},${h - 2}`} fill={c.surface} stroke={c.primary} strokeWidth={2} strokeLinejoin="round" />
@@ -262,7 +271,7 @@ function TriangleCard({ b, s, c, nameOf, canPlace, canEdit, onHost, onTopic, onA
         )}
         {/* The middle: the topic, two lines at most, inside the triangle. */}
         {w > 0 && (
-          <View style={[s.topicWrap, { left: x0 + tw * 0.24, width: tw * 0.52, top: h * 0.46, height: h * 0.5 }]}>
+          <View style={[s.topicWrap, { left: x0 + tw * 0.18, width: tw * 0.64, top: h * 0.42, height: h * 0.54 }]}>
             {mine
               ? <TextInput value={b.topic} onChangeText={(t) => onTopic(t.replace(/\n/g, ' '))} placeholder="Topic" placeholderTextColor={c.textMuted}
                   style={s.topicInput} maxLength={60} multiline numberOfLines={2} blurOnSubmit accessibilityLabel="Topic" />
@@ -317,21 +326,23 @@ function ListCard({ b, s, c, nameOf, canPlace, canEdit, onHost, onAdd, onRemove,
 
 const styles = (c: any) => StyleSheet.create({
   wrap: { gap: 10 },
+  triRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'flex-start' },
+  triCard: { flexGrow: 1, flexBasis: 150, minWidth: 150, maxWidth: 210, paddingHorizontal: 8, paddingVertical: 8 },
   card: { backgroundColor: c.background, borderRadius: 14, borderWidth: 1, borderColor: c.border, paddingHorizontal: 12, paddingVertical: 10, gap: 5 },
   remove: { position: 'absolute', top: 8, right: 8, zIndex: 2 },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   host: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: c.primary, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 4, maxWidth: 220 },
-  hostText: { fontFamily: fonts.bodyBold, fontSize: 13, color: c.onPrimary },
+  hostText: { fontFamily: fonts.bodyBold, fontSize: 12, color: c.onPrimary },
   topicWrap: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
-  topicInput: { width: '100%', height: 36, textAlign: 'center', fontFamily: fonts.bodyBold, fontSize: 13, lineHeight: 17, color: c.text, padding: 0, overflow: 'hidden' },
-  topicText: { textAlign: 'center', fontFamily: fonts.bodyBold, fontSize: 13, lineHeight: 17, color: c.text },
-  corners: { flexDirection: 'row', gap: 10 },
+  topicInput: { width: '100%', height: 30, textAlign: 'center', fontFamily: fonts.bodyBold, fontSize: 11.5, lineHeight: 14, color: c.text, padding: 0, overflow: 'hidden' },
+  topicText: { textAlign: 'center', fontFamily: fonts.bodyBold, fontSize: 11.5, lineHeight: 14, color: c.text },
+  corners: { flexDirection: 'row', gap: 6 },
   corner: { flex: 1, gap: 4, alignItems: 'flex-start' },
-  cornerHead: { fontFamily: fonts.bodySemibold, fontSize: 10.5, letterSpacing: 0.6, textTransform: 'uppercase', color: c.primary },
-  person: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 9, paddingVertical: 3, borderRadius: 999, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, maxWidth: '100%' },
-  personText: { fontFamily: fonts.bodySemibold, fontSize: 12.5, color: c.text, flexShrink: 1 },
+  cornerHead: { fontFamily: fonts.bodySemibold, fontSize: 9.5, letterSpacing: 0.5, textTransform: 'uppercase', color: c.primary },
+  person: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, maxWidth: '100%' },
+  personText: { fontFamily: fonts.bodySemibold, fontSize: 11.5, color: c.text, flexShrink: 1 },
   personX: { color: c.textMuted },
-  addPerson: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 9, paddingVertical: 3, borderRadius: 999, borderWidth: 1, borderStyle: 'dashed', borderColor: c.primary },
+  addPerson: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 999, borderWidth: 1, borderStyle: 'dashed', borderColor: c.primary },
   addPersonText: { fontFamily: fonts.bodySemibold, fontSize: 12.5, color: c.primary },
   listTitle: { fontFamily: fonts.bodyBold, fontSize: 15, color: c.text },
   ppLine: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
