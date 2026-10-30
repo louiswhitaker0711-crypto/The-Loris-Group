@@ -44,6 +44,14 @@ export default function PrimetimeBoard({ data, week, dayIndex, office, canEdit }
     .sort((a, b) => (a.name || '').localeCompare(b.name || '')), [data, dayIndex]);
   const nameOf = (id: string) => (data.people || []).find((p) => p.user_id === id)?.name
     || (data.entries || []).find((e) => e.subject_user_id === id)?.subject_name || '';
+  // On the board: first names (with a last initial when two share one), like the whiteboard.
+  const shortOf = (id: string) => {
+    const full = nameOf(id).trim();
+    const [f, ...rest] = full.split(/\s+/);
+    if (!f) return full;
+    const clash = (data.people || []).some((p) => p.user_id !== id && (p.name || '').trim().split(/\s+/)[0] === f);
+    return clash && rest.length ? `${f} ${rest[rest.length - 1][0]}` : f;
+  };
   const free = useMemo(() => new Set((data.entries || [])
     .filter((e) => e.day_index === dayIndex && e.mode === 'free').map((e) => e.subject_user_id)), [data, dayIndex]);
   const canPlace = (id: string) => canEdit && (!!(data.people || []).find((p) => p.user_id === id)?.can_edit || free.has(id));
@@ -155,11 +163,11 @@ export default function PrimetimeBoard({ data, week, dayIndex, office, canEdit }
       {board.length === 0 && <Text style={s.muted}>Nothing planned yet. Add a topic: who's running it, the topic, then who's watching and who's learning.</Text>}
 
       {board.map((b) => (b.layout === 'list'
-        ? <ListCard key={b.key} b={b} s={s} c={c} nameOf={nameOf} canPlace={canPlace} canEdit={canEdit}
+        ? <ListCard key={b.key} b={b} s={s} c={c} nameOf={shortOf} canPlace={canPlace} canEdit={canEdit}
             onHost={() => setPick({ kind: 'host', key: b.key })} onAdd={() => setPick({ kind: 'corner', key: b.key, corner: 'learning' })}
             onRemove={(id) => removeFrom(b.key, id)} onDelete={() => removeSession(b.key)}
             picker={<Picker here={(p) => !!p && p.kind !== 'new' && p.key === b.key} />} />
-        : <TriangleCard key={b.key} b={b} s={s} c={c} nameOf={nameOf} canPlace={canPlace} canEdit={canEdit}
+        : <TriangleCard key={b.key} b={b} s={s} c={c} nameOf={shortOf} canPlace={canPlace} canEdit={canEdit}
             onHost={() => setPick({ kind: 'host', key: b.key })} onTopic={(t) => setTopic(b.key, t)}
             onAdd={(corner) => setPick({ kind: 'corner', key: b.key, corner })}
             onRemove={(id) => removeFrom(b.key, id)} onDelete={() => removeSession(b.key)}
@@ -202,7 +210,7 @@ function Name({ id, nameOf, s, onRemove, removable }: { id: string; nameOf: (id:
     <Pressable onPress={removable ? onRemove : undefined} disabled={!removable} style={s.person}
       accessibilityRole={removable ? 'button' : undefined} accessibilityLabel={removable ? `Take ${nameOf(id)} off` : nameOf(id)}>
       <Text style={s.personText} numberOfLines={1}>{nameOf(id)}</Text>
-      {removable && <Ionicons name="close" size={13} style={s.personX} />}
+      {removable && <Ionicons name="close" size={12} style={s.personX} />}
     </Pressable>
   );
 }
@@ -213,7 +221,10 @@ function TriangleCard({ b, s, c, nameOf, canPlace, canEdit, onHost, onTopic, onA
   picker: React.ReactNode;
 }) {
   const [w, setW] = useState(0);
-  const h = Math.round(Math.min(w * 0.5, 190));
+  // A small triangle: the topic sits in its wide lower half and wraps to two lines.
+  const tw = Math.min(w, 300);
+  const h = Math.round(Math.min(tw * 0.42, 120));
+  const x0 = (w - tw) / 2;
   const onLayout = (e: LayoutChangeEvent) => setW(e.nativeEvent.layout.width);
   const mine = canEdit && canPlace(b.host_id);
   const corner = (k: Corner, label: string) => (
@@ -236,26 +247,28 @@ function TriangleCard({ b, s, c, nameOf, canPlace, canEdit, onHost, onTopic, onA
         </Pressable>
       )}
       {/* Top of the triangle: who's running it. */}
-      <View style={{ alignItems: 'center' }}>
+      <View style={{ alignItems: 'center', gap: 3 }}>
         <Text style={s.cornerHead}>Running it</Text>
         <Pressable onPress={mine ? onHost : undefined} disabled={!mine} style={s.host} accessibilityRole={mine ? 'button' : undefined}>
           <Text style={s.hostText} numberOfLines={1}>{nameOf(b.host_id) || 'Pick someone'}</Text>
           {mine && <Ionicons name="swap-horizontal" size={13} color={c.onPrimary} />}
         </Pressable>
       </View>
-      <View onLayout={onLayout} style={{ height: h || 150, marginTop: 4 }}>
+      <View onLayout={onLayout} style={{ height: h || 110, marginTop: 2 }}>
         {w > 0 && (
           <Svg width={w} height={h} style={StyleSheet.absoluteFill as any}>
-            <Polygon points={`${w / 2},2 ${w - 2},${h - 2} 2,${h - 2}`} fill={c.surface} stroke={c.primary} strokeWidth={2.5} strokeLinejoin="round" />
+            <Polygon points={`${x0 + tw / 2},2 ${x0 + tw - 2},${h - 2} ${x0 + 2},${h - 2}`} fill={c.surface} stroke={c.primary} strokeWidth={2} strokeLinejoin="round" />
           </Svg>
         )}
-        {/* The middle: the topic. */}
-        <View style={[s.topicWrap, { top: h * 0.48 }]}>
-          {mine
-            ? <TextInput value={b.topic} onChangeText={onTopic} placeholder="Topic" placeholderTextColor={c.textMuted}
-                style={s.topicInput} maxLength={200} accessibilityLabel="Topic" />
-            : <Text style={s.topicText} numberOfLines={2}>{b.topic || 'Topic'}</Text>}
-        </View>
+        {/* The middle: the topic, two lines at most, inside the triangle. */}
+        {w > 0 && (
+          <View style={[s.topicWrap, { left: x0 + tw * 0.24, width: tw * 0.52, top: h * 0.46, height: h * 0.5 }]}>
+            {mine
+              ? <TextInput value={b.topic} onChangeText={(t) => onTopic(t.replace(/\n/g, ' '))} placeholder="Topic" placeholderTextColor={c.textMuted}
+                  style={s.topicInput} maxLength={60} multiline numberOfLines={2} blurOnSubmit accessibilityLabel="Topic" />
+              : <Text style={s.topicText} numberOfLines={2}>{b.topic || 'Topic'}</Text>}
+          </View>
+        )}
       </View>
       {/* The bottom corners: Watching on the left, Learning on the right. */}
       <View style={s.corners}>
@@ -271,6 +284,7 @@ function ListCard({ b, s, c, nameOf, canPlace, canEdit, onHost, onAdd, onRemove,
   b: Board; s: any; c: any; nameOf: (id: string) => string; canPlace: (id: string) => boolean; canEdit: boolean;
   onHost: () => void; onAdd: () => void; onRemove: (id: string) => void; onDelete: () => void; picker: React.ReactNode;
 }) {
+  // Like the whiteboard: "Pitch practice", then "Val — Tom".
   const mine = canEdit && canPlace(b.host_id);
   return (
     <View style={s.card}>
@@ -278,22 +292,20 @@ function ListCard({ b, s, c, nameOf, canPlace, canEdit, onHost, onAdd, onRemove,
         <Text style={s.listTitle}>{b.topic || 'Pitch practice'}</Text>
         {mine && (
           <Pressable onPress={onDelete} hitSlop={8} accessibilityRole="button" accessibilityLabel="Remove Pitch practice">
-            <Ionicons name="trash-outline" size={16} color={c.textMuted} />
+            <Ionicons name="trash-outline" size={15} color={c.textMuted} />
           </Pressable>
         )}
       </View>
-      <View style={s.listRow}>
-        <Text style={s.cornerHead}>Running it</Text>
-        <Pressable onPress={mine ? onHost : undefined} disabled={!mine} style={s.host} accessibilityRole={mine ? 'button' : undefined}>
-          <Text style={s.hostText} numberOfLines={1}>{nameOf(b.host_id)}</Text>
-          {mine && <Ionicons name="swap-horizontal" size={13} color={c.onPrimary} />}
+      <View style={s.ppLine}>
+        <Pressable onPress={mine ? onHost : undefined} disabled={!mine} accessibilityRole={mine ? 'button' : undefined}
+          accessibilityLabel={`${nameOf(b.host_id)} is running it${mine ? ', tap to change' : ''}`}>
+          <Text style={s.ppHost}>{nameOf(b.host_id)}</Text>
         </Pressable>
-      </View>
-      <View style={s.chips}>
+        <Text style={s.ppDash}>{'\u2014'}</Text>
         {b.learning.map((id) => <Name key={id} id={id} nameOf={nameOf} s={s} removable={canPlace(id)} onRemove={() => onRemove(id)} />)}
         {canEdit && (
           <Pressable onPress={onAdd} style={s.addPerson} accessibilityRole="button" accessibilityLabel="Add someone to Pitch practice">
-            <Ionicons name="add" size={14} color={c.primary} />
+            <Ionicons name="add" size={13} color={c.primary} />
             <Text style={s.addPersonText}>Add</Text>
           </Pressable>
         )}
@@ -305,24 +317,26 @@ function ListCard({ b, s, c, nameOf, canPlace, canEdit, onHost, onAdd, onRemove,
 
 const styles = (c: any) => StyleSheet.create({
   wrap: { gap: 10 },
-  card: { backgroundColor: c.background, borderRadius: 16, borderWidth: 1, borderColor: c.border, padding: 12, gap: 6 },
-  remove: { position: 'absolute', top: 10, right: 10, zIndex: 2 },
+  card: { backgroundColor: c.background, borderRadius: 14, borderWidth: 1, borderColor: c.border, paddingHorizontal: 12, paddingVertical: 10, gap: 5 },
+  remove: { position: 'absolute', top: 8, right: 8, zIndex: 2 },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  host: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: c.primary, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 7, maxWidth: 240 },
-  hostText: { fontFamily: fonts.bodyBold, fontSize: 14, color: c.onPrimary },
-  topicWrap: { position: 'absolute', left: '22%', right: '22%', alignItems: 'center', transform: [{ translateY: -18 }] },
-  topicInput: { width: '100%', textAlign: 'center', fontFamily: fonts.bodyBold, fontSize: 16, color: c.text, borderBottomWidth: 1, borderBottomColor: c.border, paddingVertical: 6, paddingHorizontal: 4 },
-  topicText: { textAlign: 'center', fontFamily: fonts.bodyBold, fontSize: 16, color: c.text },
+  host: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: c.primary, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 4, maxWidth: 220 },
+  hostText: { fontFamily: fonts.bodyBold, fontSize: 13, color: c.onPrimary },
+  topicWrap: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
+  topicInput: { width: '100%', height: 36, textAlign: 'center', fontFamily: fonts.bodyBold, fontSize: 13, lineHeight: 17, color: c.text, padding: 0, overflow: 'hidden' },
+  topicText: { textAlign: 'center', fontFamily: fonts.bodyBold, fontSize: 13, lineHeight: 17, color: c.text },
   corners: { flexDirection: 'row', gap: 10 },
-  corner: { flex: 1, gap: 5, alignItems: 'flex-start' },
-  cornerHead: { fontFamily: fonts.bodySemibold, fontSize: 11.5, letterSpacing: 0.6, textTransform: 'uppercase', color: c.primary },
-  person: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, maxWidth: '100%' },
-  personText: { fontFamily: fonts.bodySemibold, fontSize: 13, color: c.text, flexShrink: 1 },
+  corner: { flex: 1, gap: 4, alignItems: 'flex-start' },
+  cornerHead: { fontFamily: fonts.bodySemibold, fontSize: 10.5, letterSpacing: 0.6, textTransform: 'uppercase', color: c.primary },
+  person: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 9, paddingVertical: 3, borderRadius: 999, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, maxWidth: '100%' },
+  personText: { fontFamily: fonts.bodySemibold, fontSize: 12.5, color: c.text, flexShrink: 1 },
   personX: { color: c.textMuted },
-  addPerson: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderStyle: 'dashed', borderColor: c.primary },
-  addPersonText: { fontFamily: fonts.bodySemibold, fontSize: 13, color: c.primary },
-  listTitle: { fontFamily: fonts.bodyBold, fontSize: 16, color: c.text },
-  listRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  addPerson: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 9, paddingVertical: 3, borderRadius: 999, borderWidth: 1, borderStyle: 'dashed', borderColor: c.primary },
+  addPersonText: { fontFamily: fonts.bodySemibold, fontSize: 12.5, color: c.primary },
+  listTitle: { fontFamily: fonts.bodyBold, fontSize: 15, color: c.text },
+  ppLine: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
+  ppHost: { fontFamily: fonts.bodyBold, fontSize: 15, color: c.primary },
+  ppDash: { fontFamily: fonts.bodyBold, fontSize: 15, color: c.textMuted },
   picker: { marginTop: 6, padding: 10, borderRadius: 12, backgroundColor: c.surface, gap: 8 },
   pickTitle: { fontFamily: fonts.bodyBold, fontSize: 14, color: c.text },
   link: { fontFamily: fonts.bodySemibold, fontSize: 14, color: c.primary },
