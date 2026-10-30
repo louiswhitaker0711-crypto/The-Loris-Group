@@ -387,3 +387,19 @@ def test_breakdown_keeps_the_cod_note_and_posts_it():
     assert b["cod_note"] == "Used the assumptive close"
     text = sec.breakdown_text([{"user_name": "Sam B", "breakdown": b, "week_focus": {"topic": "The Close"}}], "2026-10-27")
     assert "COD (The Close): Used the assumptive close" in text
+
+
+def test_breakdown_gap_why_positives_primetime_and_how_ill_know():
+    # The Owner, 30 Oct 2026: up to three positives, the biggest gap, why, what
+    # will change, a Primetime topic and how they'll know it worked.
+    b = sec.clean_breakdown({"doors": 110, "spoken": 62, "pitched": 18, "closed": 12, "hit": 3, "goal": 4,
+                             "proud": "Good intro", "proud2": "Work ethic", "proud3": "",
+                             "gap": "spoken_pitched", "why": "Losing them at the intro", "change": "Neighbour story",
+                             "primetime": "Intros", "know_metric": "pitched", "know_target": 25})
+    assert b["gap"] == "spoken_pitched" and b["know_metric"] == "pitched" and b["know_target"] == 25
+    assert sec.clean_breakdown({"gap": "nonsense", "know_metric": "nonsense", "know_target": 5})["gap"] == ""
+    assert sec.clean_breakdown({"know_metric": "nonsense", "know_target": 5})["know_target"] is None
+    text = sec.breakdown_text([{"user_name": "Example Person", "breakdown": b}], "2026-10-12")
+    assert "Proud of: Good intro, Work ethic\nBiggest gap: Spoken → pitched\nWhy: Losing them at the intro\n" \
+           "Change: Neighbour story\nPrimetime: Intros\nHow I'll know: 25 pitched" in text
+    assert sec.clean_breakdown({"gap": "volume"})["gap"] == "volume"
