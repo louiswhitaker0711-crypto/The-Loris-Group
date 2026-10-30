@@ -537,12 +537,17 @@ async def sector_recap(request: Request, date: Optional[str] = None):
 
 @router.put("/sector/plan/no-show")
 async def mark_no_show(request: Request, date: Optional[str] = None):
-    """Someone scheduled in hasn't turned up: mark them No Show on Bells for
-    today (black) and pull them out of any sector. If sectors are already out,
-    their sector hears "Sectors have changed"."""
+    """Someone isn't here today (the Owner, 30 Oct 2026): No show (black, the
+    default), Scheduled off (grey) or In office (yellow) on Bells, and pulled
+    out of any sector. If sectors are already out, their sector hears
+    "Sectors have changed"."""
     user, iso = await _require_planner(request, date)
     office_id = user.get("office_id")
-    uid = str((await request.json()).get("user_id") or "")
+    body = await request.json()
+    uid = str(body.get("user_id") or "")
+    status = str(body.get("status") or "ns")
+    if status not in ("ns", "ab", "pc"):
+        raise HTTPException(status_code=400, detail="Pick No show, Scheduled off or In office")
     if not ObjectId.is_valid(uid):
         raise HTTPException(status_code=400, detail="Pick a person")
     target = await db.users.find_one({"_id": ObjectId(uid), "office_id": office_id},
@@ -558,7 +563,7 @@ async def mark_no_show(request: Request, date: Optional[str] = None):
         while len(days) < 7:
             days.append(_empty_day())
         day = dict(days[idx] or {})
-        day.update({"status": "ns", "under30": None, "over30": None, "memberships": None})
+        day.update({"status": status, "under30": None, "over30": None, "memberships": None})
         days[idx] = day
         await db.bells_entries.update_one({"id": entry["id"]},
             {"$set": {"days": days, "updated_at": datetime.now(timezone.utc).isoformat()}})
