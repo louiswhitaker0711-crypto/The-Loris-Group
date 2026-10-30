@@ -25,6 +25,9 @@ import HopLines, { type HopLine } from '../src/components/sector/HopLines';
 import BreakdownPrimetime from '../src/components/sector/BreakdownPrimetime';
 import { splitPostcodes } from '../src/utils/postcodes';
 
+// Not here today (Bells): No show, Scheduled off, In office.
+const AWAY = { ns: 'No show', ab: 'Scheduled off', pc: 'In office' } as const;
+const isAway = (p: { day_status?: string }) => ['ns', 'ab', 'pc'].includes(p.day_status || '');
 type Person = { user_id: string; name: string; role: string; sector_leader_id?: string | null; in_today?: boolean; no_show?: boolean; not_scheduled?: boolean; day_status?: string };
 type Sector = { leader_id: string; leader_name: string; postcode: string; goal: number | null; member_ids: string[]; can_delete: boolean; hops?: HopLine[] };
 type Draft = { leader_id: string; postcode: string; goal: string; member_ids: string[] };
@@ -131,9 +134,11 @@ export default function SectorPlanScreen() {
     catch (e) { showAlert('Could not change', err(e)); }
   };
 
-  const noShow = async (uid: string) => {
+  const [askAway, setAskAway] = useState<string | null>(null);
+  const noShow = async (uid: string, status: 'ns' | 'ab' | 'pc' = 'ns') => {
     setBusy(`ns:${uid}`);
-    try { refresh((await apiService.markSectorNoShow(date, uid)).data); toast.success('Marked no show'); }
+    setAskAway(null);
+    try { refresh((await apiService.markSectorNoShow(date, uid, status)).data); toast.success(`Marked ${AWAY[status].toLowerCase()}`); }
     catch (e) { showAlert('Could not mark', err(e)); }
     finally { setBusy(null); }
   };
@@ -175,32 +180,45 @@ export default function SectorPlanScreen() {
       )}
 
       {(() => {
-        // Everyone who could be out today (not scheduled off), no shows at the bottom.
-        const OFF = ['ab', 'off', 'nc'];
-        const roster = people.filter((p) => !OFF.includes(p.day_status || ''))
-          .sort((a, b) => Number(!!a.no_show) - Number(!!b.no_show));
+        // Everyone today, with a "Not here" on each (the Owner, 30 Oct 2026):
+        // No show, Scheduled off or In office. Anyone not here sits at the bottom.
+        const roster = people.filter((p) => p.day_status !== 'nc')
+          .sort((a, b) => Number(isAway(a)) - Number(isAway(b)));
         if (!roster.length) return null;
         return (
           <View style={s.card} testID="plan-in-today">
-            <Text style={s.h}>In today · {roster.filter((p) => !p.no_show).length}</Text>
-            <Text style={s.small}>Tap Not shown up for anyone who hasn’t come in. Tap No show to undo.</Text>
+            <Text style={s.h}>Who's here · {roster.filter((p) => !isAway(p)).length}</Text>
+            <Text style={s.small}>Tap Not here for anyone off, in the office or not shown up. Tap it again to put them back.</Text>
             {roster.map((p) => {
               const sec = sectors.find((x) => x.leader_id === p.sector_leader_id);
+              const away = isAway(p);
+              const st = (p.day_status || '') as keyof typeof AWAY;
               return (
-                <View key={p.user_id} style={s.rosterRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[s.rosterName, p.no_show && s.rosterNo]}>{p.name}</Text>
-                    <Text style={s.small}>
-                      {p.no_show ? 'Not shown up' : p.sector_leader_id ? `In ${first(nameOf(p.sector_leader_id))}'s${sec?.postcode ? ` · ${sec.postcode}` : ''}` : 'Not placed yet'}
-                    </Text>
+                <View key={p.user_id} style={{ gap: 6 }}>
+                  <View style={s.rosterRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[s.rosterName, away && s.rosterNo]}>{p.name}</Text>
+                      <Text style={s.small}>
+                        {away ? AWAY[st] : p.sector_leader_id ? `In ${first(nameOf(p.sector_leader_id))}'s${sec?.postcode ? ` · ${sec.postcode}` : ''}` : 'Not placed yet'}
+                      </Text>
+                    </View>
+                    {away
+                      ? <Pressable onPress={() => shownUp(p.user_id)} disabled={busy === `ns:${p.user_id}`} style={s.nsTag} accessibilityRole="button" accessibilityLabel={`Put ${p.name} back in`} testID={`plan-undo-ns-${p.user_id}`}>
+                          <Text style={s.nsTagText}>{busy === `ns:${p.user_id}` ? '…' : `${AWAY[st]} ✕`}</Text>
+                        </Pressable>
+                      : <Pressable onPress={() => setAskAway(askAway === p.user_id ? null : p.user_id)} disabled={busy === `ns:${p.user_id}`} style={s.nsBtn} accessibilityRole="button" testID={`plan-ns-${p.user_id}`}>
+                          <Text style={s.nsBtnText}>{busy === `ns:${p.user_id}` ? '…' : 'Not here'}</Text>
+                        </Pressable>}
                   </View>
-                  {p.no_show
-                    ? <Pressable onPress={() => shownUp(p.user_id)} disabled={busy === `ns:${p.user_id}`} style={s.nsTag} accessibilityRole="button" accessibilityLabel={`Undo no show for ${p.name}`} testID={`plan-undo-ns-${p.user_id}`}>
-                        <Text style={s.nsTagText}>{busy === `ns:${p.user_id}` ? '…' : 'No show ✕'}</Text>
-                      </Pressable>
-                    : <Pressable onPress={() => noShow(p.user_id)} disabled={busy === `ns:${p.user_id}`} style={s.nsBtn} accessibilityRole="button" testID={`plan-ns-${p.user_id}`}>
-                        <Text style={s.nsBtnText}>{busy === `ns:${p.user_id}` ? '…' : 'Not shown up'}</Text>
-                      </Pressable>}
+                  {askAway === p.user_id && (
+                    <View style={[s.chips, { justifyContent: 'flex-end' }]}>
+                      {(['ns', 'ab', 'pc'] as const).map((k) => (
+                        <Pressable key={k} onPress={() => noShow(p.user_id, k)} style={s.chip} accessibilityRole="button" testID={`plan-away-${k}-${p.user_id}`}>
+                          <Text style={s.chipText}>{AWAY[k]}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  )}
                 </View>
               );
             })}
@@ -232,7 +250,7 @@ export default function SectorPlanScreen() {
             </View>
             <Text style={s.label}>Who's in it{locked ? ' (fixed now the field\u2019s started)' : ''}</Text>
             <View style={s.chips}>
-              {people.filter((p) => p.user_id !== sec.leader_id && !otherLeaders.has(p.user_id) && !p.no_show && !p.not_scheduled
+              {people.filter((p) => p.user_id !== sec.leader_id && !otherLeaders.has(p.user_id) && !isAway(p)
                                     && (canPlace(p) || sec.member_ids.includes(p.user_id))).map((p) => {
                 const on = sec.member_ids.includes(p.user_id);
                 const elsewhere = board.find((x) => x.leader_id !== sec.leader_id && x.member_ids.includes(p.user_id));
@@ -261,7 +279,7 @@ export default function SectorPlanScreen() {
         <View style={s.card}>
           <Text style={s.label}>Who's leading the new sector?</Text>
           <View style={s.chips}>
-            {people.filter((p) => canPlace(p) && !p.no_show && !p.not_scheduled && !board.some((x) => x.leader_id === p.user_id)).map((p) => (
+            {people.filter((p) => canPlace(p) && !isAway(p) && !board.some((x) => x.leader_id === p.user_id)).map((p) => (
               <Pressable key={p.user_id} onPress={() => addSector(p.user_id)} style={s.chip}><Text style={s.chipText}>{p.name}</Text></Pressable>
             ))}
           </View>
@@ -295,7 +313,7 @@ export default function SectorPlanScreen() {
       {board.length > 0 && !dirty && <BreakdownPrimetime date={date} scope="morning" />}
 
       {(() => {
-        const unplaced = people.filter((p) => canPlace(p) && !p.no_show && !p.not_scheduled && p.role !== 'admin' && !board.some((x) => x.member_ids.includes(p.user_id)));
+        const unplaced = people.filter((p) => canPlace(p) && !isAway(p) && p.role !== 'admin' && !board.some((x) => x.member_ids.includes(p.user_id)));
         return unplaced.length > 0 && board.length > 0 ? (
           <Text style={s.muted}>Not in a sector: {unplaced.map((p) => first(p.name)).join(', ')}</Text>
         ) : null;
