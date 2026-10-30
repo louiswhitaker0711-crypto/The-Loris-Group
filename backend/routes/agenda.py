@@ -630,6 +630,9 @@ async def put_row_config(request: Request, office: Optional[str] = None):
 # POST: upsert (admin only). Used both for first save and incremental
 # autosaves. Status defaults to 'draft' on first save.
 # ──────────────────────────────────────────────────────────────────────────
+MAX_PLAN_PHOTOS = 8
+
+
 @router.post("/agenda")
 async def upsert_agenda(request: Request):
     admin = await require_admin(request)
@@ -653,6 +656,13 @@ async def upsert_agenda(request: Request):
 
     themes = _normalize_themes(body.get("themes"))
     stats = _normalize_stats(body.get("stats"))
+    # Photos on the plan (the Owner, 30 Oct 2026): just stored, never read by
+    # AI. Same storage and checks as planner-note photos. Only touched when
+    # the client sends the field, so older clients don't wipe them.
+    photos = None
+    if isinstance(body.get("photos"), list):
+        from routes.notes_folder import _photo_ok
+        photos = [p for p in body["photos"] if _photo_ok(p)][:MAX_PLAN_PHOTOS]
     status_in = (body.get("status") or "draft").lower()
     if status_in not in ("draft", "preview"):
         # 'published' is set only via /publish — silently coerce
@@ -687,6 +697,8 @@ async def upsert_agenda(request: Request):
             "status": next_status,
             "updated_at": now_iso,
         }
+        if photos is not None:
+            update["photos"] = photos
         await db.weekly_agendas.update_one({"id": existing["id"]}, {"$set": update})
         await _mirror_goal_if_changed(existing.get("stats"))
         day_map = await _active_days_by_title(office_id)
@@ -715,6 +727,7 @@ async def upsert_agenda(request: Request):
         "themes": themes,
         "stats": stats,
         "rows": rows,
+        "photos": photos or [],
         "created_by_id": admin.get("id"),
         "created_at": now_iso,
         "updated_at": now_iso,
