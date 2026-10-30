@@ -51,6 +51,8 @@ export default function SectorPlanScreen() {
   const [board, setBoard] = useState<BoardSec[]>([]);
   const [dirty, setDirty] = useState(false);
   const [addingLeader, setAddingLeader] = useState(false);
+  // Who the Not here choices are open for (hooks stay above the early returns).
+  const [askAway, setAskAway] = useState<string | null>(null);
 
   const d = q.data;
   const people: Person[] = d?.people || [];
@@ -134,7 +136,6 @@ export default function SectorPlanScreen() {
     catch (e) { showAlert('Could not change', err(e)); }
   };
 
-  const [askAway, setAskAway] = useState<string | null>(null);
   const noShow = async (uid: string, status: 'ns' | 'ab' | 'pc' = 'ns') => {
     setBusy(`ns:${uid}`);
     setAskAway(null);
