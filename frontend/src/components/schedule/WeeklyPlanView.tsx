@@ -1,7 +1,7 @@
 import { sortByTime } from '../../utils/agendaTime';
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { showAlert } from '../../utils/showAlert';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, RefreshControl, Modal, Pressable,  } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, RefreshControl, Modal, Pressable, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -18,8 +18,9 @@ import { useActiveOffice } from '../../office/ActiveOfficeContext';
 import { apiService } from '../../api/client';
 import WeeklyPlanGridView, { type MergeChange } from './WeeklyPlanGridView';
 import MeetingCodPick from '../planner/MeetingCodPick';
-import AgendaScanReviewSheet, { ScanInFlightOverlay, ApplyResult, ScanPayload } from './AgendaScanReviewSheet';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
+import { api } from '../../api/client';
 import { APP_LOCALE } from '../../utils/appTime';
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -99,7 +100,7 @@ type Stats = Record<string, string>;
 type Agenda = {
   id: string; office_id: string; week_ending: string;
   status: 'draft' | 'preview' | 'published';
-  themes: Themes; stats: Stats; rows: Row[];
+  themes: Themes; stats: Stats; rows: Row[]; photos?: string[];
   created_by_id?: string; created_at?: string; updated_at?: string; published_at?: string | null;
 };
 
@@ -297,7 +298,7 @@ export default function WeeklyPlanView() {
 
   // ── Mutation: save (autosave or manual)
   const saveMut = useMutation({
-    mutationFn: (payload: { week_ending: string; themes: Themes; stats: Stats; rows: Row[]; status?: 'draft' | 'preview' }) =>
+    mutationFn: (payload: { week_ending: string; themes: Themes; stats: Stats; rows: Row[]; photos?: string[]; status?: 'draft' | 'preview' }) =>
       apiService.upsertAgenda({ ...payload, office_id: officeId }).then((r) => r.data),
     onMutate: () => setSavingState('saving'),
     onSuccess: (data: Agenda) => {
@@ -322,6 +323,7 @@ export default function WeeklyPlanView() {
         themes: next.themes,
         stats: next.stats || {},
         rows: next.rows,
+        photos: next.photos || [],
       });
     }, 1200);
   }, [isAdmin, saveMut]);
@@ -406,11 +408,10 @@ export default function WeeklyPlanView() {
     staleTime: 60000,
   });
 
-  // ── Scan from Photo state (hooks must be declared BEFORE any early
-  // return — placed here so the hook order is stable across loading state).
-  const [scanInFlight, setScanInFlight] = useState(false);
-  const [scanResult, setScanResult] = useState<ScanPayload | null>(null);
-  const [scanImageUri, setScanImageUri] = useState<string | null>(null);
+  // ── Plan photos (the Owner, 30 Oct 2026): just uploaded and kept on the
+  // plan — never read by AI, so no AI key is needed.
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoOpen, setPhotoOpen] = useState<string | null>(null);
 
   // ── Loading
   if (q.isLoading || !draft) {
@@ -455,6 +456,7 @@ export default function WeeklyPlanView() {
                 themes: draft.themes,
                 stats: draft.stats || {},
                 rows: draft.rows,
+                photos: draft.photos || [],
               });
               publishMut.mutate(saved.id);
             } catch (e: any) {
@@ -465,77 +467,45 @@ export default function WeeklyPlanView() {
       ],
     );
   };
-  // ── Scan from Photo (Gemini Vision) — handlers ───────────────────────
-  const runScan = async (uri: string) => {
-    setScanImageUri(uri);
-    setScanInFlight(true);
+  const uploadPlanPhoto = async (asset: ImagePicker.ImagePickerAsset) => {
+    setPhotoUploading(true);
     try {
-      const r = await apiService.scanAgendaImage({ uri, name: 'sheet.jpg', type: 'image/jpeg' }, officeId);
-      setScanResult({
-        themes: r.data.themes || {},
-        stats: r.data.stats || {},
-        rows: r.data.rows || [],
-      });
+      const wide = (asset.width || 0) >= (asset.height || 0);
+      const resize = Math.max(asset.width || 0, asset.height || 0) > 1600 ? [{ resize: wide ? { width: 1600 } : { height: 1600 } }] : [];
+      const out = await ImageManipulator.manipulateAsync(asset.uri, resize as any, { compress: 0.75, format: ImageManipulator.SaveFormat.JPEG, base64: true });
+      if (!out.base64) throw new Error('Couldn’t read that photo');
+      const { data } = await api.post('/notes/photo', { image: `data:image/jpeg;base64,${out.base64}` }, { timeout: 60_000 });
+      const url = data?.url;
+      if (url) update((c) => ({ ...c, photos: [...(c.photos || []), url].slice(0, 8) }));
     } catch (e: any) {
-      const status = e?.response?.status;
-      let msg = e?.response?.data?.detail || e?.message || 'Scan failed';
-      // Friendlier copy for the most common failure mode: the image takes
-      // longer than the deployed ingress timeout (~60s) to OCR.
-      if (status === 504 || /timed? ?out|504/i.test(String(msg))) {
-        msg = 'The scan took too long. Try retaking the photo closer, better-lit, or cropped tighter to the sheet — large blurry photos take longest.';
-      }
-      showAlert('Scan failed', String(msg));
-      setScanImageUri(null);
+      showAlert('Couldn’t add the photo', String(e?.response?.data?.detail || e?.message || 'Try again.'));
     } finally {
-      setScanInFlight(false);
+      setPhotoUploading(false);
     }
   };
 
   const onScanFromPhoto = () => {
     if (!isAdmin) return;
+    if ((draft?.photos || []).length >= 8) { showAlert('Photo limit', 'A plan can hold 8 photos. Remove one to add another.'); return; }
     showAlert(
-      'Scan handwritten plan',
-      'Use Gemini Vision to extract themes, stats, and the daily grid from a photo of your weekly planner sheet.',
+      'Add a photo',
+      'The photo is saved on this week\'s plan.',
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Take Photo', onPress: async () => {
           const perm = await ImagePicker.requestCameraPermissionsAsync();
           if (!perm.granted) { showAlert('Permission needed', 'Please allow camera access to take a photo.'); return; }
-          const res = await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.85 });
-          if (!res.canceled && res.assets?.[0]?.uri) await runScan(res.assets[0].uri);
+          const res = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.85 });
+          if (!res.canceled && res.assets?.[0]) await uploadPlanPhoto(res.assets[0]);
         } },
         { text: 'Choose from Library', onPress: async () => {
           const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
           if (!perm.granted) { showAlert('Permission needed', 'Please allow photo access to pick an image.'); return; }
-          const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.85 });
-          if (!res.canceled && res.assets?.[0]?.uri) await runScan(res.assets[0].uri);
+          const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.85 });
+          if (!res.canceled && res.assets?.[0]) await uploadPlanPhoto(res.assets[0]);
         } },
       ],
     );
-  };
-
-  const applyScanSelection = (result: ApplyResult) => {
-    update((c) => {
-      const nextThemes = { ...(c.themes || {}), ...result.themes };
-      const nextStats = { ...(c.stats || {}), ...result.stats };
-      const nextRows = c.rows.map((row) => {
-        const m = result.rowCells.find((rc) => rc.rowLabel.toLowerCase() === row.label.toLowerCase());
-        if (!m) return row;
-        const updated = row.cells.map((cell) => m.cellsToApply[cell.day] || cell);
-        return { ...row, cells: updated };
-      });
-      return { ...c, themes: nextThemes, stats: nextStats, rows: nextRows };
-    });
-    // Persist the admin's "raw_label → target Plan row" decisions so the
-    // next scan auto-picks the same target. Empty target removes a saved
-    // mapping (admin chose Skip).
-    if (result.mappings && Object.keys(result.mappings).length > 0) {
-      apiService.saveScanMappings(result.mappings, officeId).catch(() => {
-        // Non-fatal — apply still succeeded; just lose persistence.
-      });
-    }
-    setScanResult(null);
-    setScanImageUri(null);
   };
 
   const onAddRow = () => {
@@ -876,7 +846,7 @@ export default function WeeklyPlanView() {
                   </PressableScale>
                   <PressableScale style={styles.heroBtnLight} onPress={onScanFromPhoto}>
                     <Ionicons name="camera-outline" size={14} color={colors.primary} />
-                    <Text style={styles.heroBtnLightText}>Scan photo</Text>
+                    <Text style={styles.heroBtnLightText}>Add photo</Text>
                   </PressableScale>
                 </View>
                 <TouchableOpacity onPress={() => setHeroDismissed(true)} style={styles.heroDismiss}>
@@ -977,6 +947,35 @@ export default function WeeklyPlanView() {
               )}
             </DepthCard>
 
+            {/* Photos on the plan — stored only, never scanned */}
+            {((draft.photos || []).length > 0 || photoUploading) && (
+              <DepthCard sheen={false} style={styles.card}>
+                <View style={styles.cardHeader}>
+                  <Ionicons name="images-outline" size={16} color={colors.primary} />
+                  <Text style={styles.cardTitle}>Photos</Text>
+                  {photoUploading && <ActivityIndicator size="small" color={colors.primary} style={{ marginLeft: 8 }} />}
+                </View>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {(draft.photos || []).map((p, i) => (
+                    <View key={p.slice(-40) + i}>
+                      <Pressable onPress={() => setPhotoOpen(p)} accessibilityRole="imagebutton" accessibilityLabel="Open photo">
+                        <Image source={{ uri: p }} style={{ width: 96, height: 96, borderRadius: 10, backgroundColor: colors.surface }} />
+                      </Pressable>
+                      {isAdmin && (
+                        <Pressable
+                          onPress={() => update((c) => ({ ...c, photos: (c.photos || []).filter((_, j) => j !== i) }))}
+                          style={{ position: 'absolute', top: 4, right: 4, width: 22, height: 22, borderRadius: 11, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}
+                          accessibilityRole="button" accessibilityLabel="Remove photo" hitSlop={6}
+                        >
+                          <Ionicons name="close" size={14} color={colors.onPrimary} />
+                        </Pressable>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              </DepthCard>
+            )}
+
             {/* Topics & Presenters header + toolbar */}
             <View style={styles.cardHeaderRow}>
               <View style={[styles.cardHeader, { flex: 1, marginBottom: 0 }]}>
@@ -985,7 +984,7 @@ export default function WeeklyPlanView() {
               </View>
               <TouchableOpacity style={styles.btnLight} onPress={onScanFromPhoto}>
                 <Ionicons name="camera-outline" size={13} color={colors.primary} />
-                <Text style={styles.btnLightText}>Scan</Text>
+                <Text style={styles.btnLightText}>{photoUploading ? 'Uploading…' : 'Photo'}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.btnLight} onPress={() => copyMut.mutate()} disabled={copyMut.isPending}>
                 <Ionicons name="copy-outline" size={13} color={colors.primary} />
@@ -1087,18 +1086,12 @@ export default function WeeklyPlanView() {
         )}
       </ScrollView>
 
-      {/* Scan from Photo overlays — admin only */}
-      <ScanInFlightOverlay visible={scanInFlight} />
-      <AgendaScanReviewSheet
-        visible={!!scanResult}
-        scan={scanResult}
-        draftThemes={draft.themes || {}}
-        draftStats={draft.stats || {}}
-        draftRows={draft.rows.map((r) => ({ id: r.id, label: r.label, cells: r.cells }))}
-        imageUri={scanImageUri}
-        onCancel={() => { setScanResult(null); setScanImageUri(null); }}
-        onApply={applyScanSelection}
-      />
+      {/* Full-size photo */}
+      <Modal visible={!!photoOpen} transparent animationType="fade" onRequestClose={() => setPhotoOpen(null)}>
+        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', alignItems: 'center', justifyContent: 'center' }} onPress={() => setPhotoOpen(null)}>
+          {photoOpen && <Image source={{ uri: photoOpen }} style={{ width: '100%', height: '80%' }} resizeMode="contain" />}
+        </Pressable>
+      </Modal>
 
       {/* Week-ending picker — lets admin jump to any Sunday (past or future) */}
       <WeekEndingPicker
