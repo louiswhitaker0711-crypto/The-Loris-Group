@@ -121,8 +121,8 @@ export default function HomeAreaMap() {
         <Ionicons name="expand-outline" size={16} color={c.primary} />
       </View>
     </Pressable>
-    {/* The one way into the sector from Home (the Owner, 29 Oct 2026). */}
-    <Pressable onPress={() => router.push('/my-sector' as never)} style={s.go} accessibilityRole="button" testID="home-go-to-sector">
+    {/* The one way into the sector from Home: straight to today's sector (the Owner, 31 Oct 2026). */}
+    <Pressable onPress={() => router.push((d?.sector?.leader_id ? `/sector-day?date=${today}&leader=${d.sector.leader_id}` : '/my-sector') as never)} style={s.go} accessibilityRole="button" testID="home-go-to-sector">
       <Text style={s.goText}>Go to sector</Text>
       <Ionicons name="arrow-forward" size={17} color={c.onPrimary} />
     </Pressable>
