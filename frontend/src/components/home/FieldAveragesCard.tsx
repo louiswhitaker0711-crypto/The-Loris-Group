@@ -344,8 +344,9 @@ const createStyles = (c: any) => StyleSheet.create({
   title: { fontFamily: fonts.displayWide, fontSize: 12.5, letterSpacing: 0.9, textTransform: 'uppercase', color: c.text },
   sub: { fontFamily: fonts.body, fontSize: 11, color: c.textMuted, marginTop: 2 },
   // Controls row: liquid Today/Yest. segments + See all + refresh
-  controls: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12 },
-  switch: { flex: 1, maxWidth: 200 },
+  controls: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 12 },
+  // Sized to its three tabs (Week · Yest. · Today) so none is cut off.
+  switch: { flexShrink: 0 },
   seeAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 1, paddingHorizontal: 8, paddingVertical: 5, marginLeft: 'auto' },
   seeAllTxt: { fontFamily: fonts.bodySemibold, fontSize: 11, color: c.primary },
   refreshBtn: { width: 26, alignItems: 'center', justifyContent: 'center', paddingVertical: 5 },
