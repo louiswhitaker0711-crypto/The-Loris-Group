@@ -1,4 +1,5 @@
 import React, { useCallback, useState, useMemo } from 'react';
+import { NavyCard, ON_NAVY } from '../src/components/ui/NavyCard';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput,
   Platform, KeyboardAvoidingView, RefreshControl, useWindowDimensions,
@@ -248,15 +249,20 @@ function BellsScreen() {
             )}
           </View>
 
-          {/* The office's week at a glance. */}
-          <View style={styles.kpis}>
-            <View style={[styles.kpi, styles.kpiLead]}>
-              <Text style={[styles.kpiLabel, { color: colors.onPrimary }]}>Sign-ups</Text>
-              <Text style={[styles.kpiValue, { color: colors.onPrimary }]}>{num(officeTotals.total_sales)}</Text>
-              <Text style={[styles.kpiSub, { color: colors.onPrimary }]} numberOfLines={1}>
-                {num(officeTotals.total_sales) > 0 ? `${num(officeTotals.total_over30)} ${TIER.over30.short} · ${num(officeTotals.total_under30)} ${TIER.under30.short} · ${num(officeTotals.total_memberships)} in The Round` : `${list.data?.office_name || 'Office'}`}
-              </Text>
+          {/* The office's week at a glance: the navy hero card (Nov 2026 look). */}
+          <NavyCard style={{ marginBottom: 10 }}>
+            <Text style={styles.heroKicker}>{(list.data?.office_name || 'Office').toUpperCase()} · {prettyWeekRange(weekEnding).toUpperCase()}</Text>
+            <View style={styles.heroRow}>
+              <Text style={styles.heroNum}>{num(officeTotals.total_sales)}</Text>
+              <Text style={styles.heroOf}>sign-up{num(officeTotals.total_sales) === 1 ? '' : 's'}</Text>
             </View>
+            <View style={styles.heroTiers}>
+              <Text style={styles.heroTier}><Text style={[styles.heroTierN, { color: ON_NAVY.gold }]}>{num(officeTotals.total_over30)}</Text> {TIER.over30.short}</Text>
+              <Text style={styles.heroTier}><Text style={[styles.heroTierN, { color: ON_NAVY.text }]}>{num(officeTotals.total_under30)}</Text> {TIER.under30.short}</Text>
+              <Text style={styles.heroTier}><Text style={[styles.heroTierN, { color: ON_NAVY.cyan }]}>{num(officeTotals.total_memberships)}</Text> The Round</Text>
+            </View>
+          </NavyCard>
+          <View style={styles.kpis}>
             <View style={styles.kpi}>
               <Text style={styles.kpiLabel}>Piece average</Text>
               <Text style={styles.kpiValue}>{pieceAverage.toFixed(statDecimals(pieceAverage))}</Text>
@@ -530,18 +536,26 @@ const createStyles = (colors: any) => StyleSheet.create({
 
   // Headline tiles: three to a row on a phone, all on one line on a wide screen.
   kpis: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  kpi: { flexGrow: 1, flexBasis: 150, minWidth: 104, paddingVertical: 11, paddingHorizontal: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background },
+  kpi: { flexGrow: 1, flexBasis: 150, minWidth: 104, paddingVertical: 12, paddingHorizontal: 14, borderRadius: 18, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background },
+  // Navy hero card (Nov 2026 look)
+  heroKicker: { fontFamily: fonts.bodyBold, fontSize: 12, letterSpacing: 0.8, color: ON_NAVY.muted },
+  heroRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
+  heroNum: { fontFamily: fonts.displayBlack, fontSize: 54, lineHeight: 58, letterSpacing: -2, color: ON_NAVY.text, fontVariant: ['tabular-nums'] as any },
+  heroOf: { fontFamily: fonts.bodySemibold, fontSize: 15, color: ON_NAVY.soft, paddingBottom: 8 },
+  heroTiers: { flexDirection: 'row', flexWrap: 'wrap', gap: 16 },
+  heroTier: { fontFamily: fonts.body, fontSize: 13, color: ON_NAVY.muted },
+  heroTierN: { fontFamily: fonts.displayBlack, fontSize: 17 },
   kpiLead: { backgroundColor: colors.primary, borderColor: colors.primary },
   kpiLabel: { fontFamily: fonts.bodySemibold, fontSize: 11.5, color: colors.textMuted },
-  kpiValue: { fontFamily: fonts.display, fontSize: 24, lineHeight: 30, letterSpacing: -0.6, color: colors.text, marginTop: 3, fontVariant: ['tabular-nums'] as any },
+  kpiValue: { fontFamily: fonts.displayBlack, fontSize: 24, lineHeight: 30, letterSpacing: -0.6, color: colors.text, marginTop: 3, fontVariant: ['tabular-nums'] as any },
   kpiSub: { fontFamily: fonts.body, fontSize: 10.5, color: colors.textMuted, marginTop: 1, opacity: 0.9 },
 
   // Each day's sign-ups (opens the day's breakdown)
   dayRow: { flexDirection: 'row', gap: 6, marginTop: 10 },
-  dayChip: { flex: 1, minHeight: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background },
-  dayChipOn: { borderColor: colors.primary },
+  dayChip: { flex: 1, minHeight: 50, alignItems: 'center', justifyContent: 'center', borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background },
+  dayChipOn: { borderColor: colors.border },
   dayChipLabel: { fontFamily: fonts.mono, fontSize: 9.5, letterSpacing: 0.6, textTransform: 'uppercase', color: colors.textMuted },
-  dayChipValue: { fontFamily: fonts.display, fontSize: 16, color: colors.text, fontVariant: ['tabular-nums'] as any },
+  dayChipValue: { fontFamily: fonts.displayBlack, fontSize: 18, color: colors.text, fontVariant: ['tabular-nums'] as any },
 
   // My week
   myWeek: { marginTop: 10, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background },

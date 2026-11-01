@@ -55,8 +55,8 @@ export function SectionHead({ children, size = 22, tone = 'paper', style, number
 const styles = StyleSheet.create({
   wrap: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   bar: { width: 18, height: 3, borderRadius: 1.5 },
-  kicker: { flexShrink: 1, fontFamily: fonts.displayWide, fontSize: 12, letterSpacing: 1.8, textTransform: 'uppercase' },
-  title: { flexShrink: 1, fontFamily: fonts.display, letterSpacing: -0.2 },
+  kicker: { flexShrink: 1, fontFamily: fonts.bodyBold, fontSize: 12, letterSpacing: 0.8, textTransform: 'uppercase' },
+  title: { flexShrink: 1, fontFamily: fonts.displayBlack, letterSpacing: -0.4 },
 });
 
 export default SectionHead;
