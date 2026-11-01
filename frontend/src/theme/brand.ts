@@ -88,7 +88,8 @@ export const GRADIENT_TEXT = ['#22d0ec', '#22d0ec', '#22d0ec'] as const;
 // Pop heroes — white text ≥4.5:1 on the lightest stop
 export const GRADIENT_HERO = ['#2864d9', '#1d4fa8', '#0c2340'] as const;
 // Ink block base — light theme / dark theme (dark ink must stay below the card)
-export const GRADIENT_INK = ['#17407f', '#0f2c55', '#081a30'] as const;
+// Nov 2026 look: the same navy as the masthead band and the NavyCard.
+export const GRADIENT_INK = ['#081a30', '#0e2748', '#12305c'] as const;
 // Dark theme: the ink block runs BELOW the raised forest card (DepthCard adds
 // a lime rim on dark ink faces so the pair still reads as two surfaces).
 export const GRADIENT_INK_DARK = ['#0b1e38', '#08172b', '#040b15'] as const;

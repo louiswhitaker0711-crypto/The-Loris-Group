@@ -35,21 +35,21 @@ export function PillTabs({ items, value, onChange, style, testID, fit }: {
   const colors = useColors();
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[s.scroll, fit && s.scrollFit, style]} testID={testID}
-      contentContainerStyle={[s.group, fit && s.groupFit, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      contentContainerStyle={[s.group, fit && s.groupFit, { backgroundColor: colors.surfaceAlt, borderColor: colors.surfaceAlt }]}>
       {items.map((it) => {
         const on = it.key === value;
-        const fg = on ? colors.onPrimary : colors.textSecondary;
+        const fg = on ? '#ffffff' : colors.textSecondary;
         return (
           <TouchableOpacity
             key={it.key}
             onPress={() => onChange(it.key)}
-            style={[s.pill, fit && s.pillFit, on && { backgroundColor: colors.primary }]}
+            style={[s.pill, fit && s.pillFit, on && { backgroundColor: colors.ink }]}
             accessibilityRole="tab"
             accessibilityState={{ selected: on }}
             accessibilityLabel={`${it.label}${it.locked ? ', locked' : ''}`}
             testID={it.testID}
           >
-            {it.locked ? <Ionicons name="lock-closed" size={11} color={on ? colors.onPrimary : colors.textMuted} /> : null}
+            {it.locked ? <Ionicons name="lock-closed" size={11} color={on ? '#ffffff' : colors.textMuted} /> : null}
             {it.icon ? <Ionicons name={it.icon} size={14} color={fg} /> : null}
             <Text style={[s.text, fit && s.textFit, { color: fg }]} numberOfLines={1}>{it.label}</Text>
           </TouchableOpacity>
@@ -81,7 +81,7 @@ const s = StyleSheet.create({
   pillFit: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 7 },
   textFit: { fontSize: 12.5 },
   kickerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
-  kickerBar: { width: 18, height: 3, borderRadius: 1.5 },
-  kicker: { fontFamily: fonts.displayWide, fontSize: 12, letterSpacing: 1.8, textTransform: 'uppercase' },
+  kickerBar: { width: 18, height: 3, borderRadius: 1.5 },  // cyan-blue accent
+  kicker: { fontFamily: fonts.bodyBold, fontSize: 12, letterSpacing: 0.8, textTransform: 'uppercase' },
   kickerCount: { fontFamily: fonts.mono, fontSize: 11.5 },
 });
