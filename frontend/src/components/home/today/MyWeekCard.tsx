@@ -5,6 +5,7 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useColors, fonts } from '../../../theme/ThemeContext';
 import { apiService } from '../../../api/client';
 import { ukNow } from '../../../utils/fieldTime';
@@ -12,7 +13,12 @@ import { weekBand, WEEK_BAND_LABELS, AMBER_WEEK_MIN, GREEN_WEEK_MIN, SUPER_GREEN
 
 const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-export default function MyWeekCard({ hideWhenEmpty = false }: { hideWhenEmpty?: boolean }) {
+// On the navy Home hero (Nov 2026 restyle): what each traffic light reads as.
+const ON_NAVY = { red: '#ff8178', amber: '#ffc35c', green: '#6ee794', muted: '#8fa7c4', soft: '#b3c5da', text: '#ffffff', cyan: '#22d0ec' };
+// A day's sign-ups on the Owner's daily lights: 0–1 red, 2 amber, 3 light green, 4+ green.
+const dayTone = (v: number) => (v >= 4 ? '#30d158' : v === 3 ? ON_NAVY.green : v === 2 ? ON_NAVY.amber : ON_NAVY.red);
+
+export default function MyWeekCard({ hideWhenEmpty = false, hero = false }: { hideWhenEmpty?: boolean; hero?: boolean }) {
   const c = useColors();
   const s = useMemo(() => styles(c), [c]);
   const q = useQuery({ queryKey: ['my-bells-summary', 1], queryFn: () => apiService.getMyBellsSummary(1).then((r) => r.data), retry: false });
@@ -35,6 +41,58 @@ export default function MyWeekCard({ hideWhenEmpty = false }: { hideWhenEmpty?: 
     .filter((d) => !AWAY.includes(d?.status)).length;
   const target = goal || next?.at || null;
   const perDay = target && left > 0 && target > n ? Math.ceil(((target - n) / left) * 10) / 10 : null;
+  if (hero) {
+    const heroTone = band === 'red' ? ON_NAVY.red : band === 'amber' ? ON_NAVY.amber : ON_NAVY.green;
+    return (
+      <Pressable onPress={() => router.push('/field-kpis' as never)} style={s.hero} accessibilityRole="button" testID="home-my-week">
+        <View style={s.head}>
+          <Text style={s.heroKicker}>MY WEEK</Text>
+          <View style={s.heroBand}>
+            <View style={[s.heroDot, { backgroundColor: heroTone }]} />
+            <Text style={[s.heroBandText, { color: heroTone }]}>{WEEK_BAND_LABELS[band].name}</Text>
+          </View>
+        </View>
+        <View style={s.heroRow}>
+          <Text style={s.heroNum}>{n}</Text>
+          <View style={{ flex: 1, minWidth: 0, paddingBottom: 4 }}>
+            <Text style={s.heroOf} numberOfLines={1}>{goal ? `of ${goal} sign-ups` : `sign-up${n === 1 ? '' : 's'} this week`}</Text>
+            <Text style={s.heroNext} numberOfLines={1}>
+              {next ? `${next.at - n} more for ${next.name}` : 'Top of the lights'}{pa ? ` · PA ${pa}` : ''}
+            </Text>
+          </View>
+        </View>
+        <View style={s.heroTrack}>
+          <LinearGradient
+            colors={['#2864d9', '#22d0ec']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={[s.heroFill, { width: `${Math.min(100, Math.round((n / scale) * 100))}%` as any }]}
+          />
+        </View>
+        {days.length > 0 && (
+          <View style={s.days}>
+            {DAY_SHORT.map((lbl, i) => {
+              const d = days[i] || {};
+              const away = AWAY.includes(d.status);
+              const v = count(d);
+              const isIn = d.status === 'in' || v > 0;
+              return (
+                <View key={lbl} style={[s.heroDay, i === todayIdx && s.heroDayToday]}>
+                  <Text style={s.heroDayLbl}>{lbl}</Text>
+                  <Text style={[s.heroDayNum, away ? s.heroDayOff : isIn ? { color: dayTone(v) } : { color: ON_NAVY.muted }]}>
+                    {away ? 'off' : isIn ? v : i < todayIdx ? '–' : '·'}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        )}
+        {perDay != null && (
+          <Text style={s.heroNeed}>Need {perDay} a day for the {left} day{left === 1 ? '' : 's'} left to hit {goal ? `your goal of ${goal}` : next?.name}</Text>
+        )}
+      </Pressable>
+    );
+  }
   return (
     <View style={s.card}>
     <Pressable onPress={() => router.push('/field-kpis' as never)} style={{ gap: 6 }} accessibilityRole="button" testID="home-my-week">
@@ -88,4 +146,22 @@ const styles = (c: any) => StyleSheet.create({
   dayLbl: { fontFamily: fonts.body, fontSize: 11, color: c.textMuted },
   dayNum: { fontFamily: fonts.bodyBold, fontSize: 15, color: c.textMuted },
   need: { fontFamily: fonts.bodySemibold, fontSize: 13, color: c.text, marginTop: 2 },
+  // Hero (on the navy Home band)
+  hero: { backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 14, gap: 10 },
+  heroKicker: { fontFamily: fonts.bodyBold, fontSize: 12, letterSpacing: 0.8, color: ON_NAVY.soft },
+  heroBand: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  heroDot: { width: 8, height: 8, borderRadius: 3 },
+  heroBandText: { fontFamily: fonts.bodyBold, fontSize: 12 },
+  heroRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
+  heroNum: { fontFamily: fonts.displayBlack, fontSize: 56, lineHeight: 58, letterSpacing: -2, color: ON_NAVY.text },
+  heroOf: { fontFamily: fonts.bodySemibold, fontSize: 15, color: '#d6e3f1' },
+  heroNext: { fontFamily: fonts.bodyBold, fontSize: 13, color: ON_NAVY.cyan },
+  heroTrack: { height: 6, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.12)', overflow: 'hidden' },
+  heroFill: { height: '100%', borderRadius: 4 },
+  heroDay: { flex: 1, alignItems: 'center', paddingVertical: 7, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.06)', gap: 1 },
+  heroDayToday: { borderWidth: 1.5, borderColor: ON_NAVY.cyan },
+  heroDayLbl: { fontFamily: fonts.body, fontSize: 11, color: ON_NAVY.muted },
+  heroDayNum: { fontFamily: fonts.displayBlack, fontSize: 18 },
+  heroDayOff: { fontFamily: fonts.body, fontSize: 13, color: ON_NAVY.muted },
+  heroNeed: { fontFamily: fonts.bodySemibold, fontSize: 13, color: '#d6e3f1' },
 });

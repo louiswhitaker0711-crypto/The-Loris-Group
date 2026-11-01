@@ -559,10 +559,11 @@ export default function HomeScreen() {
   const baActions: Record<HomeSlot, QuickAction[]> = { morning: baFour, prime: baFour, setup: baFour, field: baFour, evening: baFour, sunday: baFour };
   const quickActions: QuickAction[] = (isTrainee ? baActions : coachActions)[slot];
 
+  // Accent icon squares (Nov 2026 restyle): a soft tint behind a coloured glyph.
   const tintColor = (t?: QuickAction['tint']) =>
-    t === 'green' ? colors.green : t === 'accent' ? colors.accent : t === 'yellow' ? '#f59e0b' : colors.primary;
+    t === 'green' ? '#1f9d4c' : t === 'accent' ? '#0a8fb0' : t === 'yellow' ? '#d97a00' : colors.primary;
   const tintBg = (t?: QuickAction['tint']) =>
-    t === 'green' ? colors.greenBg : t === 'accent' ? colors.accent + '22' : t === 'yellow' ? '#f59e0b22' : colors.primary + '18';
+    t === 'green' ? '#e0f5e7' : t === 'accent' ? '#dcf6fb' : t === 'yellow' ? '#fff1dc' : '#e6eefc';
 
   // Home, piece by piece: today first, the rest under "More".
   const pSectorPrompt = (
@@ -1473,7 +1474,6 @@ export default function HomeScreen() {
       {pSectorPrompt}
       <HomeAreaMap />
       <MyDayCard />
-      <MyWeekCard hideWhenEmpty={isAdmin} />
       <SectorSetupsCard />
       <LiveOpsCard />
     </>
@@ -1497,7 +1497,6 @@ export default function HomeScreen() {
       <SectorSetupsCard mode="breakdowns" />
       <HomeAreaMap />
       {coachPlanning}
-      <MyWeekCard hideWhenEmpty={isAdmin} />
     </>
   );
   // Mornings (until 11:00, the Owner 26 Oct 2026): plan sectors, Primetime and
@@ -1511,7 +1510,6 @@ export default function HomeScreen() {
       {pNewStarts}
       {pPlanner}
       {pDailyPlans}
-      <MyWeekCard hideWhenEmpty={isAdmin} />
       <SectorSetupsCard />
     </>
   );
@@ -1525,7 +1523,6 @@ export default function HomeScreen() {
       {coachPlanning}
       <HomeAreaMap />
       <MyDayCard />
-      <MyWeekCard hideWhenEmpty={isAdmin} />
     </>
   );
   // Before the field with a sector today: the sector first, the day's planning under it.
@@ -1537,7 +1534,6 @@ export default function HomeScreen() {
       {coachPlanning}
       <HomeAreaMap />
       <MyDayCard />
-      <MyWeekCard hideWhenEmpty={isAdmin} />
       <SectorSetupsCard />
       <LiveOpsCard />
     </>
@@ -1562,7 +1558,6 @@ export default function HomeScreen() {
       {pSectorPrompt}
       <HomeAreaMap />
       <MyDayCard />
-      <MyWeekCard />
       <SectorSetupsCard />
     </>
   );
@@ -1580,7 +1575,6 @@ export default function HomeScreen() {
       <SectorSetupsCard mode="breakdowns" />
       <HomeAreaMap />
       {baPlanning}
-      <MyWeekCard />
     </>
   );
   // A BA leading a new start's bunny hop grades their day (the Owner's call,
@@ -1592,7 +1586,6 @@ export default function HomeScreen() {
       {baPlanning}
       <HomeAreaMap />
       <MyDayCard />
-      <MyWeekCard />
       <SectorSetupsCard />
     </>
   );
@@ -1648,7 +1641,12 @@ export default function HomeScreen() {
     >
       <View style={styles.shell} onLayout={(e) => setShellW(e.nativeEvent.layout.width)}>
       {/* ── Greeting: a slim header. Who, when, and the way to your profile. ── */}
-      <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+      {/* ── Navy hero (Nov 2026 restyle): greeting, avatar and My week on the
+          navy band with a cyan glow in the corner. ── */}
+      <View style={[styles.heroBand, { paddingTop: insets.top + 10 }]}>
+      <LinearGradient colors={['#081a30', '#12305c']} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
+      <LinearGradient colors={['rgba(34,208,236,0.30)', 'rgba(34,208,236,0)']} start={{ x: 1, y: 0 }} end={{ x: 0.35, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
+      <View style={styles.header}>
         <View style={styles.headerText}>
           <Text style={styles.greeting}>{greeting} · {dateLine}</Text>
           <Text style={styles.headerName} numberOfLines={1}>{firstName || 'there'}</Text>
@@ -1665,6 +1663,8 @@ export default function HomeScreen() {
             </View>
           )}
         </TouchableOpacity>
+      </View>
+      <MyWeekCard hero hideWhenEmpty={isAdmin} />
       </View>
       {/* Where a BA stands: their COD title, their sales level, and how far
           through it they are. A viewer with no ladder gets no bar. */}
@@ -1787,17 +1787,19 @@ const createStyles = (colors: any, isDark: boolean) => {
   // The real minHeight is computed per-inset at the call site (heroMinHeight):
   // it holds the whole cube so the block is never a slice of one.
   hero: {},
-  header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
+  heroBand: { marginHorizontal: -16, paddingHorizontal: 16, paddingBottom: 18, gap: 14, marginBottom: 16,
+    borderBottomLeftRadius: 28, borderBottomRightRadius: 28, overflow: 'hidden', backgroundColor: '#081a30' },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   headerText: { flex: 1, minWidth: 0, paddingRight: 4 },
-  greeting: { fontFamily: fonts.mono, fontSize: 10.5, letterSpacing: 1.4, textTransform: 'uppercase', color: colors.textMuted, marginBottom: 4 },
-  headerName: { fontFamily: fonts.display, fontSize: 28, lineHeight: 34, letterSpacing: -0.6, color: colors.text },
+  greeting: { fontFamily: fonts.body, fontSize: 13, color: '#9fd8ea', marginBottom: 2 },
+  headerName: { fontFamily: fonts.displayBlack, fontSize: 32, lineHeight: 38, letterSpacing: -0.8, color: '#ffffff' },
   // The date sits where the dark nebula's bright lobe drifts, and 11.5px inkMuted
   // measured 4.1:1 there (spec §6.5 wants ≥4.5:1 on ink) — so it runs inkText at
   // 0.92, which keeps the muted voice under the name and stays ≥5:1 on the lobe.
   headerDate: { fontFamily: fonts.mono, fontSize: 11.5, color: colors.inkText, opacity: 0.92, marginTop: 6, letterSpacing: 0.6 },
-  headerAvatar: { width: 42, height: 42, borderRadius: 21, borderWidth: 1.5, borderColor: colors.primary },
-  headerAvatarFallback: { backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
-  headerAvatarText: { fontFamily: fonts.bodyBold, color: colors.primary, fontSize: 16 },
+  headerAvatar: { width: 48, height: 48, borderRadius: 15, borderWidth: 2, borderColor: '#22d0ec' },
+  headerAvatarFallback: { backgroundColor: '#12305c', alignItems: 'center', justifyContent: 'center' },
+  headerAvatarText: { fontFamily: fonts.bodyBold, color: '#ffffff', fontSize: 16 },
   // A BA's standing: stage number, title, sales level and a thin bar.
   levelStrip: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, marginBottom: 12 },
   levelBadge: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary },
@@ -2032,9 +2034,9 @@ const createStyles = (colors: any, isDark: boolean) => {
   sectionHead: { marginTop: 6, marginBottom: 12 },
   actionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 14 },
   actionTile: { flexGrow: 1, flexBasis: '45%', minWidth: 140, gap: 6, minHeight: 104, padding: 14,
-    borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background },
+    borderRadius: 20, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background },
   actionIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
-  actionTitle: { fontFamily: fonts.bodySemibold, fontSize: 15, color: colors.text },
+  actionTitle: { fontFamily: fonts.displayBlack, fontSize: 16, color: colors.text },
   actionSub: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted },
 
   // Footer link

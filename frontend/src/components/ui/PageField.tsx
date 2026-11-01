@@ -134,6 +134,8 @@ export function PageField() {
   const dark = effective === 'dark';
 
   const blobs = useMemo<BlobSpec[]>(() => {
+    // Light: a plain, calm field (Nov 2026 restyle) — no drifting blobs.
+    if (!dark) return [];
     const list: BlobSpec[] = [
       {
         id: 'pf-blob-violet',

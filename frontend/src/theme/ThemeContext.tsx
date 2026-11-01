@@ -47,14 +47,14 @@ export const lightColors = {
 
   // Page field — the ONE owner of the page colour (painted by PageField,
   // mounted once in app/_layout.tsx). "Ink on paper."
-  page: brand.paper,            // #eef4fa
+  page: '#f3f6fb',              // soft tonal blue-grey field (Nov 2026 restyle)
   // background = CARD face, surface = secondary/inset panel + sheets + sticky
   // chrome (near-white so surface-filled cards still float on the field),
   // surfaceAlt = tracks / chips / tiles. All three MUST stay 6-digit hex —
   // 64 sites concatenate a hex alpha onto them (`colors.surface + 'CC'`).
-  background: brand.card,       // #f8fbfe
-  surface: '#f0f5fa',
-  surfaceAlt: '#dbe6f0',
+  background: '#ffffff',        // white cards
+  surface: '#f6f8fc',
+  surfaceAlt: '#e6edf6',
 
   // Text — forest ink (contrast measured on the page field, not on the card)
   text: brand.ink,              // #12294a 11.8:1
@@ -74,15 +74,15 @@ export const lightColors = {
   glassBorder: 'rgba(255,255,255,0.85)',
   // Glow — text glow, focus rings, XP tip halo
   glow: 'rgba(10,155,203,0.45)',
-  trackBg: '#d1deeb',
+  trackBg: '#e3e9f1',
   // Depth — layered forest shadow (boxShadow string: rnw → CSS, RN 0.81 new-arch → native)
-  depthShadow: '0 14px 30px -10px rgba(12,35,64,0.28), 0 2px 6px rgba(12,35,64,0.10), inset 0 1px 0 rgba(255,255,255,0.7)',
+  depthShadow: '0 1px 2px rgba(16,32,58,0.06)',
   // The Vertex X / loader dots: forest on light surfaces; markOnInk on dark blocks.
   markColor: '#1d4fa8',
   markOnInk: '#22d0ec',
   // Title / section-head type on light surfaces: solid brand green (8.7:1 on
   // the page). Three identical stops so every GradientText call site keeps working.
-  titleGradient: [brand.mid, brand.mid, brand.mid] as readonly string[],
+  titleGradient: [brand.forest, brand.forest, brand.forest] as readonly string[],
 
   // Status colors
   sgreen: '#059669',
@@ -99,8 +99,8 @@ export const lightColors = {
   redBg: '#FEE2E2',
 
   // Neutrals — hairlines that read on the card AND on the field
-  border: brand.rule,           // #cbd8e6
-  borderDark: '#9eb4ce',
+  border: '#e3e9f1',            // soft hairline
+  borderDark: '#c3cfdd',
   shadow: 'rgba(12, 35, 64, 0.22)',
 
   // Accent

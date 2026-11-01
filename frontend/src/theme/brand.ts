@@ -108,17 +108,20 @@ export const GRADIENT_HOLO_LIGHT = ['rgba(255,255,255,0)', 'rgba(34,208,236,0.06
 // Family names here MUST match the keys registered in useFonts() in _layout.tsx.
 // Space Grotesk = display/headings, Inter = body/UI, JetBrains Mono = data.
 export const fonts = {
-  display: 'SpaceGrotesk-Bold',
-  displayMedium: 'SpaceGrotesk-Medium',
-  displayRegular: 'SpaceGrotesk',
+  // Plus Jakarta Sans = display/headings (Nov 2026 restyle), Inter = body/UI.
+  // The old Space Grotesk / Unbounded / JetBrains Mono slots now point at
+  // Jakarta / Inter so every screen picks up the new voice without edits.
+  display: 'PlusJakartaSans-Bold',
+  displayMedium: 'PlusJakartaSans-SemiBold',
+  displayRegular: 'PlusJakartaSans-Medium',
   body: 'Inter',
   bodyMedium: 'Inter-Medium',
   bodySemibold: 'Inter-SemiBold',
   bodyBold: 'Inter-Bold',
-  mono: 'JetBrainsMono',
-  monoSemibold: 'JetBrainsMono-SemiBold',
-  // Unbounded — the editorial voice. NEVER stack fontWeight on these: expo-font's
-  // web @font-face has no weight descriptor, so a fontWeight triggers faux-bold.
-  displayWide: 'Unbounded-SemiBold',   // section heads, ribbons, segment labels, kickers ≥11px uppercase
-  displayBlack: 'Unbounded-Black',     // mastheads, hero titles, stat numerals ≥20px
+  mono: 'Inter-Medium',
+  monoSemibold: 'Inter-SemiBold',
+  // NEVER stack fontWeight on these: expo-font's web @font-face has no weight
+  // descriptor, so a fontWeight triggers faux-bold.
+  displayWide: 'PlusJakartaSans-ExtraBold',   // section heads, kickers
+  displayBlack: 'PlusJakartaSans-ExtraBold',  // mastheads, hero titles, big numbers
 } as const;
