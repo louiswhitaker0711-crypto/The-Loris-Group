@@ -50,11 +50,12 @@ export type GlowButtonProps = {
 // ── Tones ────────────────────────────────────────────────────────────────────
 // White 16px bold label is "large text" → needs ≥3:1; every stop here clears it.
 const GREEN_GRADIENT = ['#0d9f6e', '#059669', '#047857'] as const;
-const GLOW_SHADOW: Record<GlowButtonTone, string> = {
+// Kept for reference; buttons are flat since the Nov 2026 restyle.
+export const GLOW_SHADOW: Record<GlowButtonTone, string> = {
   gradient: '0 8px 18px rgba(40,100,217,0.45)',
   green: '0 8px 18px rgba(16,185,129,0.45)',
 };
-const DEFAULT_RADIUS = 16;
+const DEFAULT_RADIUS = 14;
 
 export function GlowButton({
   onPress, children, style, breathe = false, sheen = true, tone = 'gradient',
@@ -77,7 +78,8 @@ export function GlowButton({
       glow={false}
       style={[
         styles.button,
-        { borderRadius: radius, boxShadow: GLOW_SHADOW[tone] },
+        // Flat (Nov 2026 restyle): no glow shadow.
+        { borderRadius: radius },
         style,
         disabled ? styles.disabled : null,
       ]}

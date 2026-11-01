@@ -92,6 +92,10 @@ function RootNavigator() {
     'JetBrainsMono-SemiBold': require('../assets/fonts/JetBrainsMono-SemiBold.ttf'),
     'Unbounded-SemiBold': require('../assets/fonts/Unbounded-SemiBold.ttf'),
     'Unbounded-Black': require('../assets/fonts/Unbounded-Black.ttf'),
+    'PlusJakartaSans-Medium': require('../assets/fonts/PlusJakartaSans-Medium.ttf'),
+    'PlusJakartaSans-SemiBold': require('../assets/fonts/PlusJakartaSans-SemiBold.ttf'),
+    'PlusJakartaSans-Bold': require('../assets/fonts/PlusJakartaSans-Bold.ttf'),
+    'PlusJakartaSans-ExtraBold': require('../assets/fonts/PlusJakartaSans-ExtraBold.ttf'),
   });
 
   const { user, realUser, loading } = useAuth();

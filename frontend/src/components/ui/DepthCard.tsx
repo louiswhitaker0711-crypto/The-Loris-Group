@@ -117,9 +117,9 @@ function splitCardStyle(style: StyleProp<ViewStyle>, defaultRadius: number): Spl
   return { outer: outer as ViewStyle, face: face as ViewStyle, radius };
 }
 
-const DEFAULT_RADIUS = 16;
+const DEFAULT_RADIUS = 20;
 /** The largest corner a flat card takes, whatever the caller asked for. */
-const MAX_RADIUS = 16;
+const MAX_RADIUS = 20;
 const EDGE_PAD = 1.5;
 /** Sheen cap (spec §3.4): the first 8 indexed cards on a screen may carry a sheen. */
 const SHEEN_CAP = 8;

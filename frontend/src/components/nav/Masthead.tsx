@@ -73,7 +73,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
 } from 'react-native-reanimated';
-import { fonts, GRADIENT, useColors, useTheme, type ColorPalette } from '../../theme/ThemeContext';
+import { fonts, useColors, useTheme, type ColorPalette } from '../../theme/ThemeContext';
 import { pageMarkKick, pageScrollY } from '../../theme/pageScroll';
 import { VertexMark } from '../ui/VertexMark';
 import { GradientText } from '../ui/GradientText';
@@ -121,11 +121,14 @@ const GUTTER = 16;
 const SLOT_GAP = 12;
 const CUBE_SIZE = 44;
 /** The Vertex X on the LIGHT masthead: brand green, a touch softer than the title. */
-const MASTHEAD_MARK_LIGHT = 'rgba(29,79,168,0.85)';
+/** The navy band (Nov 2026 restyle) and what sits on it. */
+const NAVY = '#081a30';     // matches the app bar above, so the two read as one band
+const NAVY_LOW = '#12305c';
+const MARK_ON_NAVY = '#22d0ec';
+const TITLE_ON_NAVY = ['#ffffff', '#ffffff', '#ffffff'] as const;
 const CHIP_SIZE = 36;
 const CONDENSE_PX = 120;        // scroll distance over which the title condenses
 const CONDENSE_SCALE = 0.72;
-const HAIRLINE_MIN_OPACITY = 0.35;
 const CUBE_RELEASE_MS = 450;    // keep the cube through a push/pop transition before unmounting
 const LONG_TITLE = 14;          // > 14 chars → 22px instead of 28px
 
@@ -259,16 +262,15 @@ function BackChip({ onPress, label, colors, light }: {
       style={({ pressed }) => [
         styles.chip,
         {
-          backgroundColor: colors.glass,
-          borderColor: colors.glassBorder,
-          // depthShadow is a boxShadow STRING (not hex-alpha concatenation); light theme only per spec.
-          ...(light ? { boxShadow: colors.depthShadow } : null),
+          // Sits on the navy band (Nov 2026 restyle): frosted white chip.
+          backgroundColor: 'rgba(255,255,255,0.10)',
+          borderColor: 'rgba(255,255,255,0.16)',
           opacity: pressed ? 0.7 : 1,
         },
       ]}
     >
       {/* Optical centring: the chevron glyph sits right of its box centre. */}
-      <Ionicons name="chevron-back" size={20} color={colors.text} style={styles.chevron} />
+      <Ionicons name="chevron-back" size={20} color={MARK_ON_NAVY} style={styles.chevron} />
     </Pressable>
   );
 }
@@ -288,7 +290,9 @@ export function Masthead(props: MastheadProps) {
 
   // iOS paints colors.page behind opaque scenes (see header comment); everything
   // else is transparent so the PageField shows through.
-  const background = Platform.OS === 'ios' && !r.sceneTransparent ? colors.page : 'transparent';
+  // Nov 2026 restyle: the masthead is a navy band with a cyan glow in the
+  // top-right corner and rounded bottom corners, in both themes.
+  const background = NAVY;
 
   // Title type: Unbounded Black via fonts.displayBlack — NEVER add fontWeight
   // (expo-font's web @font-face has no weight descriptor → faux-bold smear).
@@ -316,9 +320,7 @@ export function Masthead(props: MastheadProps) {
       ],
     };
   });
-  const hairlineAnim = useAnimatedStyle(() => ({
-    opacity: interpolate(pageScrollY.value, [0, CONDENSE_PX], [1, HAIRLINE_MIN_OPACITY], Extrapolation.CLAMP),
-  }));
+
 
   // ── Cube only while this screen is (or is just leaving) focus ───────────
   const focused = useScreenFocused();
@@ -342,11 +344,20 @@ export function Masthead(props: MastheadProps) {
 
   return (
     <View style={[styles.root, { paddingTop: topInset, backgroundColor: background }]}>
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.bandClip]}>
+        <LinearGradient colors={[NAVY, NAVY_LOW]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={StyleSheet.absoluteFill} />
+        <LinearGradient
+          colors={['rgba(34,208,236,0.30)', 'rgba(34,208,236,0)']}
+          start={{ x: 1, y: 0 }}
+          end={{ x: 0.35, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+      </View>
       <View style={[styles.row, { height: rowHeight }]}>
         {left}
         <Animated.View style={[styles.titleWrap, titleAnim]} onLayout={onTitleLayout}>
           <GradientText
-            colors={colors.titleGradient}
+            colors={TITLE_ON_NAVY}
             style={titleTextStyle}
             numberOfLines={1}
             adjustsFontSizeToFit
@@ -362,21 +373,13 @@ export function Masthead(props: MastheadProps) {
             {cubeMounted ? (
               <VertexMark
                 size={CUBE_SIZE}
-                color={effective === 'dark' ? colors.markColor : MASTHEAD_MARK_LIGHT}
+                color={MARK_ON_NAVY}
                 kick={pageMarkKick}
               />
             ) : null}
           </View>
         ) : null}
       </View>
-      <Animated.View pointerEvents="none" style={[styles.hairline, hairlineAnim]}>
-        <LinearGradient
-          colors={GRADIENT}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={StyleSheet.absoluteFill}
-        />
-      </Animated.View>
     </View>
   );
 }
@@ -384,6 +387,14 @@ export function Masthead(props: MastheadProps) {
 const styles = StyleSheet.create({
   root: {
     position: 'relative',
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    marginBottom: 8,
+  },
+  bandClip: {
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    overflow: 'hidden',
   },
   row: {
     flexDirection: 'row',
