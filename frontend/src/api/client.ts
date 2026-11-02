@@ -831,6 +831,8 @@ export const apiService = {
     api.delete('/auth/team-logo'),
   adminUpdateUserTeamName: (userId: string, teamName: string) =>
     api.put(`/admin/users/${userId}/team-name`, { team_name: teamName }),
+  adminUpdateUserTeamLogo: (userId: string, image: string) =>
+    api.put(`/admin/users/${userId}/team-logo`, { image }),
   listBellsTeams: (week?: string, office?: string) => {
     const params = new URLSearchParams();
     if (week) params.set('week', week);

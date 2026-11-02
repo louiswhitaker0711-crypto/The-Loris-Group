@@ -1363,6 +1363,36 @@ def exit_left_on(left_on: Optional[str], today) -> str:
     return today.isoformat()
 
 
+
+@router.put("/admin/users/{user_id}/team-logo")
+async def admin_set_user_team_logo(user_id: str, request: Request):
+    """Admin sets the logo of the team someone leads (the Owner, 2 Nov 2026)."""
+    from core import media_store
+    admin = await require_admin(request)
+    await _guard_target_user(admin, user_id)
+    body = await request.json()
+    image = body.get("image") or ""
+    if not image:
+        previous = await db.users.find_one({"_id": ObjectId(user_id)}, {"team_logo": 1})
+        await db.users.update_one({"_id": ObjectId(user_id)}, {"$unset": {"team_logo": ""}})
+        await media_store.delete_avatar_url((previous or {}).get("team_logo"))
+        return {"ok": True, "team_logo": None}
+    if len(image) > 2_800_000:
+        raise HTTPException(status_code=400, detail="Image too large (max 2MB)")
+    if not media_store.enabled():
+        await db.users.update_one({"_id": ObjectId(user_id)}, {"$set": {"team_logo": image}})
+        return {"ok": True, "team_logo": image}
+    try:
+        url, _key = await media_store.store_avatar(f"team-{user_id}", image)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Couldn't read that image. Try a JPEG or PNG.")
+    except RuntimeError:
+        raise HTTPException(status_code=502, detail="Couldn't save the logo right now. Try again.")
+    previous = await db.users.find_one({"_id": ObjectId(user_id)}, {"team_logo": 1})
+    await db.users.update_one({"_id": ObjectId(user_id)}, {"$set": {"team_logo": url}})
+    await media_store.delete_avatar_url((previous or {}).get("team_logo"))
+    return {"ok": True, "team_logo": url}
+
 @router.delete("/admin/users/{user_id}")
 async def delete_user(user_id: str, request: Request, left_on: Optional[str] = None):
     """Exit someone. `left_on` (YYYY-MM-DD) exits them from that day (Exited

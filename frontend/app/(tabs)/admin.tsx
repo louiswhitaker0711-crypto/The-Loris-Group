@@ -11,6 +11,8 @@ import { useIsLandscape } from '../../src/hooks/useIsLandscape';
 import { useTabBarClearance } from '../../src/customization/CustomTabBar';
 import { useKeyboardInset } from '../../src/hooks/useKeyboardInset';
 import * as Clipboard from 'expo-clipboard';
+import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { useColors, useTheme, lightColors, fonts, GRADIENT } from '../../src/theme/ThemeContext';
 import { apiService } from '../../src/api/client';
 import { useAuth } from '../../src/auth/AuthContext';
@@ -116,6 +118,37 @@ export default function AdminScreen() {
       showAlert('Success', 'Role updated');
     },
   });
+
+  // Team name and logo for anyone (the Owner, 2 Nov 2026).
+  const setTeamNameFor = async (u: any) => {
+    const name = await promptText('Team name', `The name of the team ${u.name || 'they'} lead${u.name ? 's' : ''}. It shows for everyone wherever their team appears.`, u.team_name || '');
+    if (name === null) return;
+    try {
+      await apiService.adminUpdateUserTeamName(u.id, name);
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+    } catch (e: any) {
+      showAlert('Error', e.response?.data?.detail || 'Couldn\u2019t save the team name');
+    }
+  };
+  const setTeamLogoFor = async (u: any) => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      showAlert('Permission needed', 'Please allow access to your photo library.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.8 });
+    const asset = result.canceled ? null : result.assets?.[0];
+    if (!asset) return;
+    try {
+      const out = await ImageManipulator.manipulateAsync(asset.uri, [{ resize: { width: 400 } }],
+        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG, base64: true });
+      if (!out.base64) throw new Error('no image');
+      await apiService.adminUpdateUserTeamLogo(u.id, `data:image/jpeg;base64,${out.base64}`);
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+    } catch (e: any) {
+      showAlert('Error', e.response?.data?.detail || 'Couldn\u2019t upload the logo');
+    }
+  };
 
   const coachPlusMut = useMutation({
     mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) => apiService.setCoachPlus(id, enabled),
@@ -739,6 +772,22 @@ export default function AdminScreen() {
                                   </TouchableOpacity>
                                 </View>
                               )}
+                              {/* Their team's name and logo (anyone can lead a team, the Owner 2 Nov 2026). */}
+                              <View style={styles.field}>
+                                <Text style={styles.fieldLabel}>Team name</Text>
+                                <TouchableOpacity style={styles.fieldValueRow} testID={`admin-team-name-${u.id}`} onPress={() => setTeamNameFor(u)}>
+                                  <Text style={[styles.fieldValue, !u.team_name && styles.cellEmpty]} numberOfLines={1}>{u.team_name || `${(u.name || '').split(' ')[0] || 'Their'}'s team (not named)`}</Text>
+                                  <Ionicons name="pencil" size={12} color={colors.primary} />
+                                </TouchableOpacity>
+                              </View>
+                              <View style={styles.field}>
+                                <Text style={styles.fieldLabel}>Team logo</Text>
+                                <TouchableOpacity style={styles.fieldValueRow} testID={`admin-team-logo-${u.id}`} onPress={() => setTeamLogoFor(u)}>
+                                  {u.team_logo ? <Image source={{ uri: u.team_logo }} style={{ width: 22, height: 22, borderRadius: 6 }} /> : null}
+                                  <Text style={[styles.fieldValue, !u.team_logo && styles.cellEmpty]} numberOfLines={1}>{u.team_logo ? 'Change logo' : 'Upload a logo'}</Text>
+                                  <Ionicons name="image-outline" size={13} color={colors.primary} />
+                                </TouchableOpacity>
+                              </View>
                               {/* Badge number: links them to their OwnerIQ numbers. */}
                               <View style={styles.field}>
                                 <Text style={styles.fieldLabel}>Badge number</Text>
