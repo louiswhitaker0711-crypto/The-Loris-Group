@@ -5,6 +5,8 @@
 //   Keep building — carried over from yesterday, one line each, with a notice when what's expected changed
 //   Ahead       — a flag on a topic already graded above today's expectation
 // Then the sector break check-in (16:30–17:00) and grading after the field.
+// BA Academy Days 1-2 are in the office (the Owner, 2 Nov 2026): no sector
+// break or field; their workbook instead, and grading once coaching's done.
 // The same screen for every Coach. (GET /coaching/today, PUT /coaching/today/taught)
 import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native';
@@ -14,7 +16,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useColors, fonts } from '../src/theme/ThemeContext';
 import { api } from '../src/api/client';
 import { toast } from '../src/utils/toast';
-import { useCoachingToday, dayStep, firstName, aimOf, detailOf, CoachItem, CoachPerson } from '../src/components/home/CoachingTodayCard';
+import { useCoachingToday, dayStep, firstName, aimOf, detailOf, CoachItem, CoachPerson, isAcademyDay, gradeOpen } from '../src/components/home/CoachingTodayCard';
 
 export default function CoachingGuideScreen() {
   const c = useColors();
@@ -41,6 +43,8 @@ export default function CoachingGuideScreen() {
   const behind = p.behind || [];
   const taughtNew = fresh.filter((i) => i.taught).length;
   const step = dayStep();
+  const academy = isAcademyDay(p);
+  const canGradeNow = gradeOpen(p);
 
   const tick = async (it: CoachItem) => {
     if (busy) return;
@@ -153,19 +157,39 @@ export default function CoachingGuideScreen() {
           </>
         )}
 
-        <Text style={[s.kicker, step === 2 && { color: c.primary }]}>Sector break · 16:30–17:00{step === 2 ? ' · now' : ''}</Text>
-        <View style={s.box}>
-          <View style={s.line}>
-            <Text style={s.text}>{`Check in with the sector. Ask ${who}: how many doors so far, and what’s one thing that’s working? Set one focus for the second half.`}</Text>
-          </View>
-        </View>
+        {academy ? (
+          <>
+            <Text style={s.kicker}>BA Academy · in the office</Text>
+            <View style={s.box}>
+              <View style={s.line}>
+                <Text style={s.text}>{`${who} is in product coaching with you today, not in the field. Their workbook shows how far through Day ${p.day_number} they are, their quiz scores and any questions for you.`}</Text>
+              </View>
+            </View>
+            {!!p.trainee_user_id && (
+              <Pressable onPress={() => router.push(`/academy/${p.day_number}?user=${encodeURIComponent(p.trainee_user_id!)}` as never)} style={s.manual} accessibilityRole="link">
+                <Ionicons name="reader-outline" size={15} color={c.primary} />
+                <Text style={s.manualText}>{`Open ${who}’s Day ${p.day_number} workbook`}</Text>
+              </Pressable>
+            )}
+          </>
+        ) : (
+          <>
+            <Text style={[s.kicker, step === 2 && { color: c.primary }]}>Sector break · 16:30–17:00{step === 2 ? ' · now' : ''}</Text>
+            <View style={s.box}>
+              <View style={s.line}>
+                <Text style={s.text}>{`Check in with the sector. Ask ${who}: how many doors so far, and what’s one thing that’s working? Set one focus for the second half.`}</Text>
+              </View>
+            </View>
+          </>
+        )}
 
-        <Text style={s.kicker}>After the field</Text>
+        <Text style={s.kicker}>{academy ? 'After product coaching' : 'After the field'}</Text>
         {p.can_grade && !!p.assessment_id ? (
-          <Pressable onPress={() => router.push(`/assessment/${p.assessment_id}` as never)} disabled={step !== 3 && !p.done}
-            style={[s.grade, (step === 3 || p.done) ? s.gradeOn : null]} accessibilityRole="button">
-            <Text style={[s.gradeText, (step === 3 || p.done) && { color: c.onPrimary }]}>
-              {p.done ? 'Graded · see their day' : step === 3 ? `Grade ${who}’s day` : `Grade ${who}’s day (opens at the end of the field)`}
+          <Pressable onPress={() => router.push(`/assessment/${p.assessment_id}` as never)} disabled={!canGradeNow && !p.done}
+            style={[s.grade, (canGradeNow || p.done) ? s.gradeOn : null]} accessibilityRole="button">
+            <Text style={[s.gradeText, (canGradeNow || p.done) && { color: c.onPrimary }]}>
+              {p.done ? 'Graded · see their day' : canGradeNow ? `Grade ${who}’s day`
+                : academy ? `Grade ${who}’s day (opens at 16:00, after product coaching)` : `Grade ${who}’s day (opens at the end of the field)`}
             </Text>
           </Pressable>
         ) : (

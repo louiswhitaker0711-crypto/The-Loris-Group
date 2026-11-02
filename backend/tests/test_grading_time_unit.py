@@ -58,3 +58,12 @@ def test_grading_fridays_day_on_saturday_morning_still_leaves_saturday_waiting()
 def test_graded_tonight_means_tomorrows_day_isnt_waiting():
     assert not ready_to_grade(5, 5, datetime(2026, 10, 23, 21, 0, tzinfo=APP_TZ),
                               last_graded="2026-10-23T20:10:00+01:00")
+
+
+def test_an_academy_day_is_ready_once_product_coaching_is_done():
+    mon_1545 = datetime(2026, 11, 2, 15, 45, tzinfo=APP_TZ)
+    mon_1600 = datetime(2026, 11, 2, 16, 0, tzinfo=APP_TZ)
+    assert not ready_to_grade(1, 1, mon_1545)
+    assert ready_to_grade(1, 1, mon_1600)
+    assert ready_to_grade(2, 2, mon_1600)
+    assert not ready_to_grade(3, 3, mon_1600)      # a field day still waits for the field

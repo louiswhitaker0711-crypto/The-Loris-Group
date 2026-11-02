@@ -20,13 +20,17 @@ from core.app_time import APP_TZ
 
 READY_FROM = {5: (17, 0), 6: (0, 0)}   # Saturday, Sunday; every other day 19:30
 WEEKDAY_READY = (19, 30)
+# BA Academy Days 1-2 are product coaching in the office, not the field: the
+# day is ready to grade once coaching's done (the Owner, 2 Nov 2026).
+ACADEMY_READY = (16, 0)
+ACADEMY_DAYS = 2
 FIELD_START = {5: (10, 0)}             # Saturday; Monday to Friday 13:30
 WEEKDAY_FIELD_START = (13, 30)
 
 
-def todays_day_ready(now: Optional[datetime] = None) -> bool:
+def todays_day_ready(now: Optional[datetime] = None, academy: bool = False) -> bool:
     now = (now or datetime.now(APP_TZ)).astimezone(APP_TZ)
-    h, m = READY_FROM.get(now.weekday(), WEEKDAY_READY)
+    h, m = ACADEMY_READY if academy and now.weekday() < 5 else READY_FROM.get(now.weekday(), WEEKDAY_READY)
     return (now.hour, now.minute) >= (h, m)
 
 
@@ -65,7 +69,7 @@ def ready_to_grade(day_number, current_day, now: Optional[datetime] = None,
     d, cur = int(day_number or 99), int(current_day or 1)
     if d < cur:
         return True
-    if d != cur or not todays_day_ready(now):
+    if d != cur or not todays_day_ready(now, academy=d <= ACADEMY_DAYS):
         return False
     graded = _parse(last_graded) if last_graded else None
     return not (graded and graded >= latest_field_start(now))

@@ -58,6 +58,18 @@ export function useCoachingToday() {
   });
 }
 
+/** BA Academy Days 1-2 are in the office: the day can be graded from 16:00,
+ * once product coaching's done (the Owner, 2 Nov 2026; backend grading_time). */
+export const isAcademyDay = (p: { day_number: number }) => Number(p.day_number) <= 2;
+export function academyGradeOpen(): boolean {
+  const { mins } = ukNow();
+  return mins >= 16 * 60;
+}
+/** Can this person's day be graded now? */
+export function gradeOpen(p: { day_number: number }): boolean {
+  return isAcademyDay(p) ? academyGradeOpen() : dayStep() === 3;
+}
+
 /** Where the day is: 0 before the doors, 1 on the doors, 2 sector break, 3 after the field. */
 export function dayStep(): number {
   if (fieldStarted() && !inFieldHours()) return 3;
@@ -129,7 +141,7 @@ function PersonCard({ p, s, c }: { p: CoachPerson; s: any; c: any }) {
       )}
       {fresh.length > 0 && kept.length > 0 && <Text style={s.sub}>{`Plus ${kept.length} to keep building from yesterday`}</Text>}
 
-      {step === 3 && p.can_grade && !!p.assessment_id && !p.done ? (
+      {gradeOpen(p) && p.can_grade && !!p.assessment_id && !p.done ? (
         <Pressable onPress={() => router.push(`/assessment/${p.assessment_id}` as never)} style={s.cta} accessibilityRole="button" testID={`coaching-grade-${p.hire_id}`}>
           <Text style={s.ctaText}>{`Grade ${who}’s day`}</Text>
           <Ionicons name="arrow-forward" size={17} color={c.onPrimary} />
