@@ -33,6 +33,12 @@ Data model (bells_entries collection):
 import uuid
 import logging
 import secrets
+from core.team_sections import (
+    display_team_name as _display_team_name,
+    has_team as _has_team,
+    stamp_team_leaders as _stamp_team_leaders,
+    today_iso as _team_today,
+)
 from datetime import datetime, timezone, date, timedelta
 from typing import Optional, List
 from bson import ObjectId
@@ -398,7 +404,7 @@ async def _enrich_entries_with_teams(entries: list) -> None:
     children_of: dict = {}
     async for u in db.users.find(
         user_filter,
-        {"_id": 1, "team_name": 1, "reports_to": 1, "role": 1, "name": 1},
+        {"_id": 1, "team_name": 1, "reports_to": 1, "role": 1, "name": 1, "team_last_member_on": 1, "team_logo": 1},
     ):
         uid = str(u["_id"])
         cache[uid] = u
@@ -413,7 +419,7 @@ async def _enrich_entries_with_teams(entries: list) -> None:
     gone = [x for x in uids_for_teams if x not in cache and ObjectId.is_valid(x)]
     if gone:
         async for u in db.users.find({"_id": {"$in": [ObjectId(x) for x in gone]}},
-                                     {"_id": 1, "team_name": 1, "reports_to": 1, "role": 1, "name": 1}):
+                                     {"_id": 1, "team_name": 1, "reports_to": 1, "role": 1, "name": 1, "team_last_member_on": 1, "team_logo": 1}):
             cache[str(u["_id"])] = u
 
     async def _load(uid: str):
@@ -422,27 +428,28 @@ async def _enrich_entries_with_teams(entries: list) -> None:
         try:
             u = await db.users.find_one(
                 {"_id": ObjectId(uid)},
-                {"_id": 1, "team_name": 1, "reports_to": 1, "role": 1, "name": 1},
+                {"_id": 1, "team_name": 1, "reports_to": 1, "role": 1, "name": 1, "team_last_member_on": 1, "team_logo": 1},
             )
         except Exception:
             u = None
         cache[uid] = u or {}
         return cache[uid]
 
+    # Team rule (the Owner, 2 Nov 2026): anyone with someone reporting to
+    # them has their own section, and keeps it for 4 weeks after the last
+    # person leaves (core/team_sections.py). Only active people count, so an
+    # exited BA never makes anyone a team on their own.
+    today = _team_today()
+    with_reports = {p for p, kids in children_of.items() if kids and p in cache}
+
     def _is_section_leader(uid: str) -> bool:
         u = cache.get(uid) or {}
         if not u:
             return False
-        if u.get("role") not in ("leader", "admin"):
-            return False
-        if not (u.get("team_name") or "").strip():
-            return False
-        # Has at least one direct report whose role == 'leader'?
-        for cid in children_of.get(uid, []):
-            cu = cache.get(cid) or {}
-            if cu.get("role") == "leader":
-                return True
-        return False
+        return _has_team(u, 1 if uid in with_reports else 0, today)
+
+    if office_ids and with_reports:
+        await _stamp_team_leaders(db, with_reports)
 
     team_by_uid: dict = {}
     for uid in uids_for_teams:
@@ -454,7 +461,8 @@ async def _enrich_entries_with_teams(entries: list) -> None:
             t_self = {
                 "leader_id": uid,
                 "leader_name": current.get("name"),
-                "team_name": (current.get("team_name") or "").strip(),
+                "team_name": _display_team_name(current),
+                "team_logo": current.get("team_logo"),
             }
             teams.append(t_self)
             primary = t_self
@@ -472,7 +480,8 @@ async def _enrich_entries_with_teams(entries: list) -> None:
                 t = {
                     "leader_id": parent_id,
                     "leader_name": parent.get("name"),
-                    "team_name": (parent.get("team_name") or "").strip(),
+                    "team_name": _display_team_name(parent),
+                    "team_logo": parent.get("team_logo"),
                 }
                 teams.append(t)
                 if not primary:
@@ -2019,29 +2028,23 @@ async def list_bells_teams(request: Request, week: Optional[str] = None, office:
 
     prev_week = _prev_sunday_iso(week_ending)
 
-    # Leaders/admins in this office who have set a team_name AND have at
-    # least one direct report whose role == 'leader' (section-leader rule).
-    # Without a sub-leader, a leader's people render inline in their parent's
-    # section on the bells sheet — they shouldn't show as a separate Team
-    # card here either, so we exclude them.
-    raw_team_leaders = await db.users.find(
-        {"office_id": office_id, "role": {"$in": ["leader", "admin"]}, "team_name": {"$nin": [None, ""]}, "is_active": {"$ne": False}, "deleted": {"$ne": True}, "is_demo": {"$ne": True}},
-        {"_id": 1, "name": 1, "team_name": 1},
-    ).to_list(200)
-    # Pull every direct child of these candidates in one round-trip
-    candidate_ids = [tl["_id"] for tl in raw_team_leaders]
-    sub_leaders_by_parent: dict = {}
-    if candidate_ids:
-        async for u in db.users.find(
-            {"office_id": office_id, "reports_to": {"$in": [str(x) for x in candidate_ids]}, "role": "leader", "is_active": {"$ne": False}, "deleted": {"$ne": True}},
-            {"_id": 1, "reports_to": 1},
-        ):
-            p = str(u.get("reports_to") or "")
-            sub_leaders_by_parent.setdefault(p, []).append(str(u["_id"]))
-    team_leaders = [
-        tl for tl in raw_team_leaders
-        if sub_leaders_by_parent.get(str(tl["_id"]))
-    ]
+    # Teams (the Owner, 2 Nov 2026): anyone in the office with someone
+    # reporting to them, or who had someone in the last 4 weeks
+    # (core/team_sections.py). A team with no name shows "<first>'s team".
+    office_people = await db.users.find(
+        {"office_id": office_id, "is_active": {"$ne": False}, "deleted": {"$ne": True}, "is_demo": {"$ne": True}},
+        {"_id": 1, "name": 1, "team_name": 1, "reports_to": 1, "team_last_member_on": 1, "team_logo": 1},
+    ).to_list(5000)
+    with_reports = {str(u.get("reports_to")) for u in office_people if u.get("reports_to")}
+    _today = _team_today()
+    team_leaders = []
+    for tl in office_people:
+        uid = str(tl["_id"])
+        if _has_team(tl, 1 if uid in with_reports else 0, _today):
+            tl["team_name"] = _display_team_name(tl)
+            team_leaders.append(tl)
+    if with_reports:
+        await _stamp_team_leaders(db, [str(u["_id"]) for u in office_people if str(u["_id"]) in with_reports])
 
     # Determine whether 'working today' is meaningful (only for current week)
     today_local = datetime.now(APP_TZ).date()
@@ -2143,6 +2146,7 @@ async def list_bells_teams(request: Request, week: Optional[str] = None, office:
             "leader_id": leader_id,
             "leader_name": tl.get("name"),
             "team_name": tl.get("team_name"),
+            "team_logo": tl.get("team_logo"),
             "team_weekly_goal": (leader_row or {}).get("team_weekly_goal"),
             "member_ids": member_ids,
             "member_count": len(member_ids),

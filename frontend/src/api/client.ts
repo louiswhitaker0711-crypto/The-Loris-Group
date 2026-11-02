@@ -825,6 +825,10 @@ export const apiService = {
     api.delete('/auth/profile-image'),
   updateTeamName: (teamName: string) =>
     api.put('/auth/team-name', { team_name: teamName }),
+  updateTeamLogo: (image: string) =>
+    api.put('/auth/team-logo', { image }),
+  removeTeamLogo: () =>
+    api.delete('/auth/team-logo'),
   adminUpdateUserTeamName: (userId: string, teamName: string) =>
     api.put(`/admin/users/${userId}/team-name`, { team_name: teamName }),
   listBellsTeams: (week?: string, office?: string) => {
