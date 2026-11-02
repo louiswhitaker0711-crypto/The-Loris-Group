@@ -1689,8 +1689,8 @@ export default function HomeScreen() {
           <VertexMark size={230} gradient opacity={0.16} />
         </View>
       ) : null}
-      {surface.team?.logo && !surface.light ? (
-        <View pointerEvents="none" style={styles.heroWatermark}>
+      {surface.team?.logo ? (
+        <View pointerEvents="none" style={[styles.heroWatermark, surface.light && styles.heroWatermarkLight]}>
           <Image source={{ uri: surface.team.logo }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
         </View>
       ) : null}
@@ -1868,6 +1868,7 @@ const createStyles = (colors: any, isDark: boolean, surface: Surface) => {
   headerAvatar: { width: 48, height: 48, borderRadius: 15, borderWidth: 2, borderColor: surface.accent },
   headerAvatarFallback: { backgroundColor: surface.mid, alignItems: 'center', justifyContent: 'center' },
   heroWatermark: { position: 'absolute', right: -70, top: 40, width: 300, height: 190, opacity: 0.14 },
+  heroWatermarkLight: { opacity: 0.12, right: -30, top: 20, width: 340, height: 260 },
   heroMarkWatermark: { position: 'absolute', right: -40, top: 10 },
   heroTeamRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   heroTeamTile: { width: 36, height: 36, borderRadius: 11, backgroundColor: '#ffffff', padding: 4 },
