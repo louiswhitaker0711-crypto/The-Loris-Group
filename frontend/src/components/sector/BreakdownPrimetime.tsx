@@ -1,6 +1,7 @@
-// The Primetime plan, planned at the sector breakdown (tomorrow's, for the
-// sector) and when the sectors are planned in the morning (today's, for
-// everyone in). At the top: what's running and who's in it. Then one line per
+// The Primetime plan, planned at the sector breakdown (tomorrow's) and when
+// the sectors are planned in the morning (today's). It's the Primetime page's
+// own board, the triangles (the Owner, 2 Nov 2026): a Coach or Admin plans on
+// it; a BA sees it and says what they're doing underneath. Then one line per
 // person with two dropdowns (29 Oct 2026): what they're doing (run an impact,
 // join one someone's running, learning, watching, or "free to work with") and,
 // for running or learning, the topic. The lists open over the page so nothing
@@ -14,6 +15,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useColors, fonts } from '../../theme/ThemeContext';
 import { apiService, PrimetimeMode } from '../../api/client';
 import { showAlert } from '../../utils/showAlert';
+import PrimetimeDayBoard, { usePlansFor } from '../primetime/PrimetimeDayBoard';
 
 type Choice = 'run' | 'join' | 'learning' | 'watching' | 'free';
 
@@ -33,6 +35,7 @@ export default function BreakdownPrimetime({ date, scope = 'breakdown' }: { date
   const c = useColors();
   const s = useMemo(() => styles(c), [c]);
   const qc = useQueryClient();
+  const { coach } = usePlansFor();
   const q = useQuery({
     queryKey: ['sector-primetime', date, scope],
     queryFn: () => apiService.getSectorPrimetime(date, scope).then((r) => r.data),
@@ -55,15 +58,12 @@ export default function BreakdownPrimetime({ date, scope = 'breakdown' }: { date
   if (!d?.people?.length) return null;
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['sector-primetime'] });
+    qc.invalidateQueries({ queryKey: ['primetime-week'] });
     qc.invalidateQueries({ queryKey: ['primetime-home'] });
     qc.invalidateQueries({ queryKey: ['sector-day'] });   // the WhatsApp breakdown carries the plan
   };
   const sessions: Session[] = d.sessions || [];
   const people: any[] = d.people;
-  const mine = sessions.filter((x) => x.mine);
-  const inSession = new Set<string>(mine.flatMap((x) => [x.host_user_id, ...x.attendees.map((a) => a.user_id)]));
-  const solo = people.filter((p) => p.mode && p.mode !== 'free' && !inSession.has(p.user_id));
-  const free = people.filter((p) => p.mode === 'free');
   const unplanned = people.filter((p) => !p.mode);
   const when = d.is_today ? 'today' : d.day_name;
   const who = (p: any) => (p.is_self ? 'You' : first(p.name));
@@ -72,44 +72,26 @@ export default function BreakdownPrimetime({ date, scope = 'breakdown' }: { date
     <View style={s.card} testID="breakdown-primetime">
       <Text style={s.h}>⚡ Primetime plan · {d.day_name}{d.is_today ? ' (today)' : ''}</Text>
       <Text style={s.muted}>
-        {d.leads
-          ? scope === 'morning' ? `Plan ${when}'s Primetime for everyone in.` : `Plan ${when}'s Primetime for everyone in the sector.`
-          : `Plan your Primetime for ${when}.`}
+        {coach
+          ? `Plan ${when}'s Primetime: add a topic, who's running it, then who's watching and who's learning. Save Primetime when you're done.`
+          : d.leads ? `${when === 'today' ? 'Today' : when}'s Primetime. Say what you and your sector are doing below.` : `${when === 'today' ? 'Today' : when}'s Primetime. Say what you're doing below.`}
       </Text>
 
-      {/* The plan so far, by impact. */}
-      <View style={s.summary}>
-        {mine.map((x) => (
-          <View key={x.session_id} style={s.sumRow}>
-            <Ionicons name="megaphone" size={14} color={c.primary} />
-            <Text style={s.sumText}>
-              <Text style={s.bold}>{first(x.host_name)}</Text> running {x.topic || 'an impact'}
-              {x.attendees.length ? ` · ${x.attendees.map((a) => first(a.name)).join(', ')}` : ' · nobody in yet'}
-            </Text>
-          </View>
-        ))}
-        {solo.map((p) => (
-          <View key={p.user_id} style={s.sumRow}>
-            <Ionicons name={p.mode === 'watching' ? 'eye' : 'school'} size={14} color={c.textMuted} />
-            <Text style={s.sumText}>
-              <Text style={s.bold}>{who(p)}</Text> {p.mode}{p.topic ? ` ${p.topic}` : ''}
-              {p.with_label ? ` · with ${p.with_label}` : ''}
-            </Text>
-          </View>
-        ))}
-        {free.length > 0 && (
-          <View style={s.sumRow}>
-            <Ionicons name="hand-left" size={14} color={c.textMuted} />
-            <Text style={s.sumText}><Text style={s.bold}>Free to work with:</Text> {free.map(who).join(', ')}</Text>
-          </View>
-        )}
-        {unplanned.length > 0 && <Text style={s.unsetLine}>Not planned yet: {unplanned.map(who).join(', ')}</Text>}
-      </View>
+      {/* The same board as the Primetime page: the triangles (the Owner, 2 Nov 2026). */}
+      <PrimetimeDayBoard week={d.week_ending} dayIndex={d.day_index} showMine={!coach} />
 
-      {people.map((p: any) => (
-        <PersonRow key={p.user_id} p={p} date={date} scope={scope}
-          sessions={sessions} topicTitles={topicTitles} onSaved={refresh} s={s} c={c} />
-      ))}
+      {/* A BA (or a BA leading the sector) can't place people on the board:
+          they say what they're doing, run something, join one, or free to work with. */}
+      {!coach && (
+        <>
+          <Text style={s.sub}>{d.leads ? 'Your sector' : 'You'}</Text>
+          {people.map((p: any) => (
+            <PersonRow key={p.user_id} p={p} date={date} scope={scope}
+              sessions={sessions} topicTitles={topicTitles} onSaved={refresh} s={s} c={c} />
+          ))}
+        </>
+      )}
+      {coach && unplanned.length > 0 && <Text style={s.unsetLine}>Not planned yet: {unplanned.map(who).join(', ')}</Text>}
     </View>
   );
 }
@@ -241,6 +223,7 @@ const styles = (c: any) => StyleSheet.create({
   muted: { fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: c.textMuted },
   small: { fontFamily: fonts.body, fontSize: 12, color: c.textMuted },
   bold: { fontFamily: fonts.bodyBold, color: c.text },
+  sub: { fontFamily: fonts.bodyBold, fontSize: 14, color: c.text, marginTop: 4 },
   summary: { gap: 6, padding: 10, borderRadius: 12, backgroundColor: c.surface },
   sumRow: { flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
   sumText: { flex: 1, fontFamily: fonts.body, fontSize: 13.5, lineHeight: 19, color: c.text },
