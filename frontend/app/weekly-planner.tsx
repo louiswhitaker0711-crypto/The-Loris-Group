@@ -37,6 +37,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDeviceInsets } from '../src/nav/AppShell';
 import { goalVsBreakeven } from '../src/utils/breakeven';
 import SlotNotesEditor, { SlotNote } from '../src/components/planner/SlotNotesEditor';
+import { SetFollowUpButton, FollowUpsForDay } from '../src/components/planner/FollowUps';
 import { APP_LOCALE, formatMoney } from '../src/utils/appTime';
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -420,6 +421,10 @@ export default function WeeklyPlannerScreen() {
   }, [showWeekTab]);
 
   const canEdit = !!q.data?.can_edit;
+  // Someone else's planner (a Coach looking at their BA's): follow-ups set
+  // from it can be for them as well.
+  const targetId: string = (q.data?.target as any)?.id || (q.data?.target as any)?.user_id || targetUserId || '';
+  const viewingOther = !!targetId && targetId !== String((user as any)?.id || '');
   const targetName = q.data?.target?.name || user?.name || '';
   const teamName = q.data?.target?.team_name || '';
 
@@ -1310,6 +1315,9 @@ export default function WeeklyPlannerScreen() {
               <Text style={styles.daySub}>{shortDate(dayDate(week, tab))}</Text>
             </View>
 
+            {/* Follow-ups due this day (the Owner, 2 Nov 2026); your own planner only. */}
+            {!viewingOther && <FollowUpsForDay date={dayDate(week, tab)} />}
+
             {showWeekTab && layoutRows.length > 0 ? (
               <>
                 <Kicker style={styles.kicker}>Your day</Kicker>
@@ -1524,6 +1532,17 @@ export default function WeeklyPlannerScreen() {
                 textAlignVertical="top"
               />
             </KeyboardAvoidingView>
+          )}
+          {/* Set follow-up (the Owner, 2 Nov 2026): a reminder on a later day,
+              for you or for you and them as well. */}
+          {!!editorField && (
+            <View style={{ paddingBottom: Math.max(deviceInsets.bottom, kbInset || 0) }}>
+              <SetFollowUpButton
+                source={{ week_ending: week, day_index: editorField.where === 'day' ? editorField.tab : undefined, key: editorField.key, title: editorField.title }}
+                withUserId={viewingOther ? targetId : undefined}
+                withName={viewingOther ? targetName : undefined}
+              />
+            </View>
           )}
         </View>
       </Modal>

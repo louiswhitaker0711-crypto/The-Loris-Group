@@ -49,6 +49,7 @@ from routes.meeting_notes import router as meeting_notes_router
 from routes.monthly_planners import router as monthly_planners_router
 from routes.weekly_planners import router as weekly_planners_router
 from routes.primetime import router as primetime_router
+from routes.followups import router as followups_router
 from routes.absences import router as absences_router
 from routes.planner_coach import router as planner_coach_router
 from routes.coaching import router as coaching_router
@@ -158,6 +159,7 @@ api_router.include_router(agenda_router)
 api_router.include_router(monthly_planners_router)
 api_router.include_router(weekly_planners_router)
 api_router.include_router(primetime_router)
+api_router.include_router(followups_router)
 api_router.include_router(absences_router)
 api_router.include_router(planner_coach_router)
 api_router.include_router(coaching_router)
@@ -544,6 +546,11 @@ async def _startup_work():
     except Exception:
         # Never let index maintenance take the app down; try again next boot.
         logger.exception("bells_entries unique-index upgrade failed (continuing)")
+    try:
+        await db.followups.create_index([("for_ids", 1), ("due_date", 1)])
+        await db.followups.create_index([("pushed_at", 1), ("due_date", 1)])
+    except Exception:
+        logger.exception("followups indexes failed (continuing)")
     # Sales Development Path — silent level backfill. MUST run after the
     # bells dedupe + unique index above so pre-2026-09-02 duplicate week rows
     # can't double-count a week into a Green Week. No-op while the feature
@@ -979,6 +986,16 @@ async def _startup_work():
                 id=f"primetime_nudge_{_slot_h:02d}{_slot_m:02d}",
                 replace_existing=True,
             )
+
+        # ── Follow-ups from the planner: a notification at their time ──────
+        async def _followup_push():
+            try:
+                from routes.followups import followup_push_tick
+                await followup_push_tick()
+            except Exception as ex:
+                logger.error(f"follow-up push failed: {ex}")
+
+        scheduler.add_job(_followup_push, "interval", minutes=1, id="followup_push_tick", replace_existing=True)
 
         # ── The 6pm reset (Mon-Fri 18:00 UK) ──────────────────────────────
         # Everyone out in the field: how many more, which number, what focus.
