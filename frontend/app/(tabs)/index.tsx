@@ -1681,7 +1681,9 @@ export default function HomeScreen() {
       <LinearGradient colors={[surface.glow, surface.glowClear]} start={{ x: 1, y: 0 }} end={{ x: 0.35, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
       {/* A team leader's look: their logo faded in the corner, and its name on top. */}
       {surface.team?.logo ? (
-        <Image source={{ uri: surface.team.logo }} style={styles.heroWatermark} resizeMode="contain" pointerEvents="none" accessible={false} />
+        <View pointerEvents="none" style={styles.heroWatermark}>
+          <Image source={{ uri: surface.team.logo }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+        </View>
       ) : null}
       {surface.team ? (
         <View style={styles.heroTeamRow}>
