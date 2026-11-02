@@ -245,8 +245,10 @@ function useCubeMounted(focused: boolean): boolean {
 }
 
 // ── Back chip ────────────────────────────────────────────────────────────────
-function BackChip({ onPress, label, colors, light, tint }: {
+function BackChip({ onPress, label, colors, light, tint, glass, glassBorder }: {
   tint: string;
+  glass: string;
+  glassBorder: string;
   onPress: () => void;
   label: string;
   colors: ColorPalette;
@@ -263,8 +265,8 @@ function BackChip({ onPress, label, colors, light, tint }: {
         styles.chip,
         {
           // Sits on the navy band (Nov 2026 restyle): frosted white chip.
-          backgroundColor: 'rgba(255,255,255,0.10)',
-          borderColor: 'rgba(255,255,255,0.16)',
+          backgroundColor: glass,
+          borderColor: glassBorder,
           opacity: pressed ? 0.7 : 1,
         },
       ]}
@@ -337,6 +339,8 @@ export function Masthead(props: MastheadProps) {
     left = (
       <BackChip
         tint={surface.accent}
+        glass={surface.light ? surface.glass : 'rgba(255,255,255,0.10)'}
+        glassBorder={surface.light ? surface.glassBorder : 'rgba(255,255,255,0.16)'}
         onPress={r.onBack}
         label={backTitle ? `Back to ${backTitle}` : 'Back'}
         colors={colors}
@@ -346,7 +350,7 @@ export function Masthead(props: MastheadProps) {
   }
 
   return (
-    <View style={[styles.root, { paddingTop: topInset, backgroundColor: background }]}>
+    <View style={[styles.root, { paddingTop: topInset, backgroundColor: background }, surface.light && { borderWidth: 1, borderTopWidth: 0, borderColor: surface.edge }]}>
       <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.bandClip]}>
         <LinearGradient colors={[surface.deep, surface.mid]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={StyleSheet.absoluteFill} />
         <LinearGradient
@@ -360,7 +364,7 @@ export function Masthead(props: MastheadProps) {
         {left}
         <Animated.View style={[styles.titleWrap, titleAnim]} onLayout={onTitleLayout}>
           <GradientText
-            colors={TITLE_ON_NAVY}
+            colors={surface.light ? [surface.text, surface.text, surface.text] : TITLE_ON_NAVY}
             style={titleTextStyle}
             numberOfLines={1}
             adjustsFontSizeToFit
@@ -372,9 +376,9 @@ export function Masthead(props: MastheadProps) {
         {r.rightNode ? <View style={styles.slot}>{r.rightNode}</View> : null}
         {!r.compact ? (
           // Fixed-size slot so the title width is stable whether or not the cube is mounted.
-          <View style={styles.cubeSlot}>
+          <View style={[styles.cubeSlot, surface.light && surface.team?.logo ? styles.cubeSlotWide : null]}>
             {surface.team?.logo ? (
-              <View style={styles.teamLogoTile}>
+              <View style={surface.light ? styles.teamLogoBare : styles.teamLogoTile}>
                 <Image source={{ uri: surface.team.logo }} style={styles.teamLogoImg} resizeMode="contain" accessibilityLabel={surface.team.name} />
               </View>
             ) : cubeMounted ? (
@@ -428,7 +432,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 5,
   },
+  // The white team look: the logo sits on the white band as it is.
+  teamLogoBare: { width: '100%', height: '100%' },
   teamLogoImg: { width: '100%', height: '100%' },
+  cubeSlotWide: { width: CUBE_SIZE * 2 },
   cubeSlot: {
     width: CUBE_SIZE,
     height: CUBE_SIZE,

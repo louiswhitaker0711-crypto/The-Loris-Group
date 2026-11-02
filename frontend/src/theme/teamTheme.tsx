@@ -36,6 +36,24 @@ export type Surface = {
   muted: string;
   /** Set only in the team look. */
   team: null | { name: string; logo: string | null };
+  /** The white team look (a logo on its own white background). */
+  light: boolean;
+  /** The top bar and side menu: always dark, with its own accent. */
+  bar: string;
+  barAccent: string;
+  /** Text and fills on the band. */
+  text: string;
+  kicker: string;
+  glass: string;
+  glassBorder: string;
+  track: string;
+  /** Status colours that read on the band (the same colours, shaded for it). */
+  gold: string;
+  green: string;
+  amber: string;
+  red: string;
+  /** The band's edge on the page (white look only). */
+  edge: string;
 };
 
 export const LORIS_SURFACE: Surface = {
@@ -48,7 +66,23 @@ export const LORIS_SURFACE: Surface = {
   soft: '#d6e3f1',
   muted: '#b3c5da',
   team: null,
+  light: false,
+  bar: '#081a30',
+  barAccent: '#22d0ec',
+  text: '#ffffff',
+  kicker: '#9fd8ea',
+  glass: 'rgba(255,255,255,0.07)',
+  glassBorder: 'rgba(255,255,255,0.12)',
+  track: 'rgba(255,255,255,0.12)',
+  gold: '#ffd60a',
+  green: '#6ee794',
+  amber: '#ffc35c',
+  red: '#ff8178',
+  edge: 'transparent',
 };
+
+/** Status colours on a white band. */
+const ON_WHITE = { gold: '#a87400', green: '#1f8f4e', amber: '#b86a00', red: '#d0342c' };
 
 // ── Colour maths ─────────────────────────────────────────────────────────────
 type RGB = [number, number, number];
@@ -94,7 +128,7 @@ function readableOn(c: RGB, bg: RGB): RGB {
   return out;
 }
 
-export type TeamColors = { primary?: string | null; accent?: string | null };
+export type TeamColors = { primary?: string | null; accent?: string | null; light_bg?: boolean | null };
 
 /** The team's surface and primary from its two colours. */
 export function deriveTeamLook(colors: TeamColors) {
@@ -116,6 +150,30 @@ export function deriveTeamLook(colors: TeamColors) {
     onAccent: contrast(accent, BLACK) >= contrast(accent, WHITE) ? toHex(toLum(p, 0.012)) : '#ffffff',
     soft: toHex(mix(toLum(p, 0.04), WHITE, 0.82)),
     muted: toHex(mix(toLum(p, 0.04), WHITE, 0.68)),
+    // The white look: white bands, team-coloured text and accents.
+    whiteLook: (() => {
+      const ink = toLum(p, 0.018);
+      const tone = primary; // already dark enough for white text, so it reads on white too
+      const [tr, tg, tb] = tone.map(Math.round);
+      const glowRgb = isHex(colors.accent) ? toRgb(colors.accent) : p;
+      const [gr, gg, gb] = glowRgb.map(Math.round);
+      return {
+        deep: '#ffffff',
+        mid: toHex(mix(p, WHITE, 0.93)),
+        accent: toHex(tone),
+        glow: `rgba(${gr},${gg},${gb},0.20)`,
+        glowClear: `rgba(${gr},${gg},${gb},0)`,
+        onAccent: '#ffffff',
+        text: toHex(ink),
+        soft: toHex(mix(ink, WHITE, 0.22)),
+        muted: toHex(mix(ink, WHITE, 0.38)),
+        kicker: toHex(tone),
+        glass: `rgba(${tr},${tg},${tb},0.05)`,
+        glassBorder: `rgba(${tr},${tg},${tb},0.14)`,
+        track: `rgba(${tr},${tg},${tb},0.12)`,
+        edge: `rgba(${tr},${tg},${tb},0.14)`,
+      };
+    })(),
   };
 }
 
@@ -135,7 +193,11 @@ export function TeamThemeProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const u: any = user || {};
   const colors: TeamColors | null = u.team_colors || u.team_colors_auto || null;
-  const active = !!u.has_team && (!!u.team_logo || !!colors);
+  // The Owner (an Admin) always keeps the Loris look and logo.
+  const active = u.role !== 'admin' && !!u.has_team && (!!u.team_logo || !!colors);
+  // A logo on its own white background gets the white look (no white box
+  // round it on a dark band). Picked from the logo on upload.
+  const lightBg = !!u.team_logo && !!u.team_colors_auto?.light_bg;
 
   const look = useMemo(() => (active ? deriveTeamLook(colors || {}) : null),
     [active, colors?.primary, colors?.accent]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -143,12 +205,18 @@ export function TeamThemeProvider({ children }: { children: React.ReactNode }) {
   const surface = useMemo<Surface>(() => {
     if (!look) return LORIS_SURFACE;
     const first = (u.name || '').trim().split(' ')[0];
+    const team = { name: (u.team_name || '').trim() || (first ? `${first}'s team` : 'Your team'), logo: u.team_logo || null };
+    const bar = { bar: look.deep, barAccent: look.accent };
+    if (lightBg) {
+      return { ...LORIS_SURFACE, ...look.whiteLook, ...ON_WHITE, ...bar, team, light: true };
+    }
     return {
+      ...LORIS_SURFACE, ...bar,
       deep: look.deep, mid: look.mid, accent: look.accent, glow: look.glow, glowClear: look.glowClear,
-      onAccent: look.onAccent, soft: look.soft, muted: look.muted,
-      team: { name: (u.team_name || '').trim() || (first ? `${first}'s team` : 'Your team'), logo: u.team_logo || null },
+      onAccent: look.onAccent, soft: look.soft, muted: look.muted, kicker: look.soft,
+      team,
     };
-  }, [look, u.team_name, u.team_logo, u.name]);
+  }, [look, lightBg, u.team_name, u.team_logo, u.name]);
 
   const themeValue = useMemo(() => {
     if (!look) return parent;

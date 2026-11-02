@@ -35,7 +35,7 @@ export function NavyCard({ children, style }: { children: React.ReactNode; style
   // Loris navy, or a team leader's own colours (src/theme/teamTheme.tsx).
   const surface = useSurface();
   return (
-    <View style={[styles.card, { backgroundColor: surface.deep }, style]}>
+    <View style={[styles.card, { backgroundColor: surface.deep }, surface.light && { borderWidth: 1, borderColor: surface.edge }, style]}>
       <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.clip]}>
         <LinearGradient colors={[surface.deep, surface.mid]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={StyleSheet.absoluteFill} />
         <LinearGradient

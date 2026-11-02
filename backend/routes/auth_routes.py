@@ -397,7 +397,7 @@ async def get_me(request: Request):
     except Exception:
         user["has_team"] = False
     # A logo uploaded before team colours existed: pick its colours once.
-    if user.get("has_team") and user.get("team_logo") and not user.get("team_colors_auto"):
+    if user.get("has_team") and user.get("team_logo") and "light_bg" not in (user.get("team_colors_auto") or {}):
         try:
             from core.team_colors import ensure_auto_colors
             user["team_colors_auto"] = await ensure_auto_colors(db, user)

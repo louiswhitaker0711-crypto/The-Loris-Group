@@ -27,6 +27,7 @@ import { useIsLandscape } from '../../src/hooks/useIsLandscape';
 import { useTabBarClearance } from '../../src/customization/CustomTabBar';
 import { useColors, useTheme, buildGetStatusColor, fonts } from '../../src/theme/ThemeContext';
 import { APP_SHORT_NAME, GRADIENT, GRADIENT_TEXT } from '../../src/theme/brand';
+import { VertexMark } from '../../src/components/ui/VertexMark';
 import { useSurface, poweredBy, type Surface } from '../../src/theme/teamTheme';
 import { api, apiService, NewHire } from '../../src/api/client';
 import { useAuth } from '../../src/auth/AuthContext';
@@ -1676,11 +1677,13 @@ export default function HomeScreen() {
       {/* ── Greeting: a slim header. Who, when, and the way to your profile. ── */}
       {/* ── Navy hero (Nov 2026 restyle): greeting, avatar and My week on the
           navy band with a cyan glow in the corner. ── */}
-      <View style={[styles.heroBand, { paddingTop: insets.top + 10, backgroundColor: surface.deep }]}>
+      <View style={[styles.heroBand, { paddingTop: insets.top + 10, backgroundColor: surface.deep }, surface.light && { borderWidth: 1, borderTopWidth: 0, borderColor: surface.edge }]}>
       <LinearGradient colors={[surface.deep, surface.mid]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
       <LinearGradient colors={[surface.glow, surface.glowClear]} start={{ x: 1, y: 0 }} end={{ x: 0.35, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
-      {/* A team leader's look: their logo faded in the corner, and its name on top. */}
-      {surface.team?.logo ? (
+      {/* A team leader's look: their logo faded in the corner, and its name on top.
+          A logo on its own white background gets the white look instead: it
+          sits on the white band as it is, with no box round it. */}
+      {surface.team?.logo && !surface.light ? (
         <View pointerEvents="none" style={styles.heroWatermark}>
           <Image source={{ uri: surface.team.logo }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
         </View>
@@ -1688,11 +1691,17 @@ export default function HomeScreen() {
       {surface.team ? (
         <View style={styles.heroTeamRow}>
           {surface.team.logo ? (
-            <View style={styles.heroTeamTile}><Image source={{ uri: surface.team.logo }} style={{ width: '100%', height: '100%' }} resizeMode="contain" /></View>
+            <View style={surface.light ? styles.heroTeamLogoWide : styles.heroTeamTile}><Image source={{ uri: surface.team.logo }} style={{ width: '100%', height: '100%' }} resizeMode="contain" /></View>
           ) : null}
           <Text style={styles.heroTeamName} numberOfLines={1}>{surface.team.name.toUpperCase()}</Text>
         </View>
-      ) : null}
+      ) : (
+        // The Loris look: the Owner's own logo on the hero.
+        <View style={styles.heroTeamRow}>
+          <VertexMark size={34} gradient />
+          <Text style={styles.heroTeamName} numberOfLines={1}>{APP_SHORT_NAME.toUpperCase()}</Text>
+        </View>
+      )}
       <View style={styles.header}>
         <View style={styles.headerText}>
           <Text style={styles.greeting}>{greeting} · {dateLine}</Text>
@@ -1844,8 +1853,8 @@ const createStyles = (colors: any, isDark: boolean, surface: Surface) => {
     borderBottomLeftRadius: 28, borderBottomRightRadius: 28, overflow: 'hidden', backgroundColor: '#081a30' },
   header: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   headerText: { flex: 1, minWidth: 0, paddingRight: 4 },
-  greeting: { fontFamily: fonts.body, fontSize: 13, color: '#9fd8ea', marginBottom: 2 },
-  headerName: { fontFamily: fonts.displayBlack, fontSize: 32, lineHeight: 38, letterSpacing: -0.8, color: '#ffffff' },
+  greeting: { fontFamily: fonts.body, fontSize: 13, color: surface.kicker, marginBottom: 2 },
+  headerName: { fontFamily: fonts.displayBlack, fontSize: 32, lineHeight: 38, letterSpacing: -0.8, color: surface.text },
   // The date sits where the dark nebula's bright lobe drifts, and 11.5px inkMuted
   // measured 4.1:1 there (spec §6.5 wants ≥4.5:1 on ink) — so it runs inkText at
   // 0.92, which keeps the muted voice under the name and stays ≥5:1 on the lobe.
@@ -1855,11 +1864,12 @@ const createStyles = (colors: any, isDark: boolean, surface: Surface) => {
   heroWatermark: { position: 'absolute', right: -70, top: 40, width: 300, height: 190, opacity: 0.14 },
   heroTeamRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   heroTeamTile: { width: 36, height: 36, borderRadius: 11, backgroundColor: '#ffffff', padding: 4 },
-  heroTeamName: { flexShrink: 1, fontFamily: fonts.displayBlack, fontSize: 15, letterSpacing: 1.6, color: '#ffffff' },
+  heroTeamLogoWide: { width: 120, height: 48 },
+  heroTeamName: { flexShrink: 1, fontFamily: fonts.displayBlack, fontSize: 15, letterSpacing: 1.6, color: surface.text },
   poweredRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   poweredLogo: { width: 16, height: 16, borderRadius: 8, backgroundColor: '#ffffff' },
   poweredText: { fontFamily: fonts.bodySemibold, fontSize: 11, letterSpacing: 0.3 },
-  headerAvatarText: { fontFamily: fonts.bodyBold, color: '#ffffff', fontSize: 16 },
+  headerAvatarText: { fontFamily: fonts.bodyBold, color: surface.light ? surface.accent : '#ffffff', fontSize: 16 },
   // A BA's standing: stage number, title, sales level and a thin bar.
   levelStrip: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, marginBottom: 12 },
   levelBadge: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary },

@@ -36,8 +36,8 @@ export default function MySectorScreen() {
     <ScrollView style={s.page} contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 40 }]}>
       {/* Navy hero card (Nov 2026 look): where today stands and the two main buttons. */}
       <NavyCard>
-        <Text style={s.heroKicker}>TODAY</Text>
-        <Text style={s.heroLine}>
+        <Text style={[s.heroKicker, { color: surface.muted }]}>TODAY</Text>
+        <Text style={[s.heroLine, { color: surface.text }]}>
           {inOneToday ? "You're in a sector today" : today ? `${today.sectors.length} sector${today.sectors.length === 1 ? '' : 's'} out today` : 'No sectors yet today'}
         </Text>
         {(!inOneToday || !!st.data?.can_plan) && (
@@ -49,9 +49,9 @@ export default function MySectorScreen() {
               </Pressable>
             )}
             {!!st.data?.can_plan && (
-              <Pressable onPress={() => router.push('/sector-plan' as never)} style={s.heroGhost} accessibilityRole="button" testID="ms-plan">
-                <Ionicons name="compass-outline" size={17} color={ON_NAVY.text} />
-                <Text style={s.heroGhostText}>Plan today's</Text>
+              <Pressable onPress={() => router.push('/sector-plan' as never)} style={[s.heroGhost, { backgroundColor: surface.glass, borderColor: surface.glassBorder }]} accessibilityRole="button" testID="ms-plan">
+                <Ionicons name="compass-outline" size={17} color={surface.text} />
+                <Text style={[s.heroGhostText, { color: surface.text }]}>Plan today's</Text>
               </Pressable>
             )}
           </View>
