@@ -19,4 +19,4 @@ def _field_day_over(monkeypatch, request):
     if request.module.__name__.endswith("test_grading_time_unit"):
         return
     import core.grading_time as gt
-    monkeypatch.setattr(gt, "todays_day_ready", lambda now=None: True)
+    monkeypatch.setattr(gt, "todays_day_ready", lambda now=None, academy=False: True)
