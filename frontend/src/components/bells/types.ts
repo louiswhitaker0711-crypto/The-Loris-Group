@@ -130,6 +130,7 @@ export type Entry = {
   };
   /** Who they report to, and the stage they hold as OwnerIQ words it ("3", "3+"). */
   coach_name?: string | null;
+  coach_id?: string | null;
   stage_label?: string | null;
   /** The office's (MC's) fees for this person's sign-ups. Sent to Admins only. */
   mc_fees?: number;

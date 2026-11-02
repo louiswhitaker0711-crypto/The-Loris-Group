@@ -1256,6 +1256,7 @@ async def bells_week_for(user: dict, week: Optional[str] = None, office: Optiona
         uid = e.get("user_id")
         coach_id = reports_to_map.get(uid) if uid else None
         e["coach_name"] = (people.get(str(coach_id)) or {}).get("name") if coach_id else None
+        e["coach_id"] = str(coach_id) if coach_id else None
         e["stage_label"] = _stage_label((people.get(uid) or {}).get("owneriq_stage")) if uid else None
         # BE comes from their Plan your earnings unless it's typed on the
         # sheet (the Owner, 26 Oct 2026: nobody types it in by hand).

@@ -62,16 +62,34 @@ import { SUPER_GREEN_WEEK_MIN, GREEN_WEEK_MIN, AMBER_WEEK_MIN, RED_WEEK_MAX, wee
 // on a page.
 // ─────────────────────────────────────────────────────────────────────
 
-/** PR (personal recruit) / OR (office recruitment) beside a name on Bells. */
+/** Tap-to-toggle PR / OR, provided by TableView for Admins (null = read only). */
+const RecruitToggleContext = React.createContext<((e: Entry) => void) | null>(null);
+
+/** PR (personal recruit) / OR (office recruitment) beside a name on Bells.
+ *  An Admin taps it to switch PR ↔ OR (unset → PR); the shared link shows it too. */
 function RecruitBadge({ e, colors, z = 1 }: { e: Entry; colors: any; z?: number }) {
-  if (!e.recruit_badge) return null;
+  const onToggle = React.useContext(RecruitToggleContext);
+  if (!e.recruit_badge && !onToggle) return null;
   const pr = e.recruit_badge === 'PR';
-  return (
-    <Text style={{ fontSize: 9 * z, fontFamily: fonts.bodyBold, letterSpacing: 0.4, marginLeft: 4, paddingHorizontal: 4, paddingVertical: 1,
-      borderRadius: 4, overflow: 'hidden', color: pr ? colors.onPrimary : colors.textSecondary, backgroundColor: pr ? colors.primary : colors.surfaceAlt }}
-      accessibilityLabel={pr ? `Personal recruit${e.recruited_by_name ? ` of ${e.recruited_by_name}` : ''}` : 'Office recruitment'}>
-      {e.recruit_badge}
+  const unset = !e.recruit_badge;
+  const label = (
+    <Text style={{ fontSize: 9.5 * z, fontFamily: fonts.bodyBold, letterSpacing: 0.4, paddingHorizontal: 5, paddingVertical: 1.5,
+      borderRadius: 5, overflow: 'hidden',
+      color: unset ? colors.textMuted : pr ? '#ffffff' : colors.textSecondary,
+      backgroundColor: unset ? 'transparent' : pr ? colors.ink : colors.surfaceAlt,
+      borderWidth: unset ? 1 : 0, borderColor: colors.border, borderStyle: unset ? 'dashed' : 'solid' }}>
+      {unset ? 'PR/OR' : e.recruit_badge}
     </Text>
+  );
+  const a11y = unset ? 'Not set: tap to mark as a personal recruit' : pr ? `Personal recruit${e.recruited_by_name ? ` of ${e.recruited_by_name}` : ''}` : 'Office recruitment';
+  if (!onToggle || !e.user_id) {
+    return <View style={{ marginLeft: 6 }} accessibilityLabel={a11y}>{label}</View>;
+  }
+  return (
+    <TouchableOpacity onPress={() => onToggle(e)} hitSlop={8} style={{ marginLeft: 6 }} accessibilityRole="button"
+      accessibilityLabel={`${a11y}. Tap to switch`} testID={`bells-recruit-${e.user_id}`}>
+      {label}
+    </TouchableOpacity>
   );
 }
 
@@ -745,7 +763,23 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
     />
   );
 
+  // PR / OR toggle (Admins, not on the shared view): unset → PR, PR ↔ OR.
+  // A PR keeps whoever recruited them; a new PR is credited to their Coach.
+  const { user: me } = useAuth();
+  const toggleRecruit = (!readOnly && me?.role === 'admin') ? async (e: Entry) => {
+    const prevBy = (e as any).recruited_by;
+    const next = e.recruit_badge === 'PR' ? 'office'
+      : (prevBy && prevBy !== 'office' ? prevBy : ((e as any).coach_id || me?.id || ''));
+    try {
+      await apiService.setRecruitedBy(String(e.user_id), String(next));
+      onRefresh?.();
+    } catch (err: any) {
+      showAlert('Couldn\u2019t change it', err?.response?.data?.detail || 'Try again in a moment.');
+    }
+  } : null;
+
   return (
+    <RecruitToggleContext.Provider value={toggleRecruit}>
     <View style={phone ? styles.phoneWrap : styles.wrap} onLayout={onWrapLayout}>
       {phone ? (
         <PhoneSheet
@@ -1045,6 +1079,7 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
         </KeyboardAvoidingView>
       </Modal>
     </View>
+    </RecruitToggleContext.Provider>
   );
 }
 
@@ -1399,8 +1434,8 @@ function PhoneSheet({ groups, office, entries, colors, isDark, styles, showMc, w
         <View style={styles.pSection}>
           <View style={styles.nRow}>
             <Text style={[styles.lHead, { flex: 1, textAlign: 'left', paddingLeft: 8 }]}>Name</Text>
-            {dayIdx.map((i) => <Text key={i} style={[styles.lHead, styles.nDayW]}>{DAYS[i].charAt(0)}</Text>)}
-            <Text style={[styles.lHead, styles.lTotW, { textAlign: 'right' }]}>Tot</Text>
+            {dayIdx.map((i) => <Text key={i} style={[styles.lHead, styles.nDayW, styles.nGrid, { paddingVertical: 8 }]}>{DAYS[i].charAt(0)}</Text>)}
+            <Text style={[styles.lHead, styles.lTotW, styles.nGrid, { textAlign: 'right', paddingVertical: 8 }]}>Tot</Text>
           </View>
           {everyone.map((it: EveryoneItem, idx: number) => {
             const g = it.g;
@@ -1452,7 +1487,7 @@ function PhoneSheet({ groups, office, entries, colors, isDark, styles, showMc, w
                     : sd.kind === 'nums' && sd.n >= 4 ? { backgroundColor: '#1f9d4c' }
                     : sd.kind === 'off' ? { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#f1f4f8' } : null;
                   return (
-                    <TouchableOpacity key={i} style={[styles.nDayW, { alignItems: 'center', justifyContent: 'center', height: 52 }]}
+                    <TouchableOpacity key={i} style={[styles.nDayW, styles.nGrid, { alignItems: 'center', justifyContent: 'center', height: 52 }]}
                       onPress={() => onCellPress?.(e, i)} activeOpacity={0.6}
                       accessibilityLabel={`${e.user_name}, ${DAYS_LONG[i]}: ${sd.kind === 'nums' ? `${sd.gold} Gold, ${sd.silver} Silver` : sd.label}. Tap to edit`}>
                       <View style={[styles.nCell, cellStyle]}>
@@ -1461,7 +1496,7 @@ function PhoneSheet({ groups, office, entries, colors, isDark, styles, showMc, w
                     </TouchableOpacity>
                   );
                 })}
-                <View style={[styles.lTotW, { alignItems: 'flex-end', justifyContent: 'center' }]}>
+                <View style={[styles.lTotW, styles.nGrid, { alignItems: 'flex-end', justifyContent: 'center', alignSelf: 'stretch' }]}>
                   <Text style={[styles.nTot, { color: tl.fg }]}>{e.total_sales}</Text>
                 </View>
               </View>
@@ -1622,6 +1657,8 @@ const createStyles = (colors: any) => StyleSheet.create({
   nName: { fontFamily: fonts.bodySemibold, fontSize: 14, color: colors.text },
   nGoal: { fontFamily: fonts.body, fontSize: 11, color: colors.textMuted, marginTop: 1 },
   nDayW: { width: 32 },
+  // The light grid between the days (the Owner, 2 Nov 2026: the sheet needs its grid).
+  nGrid: { borderLeftWidth: 1, borderLeftColor: colors.border, alignSelf: 'stretch' },
   nCell: { width: 26, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   nCellText: { fontFamily: fonts.displayBlack, fontSize: 14 },
   nTot: { fontFamily: fonts.displayBlack, fontSize: 16 },
