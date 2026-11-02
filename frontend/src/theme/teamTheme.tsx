@@ -193,7 +193,8 @@ export function TeamThemeProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const u: any = user || {};
   const colors: TeamColors | null = u.team_colors || u.team_colors_auto || null;
-  const active = !!u.has_team && (!!u.team_logo || !!colors);
+  // The Owner (an Admin) always keeps the Loris look and logo.
+  const active = u.role !== 'admin' && !!u.has_team && (!!u.team_logo || !!colors);
   // A logo on its own white background gets the white look (no white box
   // round it on a dark band). Picked from the logo on upload.
   const lightBg = !!u.team_logo && !!u.team_colors_auto?.light_bg;

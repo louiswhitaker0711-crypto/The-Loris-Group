@@ -27,6 +27,7 @@ import { useIsLandscape } from '../../src/hooks/useIsLandscape';
 import { useTabBarClearance } from '../../src/customization/CustomTabBar';
 import { useColors, useTheme, buildGetStatusColor, fonts } from '../../src/theme/ThemeContext';
 import { APP_SHORT_NAME, GRADIENT, GRADIENT_TEXT } from '../../src/theme/brand';
+import { VertexMark } from '../../src/components/ui/VertexMark';
 import { useSurface, poweredBy, type Surface } from '../../src/theme/teamTheme';
 import { api, apiService, NewHire } from '../../src/api/client';
 import { useAuth } from '../../src/auth/AuthContext';
@@ -1694,7 +1695,13 @@ export default function HomeScreen() {
           ) : null}
           <Text style={styles.heroTeamName} numberOfLines={1}>{surface.team.name.toUpperCase()}</Text>
         </View>
-      ) : null}
+      ) : (
+        // The Loris look: the Owner's own logo on the hero.
+        <View style={styles.heroTeamRow}>
+          <VertexMark size={34} gradient />
+          <Text style={styles.heroTeamName} numberOfLines={1}>{APP_SHORT_NAME.toUpperCase()}</Text>
+        </View>
+      )}
       <View style={styles.header}>
         <View style={styles.headerText}>
           <Text style={styles.greeting}>{greeting} · {dateLine}</Text>
