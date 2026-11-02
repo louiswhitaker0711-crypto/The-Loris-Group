@@ -58,12 +58,12 @@ export function useCoachingToday() {
   });
 }
 
-/** BA Academy Days 1-2 are in the office: the day can be graded from 16:00,
+/** BA Academy Days 1-2 are in the office: the day can be graded from 17:30,
  * once product coaching's done (the Owner, 2 Nov 2026; backend grading_time). */
 export const isAcademyDay = (p: { day_number: number }) => Number(p.day_number) <= 2;
 export function academyGradeOpen(): boolean {
   const { mins } = ukNow();
-  return mins >= 16 * 60;
+  return mins >= 17 * 60 + 30;
 }
 /** Can this person's day be graded now? */
 export function gradeOpen(p: { day_number: number }): boolean {

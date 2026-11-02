@@ -22,7 +22,7 @@ READY_FROM = {5: (17, 0), 6: (0, 0)}   # Saturday, Sunday; every other day 19:30
 WEEKDAY_READY = (19, 30)
 # BA Academy Days 1-2 are product coaching in the office, not the field: the
 # day is ready to grade once coaching's done (the Owner, 2 Nov 2026).
-ACADEMY_READY = (16, 0)
+ACADEMY_READY = (17, 30)
 ACADEMY_DAYS = 2
 FIELD_START = {5: (10, 0)}             # Saturday; Monday to Friday 13:30
 WEEKDAY_FIELD_START = (13, 30)

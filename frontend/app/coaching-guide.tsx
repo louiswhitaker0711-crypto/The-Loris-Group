@@ -189,7 +189,7 @@ export default function CoachingGuideScreen() {
             style={[s.grade, (canGradeNow || p.done) ? s.gradeOn : null]} accessibilityRole="button">
             <Text style={[s.gradeText, (canGradeNow || p.done) && { color: c.onPrimary }]}>
               {p.done ? 'Graded · see their day' : canGradeNow ? `Grade ${who}’s day`
-                : academy ? `Grade ${who}’s day (opens at 16:00, after product coaching)` : `Grade ${who}’s day (opens at the end of the field)`}
+                : academy ? `Grade ${who}’s day (opens at 17:30, after product coaching)` : `Grade ${who}’s day (opens at the end of the field)`}
             </Text>
           </Pressable>
         ) : (
