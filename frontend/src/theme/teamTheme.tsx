@@ -160,9 +160,10 @@ export function deriveTeamLook(colors: TeamColors) {
       const [gr, gg, gb] = glowRgb.map(Math.round);
       return {
         deep: '#ffffff',
-        mid: toHex(mix(p, WHITE, 0.96)),
+        // Pure white top to bottom, so a logo's own white background melts into it.
+        mid: '#ffffff',
         accent: toHex(tone),
-        glow: `rgba(${gr},${gg},${gb},0.10)`,
+        glow: `rgba(${gr},${gg},${gb},0)`,
         glowClear: `rgba(${gr},${gg},${gb},0)`,
         onAccent: '#ffffff',
         text: toHex(ink),
