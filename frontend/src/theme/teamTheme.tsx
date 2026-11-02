@@ -155,13 +155,14 @@ export function deriveTeamLook(colors: TeamColors) {
       const ink = toLum(p, 0.018);
       const tone = primary; // already dark enough for white text, so it reads on white too
       const [tr, tg, tb] = tone.map(Math.round);
-      const glowRgb = isHex(colors.accent) ? toRgb(colors.accent) : p;
+      // The glow is the main colour, so the band reads as the team, not a tint of the accent.
+      const glowRgb = p;
       const [gr, gg, gb] = glowRgb.map(Math.round);
       return {
         deep: '#ffffff',
-        mid: toHex(mix(p, WHITE, 0.93)),
+        mid: toHex(mix(p, WHITE, 0.96)),
         accent: toHex(tone),
-        glow: `rgba(${gr},${gg},${gb},0.20)`,
+        glow: `rgba(${gr},${gg},${gb},0.10)`,
         glowClear: `rgba(${gr},${gg},${gb},0)`,
         onAccent: '#ffffff',
         text: toHex(ink),
