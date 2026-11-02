@@ -709,6 +709,23 @@ export interface PrimetimeSession {
   attendees: Array<{ user_id: string; name: string; mode: PrimetimeMode }>;
 }
 
+export interface FollowUp {
+  id: string;
+  text: string;
+  due_date: string;
+  due_time: string;
+  done: boolean;
+  /** You set it (you can delete it). */
+  mine: boolean;
+  /** Who set it, when it wasn't you. */
+  from_name: string;
+  /** Who else it's for. */
+  with_names: string[];
+  source: { week_ending?: string; day_index?: number; key?: string; title?: string };
+  /** The due day's page of the weekly planner. */
+  url: string;
+}
+
 export interface PrimetimeWeek {
   week_ending: string;
   office_id: string;
@@ -1031,6 +1048,15 @@ export const apiService = {
     week_ending: string; day_index: number; office?: string;
     sessions: Array<{ host_id: string; topic: string; layout: 'triangle' | 'list'; watching: string[]; learning: string[] }>;
   }) => api.put<{ ok: boolean; written: number; cleared: number; skipped: string[] }>('/primetime/day', body),
+  // Follow-ups set from the planner: on that day's page, on Home until ticked, and a push at the time.
+  followUps: (params: { date?: string; due?: boolean } = {}) =>
+    api.get<{ today: string; followups: FollowUp[] }>('/followups', { params }),
+  followUpPeople: () => api.get<{ people: Array<{ user_id: string; name: string }> }>('/followups/people'),
+  createFollowUp: (body: { text: string; due_date: string; due_time?: string; also_user_id?: string | null;
+    source?: { week_ending?: string; day_index?: number; key?: string; title?: string } }) =>
+    api.post<{ ok: boolean; followup: FollowUp }>('/followups', body),
+  tickFollowUp: (id: string, done: boolean) => api.put(`/followups/${id}/done`, { done }),
+  deleteFollowUp: (id: string) => api.delete(`/followups/${id}`),
   // Primetime at the sector breakdown: tomorrow's plan for you and your sector.
   getSectorPrimetime: (date: string, scope: 'breakdown' | 'morning' = 'breakdown') =>
     api.get('/primetime/sector', { params: { date, scope } }),
