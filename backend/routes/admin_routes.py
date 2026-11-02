@@ -1399,21 +1399,10 @@ async def delete_user(user_id: str, request: Request, left_on: Optional[str] = N
     on a Bells day): today or up to 60 days back, never ahead. Default today."""
     admin = await require_admin(request)
     user = await _guard_target_user(admin, user_id)
-    if user.get("role") == "leader":
-        leader_name = user.get("name", "")
-        await db.new_hires.update_many(
-            {"leader": leader_name, "office_id": user.get("office_id"),
-             "$or": [{"leader_user_id": None}, {"leader_user_id": {"$exists": False}}]},
-            {"$set": {"leader": "Unassigned"}},
-        )
-        await db.new_hires.update_many(
-            {"leader_user_id": user_id},
-            {"$set": {"leader": "Unassigned", "leader_user_id": None}},
-        )
-        await db.users.update_many(
-            {"reports_to": user_id, "office_id": user.get("office_id")},
-            {"$unset": {"reports_to": ""}},
-        )
+    # Their people move up to the person above them (or to you), whatever
+    # their role: sub-teams move whole (core/team_sections.hand_on_team).
+    from core.team_sections import hand_on_team
+    handed = await hand_on_team(db, user, str(admin.get("_id") or "") or None)
     # Soft-delete: mark deleted but keep all data so historical reports stay accurate.
     # Assessments, badges, new_hire records are preserved for historical stats.
     #
@@ -1462,7 +1451,7 @@ async def delete_user(user_id: str, request: Request, left_on: Optional[str] = N
         {"office_id": user.get("office_id"), "$or": hire_clauses},
         {"$set": {"active": False}},
     )
-    return {"message": "User deleted"}
+    return {"message": "User deleted", "handed_to": handed.get("to"), "moved": handed.get("moved", 0)}
 
 @router.get("/admin/leader-rankings")
 async def get_leader_rankings(request: Request):

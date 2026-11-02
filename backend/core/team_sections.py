@@ -90,3 +90,62 @@ async def user_has_team(db, user: dict) -> bool:
     if n > 0:
         await stamp_team_leaders(db, [uid])
     return has_team(user, n)
+
+
+async def hand_on_team(db, exited: dict, fallback_id: Optional[str]) -> dict:
+    """When someone exits, their people move up a level (the Owner, 2 Nov 2026).
+
+    Everyone who reported to them now reports to the person above them; if
+    there's nobody above (or that person has gone), to `fallback_id` (the
+    Admin doing the exit). Sub-teams move whole: only direct reports change,
+    so a sub-leader keeps their own people. Their Coach-of-record on new-start
+    records moves the same way. The exited person's team section goes
+    straight away (no 4-week grace). No notifications.
+
+    Returns {"to": <new coach id or None>, "moved": <number of people>}.
+    """
+    from bson import ObjectId
+    uid = str(exited.get("_id") or "")
+    office = exited.get("office_id")
+    if not uid:
+        return {"to": None, "moved": 0}
+
+    async def _active(pid: Optional[str]) -> Optional[dict]:
+        if not pid or not ObjectId.is_valid(str(pid)) or str(pid) == uid:
+            return None
+        u = await db.users.find_one({"_id": ObjectId(str(pid)), **ACTIVE})
+        if not u or (office and u.get("office_id") not in (office, None)):
+            return None
+        return u
+
+    heir = await _active(exited.get("reports_to")) or await _active(fallback_id)
+    heir_id = str(heir["_id"]) if heir else None
+    heir_name = (heir or {}).get("name") or "Unassigned"
+
+    q = {"reports_to": uid}
+    if office:
+        q["office_id"] = office
+    moved = await db.users.count_documents({**q, **ACTIVE})
+    if heir_id:
+        # Never make someone their own Coach (the heir was on the exited person's team).
+        await db.users.update_many({**q, "_id": {"$ne": ObjectId(heir_id)}},
+                                   {"$set": {"reports_to": heir_id}})
+        await db.users.update_one({**q, "_id": ObjectId(heir_id)}, {"$unset": {"reports_to": ""}})
+    else:
+        await db.users.update_many(q, {"$unset": {"reports_to": ""}})
+
+    # New-start records: by id, and legacy ones that only carry the name.
+    hire_set = {"leader": heir_name, "leader_user_id": heir_id}
+    await db.new_hires.update_many({"leader_user_id": uid}, {"$set": hire_set})
+    name = (exited.get("name") or "").strip()
+    if name and office:
+        await db.new_hires.update_many(
+            {"leader": name, "office_id": office,
+             "$or": [{"leader_user_id": None}, {"leader_user_id": {"$exists": False}}]},
+            {"$set": hire_set})
+
+    # Their own section goes now, not in 4 weeks.
+    await db.users.update_one({"_id": exited["_id"]}, {"$unset": {"team_last_member_on": ""}})
+    if heir_id and moved:
+        await stamp_team_leaders(db, [heir_id])
+    return {"to": heir_id, "moved": moved}
