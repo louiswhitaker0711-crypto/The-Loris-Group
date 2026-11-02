@@ -133,8 +133,8 @@ export type Entry = {
   stage_label?: string | null;
   /** The office's (MC's) fees for this person's sign-ups. Sent to Admins only. */
   mc_fees?: number;
-  primary_team?: { leader_id: string; leader_name: string; team_name: string } | null;
-  teams?: Array<{ leader_id: string; leader_name: string; team_name: string }>;
+  primary_team?: { leader_id: string; leader_name: string; team_name: string; team_logo?: string | null } | null;
+  teams?: Array<{ leader_id: string; leader_name: string; team_name: string; team_logo?: string | null }>;
   public_hidden?: boolean;
   /** A view-only row from the roll call sheet: someone the app has no
    *  account for (they've left). History only — never editable. */

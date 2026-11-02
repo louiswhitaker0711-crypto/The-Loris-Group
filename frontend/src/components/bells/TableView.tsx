@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, Alert, Modal, TextInput, KeyboardAvoidingView, LayoutChangeEvent, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, Alert, Modal, TextInput, KeyboardAvoidingView, LayoutChangeEvent, useWindowDimensions, Image } from 'react-native';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, runOnJS } from 'react-native-reanimated';
 import { apiService } from '../../api/client';
@@ -157,6 +157,7 @@ const one = (n: number) => (Math.round(n * 10) / 10).toFixed(1);
 type Group = {
   key: string;            // leader_id or '__no_team__'
   team_name: string;      // e.g. the leader's team name, or "Unassigned"
+  team_logo: string | null;
   leader_id: string | null;
   leader_name: string | null;
   members: Entry[];       // ordered: leader first, then trainees
@@ -183,6 +184,7 @@ function buildGroups(entries: Entry[], miniGoal?: number | null): Group[] {
       map.set(key, {
         key,
         team_name: name,
+        team_logo: pt?.team_logo || null,
         leader_id: pt?.leader_id || null,
         leader_name: pt?.leader_name || null,
         members: [],
@@ -1243,6 +1245,7 @@ function BodyContent({ groups, office, colors, isDark, styles, z, w, totalW, sho
                 {/* Team band — sticky under the header on web */}
                 <View style={[styles.teamHeader, stickyTeam, { backgroundColor: bandBg, borderLeftColor: tint.border, width: totalW }]}>
                   <View style={[styles.teamHeaderLeft, isWebSticky(stickyNameCol) && ({ position: 'sticky', left: 10 } as any)]}>
+                    {g.team_logo ? <Image source={{ uri: g.team_logo }} style={[styles.teamLogo, { width: 20 * z, height: 20 * z, borderRadius: 6 * z }]} /> : null}
                     <Text style={[styles.teamHeaderText, { color: bandText, fontSize: 12.5 * z }]} numberOfLines={1}>{g.team_name}</Text>
                     {g.leader_name ? (
                       <Text style={[styles.teamHeaderLeader, { color: bandText, fontSize: 11 * z }]} numberOfLines={1}>led by {firstName(g.leader_name)}</Text>
@@ -1456,6 +1459,7 @@ function PhoneSheet({ groups, office, entries, colors, isDark, styles, showMc, w
         return (
           <View key={g.key} style={styles.pSection}>
             <View style={[styles.pBand, { backgroundColor: bandBg, borderLeftColor: tint.border }]}>
+              {g.team_logo ? <Image source={{ uri: g.team_logo }} style={[styles.teamLogo, { width: 26, height: 26, borderRadius: 8, marginRight: 8 }]} /> : null}
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={[styles.teamHeaderText, { color: bandText, fontSize: 12.5 }]} numberOfLines={1}>{g.team_name}</Text>
                 {g.leader_name ? <Text style={[styles.teamHeaderLeader, { color: bandText, fontSize: 11 }]} numberOfLines={1}>led by {firstName(g.leader_name)}</Text> : null}
@@ -1533,6 +1537,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   bodyRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.background },
   nameText: { flex: 1, color: colors.text },
   lightDot: { width: 7, height: 7, borderRadius: 4, marginRight: 7 },
+  teamLogo: { marginRight: 6, backgroundColor: '#ffffff' },
   cellText: { fontFamily: fonts.body, color: colors.text, fontVariant: ['tabular-nums'] as any },
   softText: { fontFamily: fonts.body, color: colors.textMuted, fontVariant: ['tabular-nums'] as any },
   strongText: { fontFamily: fonts.bodyBold, color: colors.text },

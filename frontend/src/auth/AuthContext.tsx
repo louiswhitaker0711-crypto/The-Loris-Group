@@ -41,6 +41,10 @@ interface User {
    *  server-side authority — every /recruits route already allows leaders. */
   accessible_offices?: string[];
   team_name?: string;
+  /** The logo of the team they lead (shows next to the team name everywhere). */
+  team_logo?: string | null;
+  /** They lead a team: someone reports to them, or did in the last 4 weeks. */
+  has_team?: boolean;
   /** Signed in on the shared starter password: the app shows only the
    *  "choose your own password" screen until they have. */
   must_change_password?: boolean;

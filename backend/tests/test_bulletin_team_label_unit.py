@@ -46,6 +46,8 @@ def test_bulletin_shows_team_names(monkeypatch):
     ]))
     out = _run(bulletin.bulletin_weekly(None, week_ending="2026-10-25"))
     by = {r["name"]: r for r in out["top_sales"]}
-    assert by["Ba Example"]["office"] == "Team Example"
+    # Sub has someone on their team, so it's their (unnamed) team the BA is
+    # in, inside Team Example (team rule, the Owner 2 Nov 2026).
+    assert by["Ba Example"]["office"] == "Sub's team"
     assert by["Loner Example"]["office"] == f"Mini {ORG_NAME}"
     assert by["Ba Example"]["earnings"] > 0

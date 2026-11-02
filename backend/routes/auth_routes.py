@@ -389,6 +389,13 @@ async def resend_otp(request: Request):
 @router.get("/auth/me")
 async def get_me(request: Request):
     user = await get_current_user(request)
+    # Whether they lead a team right now (someone reports to them, or did in
+    # the last 4 weeks): Profile shows the team name and logo boxes to them.
+    try:
+        from core.team_sections import user_has_team
+        user["has_team"] = await user_has_team(db, user)
+    except Exception:
+        user["has_team"] = False
     return user
 
 
@@ -535,11 +542,9 @@ async def save_push_token(request: Request):
 
 @router.put("/auth/team-name")
 async def set_my_team_name(request: Request):
-    """Leader/admin sets their own team name. This name propagates visually to
-    everyone in their subtree (up to 6 generations) on the Bells screen."""
+    """Anyone who leads a team (a BA too, the Owner 2 Nov 2026) sets their
+    team's name. It shows for everyone wherever their team appears."""
     user = await get_current_user(request)
-    if user.get("role") not in ("leader", "admin"):
-        raise HTTPException(status_code=403, detail="Only coaches or admins can set a team name")
     body = await request.json()
     raw = (body.get("team_name") or "").strip()
     if raw and len(raw) > 40:
@@ -558,6 +563,37 @@ async def set_my_team_name(request: Request):
         except Exception as _e:
             logger.warning(f"OwnerIQ team-name hook skipped: {_e}")
     return {"ok": True, "team_name": raw or None}
+
+
+@router.put("/auth/team-logo")
+async def set_my_team_logo(req: ProfileImageRequest, request: Request):
+    """Upload the logo for the team you lead. Shows next to your team's name
+    for everyone (Bells, the Spider, teams lists)."""
+    user = await get_current_user(request)
+    if len(req.image) > 2_800_000:
+        raise HTTPException(status_code=400, detail="Image too large (max 2MB)")
+    if not media_store.enabled():
+        await db.users.update_one({"_id": ObjectId(user["id"])}, {"$set": {"team_logo": req.image}})
+        return {"ok": True, "team_logo": req.image}
+    try:
+        url, _key = await media_store.store_avatar(f"team-{user['id']}", req.image)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Couldn't read that image. Try a JPEG or PNG.")
+    except RuntimeError:
+        raise HTTPException(status_code=502, detail="Couldn't save the logo right now. Try again.")
+    previous = await db.users.find_one({"_id": ObjectId(user["id"])}, {"team_logo": 1})
+    await db.users.update_one({"_id": ObjectId(user["id"])}, {"$set": {"team_logo": url}})
+    await media_store.delete_avatar_url((previous or {}).get("team_logo"))
+    return {"ok": True, "team_logo": url}
+
+
+@router.delete("/auth/team-logo")
+async def remove_my_team_logo(request: Request):
+    user = await get_current_user(request)
+    previous = await db.users.find_one({"_id": ObjectId(user["id"])}, {"team_logo": 1})
+    await db.users.update_one({"_id": ObjectId(user["id"])}, {"$unset": {"team_logo": ""}})
+    await media_store.delete_avatar_url((previous or {}).get("team_logo"))
+    return {"ok": True, "team_logo": None}
 
 @router.get("/trainee/my-progress")
 async def get_trainee_progress(request: Request):

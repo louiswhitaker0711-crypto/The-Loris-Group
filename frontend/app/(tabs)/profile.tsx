@@ -581,7 +581,7 @@ export default function ProfileScreen() {
 
         {/* Team Name (Leaders/Admins) — sets the team that YOU lead. Propagates to everyone
             in your subtree on the Bells screen (up to 6 generations). */}
-        {(isAdmin || user?.role === 'leader') && (
+        {(isAdmin || user?.role === 'leader' || !!user?.has_team) && (
           <ScrollReveal scrollY={scrollY}>
             <TeamNameSection />
           </ScrollReveal>
@@ -1354,14 +1354,53 @@ function TeamNameSection() {
 
   const displayName = (user?.team_name || '').trim();
 
+  // Team logo: shows next to the team's name for everyone (Bells, Spider, teams).
+  const [logoBusy, setLogoBusy] = React.useState(false);
+  const pickLogo = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      showAlert('Permission needed', 'Please allow access to your photo library.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.8 });
+    const asset = result.canceled ? null : result.assets?.[0];
+    if (!asset) return;
+    setLogoBusy(true);
+    try {
+      const out = await ImageManipulator.manipulateAsync(
+        asset.uri,
+        [{ resize: { width: 400 } }],
+        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG, base64: true },
+      );
+      if (!out.base64) throw new Error('no image');
+      const { data } = await apiService.updateTeamLogo(`data:image/jpeg;base64,${out.base64}`);
+      if (user) setUser({ ...user, team_logo: data?.team_logo || null });
+    } catch (e: any) {
+      showAlert('Error', e.response?.data?.detail || 'Couldn\u2019t upload the logo');
+    } finally {
+      setLogoBusy(false);
+    }
+  };
+  const removeLogo = async () => {
+    setLogoBusy(true);
+    try {
+      await apiService.removeTeamLogo();
+      if (user) setUser({ ...user, team_logo: null });
+    } catch (e: any) {
+      showAlert('Error', e.response?.data?.detail || 'Couldn\u2019t remove the logo');
+    } finally {
+      setLogoBusy(false);
+    }
+  };
+
   return (
     <DepthCard style={teamStyles.card}>
       <View style={teamStyles.headerRow}>
         <IconWell><Ionicons name="people-circle-outline" size={20} color={colors.primary} /></IconWell>
         <View style={{ flex: 1 }}>
-          <Text style={teamStyles.label}>Team Name</Text>
+          <Text style={teamStyles.label}>Your team</Text>
           <Text style={teamStyles.helper}>
-            Shown on the Bells Team view. Every member in your sub-tree rolls up under this team.
+            Your team's name and logo show for everyone wherever your team appears. Until you name it, it shows as your first name's team.
           </Text>
         </View>
       </View>
@@ -1369,7 +1408,7 @@ function TeamNameSection() {
       {!editing ? (
         <View style={teamStyles.valueRow}>
           <Text style={[teamStyles.valueText, !displayName && { color: colors.textMuted, fontStyle: 'italic' }]} numberOfLines={1}>
-            {displayName || 'No team name set yet'}
+            {displayName || `${(user?.name || '').trim().split(' ')[0] || 'Your'}'s team (not named yet)`}
           </Text>
           <TouchableOpacity style={teamStyles.editBtn} onPress={() => setEditing(true)}>
             <Ionicons name={displayName ? 'create-outline' : 'add'} size={16} color={colors.primary} />
@@ -1410,12 +1449,42 @@ function TeamNameSection() {
           </View>
         </View>
       )}
+
+      <View style={teamStyles.logoRow}>
+        {user?.team_logo ? (
+          <Image source={{ uri: user.team_logo }} style={teamStyles.logo} />
+        ) : (
+          <View style={[teamStyles.logo, teamStyles.logoEmpty]}>
+            <Ionicons name="image-outline" size={20} color={colors.textMuted} />
+          </View>
+        )}
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={teamStyles.label}>Team logo</Text>
+          <Text style={teamStyles.helper}>A square picture works best.</Text>
+        </View>
+        {logoBusy ? <ActivityIndicator size="small" color={colors.primary} /> : (
+          <View style={{ flexDirection: 'row', gap: 6 }}>
+            <TouchableOpacity style={teamStyles.editBtn} onPress={pickLogo} testID="team-logo-upload">
+              <Ionicons name={user?.team_logo ? 'swap-horizontal' : 'cloud-upload-outline'} size={16} color={colors.primary} />
+              <Text style={teamStyles.editBtnText}>{user?.team_logo ? 'Change' : 'Upload'}</Text>
+            </TouchableOpacity>
+            {user?.team_logo ? (
+              <TouchableOpacity style={teamStyles.editBtn} onPress={removeLogo} accessibilityLabel="Remove team logo">
+                <Ionicons name="trash-outline" size={16} color={colors.red} />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        )}
+      </View>
     </DepthCard>
   );
 }
 
 const createTeamStyles = (colors: any) => StyleSheet.create({
-  card: { borderRadius: 16, marginBottom: 16, padding: 16 },
+  card: { borderRadius: 20, marginBottom: 16, padding: 16 },
+  logoRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: colors.border },
+  logo: { width: 48, height: 48, borderRadius: 14 },
+  logoEmpty: { backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
   headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 12 },
   label: { fontSize: 15, fontWeight: '600', color: colors.text },
   helper: { fontSize: 11, color: colors.textMuted, marginTop: 2, lineHeight: 15 },
