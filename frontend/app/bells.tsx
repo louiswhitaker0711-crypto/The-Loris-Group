@@ -216,15 +216,15 @@ function BellsScreen() {
 
           {/* The office's week at a glance: the navy hero card (Nov 2026 look). */}
           <NavyCard style={{ marginBottom: 10 }}>
-            <Text style={styles.heroKicker}>{(list.data?.office_name || 'Office').toUpperCase()} · {prettyWeekRange(weekEnding).toUpperCase()}</Text>
+            <Text style={[styles.heroKicker, { color: surface.muted }]}>{(list.data?.office_name || 'Office').toUpperCase()} · {prettyWeekRange(weekEnding).toUpperCase()}</Text>
             <View style={styles.heroRow}>
-              <Text style={styles.heroNum}>{num(officeTotals.total_sales)}</Text>
-              <Text style={styles.heroOf}>sign-up{num(officeTotals.total_sales) === 1 ? '' : 's'}</Text>
+              <Text style={[styles.heroNum, { color: surface.text }]}>{num(officeTotals.total_sales)}</Text>
+              <Text style={[styles.heroOf, { color: surface.soft }]}>sign-up{num(officeTotals.total_sales) === 1 ? '' : 's'}</Text>
             </View>
             <View style={styles.heroTiers}>
-              <Text style={styles.heroTier}><Text style={[styles.heroTierN, { color: ON_NAVY.gold }]}>{num(officeTotals.total_over30)}</Text> {TIER.over30.short}</Text>
-              <Text style={styles.heroTier}><Text style={[styles.heroTierN, { color: ON_NAVY.text }]}>{num(officeTotals.total_under30)}</Text> {TIER.under30.short}</Text>
-              <Text style={styles.heroTier}><Text style={[styles.heroTierN, { color: surface.accent }]}>{num(officeTotals.total_memberships)}</Text> The Round</Text>
+              <Text style={[styles.heroTier, { color: surface.muted }]}><Text style={[styles.heroTierN, { color: surface.gold }]}>{num(officeTotals.total_over30)}</Text> {TIER.over30.short}</Text>
+              <Text style={[styles.heroTier, { color: surface.muted }]}><Text style={[styles.heroTierN, { color: surface.text }]}>{num(officeTotals.total_under30)}</Text> {TIER.under30.short}</Text>
+              <Text style={[styles.heroTier, { color: surface.muted }]}><Text style={[styles.heroTierN, { color: surface.accent }]}>{num(officeTotals.total_memberships)}</Text> The Round</Text>
             </View>
           </NavyCard>
           <View style={styles.kpis}>

@@ -53,3 +53,23 @@ def test_single_colour_logo_has_no_accent():
 
 def test_unreadable_image():
     assert pick_colors(b"not an image") is None
+
+
+def test_white_backed_logo_is_flagged():
+    from PIL import Image
+    img = Image.new("RGB", (60, 60), (255, 255, 255))
+    for y in range(20, 40):
+        for x in range(10, 50):
+            img.putpixel((x, y), (47, 95, 179))
+    out = io.BytesIO(); img.save(out, format="PNG")
+    assert pick_colors(out.getvalue())["light_bg"] is True
+
+
+def test_transparent_logo_is_not_flagged():
+    from PIL import Image
+    img = Image.new("RGBA", (60, 60), (0, 0, 0, 0))
+    for y in range(20, 40):
+        for x in range(10, 50):
+            img.putpixel((x, y), (47, 95, 179, 255))
+    out = io.BytesIO(); img.save(out, format="PNG")
+    assert pick_colors(out.getvalue())["light_bg"] is False
