@@ -388,6 +388,14 @@ function sheetDay(d: Day | undefined, dark: boolean, exited: false | 'first' | '
   }
 }
 
+/** A day's number coloured by the daily lights: 0–1 red, 2 amber, 3 green
+ *  (4+ sits white on a filled green square). */
+function dayInk(n: number, dark: boolean): string {
+  if (n >= 3) return dark ? '#6ee794' : '#17693a';
+  if (n === 2) return dark ? '#ffc35c' : '#b35f00';
+  return dark ? '#ff8178' : '#c4271d';
+}
+
 /** The tally under a phone day: a gold mark per Gold, a silver per Silver. */
 function tallyMarks(gold: number, silver: number, onDark: boolean): string[] {
   const g = onDark ? GOLD.markOnDark : GOLD.mark;
@@ -1291,13 +1299,13 @@ function OrderSwitch({ order, onOrder, styles, colors }: { order: EveryoneOrder;
   const opt = (o: EveryoneOrder, label: string) => {
     const on = order === o;
     return (
-      <TouchableOpacity key={o} onPress={() => onOrder(o)} style={[styles.orderBtn, on && { backgroundColor: colors.primary }]}
+      <TouchableOpacity key={o} onPress={() => onOrder(o)} style={[styles.orderBtn, on && { backgroundColor: colors.ink }]}
         accessibilityRole="button" accessibilityState={{ selected: on }} accessibilityLabel={`Sort by ${label}`} testID={`bells-order-${o}`}>
-        <Text style={[styles.orderText, { color: on ? colors.onPrimary : colors.text }]}>{label}</Text>
+        <Text style={[styles.orderText, { color: on ? '#ffffff' : colors.textSecondary }]}>{label}</Text>
       </TouchableOpacity>
     );
   };
-  return <View style={styles.orderWrap}>{opt('team', 'Team order')}{opt('sales', 'Most sign-ups')}</View>;
+  return <View style={styles.orderWrap}>{opt('team', 'Teams')}{opt('sales', 'Top')}</View>;
 }
 
 /** This week | Last week, at the top of Bells. */
@@ -1308,9 +1316,9 @@ function WeekSwitch({ weekEnding, onShowWeek, styles, colors }: { weekEnding?: s
   const opt = (we: string, label: string) => {
     const on = weekEnding === we;
     return (
-      <TouchableOpacity key={we} onPress={() => onShowWeek(we)} style={[styles.orderBtn, on && { backgroundColor: colors.primary }]}
+      <TouchableOpacity key={we} onPress={() => onShowWeek(we)} style={[styles.orderBtn, on && { backgroundColor: colors.ink }]}
         accessibilityRole="tab" accessibilityState={{ selected: on }} testID={`bells-week-${label === 'This week' ? 'this' : 'last'}`}>
-        <Text style={[styles.orderText, { color: on ? colors.onPrimary : colors.text }]}>{label}</Text>
+        <Text style={[styles.orderText, { color: on ? '#ffffff' : colors.textSecondary }]}>{label}</Text>
       </TouchableOpacity>
     );
   };
@@ -1320,6 +1328,15 @@ function WeekSwitch({ weekEnding, onShowWeek, styles, colors }: { weekEnding?: s
 // ── The phone's Bells: the same sections as a list ───────────────────────────
 function PhoneSheet({ groups, office, entries, colors, isDark, styles, showMc, weekEnding, onShowWeek, readOnly, order, onOrder, canEditGoal, onEditGoal, onCellPress, onRowPress }: any) {
   const openPerson = useOpenPerson();
+  // Sunday only shows when someone worked it this week, or when you open it
+  // to type Sunday numbers in (the Owner, 2 Nov 2026).
+  const sunHasData = (entries as Entry[]).some((e) => {
+    const d: any = (e.days || [])[6];
+    return !!d && (d.status === 'in' || Number(d.over30 || 0) + Number(d.under30 || 0) > 0);
+  });
+  const [sunOpen, setSunOpen] = useState(false);
+  const [keyOpen, setKeyOpen] = useState(false);
+  const dayIdx = sunHasData || sunOpen ? [0, 1, 2, 3, 4, 5, 6] : [0, 1, 2, 3, 4, 5];
   // A label and seven cells, lined up under the day letters.
   const statRow = (label: string, vals: (string | number)[], strong?: boolean) => (
     <View style={styles.pStatRow}>
@@ -1353,84 +1370,100 @@ function PhoneSheet({ groups, office, entries, colors, isDark, styles, showMc, w
   const everyone = everyoneList(groups, order || 'team');
   return (
     <View>
-      <View style={[styles.pTopRow, { justifyContent: 'space-between', flexWrap: 'wrap' }]}>
+      <View style={[styles.pTopRow, { flexWrap: 'wrap' }]}>
         {onShowWeek ? <WeekSwitch weekEnding={weekEnding} onShowWeek={onShowWeek} styles={styles} colors={colors} /> : null}
         <OrderSwitch order={order || 'team'} onOrder={onOrder} styles={styles} colors={colors} />
+        <View style={{ flex: 1 }} />
+        {!sunHasData ? (
+          <TouchableOpacity onPress={() => setSunOpen((v) => !v)} style={[styles.nChip, sunOpen && styles.nChipOn]} accessibilityRole="button"
+            accessibilityLabel={sunOpen ? 'Hide Sunday' : 'Show Sunday'} testID="bells-sunday-toggle">
+            <Text style={[styles.nChipText, sunOpen && { color: '#ffffff' }]}>{sunOpen ? '− Sun' : '+ Sun'}</Text>
+          </TouchableOpacity>
+        ) : null}
+        <TouchableOpacity onPress={() => setKeyOpen((v) => !v)} style={styles.nInfo} accessibilityRole="button" accessibilityLabel="What the colours mean" testID="bells-key">
+          <Ionicons name={keyOpen ? 'close' : 'information-circle-outline'} size={18} color={colors.textMuted} />
+        </TouchableOpacity>
       </View>
-      <Text style={styles.pHint}>Names are coloured by last week's result. {readOnly ? 'View only · updates every minute.' : 'Tap a day to edit it, a goal to change it.'}</Text>
+      {keyOpen ? (
+        <View style={styles.nKey}>
+          {[
+            ['#fde047', 'In office'], [isDark ? '#6b7280' : '#cfd6df', 'Off'], [isDark ? '#000000' : '#334155', 'No show'], ['#f87171', 'Exited'],
+          ].map(([c, l]) => (
+            <View key={l} style={styles.nKeyItem}><View style={[styles.nKeySwatch, { backgroundColor: c }]} /><Text style={styles.nKeyText}>{l}</Text></View>
+          ))}
+          <View style={styles.nKeyItem}><View style={[styles.lightDot, { backgroundColor: '#f59e0b', marginRight: 0 }]} /><Text style={styles.nKeyText}>Dot: last week's light</Text></View>
+          <Text style={[styles.nKeyText, { width: '100%' }]}>{readOnly ? 'View only · updates every minute.' : 'Tap a day to edit it (Gold and Silver are in there), the goal under a name to change it.'}</Text>
+        </View>
+      ) : null}
       {everyone.length > 0 && (
         <View style={styles.pSection}>
-          <View style={styles.lRow}>
-            <Text style={[styles.lHead, { flex: 1, textAlign: 'left' }]}>Everyone</Text>
-            {DAYS.map((d, i) => <Text key={i} style={[styles.lHead, styles.lDayW]}>{d.charAt(0)}</Text>)}
-            <Text style={[styles.lHead, styles.lTotW]}>Tot</Text>
+          <View style={styles.nRow}>
+            <Text style={[styles.lHead, { flex: 1, textAlign: 'left', paddingLeft: 8 }]}>Name</Text>
+            {dayIdx.map((i) => <Text key={i} style={[styles.lHead, styles.nDayW]}>{DAYS[i].charAt(0)}</Text>)}
+            <Text style={[styles.lHead, styles.lTotW, { textAlign: 'right' }]}>Tot</Text>
           </View>
           {everyone.map((it: EveryoneItem, idx: number) => {
             const g = it.g;
             const tint = g.key === '__no_team__' ? NO_TEAM_TINT : teamColor(g.leader_id || g.team_name);
             if (it.kind === 'team') {
-              const bandText = isDark ? tint.pill : tint.text;
               return (
-                <View key={`team-${g.key}`} style={[styles.lTeamHead, { backgroundColor: isDark ? tint.border + '26' : tint.pill, borderLeftColor: tint.border }]}>
-                  <Text style={[styles.lTeamHeadText, { color: bandText }]} numberOfLines={1}>{teamTitle(g).name}</Text>
-                  {teamTitle(g).leader ? <Text style={[styles.lTeamHeadLeader, { color: bandText }]} numberOfLines={1}>led by {firstName(teamTitle(g).leader)}</Text> : null}
+                <View key={`team-${g.key}`} style={styles.nTeam}>
+                  {g.team_logo ? (
+                    <Image source={{ uri: g.team_logo }} style={styles.nTeamLogo} />
+                  ) : (
+                    <View style={[styles.nTeamLogo, { backgroundColor: isDark ? tint.border + '40' : tint.pill, alignItems: 'center', justifyContent: 'center' }]}>
+                      <Text style={[styles.nTeamInitial, { color: isDark ? tint.pill : tint.text }]}>{(teamTitle(g).name || '?').charAt(0).toUpperCase()}</Text>
+                    </View>
+                  )}
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={styles.nTeamName} numberOfLines={1}>{teamTitle(g).name}</Text>
+                    {teamTitle(g).leader ? <Text style={styles.nTeamLead} numberOfLines={1}>led by {firstName(teamTitle(g).leader)}</Text> : null}
+                  </View>
+                  <Text style={styles.nTeamTotal}>{g.crew_goal != null ? `${g.crew_sales ?? g.total_sales} / ${g.crew_goal}` : g.total_sales}</Text>
                 </View>
               );
             }
             const e = it.e;
             const light = trafficLight(e);
-            const gLook = e.weekly_goal != null ? weekBandLook(Number(e.weekly_goal) || 0, !!isDark) : null;
-            const lLook = e.last_week_total != null ? weekBandLook(Number(e.last_week_total) || 0, !!isDark) : null;
+            const tl = weekBandLook(Number(e.total_sales) || 0, !!isDark);
             return (
-              <View key={e.user_id || idx} style={styles.lRow}>
-                <View style={[styles.lTeam, { backgroundColor: tint.border }]} />
-                <View style={styles.lNameWrap}>
-                  {light ? <View style={[styles.lightDot, { backgroundColor: light.color, marginRight: 4 }]} /> : null}
-                  {/* First name, highlighted in last week's zone colour. Opens their page. */}
-                  <TouchableOpacity onPress={openPerson(e) || (() => onRowPress?.(e))} activeOpacity={0.6} style={{ flexShrink: 1 }}
-                    accessibilityRole="link" accessibilityLabel={`Open ${e.user_name}${e.last_week_total != null ? `, last week ${e.last_week_total}` : ''}`}>
-                    <Text style={[styles.lName, lLook && { color: lLook.fg, backgroundColor: lLook.bg, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 5, overflow: 'hidden' }]}
-                      numberOfLines={1}>{firstName(e.user_name) || e.user_name}</Text>
-                  </TouchableOpacity>
+              <View key={e.user_id || idx} style={styles.nRow}>
+                <View style={styles.nNameWrap}>
+                  <View style={[styles.lightDot, { backgroundColor: light ? light.color : 'transparent', marginRight: 8 }]}
+                    accessibilityLabel={light?.label} />
+                  <View style={{ flexShrink: 1, minWidth: 0 }}>
+                    <TouchableOpacity onPress={openPerson(e) || (() => onRowPress?.(e))} activeOpacity={0.6}
+                      accessibilityRole="link" accessibilityLabel={`Open ${e.user_name}`}>
+                      <Text style={styles.nName} numberOfLines={1}>{firstName(e.user_name) || e.user_name}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => onRowPress?.(e)} activeOpacity={0.6} hitSlop={6}
+                      accessibilityLabel={`${e.user_name}: goal ${e.weekly_goal ?? 'not set'}. Tap to change`} testID={`bells-goal-${e.user_id || idx}`}>
+                      <Text style={styles.nGoal} numberOfLines={1}>{e.weekly_goal != null ? `Goal ${e.weekly_goal}` : 'No goal yet'}</Text>
+                    </TouchableOpacity>
+                  </View>
                   <RecruitBadge e={e} colors={colors} />
-                  {/* Their goal, in its zone colour. Tap to change it. */}
-                  <TouchableOpacity onPress={() => onRowPress?.(e)} activeOpacity={0.6} hitSlop={6}
-                    accessibilityLabel={`${e.user_name}: goal ${e.weekly_goal ?? 'not set'}. Tap to change`} testID={`bells-goal-${e.user_id || idx}`}>
-                    <Text style={[styles.lGoal, gLook && { color: gLook.fg, fontFamily: fonts.bodySemibold }]}>/{e.weekly_goal ?? '–'}</Text>
-                  </TouchableOpacity>
                 </View>
-                {Array.from({ length: 7 }, (_, i) => (e.days || [])[i]).map((d: Day | undefined, i: number) => {
+                {dayIdx.map((i) => {
+                  const d: Day | undefined = (e.days || [])[i];
                   const sd = sheetDay(d, !!isDark, exitState(e, weekEnding, i));
-                  const look = sd.kind === 'nums' ? dayBandLook(sd.n, !!isDark) : null;
-                  const bg = sd.kind === 'block' ? sd.bg : look ? look.bg : undefined;
-                  // Tally marks: light on the dark-green 4+ day, gold/silver otherwise.
-                  const marks = sd.kind === 'nums' ? tallyMarks(sd.gold, sd.silver, sd.n >= 4 || !!isDark) : [];
+                  const ink = sd.kind === 'nums' ? dayInk(sd.n, !!isDark) : null;
+                  const cellStyle = sd.kind === 'block'
+                    ? { backgroundColor: sd.bg }
+                    : sd.kind === 'nums' && sd.n >= 4 ? { backgroundColor: '#1f9d4c' }
+                    : sd.kind === 'off' ? { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#f1f4f8' } : null;
                   return (
-                    <TouchableOpacity key={i} style={[styles.lDay, styles.lDayW, { borderLeftColor: isDark ? '#3d5a85' : '#c9d6e5' }, bg ? { backgroundColor: bg } : null]}
+                    <TouchableOpacity key={i} style={[styles.nDayW, { alignItems: 'center', justifyContent: 'center', height: 52 }]}
                       onPress={() => onCellPress?.(e, i)} activeOpacity={0.6}
                       accessibilityLabel={`${e.user_name}, ${DAYS_LONG[i]}: ${sd.kind === 'nums' ? `${sd.gold} Gold, ${sd.silver} Silver` : sd.label}. Tap to edit`}>
-                      {sd.kind === 'nums' ? (
-                        <>
-                          <Text style={[styles.lDayText, { color: look!.fg }]}>{sd.n}</Text>
-                          {marks.length > 0 ? (
-                            <View style={styles.marks}>
-                              {marks.slice(0, MAX_MARKS).map((m, k) => <View key={k} style={[styles.mark, { backgroundColor: m }]} />)}
-                              {marks.length > MAX_MARKS ? <Text style={[styles.markMore, { color: look!.fg }]}>+</Text> : null}
-                            </View>
-                          ) : null}
-                        </>
-                      ) : null}
+                      <View style={[styles.nCell, cellStyle]}>
+                        {sd.kind === 'nums' ? <Text style={[styles.nCellText, { color: sd.n >= 4 ? '#ffffff' : ink! }]}>{sd.n}</Text> : null}
+                      </View>
                     </TouchableOpacity>
                   );
                 })}
-                {(() => {
-                  const tl = weekBandLook(Number(e.total_sales) || 0, !!isDark);
-                  return (
-                    <View style={[styles.lTotW, { alignItems: 'center', justifyContent: 'center' }]}>
-                      <Text style={[styles.lTot, { color: tl.fg, backgroundColor: tl.bg, borderRadius: 5, overflow: 'hidden', paddingHorizontal: 4, minWidth: 22 }]}>{e.total_sales}</Text>
-                    </View>
-                  );
-                })()}
+                <View style={[styles.lTotW, { alignItems: 'flex-end', justifyContent: 'center' }]}>
+                  <Text style={[styles.nTot, { color: tl.fg }]}>{e.total_sales}</Text>
+                </View>
               </View>
             );
           })}
@@ -1562,9 +1595,9 @@ const createStyles = (colors: any) => StyleSheet.create({
   phoneWrap: { marginTop: 10 },
   pHint: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, marginBottom: 8, marginLeft: 2 },
   pTopRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  orderWrap: { flexDirection: 'row', borderWidth: 1, borderColor: colors.border, borderRadius: 8, overflow: 'hidden' },
-  orderBtn: { paddingHorizontal: 9, paddingVertical: 5 },
-  orderText: { fontFamily: fonts.bodySemibold, fontSize: 11.5 },
+  orderWrap: { flexDirection: 'row', backgroundColor: colors.surfaceAlt, borderRadius: 12, padding: 3, gap: 2 },
+  orderBtn: { paddingHorizontal: 11, paddingVertical: 7, borderRadius: 9 },
+  orderText: { fontFamily: fonts.bodySemibold, fontSize: 12.5 },
   lTeamHead: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 8, paddingVertical: 4, borderLeftWidth: 4, borderTopWidth: 1, borderTopColor: colors.border },
   lTeamHeadText: { fontFamily: fonts.bodyBold, fontSize: 11.5, letterSpacing: 0.3, textTransform: 'uppercase', flexShrink: 1 },
   lTeamHeadLeader: { fontFamily: fonts.body, fontSize: 10.5 },
@@ -1583,6 +1616,29 @@ const createStyles = (colors: any) => StyleSheet.create({
   lDay: { height: 34, alignItems: 'center', justifyContent: 'center', borderLeftWidth: 2 },
   lDayText: { fontFamily: fonts.bodyBold, fontSize: 11.5 },
   lTot: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.text, textAlign: 'center' },
+  // Cleaner phone sheet (Nov 2026)
+  nRow: { flexDirection: 'row', alignItems: 'center', paddingRight: 8, borderTopWidth: 1, borderTopColor: colors.border, minHeight: 34 },
+  nNameWrap: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', paddingLeft: 10, paddingVertical: 6 },
+  nName: { fontFamily: fonts.bodySemibold, fontSize: 14, color: colors.text },
+  nGoal: { fontFamily: fonts.body, fontSize: 11, color: colors.textMuted, marginTop: 1 },
+  nDayW: { width: 32 },
+  nCell: { width: 26, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  nCellText: { fontFamily: fonts.displayBlack, fontSize: 14 },
+  nTot: { fontFamily: fonts.displayBlack, fontSize: 16 },
+  nTeam: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 9, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },
+  nTeamLogo: { width: 28, height: 28, borderRadius: 9 },
+  nTeamInitial: { fontFamily: fonts.displayBlack, fontSize: 13 },
+  nTeamName: { fontFamily: fonts.displayBlack, fontSize: 14, color: colors.text },
+  nTeamLead: { fontFamily: fonts.body, fontSize: 11, color: colors.textMuted },
+  nTeamTotal: { fontFamily: fonts.displayBlack, fontSize: 16, color: colors.text },
+  nChip: { height: 32, paddingHorizontal: 10, borderRadius: 10, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
+  nChipOn: { backgroundColor: colors.ink },
+  nChipText: { fontFamily: fonts.bodySemibold, fontSize: 12, color: colors.textSecondary },
+  nInfo: { width: 34, height: 34, borderRadius: 10, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+  nKey: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, padding: 12, marginBottom: 10, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background },
+  nKeyItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  nKeySwatch: { width: 14, height: 14, borderRadius: 4 },
+  nKeyText: { fontFamily: fonts.body, fontSize: 12, color: colors.textSecondary },
   lTeamsHead: { fontFamily: fonts.bodyBold, fontSize: 12, letterSpacing: 0.6, textTransform: 'uppercase', color: colors.textMuted, marginTop: 14, marginBottom: 4, paddingHorizontal: 4 },
   pCard: { paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1, borderTopColor: colors.border },
   pHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
