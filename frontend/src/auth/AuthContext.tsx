@@ -45,6 +45,9 @@ interface User {
   team_logo?: string | null;
   /** They lead a team: someone reports to them, or did in the last 4 weeks. */
   has_team?: boolean;
+  /** The team's colours: set by hand, and the ones picked from the logo. */
+  team_colors?: { primary?: string | null; accent?: string | null } | null;
+  team_colors_auto?: { primary?: string | null; accent?: string | null } | null;
   /** Signed in on the shared starter password: the app shows only the
    *  "choose your own password" screen until they have. */
   must_change_password?: boolean;

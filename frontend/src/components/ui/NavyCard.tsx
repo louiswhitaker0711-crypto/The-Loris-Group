@@ -9,6 +9,7 @@
 import React from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSurface } from '../../theme/teamTheme';
 
 /** Colours for anything placed on a NavyCard (or the Home hero). */
 export const ON_NAVY = {
@@ -31,12 +32,14 @@ export const NAVY_LOW = '#12305c';
 export const NAVY_BAR = ['#2864d9', '#22d0ec'] as const;
 
 export function NavyCard({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
+  // Loris navy, or a team leader's own colours (src/theme/teamTheme.tsx).
+  const surface = useSurface();
   return (
-    <View style={[styles.card, style]}>
+    <View style={[styles.card, { backgroundColor: surface.deep }, style]}>
       <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.clip]}>
-        <LinearGradient colors={[NAVY_TOP, NAVY_LOW]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={StyleSheet.absoluteFill} />
+        <LinearGradient colors={[surface.deep, surface.mid]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={StyleSheet.absoluteFill} />
         <LinearGradient
-          colors={['rgba(34,208,236,0.30)', 'rgba(34,208,236,0)']}
+          colors={[surface.glow, surface.glowClear]}
           start={{ x: 1, y: 0 }}
           end={{ x: 0.35, y: 1 }}
           style={StyleSheet.absoluteFill}

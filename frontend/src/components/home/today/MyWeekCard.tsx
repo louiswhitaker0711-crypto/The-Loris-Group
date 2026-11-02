@@ -6,6 +6,7 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSurface } from '../../../theme/teamTheme';
 import { useColors, fonts } from '../../../theme/ThemeContext';
 import { apiService } from '../../../api/client';
 import { ukNow } from '../../../utils/fieldTime';
@@ -20,6 +21,7 @@ const dayTone = (v: number) => (v >= 4 ? '#30d158' : v === 3 ? ON_NAVY.green : v
 
 export default function MyWeekCard({ hideWhenEmpty = false, hero = false }: { hideWhenEmpty?: boolean; hero?: boolean }) {
   const c = useColors();
+  const surface = useSurface();
   const s = useMemo(() => styles(c), [c]);
   const q = useQuery({ queryKey: ['my-bells-summary', 1], queryFn: () => apiService.getMyBellsSummary(1).then((r) => r.data), retry: false });
   const w = q.data?.this_week;
@@ -56,14 +58,14 @@ export default function MyWeekCard({ hideWhenEmpty = false, hero = false }: { hi
           <Text style={s.heroNum}>{n}</Text>
           <View style={{ flex: 1, minWidth: 0, paddingBottom: 4 }}>
             <Text style={s.heroOf} numberOfLines={1}>{goal ? `of ${goal} sign-ups` : `sign-up${n === 1 ? '' : 's'} this week`}</Text>
-            <Text style={s.heroNext} numberOfLines={1}>
+            <Text style={[s.heroNext, { color: surface.accent }]} numberOfLines={1}>
               {next ? `${next.at - n} more for ${next.name}` : 'Top of the lights'}{pa ? ` · PA ${pa}` : ''}
             </Text>
           </View>
         </View>
         <View style={s.heroTrack}>
           <LinearGradient
-            colors={['#2864d9', '#22d0ec']}
+            colors={[surface.team ? surface.soft : '#2864d9', surface.accent]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={[s.heroFill, { width: `${Math.min(100, Math.round((n / scale) * 100))}%` as any }]}
@@ -77,7 +79,7 @@ export default function MyWeekCard({ hideWhenEmpty = false, hero = false }: { hi
               const v = count(d);
               const isIn = d.status === 'in' || v > 0;
               return (
-                <View key={lbl} style={[s.heroDay, i === todayIdx && s.heroDayToday]}>
+                <View key={lbl} style={[s.heroDay, i === todayIdx && [s.heroDayToday, { borderColor: surface.accent }]]}>
                   <Text style={s.heroDayLbl}>{lbl}</Text>
                   <Text style={[s.heroDayNum, away ? s.heroDayOff : isIn ? { color: dayTone(v) } : { color: ON_NAVY.muted }]}>
                     {away ? 'off' : isIn ? v : i < todayIdx ? '–' : '·'}

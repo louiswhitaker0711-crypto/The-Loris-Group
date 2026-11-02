@@ -396,6 +396,13 @@ async def get_me(request: Request):
         user["has_team"] = await user_has_team(db, user)
     except Exception:
         user["has_team"] = False
+    # A logo uploaded before team colours existed: pick its colours once.
+    if user.get("has_team") and user.get("team_logo") and not user.get("team_colors_auto"):
+        try:
+            from core.team_colors import ensure_auto_colors
+            user["team_colors_auto"] = await ensure_auto_colors(db, user)
+        except Exception:
+            pass
     return user
 
 
@@ -565,6 +572,31 @@ async def set_my_team_name(request: Request):
     return {"ok": True, "team_name": raw or None}
 
 
+def _auto_colors(image: str) -> dict:
+    """The logo's colours, saved as team_colors_auto (hand-set colours win)."""
+    try:
+        from core.team_colors import pick_colors
+        picked = pick_colors(media_store.decode_image(image))
+    except Exception:
+        picked = None
+    return {"team_colors_auto": picked} if picked else {}
+
+
+@router.put("/auth/team-colors")
+async def set_my_team_colors(request: Request):
+    """The team's two colours, set by hand: {"primary": "#…", "accent": "#…"}.
+    Send neither to go back to the colours picked from the logo."""
+    from core.team_colors import clean_colors
+    user = await get_current_user(request)
+    try:
+        colors = clean_colors(await request.json())
+    except ValueError as ex:
+        raise HTTPException(status_code=400, detail=str(ex))
+    op = {"$set": {"team_colors": colors}} if colors else {"$unset": {"team_colors": ""}}
+    await db.users.update_one({"_id": ObjectId(user["id"])}, op)
+    return {"ok": True, "team_colors": colors}
+
+
 @router.put("/auth/team-logo")
 async def set_my_team_logo(req: ProfileImageRequest, request: Request):
     """Upload the logo for the team you lead. Shows next to your team's name
@@ -573,7 +605,7 @@ async def set_my_team_logo(req: ProfileImageRequest, request: Request):
     if len(req.image) > 2_800_000:
         raise HTTPException(status_code=400, detail="Image too large (max 2MB)")
     if not media_store.enabled():
-        await db.users.update_one({"_id": ObjectId(user["id"])}, {"$set": {"team_logo": req.image}})
+        await db.users.update_one({"_id": ObjectId(user["id"])}, {"$set": {"team_logo": req.image, **_auto_colors(req.image)}})
         return {"ok": True, "team_logo": req.image}
     try:
         url, _key = await media_store.store_avatar(f"team-{user['id']}", req.image)
@@ -582,7 +614,7 @@ async def set_my_team_logo(req: ProfileImageRequest, request: Request):
     except RuntimeError:
         raise HTTPException(status_code=502, detail="Couldn't save the logo right now. Try again.")
     previous = await db.users.find_one({"_id": ObjectId(user["id"])}, {"team_logo": 1})
-    await db.users.update_one({"_id": ObjectId(user["id"])}, {"$set": {"team_logo": url}})
+    await db.users.update_one({"_id": ObjectId(user["id"])}, {"$set": {"team_logo": url, **_auto_colors(req.image)}})
     await media_store.delete_avatar_url((previous or {}).get("team_logo"))
     return {"ok": True, "team_logo": url}
 

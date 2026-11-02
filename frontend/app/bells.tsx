@@ -1,5 +1,6 @@
 import React, { useCallback, useState, useMemo } from 'react';
 import { NavyCard, ON_NAVY } from '../src/components/ui/NavyCard';
+import { useSurface } from '../src/theme/teamTheme';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput,
   Platform, KeyboardAvoidingView, RefreshControl, useWindowDimensions,
@@ -85,6 +86,7 @@ export default function BellsScreenWithLock() {
 
 function BellsScreen() {
   const colors = useColors();
+  const surface = useSurface();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { width: windowWidth } = useWindowDimensions();
 
@@ -222,7 +224,7 @@ function BellsScreen() {
             <View style={styles.heroTiers}>
               <Text style={styles.heroTier}><Text style={[styles.heroTierN, { color: ON_NAVY.gold }]}>{num(officeTotals.total_over30)}</Text> {TIER.over30.short}</Text>
               <Text style={styles.heroTier}><Text style={[styles.heroTierN, { color: ON_NAVY.text }]}>{num(officeTotals.total_under30)}</Text> {TIER.under30.short}</Text>
-              <Text style={styles.heroTier}><Text style={[styles.heroTierN, { color: ON_NAVY.cyan }]}>{num(officeTotals.total_memberships)}</Text> The Round</Text>
+              <Text style={styles.heroTier}><Text style={[styles.heroTierN, { color: surface.accent }]}>{num(officeTotals.total_memberships)}</Text> The Round</Text>
             </View>
           </NavyCard>
           <View style={styles.kpis}>

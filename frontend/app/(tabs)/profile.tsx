@@ -8,6 +8,7 @@ import { useTabBarClearance } from '../../src/customization/CustomTabBar';
 import { useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
+import { promptText } from '../../src/utils/promptText';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { colors } from '../../src/theme/colors';
 import { lightColors } from '../../src/theme/ThemeContext';
@@ -1405,13 +1406,32 @@ function TeamNameSection() {
       );
       if (!out.base64) throw new Error('no image');
       const { data } = await apiService.updateTeamLogo(`data:image/jpeg;base64,${out.base64}`);
-      if (user) setUser({ ...user, team_logo: data?.team_logo || null });
+      // Reload: the server also picked the team's colours out of the logo.
+      try { const me = (await apiService.getMe()).data; if (me) setUser({ ...(user as any), ...me }); }
+      catch { if (user) setUser({ ...user, team_logo: data?.team_logo || null }); }
     } catch (e: any) {
       showAlert('Error', e.response?.data?.detail || 'Couldn\u2019t upload the logo');
     } finally {
       setLogoBusy(false);
     }
   };
+  // Team colours: picked from the logo, or set by hand here.
+  const teamCols = (user as any)?.team_colors || (user as any)?.team_colors_auto || null;
+  const byHand = !!(user as any)?.team_colors;
+  const editColour = async (which: 'primary' | 'accent') => {
+    const now = (teamCols?.[which] as string) || '';
+    const v = await promptText(which === 'primary' ? 'Main colour' : 'Accent colour',
+      'A hex code, like #2f5fb3.', now);
+    if (v === null) return;
+    const next = { primary: teamCols?.primary || '', accent: teamCols?.accent || '', [which]: v };
+    try {
+      const { data } = await apiService.updateTeamColors(next.primary, next.accent);
+      if (user) setUser({ ...(user as any), team_colors: data?.team_colors || null });
+    } catch (e: any) {
+      showAlert('Error', e.response?.data?.detail || 'Couldn\u2019t save the colours');
+    }
+  };
+
   const removeLogo = async () => {
     setLogoBusy(true);
     try {
@@ -1507,6 +1527,20 @@ function TeamNameSection() {
           </View>
         )}
       </View>
+
+      <View style={teamStyles.logoRow}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={teamStyles.label}>Team colours</Text>
+          <Text style={teamStyles.helper}>{byHand ? 'Set by hand.' : teamCols ? 'Picked from your logo.' : 'Upload a logo, or tap a colour to set it.'} Your app shows in these; your team keeps the main look.</Text>
+        </View>
+        {(['primary', 'accent'] as const).map((k) => (
+          <TouchableOpacity key={k} onPress={() => editColour(k)} accessibilityRole="button" testID={`team-colour-${k}`}
+            accessibilityLabel={`${k === 'primary' ? 'Main' : 'Accent'} colour ${teamCols?.[k] || 'not set'}. Tap to change`}
+            style={[teamStyles.swatch, { backgroundColor: (teamCols?.[k] as string) || colors.surfaceAlt }]}>
+            {!teamCols?.[k] ? <Ionicons name="add" size={16} color={colors.textMuted} /> : null}
+          </TouchableOpacity>
+        ))}
+      </View>
     </DepthCard>
   );
 }
@@ -1515,6 +1549,7 @@ const createTeamStyles = (colors: any) => StyleSheet.create({
   card: { borderRadius: 20, marginBottom: 16, padding: 16 },
   logoRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: colors.border },
   logo: { width: 48, height: 48, borderRadius: 14 },
+  swatch: { width: 36, height: 36, borderRadius: 11, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
   logoEmpty: { backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
   headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 12 },
   label: { fontSize: 15, fontWeight: '600', color: colors.text },

@@ -33,6 +33,7 @@ import { MOTION } from '../theme/motion';
 import { pageMarkKick, pageTab } from '../theme/pageScroll';
 import { VertexMark } from '../components/ui/VertexMark';
 import { useAuth } from '../auth/AuthContext';
+import { useSurface } from '../theme/teamTheme';
 import { useTabPrefs } from '../customization/TabPrefsContext';
 import type { TabItem } from '../customization/tabRegistry';
 import { levelWord } from '../utils/roleTitle';
@@ -234,6 +235,7 @@ function Sidebar({ mode, inDrawer, pinned, more, activeId, unread, onToggle, top
   unread: number; onToggle: () => void; topInset: number; user: any;
 }) {
   // The Inbox row carries the count; when Inbox sits under a closed More, More does.
+  const surface = useSurface();
   const badgeFor = (it: TabItem) => (it.id === 'notifications' ? unread : 0);
   const moreBadge = more.some((m) => m.id === 'notifications') ? unread : 0;
   const rail = mode === 'rail';
@@ -242,7 +244,7 @@ function Sidebar({ mode, inDrawer, pinned, more, activeId, unread, onToggle, top
   const initials = (user?.name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w: string) => w[0]?.toUpperCase()).join('');
 
   return (
-    <View style={[s.side, inDrawer && { flex: 1 }, { width: rail ? RAIL_W : inDrawer ? '100%' : SIDE_W, paddingTop: topInset }]}>
+    <View style={[s.side, { backgroundColor: surface.deep }, inDrawer && { flex: 1 }, { width: rail ? RAIL_W : inDrawer ? '100%' : SIDE_W, paddingTop: topInset }]}>
       <LinearGradient pointerEvents="none" colors={['rgba(34,208,236,0.10)', 'rgba(34,208,236,0)']} style={s.sideGlow} />
 
       <View style={[s.brand, rail && s.brandRail]}>
@@ -352,6 +354,7 @@ function TabStrip({ tabs, activeKey, onClose, topInset, onMenu, unread, inboxAct
   unread: number; inboxActive: boolean;
 }) {
   const colors = useColors();
+  const surface = useSurface();
   const scroll = useRef<ScrollView>(null);
   const boxes = useRef<Record<string, { x: number; w: number }>>({});
   const [stripW, setStripW] = useState(0);
@@ -364,7 +367,7 @@ function TabStrip({ tabs, activeKey, onClose, topInset, onMenu, unread, inboxAct
 
   const phone = !!onMenu;
   return (
-    <View style={[s.strip, { paddingTop: topInset, height: (phone ? 46 : TAB_H) + topInset }]}>
+    <View style={[s.strip, { backgroundColor: surface.deep, paddingTop: topInset, height: (phone ? 46 : TAB_H) + topInset }]}>
       {onMenu && (
         <Pressable onPress={onMenu} style={s.menuBtn} accessibilityLabel="Open menu" testID="nav-menu">
           <Ionicons name="menu" size={22} color={C.text} />
@@ -376,7 +379,7 @@ function TabStrip({ tabs, activeKey, onClose, topInset, onMenu, unread, inboxAct
         const cur = tabs.find((t) => t.key === activeKey);
         return (
           <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, height: phone ? 46 : TAB_H, paddingLeft: phone ? 0 : 14 }}>
-            {cur ? <Ionicons name={cur.icon as any} size={17} color={C.lime} /> : null}
+            {cur ? <Ionicons name={cur.icon as any} size={17} color={surface.accent} /> : null}
             <Text style={{ color: C.text, fontSize: 15.5, fontFamily: fonts.bodySemibold }} numberOfLines={1}>{cur?.label || ''}</Text>
           </View>
         );
@@ -389,7 +392,7 @@ function TabStrip({ tabs, activeKey, onClose, topInset, onMenu, unread, inboxAct
         accessibilityLabel={unread > 0 ? `Inbox, ${unread} unread` : 'Inbox'}
         testID="nav-inbox-bell"
       >
-        <Ionicons name={inboxActive ? 'notifications' : 'notifications-outline'} size={19} color={inboxActive || unread > 0 ? C.lime : C.muted} />
+        <Ionicons name={inboxActive ? 'notifications' : 'notifications-outline'} size={19} color={inboxActive || unread > 0 ? surface.accent : C.muted} />
         {unread > 0 ? (
           <View style={s.bellBadge}><Text style={s.badgeText}>{badgeText(unread)}</Text></View>
         ) : null}
