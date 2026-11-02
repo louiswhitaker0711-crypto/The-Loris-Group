@@ -125,9 +125,8 @@ def _normalize_goals(raw) -> dict:
 # lists from the org's goal-setting session.
 DEFAULT_KPI_MENU: list = [
     "Sign-ups (personal)",
-    "Contract sign-ups",
     "Team sign-ups",
-    "Contract piece average",
+    "Team piece average",
     "Team size",
     "Stage 3 count",
     "2nd-week retention %",
@@ -140,11 +139,18 @@ DEFAULT_KPI_MENU: list = [
     "First-day-ons taken out",
     "First-day coachings done",
     "New stars booked in",
-    "ERs booked for Initial Appointment",
+    "PRs booked for Initial Appointment",
     "Initial Appointments run",
     "New starters",
     "Personal best",
 ]
+
+# Old labels that may still sit in a saved menu: renamed or dropped on read.
+_KPI_RENAMES: dict = {
+    "ERs booked for Initial Appointment": "PRs booked for Initial Appointment",
+    "Contract piece average": "Team piece average",
+    "Contract sign-ups": None,
+}
 
 DEFAULT_ROCK_SUGGESTIONS: list = [
     "Visit another office",
@@ -375,7 +381,12 @@ async def get_goal_menu(request: Request):
                 return d.get(field)
         return default
 
-    kpis = [str(x).strip() for x in _pick("kpis", DEFAULT_KPI_MENU) if str(x).strip()]
+    kpis = []
+    for x in _pick("kpis", DEFAULT_KPI_MENU):
+        label = str(x).strip()
+        label = _KPI_RENAMES.get(label, label)
+        if label and label not in kpis:
+            kpis.append(label)
     rocks = [str(x).strip() for x in _pick("rock_suggestions", DEFAULT_ROCK_SUGGESTIONS) if str(x).strip()]
     return {
         "kpis": kpis,
