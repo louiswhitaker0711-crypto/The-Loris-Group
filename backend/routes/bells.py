@@ -370,7 +370,7 @@ def compute_totals(entry: dict, fees: Optional[dict]) -> dict:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-async def _enrich_entries_with_teams(entries: list) -> None:
+async def _enrich_entries_with_teams(entries: list, week_ending: Optional[str] = None) -> None:
     """Mutates the given entries list in place, adding `teams` (list) and
     `primary_team` (object | None) to each.
 
@@ -399,6 +399,20 @@ async def _enrich_entries_with_teams(entries: list) -> None:
     if office_ids:
         # Pull every user in those offices so we can check direct reports
         user_filter = {"office_id": {"$in": list(office_ids)}, "is_active": {"$ne": False}, "deleted": {"$ne": True}}
+
+    # A week that has ended reads its teams as they stood that week
+    # (core/team_history.py); the current week reads live.
+    from core.team_history import as_at_for_week, office_history, leaders_at
+    as_at = as_at_for_week(week_ending)
+    if as_at:
+        h_users, h_by_day = await office_history(db, office_ids, as_at)
+        h_parents = h_by_day[as_at]
+        cache_h: dict = {}
+        for uid, u in h_users.items():
+            cache_h[uid] = {**u, "reports_to": h_parents.get(uid)}
+        h_leaders = leaders_at(h_users, h_by_day, as_at)
+        await _walk_teams(entries, uids_for_teams, cache_h, lambda uid: uid in h_leaders)
+        return
 
     cache: dict = {}
     children_of: dict = {}
@@ -451,6 +465,17 @@ async def _enrich_entries_with_teams(entries: list) -> None:
     if office_ids and with_reports:
         await _stamp_team_leaders(db, with_reports)
 
+    await _walk_teams(entries, uids_for_teams, cache, _is_section_leader, _load)
+
+
+async def _walk_teams(entries: list, uids_for_teams: list, cache: dict, _is_section_leader, _load=None) -> None:
+    """Give each entry its teams: their own (if they lead one) and every team
+    above them, nearest first (`primary_team`)."""
+    async def _get(uid: str):
+        if _load:
+            return await _load(uid)
+        return cache.get(uid) or {}
+
     team_by_uid: dict = {}
     for uid in uids_for_teams:
         teams: list = []
@@ -473,7 +498,7 @@ async def _enrich_entries_with_teams(entries: list) -> None:
             if not parent_id or parent_id in visited_chain:
                 break
             visited_chain.add(parent_id)
-            parent = await _load(parent_id)
+            parent = await _get(parent_id)
             if not parent:
                 break
             if _is_section_leader(parent_id):
@@ -1101,8 +1126,13 @@ async def bells_week_for(user: dict, week: Optional[str] = None, office: Optiona
         return new_hire_starts.get(uid) or user_created_at.get(uid) or ""
 
     # ─── Team enrichment ────────────────────────────────────────────────────
-    # See _enrich_entries_with_teams() docstring.
-    await _enrich_entries_with_teams(entries)
+    # See _enrich_entries_with_teams() docstring. A past week keeps its teams.
+    await _enrich_entries_with_teams(entries, week_ending)
+    from core.team_history import parents_for_week
+    _then = await parents_for_week(db, office_id, week_ending)
+    if _then is not None:
+        for _uid in list(reports_to_map):
+            reports_to_map[_uid] = _then.get(_uid)
 
     # Why each AB was granted + who approved it, for the table's AB popover.
     await _attach_absence_details(entries, office_id, week_ending)
@@ -2047,6 +2077,34 @@ async def list_bells_teams(request: Request, week: Optional[str] = None, office:
     if with_reports:
         await _stamp_team_leaders(db, [str(u["_id"]) for u in office_people if str(u["_id"]) in with_reports])
 
+    # A week that has ended shows its teams as they stood that week.
+    from core.team_history import as_at_for_week, office_history, leaders_at, was_here
+    _as_at = as_at_for_week(week_ending)
+    _hist_kids: Optional[dict] = None
+    if _as_at:
+        h_users, h_by_day = await office_history(db, [office_id], _as_at)
+        h_leaders = leaders_at(h_users, h_by_day, _as_at)
+        team_leaders = []
+        for lid in h_leaders:
+            tl = dict(h_users[lid])
+            tl["team_name"] = _display_team_name(tl)
+            team_leaders.append(tl)
+        _hist_kids = {}
+        for _u, _p in h_by_day[_as_at].items():
+            if _p and was_here(h_users.get(_u) or {}, _as_at):
+                _hist_kids.setdefault(_p, []).append(_u)
+
+    def _subtree_then(root: str) -> list:
+        out, stack, seen = [], [root], set()
+        while stack:
+            x = stack.pop()
+            if x in seen:
+                continue
+            seen.add(x)
+            out.append(x)
+            stack.extend((_hist_kids or {}).get(x, []))
+        return out
+
     # Determine whether 'working today' is meaningful (only for current week)
     today_local = datetime.now(APP_TZ).date()
     current_week_end = (today_local + timedelta(days=(6 - today_local.weekday()) % 7)).isoformat()
@@ -2069,7 +2127,7 @@ async def list_bells_teams(request: Request, week: Optional[str] = None, office:
     for tl in team_leaders:
         leader_id = str(tl["_id"])
         try:
-            member_ids = await get_subtree_ids(leader_id)
+            member_ids = _subtree_then(leader_id) if _hist_kids is not None else await get_subtree_ids(leader_id)
         except Exception:
             member_ids = []
         member_ids = [str(m) for m in member_ids]
@@ -2631,8 +2689,13 @@ async def _public_bells_payload(office_slug: str, week: Optional[str], code: Opt
                 e["start_date"] = str(new_hire_starts[str(e["user_id"])])[:10]
 
         # Team enrichment must happen BEFORE the section-aware sort so each
-        # entry knows which section it belongs to.
-        await _enrich_entries_with_teams(enriched)
+        # entry knows which section it belongs to. A past week keeps its teams.
+        await _enrich_entries_with_teams(enriched, week_ending)
+        from core.team_history import parents_for_week
+        _then = await parents_for_week(db, office_id, week_ending)
+        if _then is not None:
+            for _uid in list(reports_to_map):
+                reports_to_map[_uid] = _then.get(_uid)
         await _attach_absence_details(enriched, office_id, week_ending)
         _attach_team_subtree_sales(enriched, reports_to_map)
         enriched = _section_aware_sort(enriched, reports_to_map, _join_key, role_map)
@@ -2640,7 +2703,7 @@ async def _public_bells_payload(office_slug: str, week: Optional[str], code: Opt
         # Fallback: enrich (so the UI still groups) and apply a flat alpha
         # sort if anything goes wrong.
         try:
-            await _enrich_entries_with_teams(enriched)
+            await _enrich_entries_with_teams(enriched, week_ending)
             await _attach_absence_details(enriched, office_id, week_ending)
         except Exception:
             pass

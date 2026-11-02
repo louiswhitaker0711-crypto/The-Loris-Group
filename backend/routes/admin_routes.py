@@ -1402,7 +1402,9 @@ async def delete_user(user_id: str, request: Request, left_on: Optional[str] = N
     # Their people move up to the person above them (or to you), whatever
     # their role: sub-teams move whole (core/team_sections.hand_on_team).
     from core.team_sections import hand_on_team
-    handed = await hand_on_team(db, user, str(admin.get("_id") or "") or None)
+    now = datetime.now(timezone.utc)
+    exit_day = exit_left_on(left_on, now.astimezone(APP_TZ).date())
+    handed = await hand_on_team(db, user, str(admin.get("id") or admin.get("_id") or "") or None, on=exit_day)
     # Soft-delete: mark deleted but keep all data so historical reports stay accurate.
     # Assessments, badges, new_hire records are preserved for historical stats.
     #
@@ -1411,8 +1413,6 @@ async def delete_user(user_id: str, request: Request, left_on: Optional[str] = N
     # — good for auditing, useless for "was she here on Wednesday?". Anything
     # that plans day by day (Office Primetime) reads `left_on`: the person stays
     # on the plan up to and including that date, and drops off after it.
-    now = datetime.now(timezone.utc)
-    exit_day = exit_left_on(left_on, now.astimezone(APP_TZ).date())
     await db.users.update_one(
         {"_id": ObjectId(user_id)},
         {"$set": {

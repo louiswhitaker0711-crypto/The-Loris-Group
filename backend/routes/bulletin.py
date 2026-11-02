@@ -306,7 +306,7 @@ async def bulletin_weekly(request: Request, week_ending: Optional[str] = None):
     # `office` so the screen and the shared image need no change.
     linked = [{"user_id": r["user_id"], "office_id": r.get("office_id")} for r in per_rep.values() if r["user_id"] and ObjectId.is_valid(str(r["user_id"]))]
     try:
-        await _enrich_entries_with_teams(linked)
+        await _enrich_entries_with_teams(linked, week_ending)
     except Exception:
         linked = []
     team_of = {e["user_id"]: ((e.get("primary_team") or {}).get("team_name") or "") for e in linked}

@@ -92,7 +92,7 @@ async def user_has_team(db, user: dict) -> bool:
     return has_team(user, n)
 
 
-async def hand_on_team(db, exited: dict, fallback_id: Optional[str]) -> dict:
+async def hand_on_team(db, exited: dict, fallback_id: Optional[str], on: Optional[str] = None) -> dict:
     """When someone exits, their people move up a level (the Owner, 2 Nov 2026).
 
     Everyone who reported to them now reports to the person above them; if
@@ -125,7 +125,12 @@ async def hand_on_team(db, exited: dict, fallback_id: Optional[str]) -> dict:
     q = {"reports_to": uid}
     if office:
         q["office_id"] = office
+    from core.team_history import record_move
     moved = await db.users.count_documents({**q, **ACTIVE})
+    # Log each move (dated the exit day) so past weeks keep the old team.
+    async for r in db.users.find(q, {"_id": 1}):
+        to = heir_id if heir_id and str(r["_id"]) != heir_id else None
+        await record_move(db, str(r["_id"]), office, uid, to, why="exit", on=on)
     if heir_id:
         # Never make someone their own Coach (the heir was on the exited person's team).
         await db.users.update_many({**q, "_id": {"$ne": ObjectId(heir_id)}},

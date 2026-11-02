@@ -88,6 +88,7 @@ from routes.territory import router as territory_router
 from routes.cod_tests import router as cod_tests_router
 from routes.coach_suggestions import router as coach_suggestions_router
 from routes.viewers import router as viewers_router
+from routes.team_history import router as team_history_router
 from routes.cod_focus import router as cod_focus_router
 from routes.ai_assistant import router as ai_assistant_router
 
@@ -200,6 +201,7 @@ api_router.include_router(territory_router)
 api_router.include_router(cod_tests_router)
 api_router.include_router(coach_suggestions_router)
 api_router.include_router(viewers_router)
+api_router.include_router(team_history_router)
 api_router.include_router(cod_focus_router)
 api_router.include_router(ai_assistant_router)
 

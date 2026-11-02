@@ -254,10 +254,10 @@ async def reassign_leader(hire_id: str, req: ReassignLeaderRequest, request: Req
     )
     # Also update reports_to on the trainee user to keep tree in sync
     if hire and hire.get("trainee_user_id"):
-        await db.users.update_one(
-            {"_id": ObjectId(hire["trainee_user_id"])},
-            {"$set": {"reports_to": str(leader_user["_id"])}}
-        )
+        trainee = await db.users.find_one({"_id": ObjectId(hire["trainee_user_id"])}, {"_id": 1, "reports_to": 1, "office_id": 1})
+        if trainee:
+            from core.team_history import set_coach
+            await set_coach(db, trainee, str(leader_user["_id"]), why="coach reassigned")
     return {"message": "Coach reassigned"}
 
 # ==================== ASSESSMENT ROUTES ====================
@@ -1200,10 +1200,8 @@ async def set_reports_to(user_id: str, request: Request):
             raise HTTPException(status_code=400, detail="Cannot create circular hierarchy")
     # Capture previous parent for change-detection
     prev_parent_id = target_user_before.get("reports_to") if target_user_before else None
-    if parent_id:
-        await db.users.update_one({"_id": target_oid}, {"$set": {"reports_to": parent_id}})
-    else:
-        await db.users.update_one({"_id": target_oid}, {"$unset": {"reports_to": ""}})
+    from core.team_history import set_coach
+    await set_coach(db, target_user_before, parent_id, why="moved")
     # OwnerIQ — mirror the reparent in the family tree (move under the leader).
     # Fire-and-forget; gated by OWNERIQ_WRITES_ENABLED (no-op until enabled).
     if parent_id:
