@@ -15,7 +15,7 @@ import { useColors, useTheme, fonts, type ThemeMode } from '../../src/theme/Them
 import { useAuth } from '../../src/auth/AuthContext';
 import { setAuthTokens } from '../../src/auth/tokenStorage';
 import { toast } from '../../src/utils/toast';
-import { apiService } from '../../src/api/client';
+import { api, apiService } from '../../src/api/client';
 import { getScheduleRemindersEnabled, setScheduleRemindersEnabled } from '../../src/utils/notificationPrefs';
 import { clearAllScheduledForUser, rescheduleAllForUser } from '../../src/utils/scheduleNotifications';
 import { useTabPrefs } from '../../src/customization/TabPrefsContext';
@@ -631,6 +631,9 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </DepthCard>
         </ScrollReveal>
+
+        {/* Connect Claude: your own link so Claude can read and fill in your plans (the Owner, 2 Nov 2026). */}
+        <ConnectClaudeRow />
 
         {/* Biometric / Face ID quick sign-in */}
         <BiometricSection />
@@ -1248,6 +1251,34 @@ const createNotifStyles = (colors: any) => StyleSheet.create({
   helper: { fontSize: 11, color: colors.textMuted, marginTop: 2, lineHeight: 15 },
   inboxLink: { fontSize: 12, fontWeight: '700', color: colors.primary, marginTop: 12 },
 });
+
+// ── Connect Claude ───────────────────────────────────────────────────────
+// Admins, and anyone an Admin has allowed (GET /ai/connector-link).
+function ConnectClaudeRow() {
+  const colors = useColors();
+  const router = useRouter();
+  const q = useQuery({
+    queryKey: ['ai', 'connector-link'],
+    queryFn: async () => (await api.get('/ai/connector-link')).data as { allowed: boolean; has_link: boolean },
+    retry: false,
+  });
+  if (!q.data?.allowed) return null;
+  return (
+    <DepthCard style={{ borderRadius: 16, marginBottom: 16, padding: 16 }}>
+      <TouchableOpacity onPress={() => router.push('/connect-claude' as never)} activeOpacity={0.7}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }} testID="profile-connect-claude">
+        <Ionicons name="sparkles-outline" size={20} color={colors.primary} />
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 15, fontWeight: '600', color: colors.text }}>Connect Claude</Text>
+          <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 2, lineHeight: 15 }}>
+            {q.data.has_link ? 'Connected. Claude can read your numbers and fill in your plans.' : 'Talk to Claude and have it fill in your plans in the app.'}
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+      </TouchableOpacity>
+    </DepthCard>
+  );
+}
 
 // ── Biometric / Face ID Section ──────────────────────────────────────────
 // Toggle that enables/disables Face ID (or Touch ID / Fingerprint) sign-in.

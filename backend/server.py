@@ -89,6 +89,7 @@ from routes.cod_tests import router as cod_tests_router
 from routes.coach_suggestions import router as coach_suggestions_router
 from routes.viewers import router as viewers_router
 from routes.cod_focus import router as cod_focus_router
+from routes.ai_assistant import router as ai_assistant_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -200,6 +201,7 @@ api_router.include_router(cod_tests_router)
 api_router.include_router(coach_suggestions_router)
 api_router.include_router(viewers_router)
 api_router.include_router(cod_focus_router)
+api_router.include_router(ai_assistant_router)
 
 app.include_router(api_router)
 
@@ -508,6 +510,11 @@ async def _startup_work():
     await db.primetime_entries.create_index([("office_id", 1), ("session_id", 1)])
     # BA Academy workbooks: one per person per day (routes/academy.py).
     await db.academy_workbooks.create_index([("user_id", 1), ("day", 1)])
+    # The Hub's AI (routes/ai_assistant.py): one analysis per person a day; the
+    # Claude connector's personal links are looked up by their hash.
+    await db.ai_analyses.create_index([("user_id", 1), ("date", 1)], unique=True)
+    await db.ai_conversations.create_index([("user_id", 1), ("date", 1)])
+    await db.connector_links.create_index("token_hash", unique=True)
     # New-start join codes (routes/new_starts.py), looked up by their hash.
     await db.join_tokens.create_index("token_hash")
     await db.room_codes.create_index([("code", 1), ("closed_at", 1)])

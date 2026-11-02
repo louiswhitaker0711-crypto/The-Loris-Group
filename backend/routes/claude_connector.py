@@ -1,24 +1,28 @@
-"""Claude connector: a read-only window on the office for the Owner's Claude.
+"""Claude connector: the office in Claude, read and (with a yes) write.
 
-The Owner adds this once in claude.ai as a custom connector, and then any chat
-with Claude can read the team's numbers (Bells, breakdowns, field numbers,
-sectors, quality, COD) to help plan the week. Agreed with the Owner, 25 Oct
-2026: read-only, everything sales-related, no contact details.
+Added in claude.ai as a custom connector, then any chat with Claude can read
+the numbers (Bells, breakdowns, field numbers, sectors, quality, COD) to help
+plan the week, and fill in plans in the app (the Owner, 2 Nov 2026).
 
   POST /mcp/{token}     the connector (MCP over HTTP, JSON replies)
 
-The secret in the address is the only gate, the same model as the other
-secret links (routes/roster_share.py). Off until CLAUDE_CONNECTOR_TOKEN is set
-to a long random string (32+ characters); unset, it 404s. Wrong secrets are
-rate-limited per caller IP.
+Two kinds of link, each just a long secret in the address:
+  * CLAUDE_CONNECTOR_TOKEN (Railway, 32+ characters): the Owner's original
+    link. Reads as the Owner (the super-admin) sees the app; writes as them.
+  * Personal links (`connector_links`, made in the app: Profile → Connect
+    Claude). Stored only as a hash. Reads what that person can see in the app
+    (`core.ai_context.visible_ids`) and writes only what they could write
+    (`core.ai_actions`). Admins make their own; anyone else once an Admin has
+    allowed them (`users.connector_allowed`).
+Wrong secrets are rate-limited per caller IP; with neither kind set up, 404.
 
-Read only: nothing here writes to the database, sends anything or asks
-OwnerIQ. Every tool reads as the office's Owner (the super-admin) would see
-the app, then drops personal details: emails, phone numbers, photos, badge
-numbers and passwords never leave.
+Writes (weekly goal, sector set-ups, planner boxes and notes, bunny hops) are
+marked as changing the app, so Claude asks the person before each one. Never
+sent: emails, phone numbers, photos, badge numbers, passwords.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -69,15 +73,29 @@ def _token() -> str:
     return t
 
 
-def _check_token(token: str, request: Request) -> None:
-    expected = _token()
-    if not expected:
-        raise HTTPException(status_code=404, detail="Not found")
+def hash_link(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+async def _check_token(token: str, request: Request) -> dict:
+    """The viewer this link reads and writes as, or 404."""
     key = client_ip(request)
     _TOKEN_FAILURES.check(key)
-    if not token or not secrets.compare_digest(token.encode(), expected.encode()):
-        _TOKEN_FAILURES.hit(key)
-        raise HTTPException(status_code=404, detail="Not found")
+    expected = _token()
+    if token and expected and secrets.compare_digest(token.encode(), expected.encode()):
+        return await owner_view()
+    if token and len(token) >= MIN_TOKEN_LENGTH:
+        link = await db.connector_links.find_one({"token_hash": hash_link(token), "revoked": {"$ne": True}})
+        if link and ObjectId.is_valid(str(link.get("user_id"))):
+            u = await db.users.find_one({"_id": ObjectId(str(link["user_id"])), "deleted": {"$ne": True},
+                                         "is_active": {"$ne": False}}, {"password_hash": 0})
+            if u and not u.get("is_viewer"):
+                u["id"] = str(u.pop("_id"))
+                await db.connector_links.update_one({"_id": link["_id"]},
+                                                    {"$set": {"last_used_at": datetime.utcnow().isoformat()}})
+                return u
+    _TOKEN_FAILURES.hit(key)
+    raise HTTPException(status_code=404, detail="Not found")
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -110,6 +128,17 @@ async def owner_view() -> dict:
         first = await db.offices.find_one({}, {"_id": 0, "id": 1}, sort=[("created_at", 1)])
         u["office_id"] = (first or {}).get("id")
     return u
+
+
+async def scoped(viewer: dict) -> dict:
+    """The viewer with `_visible` set: None for whole-office readers (Admins,
+    Coach+, the Owner's link), else the ids they can see in the app."""
+    from auth import sees_whole_office
+    if viewer.get("is_super_admin") or sees_whole_office(viewer):
+        return {**viewer, "_visible": None}
+    from core.ai_context import visible_ids
+    ids, _whole = await visible_ids(viewer)
+    return {**viewer, "_visible": ids}
 
 
 def today_uk() -> date:
@@ -145,7 +174,15 @@ async def _office_people(owner: dict, include_left: bool = False) -> dict[str, d
                "role": {"$in": ["trainee", "leader", "admin"]}}
     if not include_left:
         q.update({"deleted": {"$ne": True}, "is_active": {"$ne": False}})
-    return {str(u["_id"]): u async for u in db.users.find(q, {"name": 1, "role": 1, "reports_to": 1})}
+    people = {str(u["_id"]): u async for u in db.users.find(q, {"name": 1, "role": 1, "reports_to": 1})}
+    vis = owner.get("_visible")
+    return people if vis is None else {i: u for i, u in people.items() if i in vis}
+
+
+def _sees(owner: dict, user_id: Any) -> bool:
+    """Personal links only see their own people; the Owner's link sees all."""
+    vis = owner.get("_visible")
+    return vis is None or str(user_id or "") in vis
 
 
 def _band(n: int) -> str:
@@ -219,7 +256,8 @@ async def tool_get_bells_week(owner: dict, args: dict) -> dict:
         "week_ending": sheet["week_ending"], "office": sheet.get("office_name"),
         "office_totals": totals,
         "people": [_compact_entry(e) for e in sheet.get("entries") or []
-                   if e.get("user_active", True) or (e.get("total_sales") or 0) > 0 or e.get("left_on")],
+                   if (e.get("user_active", True) or (e.get("total_sales") or 0) > 0 or e.get("left_on"))
+                   and _sees(owner, e.get("user_id"))],
     }
 
 
@@ -235,6 +273,15 @@ async def tool_get_recent_weeks(owner: dict, args: dict) -> dict:
     async for b in db.bells_entries.find({"office_id": owner.get("office_id"), "week_ending": {"$in": weeks}},
                                          {"_id": 0, "user_id": 1, "user_name": 1, "week_ending": 1, "days": 1}):
         t = compute_totals(b, None)
+        o = office[b["week_ending"]]
+        o["sign_ups"] += t["total_sales"]
+        o["gold"] += t["total_over30"]
+        o["silver"] += t["total_under30"]
+        o["the_round"] += t["total_memberships"]
+        o["days_worked"] += t["days_worked"]
+        o["people_in"] += 1 if t["days_worked"] else 0
+        if not _sees(owner, b.get("user_id")):
+            continue
         key = b.get("user_id") or (b.get("user_name") or "").strip().lower()
         u = people.get(str(b.get("user_id") or "")) or {}
         r = rows.setdefault(key, {"name": u.get("name") or b.get("user_name"),
@@ -243,13 +290,6 @@ async def tool_get_recent_weeks(owner: dict, args: dict) -> dict:
         r["weeks"][b["week_ending"]] = {"sign_ups": t["total_sales"], "gold": t["total_over30"],
                                         "the_round": t["total_memberships"], "days_worked": t["days_worked"],
                                         "piece_average": t["piece_average"], "reliability_pct": t["reliability_pct"]}
-        o = office[b["week_ending"]]
-        o["sign_ups"] += t["total_sales"]
-        o["gold"] += t["total_over30"]
-        o["silver"] += t["total_under30"]
-        o["the_round"] += t["total_memberships"]
-        o["days_worked"] += t["days_worked"]
-        o["people_in"] += 1 if t["days_worked"] else 0
     for o in office.values():
         o["piece_average"] = round(o["sign_ups"] / o["days_worked"], 2) if o["days_worked"] else None
         o["gold_pct"] = round(100 * o["gold"] / o["sign_ups"]) if o["sign_ups"] else None
@@ -306,12 +346,15 @@ async def tool_get_field_numbers(owner: dict, args: dict) -> dict:
         start, end = end, start
     if (end - start).days > 186:
         start = end - timedelta(days=186)
-    people = await _office_people(owner, include_left=True)
+    everyone = await _office_people({**owner, "_visible": None}, include_left=True)
+    people = {i: u for i, u in everyone.items() if _sees(owner, i)}
     rows = await db.owneriq_kpis.find(
-        {"cg1_user_id": {"$in": list(people)}, "date": {"$gte": start.isoformat(), "$lte": end.isoformat()},
+        {"cg1_user_id": {"$in": list(everyone)}, "date": {"$gte": start.isoformat(), "$lte": end.isoformat()},
          "test_mode": {"$ne": True}, **ID_LINKED}, {"_id": 0}).to_list(50000)
     by_person: dict[str, list] = {}
     for r in rows:
+        if str(r["cg1_user_id"]) not in people:
+            continue
         by_person.setdefault(str(r["cg1_user_id"]), []).append(r)
     per = []
     for uid, rs in by_person.items():
@@ -338,13 +381,17 @@ async def tool_get_sectors(owner: dict, args: dict) -> dict:
     else:
         dates = [_date_arg(args.get("date"), today_uk()).isoformat()]
     office_id = owner.get("office_id")
-    people = await _office_people(owner, include_left=True)
+    # Names for everyone in a sector they can see (teammates outside their team
+    # show by name, without their set-up or breakdown).
+    people = await _office_people({**owner, "_visible": None}, include_left=True)
     name = lambda i: (people.get(str(i)) or {}).get("name") or "?"  # noqa: E731
     days = {}
     async for sd in db.sector_days.find({"office_id": office_id, "date": {"$in": dates}}, {"_id": 0}):
         days[(sd.get("user_id"), sd.get("date"))] = sd
     out = []
     async for s in db.sectors.find({"office_id": office_id, "date": {"$in": dates}}, {"_id": 0}).sort([("date", 1), ("leader_name", 1)]):
+        if not any(_sees(owner, i) for i in [s.get("leader_id")] + list(s.get("member_ids") or [])):
+            continue
         hops = []
         for h in s.get("hops") or []:
             shadows = set(h.get("shadow_ids") or [])
@@ -352,7 +399,7 @@ async def tool_get_sectors(owner: dict, args: dict) -> dict:
                          "shadows": [name(m) for m in shadows]})
         members = []
         for m in s.get("member_ids") or []:
-            d = days.get((m, s["date"])) or {}
+            d = (days.get((m, s["date"])) or {}) if _sees(owner, m) else {}
             members.append({"name": name(m),
                             "set_up": strip_private(d.get("setup")) if d.get("setup") else None,
                             "breakdown": strip_private(d.get("breakdown")) if d.get("breakdown") else None,
@@ -375,10 +422,61 @@ async def tool_get_quality(owner: dict, args: dict) -> dict:
         return {"message": "No quality report uploaded for that week.", "weeks_available": weeks}
     people = await _office_people(owner, include_left=True)
     bas = [{"name": (people.get(str(b.get("user_id"))) or {}).get("name") or b.get("label"),
-            "metrics": b.get("metrics")} for b in doc.get("bas") or []]
+            "metrics": b.get("metrics")} for b in doc.get("bas") or [] if _sees(owner, b.get("user_id"))]
     return {"week_ending": doc["week_ending"], "measures": LABELS,
             "targets": {k: v["text"] for k, v in TARGETS.items()},
             "office_total": doc.get("total"), "bas": bas, "weeks_available": weeks}
+
+
+async def tool_get_me(owner: dict, args: dict) -> dict:
+    """Everything this link's person can see, in one go (as the in-app AI sees it)."""
+    from core.ai_context import build_context
+    return await build_context(owner)
+
+
+# ── Writes (Claude asks the person before each one) ──────────────────────────
+
+async def _person_id(owner: dict, name: Any) -> str:
+    """A name → someone this link can see; blank = the link's own person."""
+    if not str(name or "").strip():
+        return str(owner["id"])
+    return await _find_person(owner, str(name))
+
+
+async def tool_set_weekly_goal(owner: dict, args: dict) -> dict:
+    from core.ai_actions import set_weekly_goal
+    return await set_weekly_goal(owner, args.get("goal"))
+
+
+async def tool_save_setup(owner: dict, args: dict) -> dict:
+    from core.ai_actions import save_setup
+    who = await _person_id(owner, args.get("person"))
+    return await save_setup(owner, who, args.get("date"), args)
+
+
+async def tool_write_planner(owner: dict, args: dict) -> dict:
+    from core.ai_actions import set_planner_box
+    return await set_planner_box(owner, args.get("date"), args.get("box"), args.get("text"),
+                                 append=args.get("replace") is not True)
+
+
+async def tool_add_planner_note(owner: dict, args: dict) -> dict:
+    from core.ai_actions import add_planner_note
+    return await add_planner_note(owner, args.get("date"), args.get("title"), args.get("body"))
+
+
+async def tool_set_bunny_hops(owner: dict, args: dict) -> dict:
+    from core.ai_actions import set_hops
+    leader = await _person_id(owner, args.get("sector_leader")) if args.get("sector_leader") else None
+    return await set_hops(owner, args.get("date"), args.get("hops") or [], leader)
+
+
+def _box_names() -> str:
+    from core.ai_actions import planner_boxes
+    return ", ".join(planner_boxes().values())
+
+
+WRITE_TOOLS = {"set_weekly_goal", "save_setup", "write_planner", "add_planner_note", "set_bunny_hops"}
 
 
 TOOLS: dict[str, tuple] = {
@@ -417,17 +515,59 @@ TOOLS: dict[str, tuple] = {
                     "Acwyre's weekly quality report per BA (order value, drop days, The Round %, 4th week %, "
                     "fails) against the Owner's targets. Defaults to the latest uploaded week.",
                     {"week_ending": {"type": "string", "description": "YYYY-MM-DD. Optional."}}),
+    "get_me": (tool_get_me,
+               "Everything about the person this connector belongs to, in one go: their weeks, the office's "
+               "weeks to compare with, their page, recent set-ups and breakdowns, this week's planner, their "
+               "team's weeks and the latest quality. Start here when they ask about themselves or their plan.",
+               {}),
+    "set_weekly_goal": (tool_set_weekly_goal,
+                        "CHANGES THE APP. Sets the person's own weekly goal (sign-ups) on Bells for this week.",
+                        {"goal": {"type": "integer", "description": "Sign-ups for the week."}}),
+    "save_setup": (tool_save_setup,
+                   "CHANGES THE APP. Fills in a sector set-up for a day: sign-ups goal, focus, KPI (doors, spoken, "
+                   "pitched, closes or callbacks) and its target, and a positive to keep doing. Their own, or "
+                   "someone else's if they lead that sector or coach them. Keeps their COD pick.",
+                   {"date": {"type": "string", "description": "YYYY-MM-DD. Default today."},
+                    "person": {"type": "string", "description": "Whose set-up (a name). Blank = their own."},
+                    "goal": {"type": "integer"}, "focus": {"type": "string"},
+                    "kpi_metric": {"type": "string", "enum": ["doors", "spoken", "pitched", "closes", "callbacks"]},
+                    "kpi_target": {"type": "integer"}, "positive": {"type": "string"}}),
+    "write_planner": (tool_write_planner,
+                      "CHANGES THE APP. Writes into one box of a day (Monday–Saturday) in the person's own weekly "
+                      "planner. Adds to what's there unless replace is true.",
+                      {"date": {"type": "string", "description": "YYYY-MM-DD."},
+                       "box": {"type": "string", "description": "One of the planner's boxes (see instructions)."},
+                       "text": {"type": "string"},
+                       "replace": {"type": "boolean", "description": "Replace the box instead of adding. Default false."}}),
+    "add_planner_note": (tool_add_planner_note,
+                         "CHANGES THE APP. Adds a note to a day's Notes box in the person's own planner.",
+                         {"date": {"type": "string", "description": "YYYY-MM-DD. Default today."},
+                          "title": {"type": "string"}, "body": {"type": "string"}}),
+    "set_bunny_hops": (tool_set_bunny_hops,
+                       "CHANGES THE APP. Sets the bunny hops for a sector the person leads (an Admin: any sector, "
+                       "by its leader's name). Only people already in that sector; shadows are kept.",
+                       {"date": {"type": "string", "description": "YYYY-MM-DD. Default today."},
+                        "hops": {"type": "array", "items": {"type": "array", "items": {"type": "string"}},
+                                 "description": "Each hop is a list of names, e.g. [[\"A\", \"B\"], [\"C\"]]."},
+                        "sector_leader": {"type": "string", "description": "Admins only: whose sector. Blank = their own."}}),
 }
 
 INSTRUCTIONS = (
-    f"Read-only view of {APP_NAME}, the Owner's field app for a UK Modern Milkman door-to-door sales office. "
+    f"{APP_NAME}, the field app for a UK Modern Milkman door-to-door sales office. "
     "Self-employed Brand Ambassadors (BAs) sign up customers; Coaches develop them. Gold = a sign-up with a £10+ "
     "repeat weekly order, Silver = £5–£9.99, The Round = Modern Milkman's membership add-on. Standards: weekly "
-    "traffic light Red under 8, Amber 8–14, Green 15–19, Super Green 20+; Gold 90%+; The Round 75%+; under 2 "
-    "sign-ups a day on average needs retraining. Law of Averages per day: 120 doors, 70 spoken to, 25 pitched, "
-    "15 closed, 4+ sign-ups. Weeks run Monday–Saturday and are named by their Sunday. Use self-employed language "
-    "(no 'staff', 'employees', 'manager', 'hire'), British English. Nothing here can change the app."
+    "traffic light Red under 8, Amber 8–14, Green 15–19, Super Green 20+; Gold 90%+; The Round 75%+; under 1.8 "
+    "sign-ups a day on average over the last 3 days in needs retraining. Law of Averages per day: 120 doors, 70 "
+    "spoken to, 25 pitched, 15 closed, 4+ sign-ups. Weeks run Monday–Saturday and are named by their Sunday. Use "
+    "self-employed language (no 'staff', 'employees', 'manager', 'hire'), British English. "
+    "This connector belongs to one person and sees what they can see in the app (get_me first). Tools marked "
+    "CHANGES THE APP write to it as that person: before each one, show them exactly what you'll write and get a "
+    "clear yes. Planner boxes: "
 )
+
+
+def instructions() -> str:
+    return INSTRUCTIONS + _box_names() + "."
 
 
 def _schema(props: dict) -> dict:
@@ -436,11 +576,13 @@ def _schema(props: dict) -> dict:
 
 def tools_list() -> list[dict]:
     return [{"name": n, "description": d, "inputSchema": _schema(p),
-             "annotations": {"readOnlyHint": True, "openWorldHint": False}}
+             "annotations": ({"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False,
+                              "openWorldHint": False} if n in WRITE_TOOLS
+                             else {"readOnlyHint": True, "openWorldHint": False})}
             for n, (_f, d, p) in TOOLS.items()]
 
 
-async def handle(msg: dict) -> Optional[dict]:
+async def handle(msg: dict, viewer: Optional[dict] = None) -> Optional[dict]:
     """One JSON-RPC message → its reply (None for a notification)."""
     mid = msg.get("id")
     method = msg.get("method")
@@ -458,8 +600,8 @@ async def handle(msg: dict) -> Optional[dict]:
         asked = params.get("protocolVersion")
         return ok({"protocolVersion": asked if asked in PROTOCOL_VERSIONS else PROTOCOL_VERSIONS[0],
                    "capabilities": {"tools": {"listChanged": False}},
-                   "serverInfo": {"name": f"{APP_NAME} (read-only)", "version": SERVER_VERSION},
-                   "instructions": INSTRUCTIONS})
+                   "serverInfo": {"name": APP_NAME, "version": SERVER_VERSION},
+                   "instructions": instructions()})
     if method == "ping":
         return ok({})
     if method == "tools/list":
@@ -469,7 +611,7 @@ async def handle(msg: dict) -> Optional[dict]:
         if name not in TOOLS:
             return err(-32602, f"Unknown tool: {name}")
         try:
-            owner = await owner_view()
+            owner = await scoped(viewer or await owner_view())
             result = await TOOLS[name][0](owner, params.get("arguments") or {})
             text = json.dumps(strip_private(result), ensure_ascii=False, default=str)
             return ok({"content": [{"type": "text", "text": text}], "isError": False})
@@ -487,30 +629,30 @@ async def handle(msg: dict) -> Optional[dict]:
 
 @router.post("/mcp/{token}")
 async def mcp_post(token: str, request: Request):
-    _check_token(token, request)
+    viewer = await _check_token(token, request)
     try:
         body = await request.json()
     except Exception:
         return JSONResponse({"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "Parse error"}},
                             status_code=400)
     if isinstance(body, list):
-        replies = [r for r in [await handle(m) for m in body if isinstance(m, dict)] if r]
+        replies = [r for r in [await handle(m, viewer) for m in body if isinstance(m, dict)] if r]
         return JSONResponse(replies) if replies else Response(status_code=202)
     if not isinstance(body, dict):
         return JSONResponse({"jsonrpc": "2.0", "id": None, "error": {"code": -32600, "message": "Invalid request"}},
                             status_code=400)
-    reply = await handle(body)
+    reply = await handle(body, viewer)
     return JSONResponse(reply) if reply else Response(status_code=202)
 
 
 @router.get("/mcp/{token}")
 async def mcp_get(token: str, request: Request):
     """No server-sent stream here: every reply comes back on the POST."""
-    _check_token(token, request)
+    await _check_token(token, request)
     return Response(status_code=405, headers={"Allow": "POST"})
 
 
 @router.delete("/mcp/{token}")
 async def mcp_delete(token: str, request: Request):
-    _check_token(token, request)
+    await _check_token(token, request)
     return Response(status_code=405, headers={"Allow": "POST"})

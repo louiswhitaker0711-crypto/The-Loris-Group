@@ -59,7 +59,8 @@ The docs in `docs/` are the source of truth for those tasks. If code and docs di
 | `docs/` | Owner guides: SETUP, OWNERIQ, BRANDING, SERVICES, CLAUDE_CONNECTOR |
 | `frontend/src/academy/`, `frontend/app/academy/[day].tsx`, `backend/routes/academy.py` | BA Academy workbook (Days 1–2): content and quizzes in `src/academy/day1.ts` + `Day1Page.tsx`, `day2.ts` + `Day2Page.tsx` (final quiz link at the end of Day 2); answers saved per person per day in `academy_workbooks`. Never rename a field id people have used |
 | `frontend/app/new-starts.tsx`, `frontend/app/public/join.tsx`, `backend/routes/new_starts.py` | Set up today's new starts (Academy days): Admin adds name + email, gets a starter password + a one-time join code (stored hashed in `join_tokens`, 3 days); `/public/join` lets the new start choose their password with the code and signs them in. The room QR (`room_codes`, today only) opens `/public/signup`: the one place self sign-up exists |
-| `backend/routes/claude_connector.py` | Read-only Claude connector (`/mcp/<token>`): team, Bells, recent weeks, person, field numbers, sectors, quality. No contact details |
+| `backend/routes/claude_connector.py` | Claude connector (`/mcp/<token>`): the Owner's link (`CLAUDE_CONNECTOR_TOKEN`) or a personal link (`connector_links`, hashed). Reads what that person can see; write tools (weekly goal, set-ups, planner, bunny hops) go through `core/ai_actions.py`. No contact details |
+| `backend/routes/ai_assistant.py`, `core/ai_context.py`, `core/ai_actions.py`, `frontend/app/ai.tsx`, `app/connect-claude.tsx` | The Hub's AI: Analyse me (1 a day), Suggest my plan (5), chat (20), caps in `ai_usage`. Context = what the person can see (`visible_ids`); "Use this" = `POST /ai/apply` as the person. Personal connector links made in Connect Claude |
 
 ## Business rules worth knowing
 

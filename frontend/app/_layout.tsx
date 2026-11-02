@@ -298,6 +298,8 @@ function RootNavigator() {
       <Stack.Screen name="library" options={{ headerShown: true, title: 'Library', headerBackTitle: 'Back', ...MASTHEAD_COMPACT }} />
       <Stack.Screen name="coaching-guide" options={{ headerShown: true, title: 'Today\u2019s guide', headerBackTitle: 'Back', ...MASTHEAD_COMPACT }} />
       <Stack.Screen name="earnings-plan" options={{ headerShown: true, title: 'Plan your earnings', headerBackTitle: 'Back', ...MASTHEAD_COMPACT }} />
+      <Stack.Screen name="ai" options={{ headerShown: true, title: 'Your AI coach', headerBackTitle: 'Back', ...MASTHEAD_COMPACT }} />
+      <Stack.Screen name="connect-claude" options={{ headerShown: true, title: 'Connect Claude', headerBackTitle: 'Back', ...MASTHEAD_COMPACT }} />
       <Stack.Screen name="new-starts" options={{ headerShown: true, title: 'New starts', headerBackTitle: 'Back', ...MASTHEAD_COMPACT }} />
       </Stack>
       </NavThemeProvider>
