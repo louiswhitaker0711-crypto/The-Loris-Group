@@ -204,7 +204,7 @@ def test_mc_fees_are_admin_only_knobs_priced_by_tier():
     from core.vertex_pay import ADMIN_ONLY_FEE_KEYS, mc_fees
     # The office is paid £16 for a Silver and £20 for a Gold.
     assert DEFAULT_FEES["fee_mc_standard"] == 16 and DEFAULT_FEES["fee_mc_target"] == 20
-    assert set(ADMIN_ONLY_FEE_KEYS) == {"fee_mc_standard", "fee_mc_target"}
+    assert set(ADMIN_ONLY_FEE_KEYS) == {"fee_mc_standard", "fee_mc_target", "retention_mc_standard", "retention_mc_target"}
     assert mc_fees(3, 2, None) == 3 * 16 + 2 * 20
     assert mc_fees(5, 0, {"fee_mc_standard": 30}) == 150
     assert mc_fees(0, 13, {"fee_mc_target": 32.5}) == 422.5

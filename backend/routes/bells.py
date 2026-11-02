@@ -1294,7 +1294,8 @@ async def bells_week_for(user: dict, week: Optional[str] = None, office: Optiona
             plan = (people.get(uid) or {}).get("earnings_plan")
             if plan:
                 from core.earnings_plan import compute as _be
-                be = _be(plan, fees).get("breakeven")
+                from core.sign_up_value import per_sign_up_for as _rate
+                be = _be(plan, fees, await _rate(db, uid, fees)).get("breakeven")
                 if be is not None:
                     e["break_even"] = be
                     e["break_even_source"] = "plan"

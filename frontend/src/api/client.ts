@@ -1190,6 +1190,12 @@ export const apiService = {
   // Admin: make a Coach a Coach+ (whole-office numbers and ID badges), or take it back.
   setCoachPlus: (userId: string, enabled: boolean) =>
     api.put(`/admin/users/${userId}/coach-plus`, { enabled }),
+  // Admin: a driver gets the driver bonus on every sign-up in their breakeven.
+  setDriver: (userId: string, enabled: boolean) =>
+    api.put(`/admin/users/${userId}/driver`, { enabled }),
+  // Admin: paid as an Owner (BA + MC fee on personal sign-ups) or as a BA.
+  setPayType: (userId: string, payType: 'owner' | 'ba') =>
+    api.put(`/admin/users/${userId}/pay-type`, { pay_type: payType }),
   // leftOn (YYYY-MM-DD): exit from that day (Exited on a Bells day); default today.
   deleteUser: (userId: string, leftOn?: string) => api.delete(`/admin/users/${userId}`, { params: leftOn ? { left_on: leftOn } : undefined }),
   // Admin: give one person a temporary password; they choose their own on sign-in.

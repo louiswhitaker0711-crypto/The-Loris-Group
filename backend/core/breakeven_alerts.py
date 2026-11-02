@@ -38,12 +38,12 @@ def week_total(entry: dict) -> int:
                for d in (entry.get("days") or [])[:7])
 
 
-def breakeven_for(entry: dict, plan: Optional[dict], fees: Optional[dict]) -> Optional[int]:
+def breakeven_for(entry: dict, plan: Optional[dict], fees: Optional[dict], rate: Optional[float] = None) -> Optional[int]:
     typed = entry.get("break_even")
     if isinstance(typed, (int, float)) and typed > 0:
         return int(typed)
     if plan:
-        be = compute(plan, fees).get("breakeven")
+        be = compute(plan, fees, rate).get("breakeven")
         return int(be) if be else None
     return None
 
@@ -78,7 +78,11 @@ async def run_hits(database, now_uk: Optional[datetime] = None, send=None) -> li
         if office_id not in fees_by_office:
             fees_by_office[office_id] = (await database.commission_fees.find_one({"office_id": office_id}, {"_id": 0})
                                          or await database.commission_fees.find_one({}, {"_id": 0}))
-        be = breakeven_for(e, person.get("earnings_plan"), fees_by_office[office_id])
+        rate = None
+        if person.get("earnings_plan") and not e.get("break_even"):
+            from core.sign_up_value import rate_for
+            rate = (await rate_for(database, person, fees_by_office[office_id]))["per_sign_up"]
+        be = breakeven_for(e, person.get("earnings_plan"), fees_by_office[office_id], rate)
         if not hit(total, be):
             continue
         claim = await database.breakeven_hits.update_one(

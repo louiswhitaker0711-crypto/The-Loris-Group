@@ -809,16 +809,25 @@ function BudgetSection({ budget, canEdit, onChange }: { budget: any; canEdit: bo
 
       {/* Sale value + summary */}
       <View style={s.summaryCard}>
+        {/* Locked (the Owner, 2 Nov 2026): worked out from their own last 4
+            weeks' Gold %, Round % and 4th-week %, not typed. */}
         <View style={s.summaryRow}>
-          <Text style={s.summaryLabel}>Each sign-up is worth £</Text>
-          <TextInput
-            style={[s.summaryInput, !canEdit && s.disabled]} editable={canEdit}
-            placeholder="0.00" placeholderTextColor={colors.textMuted}
-            keyboardType="decimal-pad"
-            value={budget.sale_value || ''}
-            onChangeText={(v) => onChange({ ...budget, sale_value: v })}
-          />
+          <Text style={s.summaryLabel}>Each sign-up is worth</Text>
+          <Text style={s.summaryValue}>{sv > 0 ? formatMoney(sv, 2) : '—'}</Text>
         </View>
+        {budget.sign_up_value && (() => {
+          const v = budget.sign_up_value;
+          const pct = (k: 'gold_pct' | 'round_pct' | 'fourth_pct', label: string) =>
+            `${Math.round(v[k])}% ${label}${v.source?.[k] === 'standard' ? ' (standard)' : ''}`;
+          const extras = [v.owner ? 'Owner pay (BA + MC fee)' : null, v.driver ? 'driver bonus' : null].filter(Boolean).join(' · ');
+          const allStandard = ['gold_pct', 'round_pct', 'fourth_pct'].every((k) => v.source?.[k] === 'standard');
+          return (
+            <Text style={[s.summaryLabel, { marginBottom: 6, color: colors.textMuted }]}>
+              {allStandard ? 'Using the team standards until there are 4 weeks of numbers: ' : 'From the last 4 weeks: '}
+              {pct('gold_pct', 'Gold')} · {pct('round_pct', 'Round')} · {pct('fourth_pct', '4th week')}{extras ? ` · ${extras}` : ''}
+            </Text>
+          );
+        })()}
         <View style={s.summaryRow}>
           <Text style={s.summaryLabel}>Total £ needed (Needs + Wants)</Text>
           <Text style={s.summaryValue}>{formatMoney(tmN + tmW, 2)}</Text>

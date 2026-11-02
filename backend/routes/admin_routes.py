@@ -1322,6 +1322,33 @@ async def set_coach_plus(user_id: str, request: Request):
     return {"coach_plus": enabled, "message": f"{target.get('name') or 'They'} {'is now Coach+' if enabled else 'is back to Coach'}"}
 
 
+@router.put("/admin/users/{user_id}/driver")
+async def set_driver(user_id: str, request: Request):
+    """Admin: mark someone as a driver (an extra driver_bonus on every sign-up
+    in their breakeven, the Owner, 2 Nov 2026), or take it off. Body: {enabled: bool}."""
+    admin = await require_admin(request)
+    target = await _guard_target_user(admin, user_id)
+    enabled = bool((await request.json() or {}).get("enabled"))
+    if enabled:
+        await db.users.update_one({"_id": target["_id"]}, {"$set": {"is_driver": True}})
+    else:
+        await db.users.update_one({"_id": target["_id"]}, {"$unset": {"is_driver": ""}})
+    return {"is_driver": enabled, "message": f"{target.get('name') or 'They'} {'is now a driver' if enabled else 'is no longer a driver'}"}
+
+
+@router.put("/admin/users/{user_id}/pay-type")
+async def set_pay_type(user_id: str, request: Request):
+    """Admin: how someone is paid on their personal sign-ups. "owner" = BA fee
+    + MC fee (up front and at week 4); "ba" = the BA fees only. Body: {pay_type}."""
+    admin = await require_admin(request)
+    target = await _guard_target_user(admin, user_id)
+    pay_type = str((await request.json() or {}).get("pay_type") or "")
+    if pay_type not in ("owner", "ba"):
+        raise HTTPException(status_code=400, detail="pay_type must be owner or ba")
+    await db.users.update_one({"_id": target["_id"]}, {"$set": {"pay_type": pay_type}})
+    return {"pay_type": pay_type, "message": f"{target.get('name') or 'They'} {'is paid as an Owner' if pay_type == 'owner' else 'is paid as a BA'}"}
+
+
 @router.put("/admin/users/{user_id}/team-name")
 async def admin_set_user_team_name(user_id: str, request: Request):
     """Admin-only override for a user's team name (the team they lead)."""

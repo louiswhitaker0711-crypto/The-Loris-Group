@@ -54,7 +54,8 @@ async def _breakeven(user_id, office_id) -> Optional[int]:
         return None
     fees = (await db.commission_fees.find_one({"office_id": office_id}, {"_id": 0})
             or await db.commission_fees.find_one({}, {"_id": 0}))
-    return compute(plan, fees).get("breakeven")
+    from core.sign_up_value import per_sign_up_for
+    return compute(plan, fees, await per_sign_up_for(db, user_id, fees)).get("breakeven")
 
 
 def _today() -> str:

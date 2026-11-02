@@ -31,11 +31,13 @@ async def office_fees(office_id: Optional[str]) -> Optional[dict]:
             or await db.commission_fees.find_one({}, {"_id": 0}))
 
 
-def _out(u: dict, fees: Optional[dict], read_only: bool) -> dict:
+async def _out(u: dict, fees: Optional[dict], read_only: bool) -> dict:
+    from core.sign_up_value import rate_for
     plan = u.get("earnings_plan") or {}
-    return {"user_id": str(u["_id"]), "name": u.get("name") or "",
+    rate = await rate_for(db, u, fees)
+    return {"sign_up_value": rate, "user_id": str(u["_id"]), "name": u.get("name") or "",
             "needs": plan.get("needs") or [], "wants": plan.get("wants") or [],
-            "updated_at": plan.get("updated_at"), "read_only": read_only, **compute(plan, fees)}
+            "updated_at": plan.get("updated_at"), "read_only": read_only, **compute(plan, fees, rate["per_sign_up"])}
 
 
 async def _target(me: dict, user_id: Optional[str]) -> dict:
@@ -43,7 +45,7 @@ async def _target(me: dict, user_id: Optional[str]) -> dict:
     target_id = str(user_id or me["id"])
     try:
         u = await db.users.find_one({"_id": ObjectId(target_id), "deleted": {"$ne": True}},
-                                    {"name": 1, "office_id": 1, "earnings_plan": 1})
+                                    {"name": 1, "office_id": 1, "earnings_plan": 1, "role": 1, "is_viewer": 1, "pay_type": 1, "is_driver": 1})
     except (InvalidId, TypeError):
         u = None
     if not u:
@@ -61,7 +63,7 @@ async def _target(me: dict, user_id: Optional[str]) -> dict:
 async def get_plan(request: Request, user_id: Optional[str] = None):
     me = await get_current_user(request)
     u = await _target(me, user_id)
-    return _out(u, await office_fees(u.get("office_id")), bool(me.get("is_viewer")))
+    return await _out(u, await office_fees(u.get("office_id")), bool(me.get("is_viewer")))
 
 
 @router.put("/earnings-plan")
@@ -78,5 +80,6 @@ async def save_plan(request: Request, user_id: Optional[str] = None):
     if str(u["_id"]) != str(me["id"]):
         plan["updated_by"] = str(me["id"])
     await db.users.update_one({"_id": u["_id"]}, {"$set": {"earnings_plan": plan}})
-    u = await db.users.find_one({"_id": u["_id"]}, {"name": 1, "office_id": 1, "earnings_plan": 1})
-    return _out(u, await office_fees(u.get("office_id")), False)
+    u = await db.users.find_one({"_id": u["_id"]}, {"name": 1, "office_id": 1, "earnings_plan": 1, "role": 1,
+                                                    "is_viewer": 1, "pay_type": 1, "is_driver": 1})
+    return await _out(u, await office_fees(u.get("office_id")), False)

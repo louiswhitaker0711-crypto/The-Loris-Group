@@ -44,6 +44,12 @@ export type VertexFees = {
   fee_mc_standard: number;
   /** The office's (MC's) own fee for a Gold sign-up. Admins only, as above. */
   fee_mc_target: number;
+  /** The office's week-4 payment on a Silver, paid to the Owner on their own sign-ups. Admins only. */
+  retention_mc_standard: number;
+  /** The office's week-4 payment on a Gold, paid to the Owner on their own sign-ups. Admins only. */
+  retention_mc_target: number;
+  /** Extra per sign-up for a driver. */
+  driver_bonus: number;
 };
 
 export const DEFAULT_FEES: VertexFees = {
@@ -54,6 +60,9 @@ export const DEFAULT_FEES: VertexFees = {
   retention_target: 8,
   fee_mc_standard: 16,
   fee_mc_target: 20,
+  retention_mc_standard: 0,
+  retention_mc_target: 9,
+  driver_bonus: 6,
 };
 
 export const FEE_KEYS = Object.keys(DEFAULT_FEES) as Array<keyof VertexFees>;
@@ -67,6 +76,9 @@ export const FEE_BOUNDS: Record<keyof VertexFees, [number, number]> = {
   retention_target: [0, 1000],
   fee_mc_standard: [0, 1000],
   fee_mc_target: [0, 1000],
+  retention_mc_standard: [0, 1000],
+  retention_mc_target: [0, 1000],
+  driver_bonus: [0, 1000],
 };
 
 /** What the campaign asks for. Shown beside a person's own numbers. */

@@ -479,12 +479,21 @@ const RATE_GROUPS: Array<{ title: string; hint: string; fields: RateField[]; adm
     ],
   },
   {
+    title: 'Drivers',
+    hint: 'Drivers get this on top of every sign-up. Mark drivers in Admin.',
+    fields: [
+      { key: 'driver_bonus', label: 'Driver bonus', unit: '£', help: 'Extra per sign-up for a driver.' },
+    ],
+  },
+  {
     title: 'Office (MC) fees',
     hint: 'What the office is paid for each sign-up. Only Admins see this, here and in the MC fees column on Bells.',
     adminOnly: true,
     fields: [
       { key: 'fee_mc_standard', label: 'MC fee, Silver', unit: '£', help: 'What the office is paid for each Silver sign-up.' },
       { key: 'fee_mc_target', label: 'MC fee, Gold', unit: '£', help: 'What the office is paid for each Gold sign-up.' },
+      { key: 'retention_mc_standard', label: 'MC week 4, Silver', unit: '£', help: 'The office\'s week-4 payment on a Silver (counted in the Owner\'s breakeven).' },
+      { key: 'retention_mc_target', label: 'MC week 4, Gold', unit: '£', help: 'The office\'s week-4 payment on a Gold (counted in the Owner\'s breakeven).' },
     ],
   },
 ];

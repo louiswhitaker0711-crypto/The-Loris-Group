@@ -52,10 +52,16 @@ DEFAULT_FEES: dict[str, float] = {
     "retention_target": 8,
     "fee_mc_standard": 16,
     "fee_mc_target": 20,
+    # The office's own week-4 payment, paid to the Owner on their personal
+    # sign-ups on top of the BA's (the Owner, 2 Nov 2026: Gold £8 + £9).
+    "retention_mc_standard": 0,
+    "retention_mc_target": 9,
+    # Extra per sign-up for a driver (the Owner, 2 Nov 2026: £6).
+    "driver_bonus": 6,
 }
 
 # Knobs only an Admin is shown (the office's own income, not a BA's).
-ADMIN_ONLY_FEE_KEYS: tuple[str, ...] = ("fee_mc_standard", "fee_mc_target")
+ADMIN_ONLY_FEE_KEYS: tuple[str, ...] = ("fee_mc_standard", "fee_mc_target", "retention_mc_standard", "retention_mc_target")
 
 FEE_KEYS: tuple[str, ...] = tuple(DEFAULT_FEES)
 
@@ -68,6 +74,9 @@ _BOUNDS: dict[str, tuple[float, float]] = {
     "retention_target": (0, 1000),
     "fee_mc_standard": (0, 1000),
     "fee_mc_target": (0, 1000),
+    "retention_mc_standard": (0, 1000),
+    "retention_mc_target": (0, 1000),
+    "driver_bonus": (0, 1000),
 }
 _INT_KEYS: set[str] = set()
 

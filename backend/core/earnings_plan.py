@@ -52,9 +52,11 @@ def clean_rows(raw: Any, default_per: str = "week") -> list[dict]:
     return out
 
 
-def compute(plan: Optional[dict], fees: Optional[dict]) -> dict:
+def compute(plan: Optional[dict], fees: Optional[dict], rate: Optional[float] = None) -> dict:
+    """`rate` is the person's own per-sign-up value (core.sign_up_value);
+    without it the office's flat figure is used."""
     plan = plan or {}
-    fee = per_sign_up(fees)
+    fee = round(float(rate), 2) if rate and rate > 0 else per_sign_up(fees)
     needs = sum(weekly(r.get("amount"), r.get("per") or "week") for r in plan.get("needs") or [])
     wants = sum(weekly(r.get("amount"), r.get("per") or "week") for r in plan.get("wants") or [])
     return {

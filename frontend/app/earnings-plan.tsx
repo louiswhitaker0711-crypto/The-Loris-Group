@@ -2,7 +2,7 @@
  * Plan your earnings (route: /earnings-plan; ?user=<id> to read someone you
  * coach). The Owner's call (26 Oct 2026): everyone knows their weekly
  * breakeven. Needs and wants, each per week or per month; one sign-up counts
- * as the Gold fee up front plus The Round on 75% of sign-ups (from Rates).
+ * from the person's own last 4 weeks' Gold %, Round % and 4th-week % (core/sign_up_value.py).
  * The breakeven fills the BE column on Bells and shows on the weekly plan.
  * (GET/PUT /earnings-plan; the maths matches backend/core/earnings_plan.py)
  */
@@ -121,7 +121,7 @@ export default function EarningsPlanScreen() {
             <Text style={s.resSub}>to cover your needs and wants</Text>
           </View>
         </View>
-        <Text style={s.small}>Needs {formatMoney(wkNeeds, 2)} a week · wants {formatMoney(wkWants, 2)} a week · each sign-up counted at {formatMoney(fee, 2)} (a Gold sign-up, with The Round on 3 in 4)</Text>
+        <Text style={s.small}>Needs {formatMoney(wkNeeds, 2)} a week · wants {formatMoney(wkWants, 2)} a week · each sign-up counted at {formatMoney(fee, 2)} (from the last 4 weeks' Gold, Round and 4th-week %)</Text>
 
         {group('Needs', needs, setNeeds, 'The things you have to pay for.')}
         {group('Wants', wants, setWants, 'What you’d like on top: savings, going out, a holiday.')}

@@ -208,6 +208,32 @@ def _empty_learning_item() -> dict:
     return {"id": str(uuid.uuid4()), "topic": "", "mentor": "", "notes": ""}
 
 
+async def _sign_up_value(user_id: str) -> Optional[dict]:
+    """What each sign-up is worth to this person (core.sign_up_value)."""
+    from core.sign_up_value import rate_for
+    try:
+        u = await db.users.find_one({"_id": ObjectId(str(user_id))},
+                                    {"office_id": 1, "role": 1, "is_viewer": 1, "pay_type": 1, "is_driver": 1})
+    except Exception:
+        u = None
+    if not u:
+        return None
+    fees = (await db.commission_fees.find_one({"office_id": u.get("office_id")}, {"_id": 0})
+            or await db.commission_fees.find_one({}, {"_id": 0}))
+    return await rate_for(db, u, fees)
+
+
+def _with_rate(budget: dict, rate: Optional[dict]) -> dict:
+    """Show the locked figure: today's value, with totals worked from it."""
+    if not rate:
+        return budget
+    b = dict(budget or {})
+    b["sale_value"] = f"{rate['per_sign_up']:.2f}"
+    b = _compute_budget_totals(b)
+    b["sign_up_value"] = rate
+    return b
+
+
 async def _fill_budget_from_plan(seed: dict, user_id: str) -> dict:
     """A new month starts with last month's breakeven filled in (the Owner,
     29 Oct 2026): their current Plan your earnings rows, to review and change.
@@ -230,7 +256,12 @@ async def _fill_budget_from_plan(seed: dict, user_id: str) -> dict:
     b["needs"] = needs or b.get("needs") or []
     b["wants"] = wants or b.get("wants") or []
     b = _compute_budget_totals(b)
-    b["from_plan"] = {"breakeven": compute(plan, fees).get("breakeven"), "updated_at": plan.get("updated_at")}
+    from core.sign_up_value import per_sign_up_for
+    rate = await per_sign_up_for(db, user_id, fees)
+    if rate:
+        b["sale_value"] = f"{rate:.2f}"
+        b = _compute_budget_totals(b)
+    b["from_plan"] = {"breakeven": compute(plan, fees, rate).get("breakeven"), "updated_at": plan.get("updated_at")}
     seed["budget"] = b
     return seed
 
@@ -470,6 +501,7 @@ async def get_planner(month: str, request: Request, user_id: Optional[str] = Non
         # Owner viewing their own non-existent month — return seed + flag
         seed = await _fill_budget_from_plan(
             _seed_planner(me["id"], me.get("office_id") or "", coerced, me.get("role") or "trainee"), me["id"])
+        seed["budget"] = _with_rate(seed.get("budget") or {}, await _sign_up_value(me["id"]))
         return {
             "exists": False,
             "can_edit": True,
@@ -482,6 +514,7 @@ async def get_planner(month: str, request: Request, user_id: Optional[str] = Non
     # - Only the OWNER may edit
     # - And only when the planner is NOT locked
     can_edit = (target["id"] == me["id"]) and not bool(doc.get("locked"))
+    doc["budget"] = _with_rate(doc.get("budget") or {}, await _sign_up_value(target["id"]))
     return {
         "exists": True,
         "can_edit": can_edit,
@@ -615,6 +648,11 @@ async def upsert_planner(month: str, request: Request):
         "wants": _normalize_budget_rows(budget_in.get("wants")),
         "sale_value": (str(budget_in.get("sale_value") or "")).strip(),
     }
+    # Locked (the Owner, 2 Nov 2026): what each sign-up is worth comes from
+    # their own last 4 weeks, never what's typed.
+    _rate = await _sign_up_value(user_id)
+    if _rate:
+        budget["sale_value"] = f"{_rate['per_sign_up']:.2f}"
     budget = _compute_budget_totals(budget)
     # The budget is their Plan your earnings too (the Owner, 26 Oct 2026):
     # saving it here updates their breakeven on Bells and their weekly plan.

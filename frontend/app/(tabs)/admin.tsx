@@ -164,6 +164,22 @@ export default function AdminScreen() {
     }
   };
 
+  const driverMut = useMutation({
+    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) => apiService.setDriver(id, enabled),
+    onSuccess: (res: any) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      showAlert('Done', res?.data?.message || 'Updated');
+    },
+    onError: (e: any) => showAlert('Error', e.response?.data?.detail || 'Failed'),
+  });
+  const payTypeMut = useMutation({
+    mutationFn: ({ id, payType }: { id: string; payType: 'owner' | 'ba' }) => apiService.setPayType(id, payType),
+    onSuccess: (res: any) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      showAlert('Done', res?.data?.message || 'Updated');
+    },
+    onError: (e: any) => showAlert('Error', e.response?.data?.detail || 'Failed'),
+  });
   const coachPlusMut = useMutation({
     mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) => apiService.setCoachPlus(id, enabled),
     onSuccess: (res: any) => {
@@ -850,6 +866,27 @@ export default function AdminScreen() {
                                   <Text style={styles.actText}>Advance to Coach</Text>
                                 </TouchableOpacity>
                               )}
+                              <TouchableOpacity style={styles.act} testID={`admin-driver-${u.id}`} onPress={() => showAlert(u.is_driver ? 'Not a driver' : 'Make driver',
+                                u.is_driver ? `${u.name} stops getting the driver bonus in their breakeven.` : `${u.name} gets the driver bonus on every sign-up in their breakeven.`, [
+                                  { text: 'Cancel', style: 'cancel' },
+                                  { text: u.is_driver ? 'Remove' : 'Make driver', onPress: () => driverMut.mutate({ id: u.id, enabled: !u.is_driver }) },
+                                ])}>
+                                <Ionicons name="car-outline" size={15} color={u.is_driver ? colors.yellow : colors.primary} />
+                                <Text style={styles.actText}>{u.is_driver ? 'Remove driver' : 'Make driver'}</Text>
+                              </TouchableOpacity>
+                              {(() => {
+                                const owner = u.pay_type ? u.pay_type === 'owner' : (u.role === 'admin' && !u.is_viewer);
+                                return (
+                                  <TouchableOpacity style={styles.act} testID={`admin-pay-type-${u.id}`} onPress={() => showAlert(owner ? 'Pay as a BA' : 'Pay as an Owner',
+                                    owner ? `${u.name}'s breakeven uses the BA fees only.` : `${u.name}'s breakeven uses the BA fee plus the MC fee on their personal sign-ups.`, [
+                                      { text: 'Cancel', style: 'cancel' },
+                                      { text: 'Change', onPress: () => payTypeMut.mutate({ id: u.id, payType: owner ? 'ba' : 'owner' }) },
+                                    ])}>
+                                    <Ionicons name="cash-outline" size={15} color={colors.primary} />
+                                    <Text style={styles.actText}>{owner ? 'Paid as Owner' : 'Paid as BA'}</Text>
+                                  </TouchableOpacity>
+                                );
+                              })()}
                               {u.role === 'leader' && !isPlus && (
                                 <TouchableOpacity style={styles.act} testID={`admin-coach-plus-${u.id}`} onPress={() => showAlert('Make Coach+',
                                   `${u.name} will see the whole office in Live Operations, the Performance Hub and Field KPIs, and can make and print anyone's ID badge.`, [
