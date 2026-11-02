@@ -131,6 +131,19 @@ export default function AdminScreen() {
       showAlert('Error', e.response?.data?.detail || 'Couldn\u2019t save the team name');
     }
   };
+  const setTeamColoursFor = async (u: any) => {
+    const cur = u.team_colors || u.team_colors_auto || {};
+    const v = await promptText('Team colours', 'Main colour, then accent, as hex codes: e.g. #2f5fb3, #f2c230. Type "logo" to use the colours from their logo.',
+      [cur.primary, cur.accent].filter(Boolean).join(', '));
+    if (v === null) return;
+    const parts = v.toLowerCase() === 'logo' ? ['', ''] : v.split(/[\s,]+/).filter(Boolean);
+    try {
+      await apiService.adminUpdateUserTeamColors(u.id, parts[0] || '', parts[1] || '');
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+    } catch (e: any) {
+      showAlert('Error', e.response?.data?.detail || 'Couldn\u2019t save the colours');
+    }
+  };
   const setTeamLogoFor = async (u: any) => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -781,6 +794,18 @@ export default function AdminScreen() {
                                 <TouchableOpacity style={styles.fieldValueRow} testID={`admin-team-name-${u.id}`} onPress={() => setTeamNameFor(u)}>
                                   <Text style={[styles.fieldValue, !u.team_name && styles.cellEmpty]} numberOfLines={1}>{u.team_name || `${(u.name || '').split(' ')[0] || 'Their'}'s team (not named)`}</Text>
                                   <Ionicons name="pencil" size={12} color={colors.primary} />
+                                </TouchableOpacity>
+                              </View>
+                              <View style={styles.field}>
+                                <Text style={styles.fieldLabel}>Team colours</Text>
+                                <TouchableOpacity style={styles.fieldValueRow} testID={`admin-team-colours-${u.id}`} onPress={() => setTeamColoursFor(u)}>
+                                  {[(u.team_colors || u.team_colors_auto)?.primary, (u.team_colors || u.team_colors_auto)?.accent].filter(Boolean).map((c: string) => (
+                                    <View key={c} style={{ width: 18, height: 18, borderRadius: 5, backgroundColor: c, borderWidth: 1, borderColor: colors.border }} />
+                                  ))}
+                                  <Text style={[styles.fieldValue, !(u.team_colors || u.team_colors_auto) && styles.cellEmpty]} numberOfLines={1}>
+                                    {u.team_colors ? 'Set by hand' : u.team_colors_auto ? 'From their logo' : 'Not set'}
+                                  </Text>
+                                  <Ionicons name="color-palette-outline" size={13} color={colors.primary} />
                                 </TouchableOpacity>
                               </View>
                               <View style={styles.field}>

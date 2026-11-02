@@ -12,6 +12,7 @@ import { useColors, fonts } from '../src/theme/ThemeContext';
 import { apiService } from '../src/api/client';
 import { useAuth } from '../src/auth/AuthContext';
 import { NavyCard, ON_NAVY } from '../src/components/ui/NavyCard';
+import { useSurface } from '../src/theme/teamTheme';
 
 const first = (n: string) => (n || '').trim().split(' ')[0] || 'Someone';
 
@@ -19,6 +20,7 @@ export default function MySectorScreen() {
   const c = useColors();
   const s = useMemo(() => styles(c), [c]);
   const insets = useSafeAreaInsets();
+  const surface = useSurface();
   const router = useRouter();
   const { user } = useAuth();
   const q = useQuery({ queryKey: ['sector-days'], queryFn: () => apiService.getSectorDays(7).then((r) => r.data) });
@@ -41,9 +43,9 @@ export default function MySectorScreen() {
         {(!inOneToday || !!st.data?.can_plan) && (
           <View style={s.heroBtns}>
             {!inOneToday && (
-              <Pressable onPress={() => router.push('/sector?start=1' as never)} style={s.heroPrimary} accessibilityRole="button" testID="ms-start">
-                <Ionicons name="add" size={18} color="#0c2340" />
-                <Text style={s.heroPrimaryText}>Start a sector</Text>
+              <Pressable onPress={() => router.push('/sector?start=1' as never)} style={[s.heroPrimary, { backgroundColor: surface.accent }]} accessibilityRole="button" testID="ms-start">
+                <Ionicons name="add" size={18} color={surface.onAccent} />
+                <Text style={[s.heroPrimaryText, { color: surface.onAccent }]}>Start a sector</Text>
               </Pressable>
             )}
             {!!st.data?.can_plan && (

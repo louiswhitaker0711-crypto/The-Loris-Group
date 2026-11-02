@@ -196,7 +196,7 @@ type ThemeCtx = {
 // What people get until they pick a mode themselves in Profile.
 const DEFAULT_MODE: ThemeMode = 'light';
 
-const ThemeContext = createContext<ThemeCtx>({
+export const ThemeContext = createContext<ThemeCtx>({
   colors: lightColors,
   mode: DEFAULT_MODE,
   effective: 'light',

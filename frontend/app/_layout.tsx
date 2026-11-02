@@ -22,6 +22,7 @@ import { lightColors } from '../src/theme/ThemeContext';
 import { useColors } from '../src/theme/ThemeContext';
 import { AuthProvider, useAuth } from '../src/auth/AuthContext';
 import { ThemeProvider, useTheme } from '../src/theme/ThemeContext';
+import { TeamThemeProvider } from '../src/theme/teamTheme';
 import { ThemeProvider as NavThemeProvider, DefaultTheme as NavDefaultTheme, DarkTheme as NavDarkTheme } from '@react-navigation/native';
 import { TabPrefsProvider } from '../src/customization/TabPrefsContext';
 // Metro resolves the .native implementation on iOS/Android; the default file
@@ -347,6 +348,7 @@ export default function RootLayout() {
               value at mid-phase so the frozen frame is the intended composition. */}
           <ReducedMotionConfig mode={ReduceMotion.System} />
           <AuthProvider>
+            <TeamThemeProvider>
             <ActiveOfficeProvider>
               <TabPrefsProvider>
                 <RootNavigator />
@@ -357,6 +359,7 @@ export default function RootLayout() {
                 <PreviewBanner />
               </TabPrefsProvider>
             </ActiveOfficeProvider>
+            </TeamThemeProvider>
           </AuthProvider>
         </ThemeProvider>
       </SafeAreaProvider>

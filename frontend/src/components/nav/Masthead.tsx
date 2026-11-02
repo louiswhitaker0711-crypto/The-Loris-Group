@@ -52,6 +52,7 @@ import React, { useCallback, useContext, useEffect, useMemo, useState } from 're
 import { router } from 'expo-router';
 import {
   Platform,
+  Image,
   Pressable,
   StyleSheet,
   View,
@@ -75,6 +76,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { fonts, useColors, useTheme, type ColorPalette } from '../../theme/ThemeContext';
 import { pageMarkKick, pageScrollY } from '../../theme/pageScroll';
+import { useSurface } from '../../theme/teamTheme';
 import { VertexMark } from '../ui/VertexMark';
 import { GradientText } from '../ui/GradientText';
 import { haptics } from '../../utils/haptics';
@@ -122,9 +124,6 @@ const SLOT_GAP = 12;
 const CUBE_SIZE = 44;
 /** The Vertex X on the LIGHT masthead: brand green, a touch softer than the title. */
 /** The navy band (Nov 2026 restyle) and what sits on it. */
-const NAVY = '#081a30';     // matches the app bar above, so the two read as one band
-const NAVY_LOW = '#12305c';
-const MARK_ON_NAVY = '#22d0ec';
 const TITLE_ON_NAVY = ['#ffffff', '#ffffff', '#ffffff'] as const;
 const CHIP_SIZE = 36;
 const CONDENSE_PX = 120;        // scroll distance over which the title condenses
@@ -246,7 +245,8 @@ function useCubeMounted(focused: boolean): boolean {
 }
 
 // ── Back chip ────────────────────────────────────────────────────────────────
-function BackChip({ onPress, label, colors, light }: {
+function BackChip({ onPress, label, colors, light, tint }: {
+  tint: string;
   onPress: () => void;
   label: string;
   colors: ColorPalette;
@@ -270,7 +270,7 @@ function BackChip({ onPress, label, colors, light }: {
       ]}
     >
       {/* Optical centring: the chevron glyph sits right of its box centre. */}
-      <Ionicons name="chevron-back" size={20} color={MARK_ON_NAVY} style={styles.chevron} />
+      <Ionicons name="chevron-back" size={20} color={tint} style={styles.chevron} />
     </Pressable>
   );
 }
@@ -279,6 +279,8 @@ function BackChip({ onPress, label, colors, light }: {
 export function Masthead(props: MastheadProps) {
   const colors = useColors();
   const { effective } = useTheme();
+  // The band's colours: Loris navy, or a team leader's own (src/theme/teamTheme.tsx).
+  const surface = useSurface();
   const insets = useSafeAreaInsets();
   // A parent navigator that already shows a header has paid the status-bar
   // inset; the default elements Header does the same check.
@@ -292,7 +294,7 @@ export function Masthead(props: MastheadProps) {
   // else is transparent so the PageField shows through.
   // Nov 2026 restyle: the masthead is a navy band with a cyan glow in the
   // top-right corner and rounded bottom corners, in both themes.
-  const background = NAVY;
+  const background = surface.deep;
 
   // Title type: Unbounded Black via fonts.displayBlack — NEVER add fontWeight
   // (expo-font's web @font-face has no weight descriptor → faux-bold smear).
@@ -334,6 +336,7 @@ export function Masthead(props: MastheadProps) {
     const backTitle = !isStandalone(props) && !isTabs(props) ? props.back?.title : undefined;
     left = (
       <BackChip
+        tint={surface.accent}
         onPress={r.onBack}
         label={backTitle ? `Back to ${backTitle}` : 'Back'}
         colors={colors}
@@ -345,9 +348,9 @@ export function Masthead(props: MastheadProps) {
   return (
     <View style={[styles.root, { paddingTop: topInset, backgroundColor: background }]}>
       <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.bandClip]}>
-        <LinearGradient colors={[NAVY, NAVY_LOW]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={StyleSheet.absoluteFill} />
+        <LinearGradient colors={[surface.deep, surface.mid]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={StyleSheet.absoluteFill} />
         <LinearGradient
-          colors={['rgba(34,208,236,0.30)', 'rgba(34,208,236,0)']}
+          colors={[surface.glow, surface.glowClear]}
           start={{ x: 1, y: 0 }}
           end={{ x: 0.35, y: 1 }}
           style={StyleSheet.absoluteFill}
@@ -370,10 +373,14 @@ export function Masthead(props: MastheadProps) {
         {!r.compact ? (
           // Fixed-size slot so the title width is stable whether or not the cube is mounted.
           <View style={styles.cubeSlot}>
-            {cubeMounted ? (
+            {surface.team?.logo ? (
+              <View style={styles.teamLogoTile}>
+                <Image source={{ uri: surface.team.logo }} style={styles.teamLogoImg} resizeMode="contain" accessibilityLabel={surface.team.name} />
+              </View>
+            ) : cubeMounted ? (
               <VertexMark
                 size={CUBE_SIZE}
-                color={MARK_ON_NAVY}
+                color={surface.accent}
                 kick={pageMarkKick}
               />
             ) : null}
@@ -412,6 +419,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  teamLogoTile: {
+    width: CUBE_SIZE,
+    height: CUBE_SIZE,
+    borderRadius: 13,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 5,
+  },
+  teamLogoImg: { width: '100%', height: '100%' },
   cubeSlot: {
     width: CUBE_SIZE,
     height: CUBE_SIZE,

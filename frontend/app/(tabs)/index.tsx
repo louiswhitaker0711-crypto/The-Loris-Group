@@ -27,6 +27,7 @@ import { useIsLandscape } from '../../src/hooks/useIsLandscape';
 import { useTabBarClearance } from '../../src/customization/CustomTabBar';
 import { useColors, useTheme, buildGetStatusColor, fonts } from '../../src/theme/ThemeContext';
 import { APP_SHORT_NAME, GRADIENT, GRADIENT_TEXT } from '../../src/theme/brand';
+import { useSurface, poweredBy, type Surface } from '../../src/theme/teamTheme';
 import { api, apiService, NewHire } from '../../src/api/client';
 import { useAuth } from '../../src/auth/AuthContext';
 import PressableScale from '../../src/components/ui/PressableScale';
@@ -195,7 +196,9 @@ export default function HomeScreen() {
   const colors = useColors();
   const { effective } = useTheme();
   const isDark = effective === 'dark';
-  const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
+  // Loris navy, or a team leader's own colours (src/theme/teamTheme.tsx).
+  const surface = useSurface();
+  const styles = useMemo(() => createStyles(colors, isDark, surface), [colors, isDark, surface]);
   // Green as TEXT (see GREEN_TEXT_LIGHT) — fills, dots and icons stay colors.green.
   const greenText = isDark ? colors.green : GREEN_TEXT_LIGHT;
   // Status-chip LABELS come from buildGetStatusColor, which hands back
@@ -1673,9 +1676,21 @@ export default function HomeScreen() {
       {/* ── Greeting: a slim header. Who, when, and the way to your profile. ── */}
       {/* ── Navy hero (Nov 2026 restyle): greeting, avatar and My week on the
           navy band with a cyan glow in the corner. ── */}
-      <View style={[styles.heroBand, { paddingTop: insets.top + 10 }]}>
-      <LinearGradient colors={['#081a30', '#12305c']} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
-      <LinearGradient colors={['rgba(34,208,236,0.30)', 'rgba(34,208,236,0)']} start={{ x: 1, y: 0 }} end={{ x: 0.35, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
+      <View style={[styles.heroBand, { paddingTop: insets.top + 10, backgroundColor: surface.deep }]}>
+      <LinearGradient colors={[surface.deep, surface.mid]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
+      <LinearGradient colors={[surface.glow, surface.glowClear]} start={{ x: 1, y: 0 }} end={{ x: 0.35, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
+      {/* A team leader's look: their logo faded in the corner, and its name on top. */}
+      {surface.team?.logo ? (
+        <Image source={{ uri: surface.team.logo }} style={styles.heroWatermark} resizeMode="contain" pointerEvents="none" accessible={false} />
+      ) : null}
+      {surface.team ? (
+        <View style={styles.heroTeamRow}>
+          {surface.team.logo ? (
+            <View style={styles.heroTeamTile}><Image source={{ uri: surface.team.logo }} style={{ width: '100%', height: '100%' }} resizeMode="contain" /></View>
+          ) : null}
+          <Text style={styles.heroTeamName} numberOfLines={1}>{surface.team.name.toUpperCase()}</Text>
+        </View>
+      ) : null}
       <View style={styles.header}>
         <View style={styles.headerText}>
           <Text style={styles.greeting}>{greeting} · {dateLine}</Text>
@@ -1695,6 +1710,12 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
       <MyWeekCard hero hideWhenEmpty={isAdmin} />
+      {surface.team ? (
+        <View style={styles.poweredRow}>
+          <Image source={require('../../assets/logo.png')} style={styles.poweredLogo} resizeMode="contain" />
+          <Text style={[styles.poweredText, { color: surface.muted }]}>{poweredBy(APP_SHORT_NAME)}</Text>
+        </View>
+      ) : null}
       </View>
       {/* Where a BA stands: their COD title, their sales level, and how far
           through it they are. A viewer with no ladder gets no bar. */}
@@ -1799,7 +1820,7 @@ export default function HomeScreen() {
   );
 }
 
-const createStyles = (colors: any, isDark: boolean) => {
+const createStyles = (colors: any, isDark: boolean, surface: Surface) => {
   // Success green reads as a FILL, not as text: #10B981 is 2.5:1 on a white
   // card. Light theme swaps every green *label* to the darker stop (5.0:1);
   // dark keeps colors.green (≈6.5:1 on the raised card).
@@ -1827,8 +1848,15 @@ const createStyles = (colors: any, isDark: boolean) => {
   // measured 4.1:1 there (spec §6.5 wants ≥4.5:1 on ink) — so it runs inkText at
   // 0.92, which keeps the muted voice under the name and stays ≥5:1 on the lobe.
   headerDate: { fontFamily: fonts.mono, fontSize: 11.5, color: colors.inkText, opacity: 0.92, marginTop: 6, letterSpacing: 0.6 },
-  headerAvatar: { width: 48, height: 48, borderRadius: 15, borderWidth: 2, borderColor: '#22d0ec' },
-  headerAvatarFallback: { backgroundColor: '#12305c', alignItems: 'center', justifyContent: 'center' },
+  headerAvatar: { width: 48, height: 48, borderRadius: 15, borderWidth: 2, borderColor: surface.accent },
+  headerAvatarFallback: { backgroundColor: surface.mid, alignItems: 'center', justifyContent: 'center' },
+  heroWatermark: { position: 'absolute', right: -70, top: 40, width: 300, height: 190, opacity: 0.14 },
+  heroTeamRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  heroTeamTile: { width: 36, height: 36, borderRadius: 11, backgroundColor: '#ffffff', padding: 4 },
+  heroTeamName: { flexShrink: 1, fontFamily: fonts.displayBlack, fontSize: 15, letterSpacing: 1.6, color: '#ffffff' },
+  poweredRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  poweredLogo: { width: 16, height: 16, borderRadius: 8, backgroundColor: '#ffffff' },
+  poweredText: { fontFamily: fonts.bodySemibold, fontSize: 11, letterSpacing: 0.3 },
   headerAvatarText: { fontFamily: fonts.bodyBold, color: '#ffffff', fontSize: 16 },
   // A BA's standing: stage number, title, sales level and a thin bar.
   levelStrip: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, marginBottom: 12 },
