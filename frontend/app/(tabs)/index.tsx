@@ -1634,6 +1634,26 @@ export default function HomeScreen() {
   );
   // Everyone has their pitch at the bottom of Home (the Owner, 26 Oct 2026).
   const moreBlock = isTrainee ? moreBA : moreCoach;
+  // BA Academy Days 1-2 (the Owner, 2 Nov 2026): a new start's Home is their
+  // new-start journey, nothing of the team's day (no resets, Primetime, sectors).
+  const academyHome = isTrainee && !!nextPending && nextPending.day_number <= 2;
+  const pAcademy = (
+    <>
+      <AcademyWorkbookCard />
+      <PitchCard place="top" />
+      {pStartHere}
+      <PressableScale onPress={() => router.push('/welcome' as never)} testID="home-welcome">
+        <DepthCard style={styles.card}>
+          <View style={styles.cardHeaderRow}>
+            <Text style={styles.cardTitle}>Welcome to the team</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+          </View>
+          <Text style={styles.cardLead}>What we look for in people, and our six core values.</Text>
+        </DepthCard>
+      </PressableScale>
+      {pJourney}
+    </>
+  );
 
   return (
     <>
@@ -1719,7 +1739,7 @@ export default function HomeScreen() {
 
       {/* Today first. On a wide screen the rest sits alongside; on a phone it
           folds away under "More". */}
-      {wide ? (
+      {academyHome ? pAcademy : wide ? (
         <View style={styles.cols}>
           <View style={styles.colMain}>{pTop}{todayBlock}</View>
           <View style={styles.colSide}>{moreBlock}</View>
