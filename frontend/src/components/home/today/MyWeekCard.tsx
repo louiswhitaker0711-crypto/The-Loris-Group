@@ -18,11 +18,11 @@ const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const ON_NAVY: { red: string; amber: string; green: string; muted: string; soft: string; text: string; cyan: string } = { red: '#ff8178', amber: '#ffc35c', green: '#6ee794', muted: '#8fa7c4', soft: '#b3c5da', text: '#ffffff', cyan: '#22d0ec' };
 // A day's sign-ups on the Owner's daily lights: 0–1 red, 2 amber, 3 light green, 4+ green.
 // The white team look (src/theme/teamTheme.tsx) swaps these for shades that read on white.
-type OnBand = typeof ON_NAVY & { best: string; glass: string; glassBorder: string; track: string; day: string };
+type OnBand = typeof ON_NAVY & { strong: string; best: string; glass: string; glassBorder: string; track: string; day: string };
 const onBand = (surface: Surface): OnBand => surface.light
-  ? { red: surface.red, amber: surface.amber, green: surface.green, best: surface.green, muted: surface.muted, soft: surface.soft, text: surface.text, cyan: surface.accent,
+  ? { red: surface.red, amber: surface.amber, green: surface.green, best: surface.green, muted: surface.muted, soft: surface.soft, text: surface.text, cyan: surface.accent, strong: surface.soft,
       glass: surface.glass, glassBorder: surface.glassBorder, track: surface.track, day: surface.glass }
-  : { ...ON_NAVY, best: '#30d158', glass: 'rgba(255,255,255,0.07)', glassBorder: 'rgba(255,255,255,0.12)', track: 'rgba(255,255,255,0.12)', day: 'rgba(255,255,255,0.06)' };
+  : { ...ON_NAVY, strong: '#d6e3f1', best: '#30d158', glass: 'rgba(255,255,255,0.07)', glassBorder: 'rgba(255,255,255,0.12)', track: 'rgba(255,255,255,0.12)', day: 'rgba(255,255,255,0.06)' };
 const dayTone = (N: OnBand, v: number) => (v >= 4 ? N.best : v === 3 ? N.green : v === 2 ? N.amber : N.red);
 
 export default function MyWeekCard({ hideWhenEmpty = false, hero = false }: { hideWhenEmpty?: boolean; hero?: boolean }) {
@@ -163,7 +163,7 @@ const styles = (c: any, N: OnBand) => StyleSheet.create({
   heroBandText: { fontFamily: fonts.bodyBold, fontSize: 12 },
   heroRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
   heroNum: { fontFamily: fonts.displayBlack, fontSize: 56, lineHeight: 58, letterSpacing: -2, color: N.text },
-  heroOf: { fontFamily: fonts.bodySemibold, fontSize: 15, color: '#d6e3f1' },
+  heroOf: { fontFamily: fonts.bodySemibold, fontSize: 15, color: N.strong },
   heroNext: { fontFamily: fonts.bodyBold, fontSize: 13, color: N.cyan },
   heroTrack: { height: 6, borderRadius: 4, backgroundColor: N.track, overflow: 'hidden' },
   heroFill: { height: '100%', borderRadius: 4 },
@@ -172,5 +172,5 @@ const styles = (c: any, N: OnBand) => StyleSheet.create({
   heroDayLbl: { fontFamily: fonts.body, fontSize: 11, color: N.muted },
   heroDayNum: { fontFamily: fonts.displayBlack, fontSize: 18 },
   heroDayOff: { fontFamily: fonts.body, fontSize: 13, color: N.muted },
-  heroNeed: { fontFamily: fonts.bodySemibold, fontSize: 13, color: '#d6e3f1' },
+  heroNeed: { fontFamily: fonts.bodySemibold, fontSize: 13, color: N.strong },
 });

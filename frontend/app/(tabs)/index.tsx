@@ -1871,7 +1871,7 @@ const createStyles = (colors: any, isDark: boolean, surface: Surface) => {
   heroMarkWatermark: { position: 'absolute', right: -40, top: 10 },
   heroTeamRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   heroTeamTile: { width: 36, height: 36, borderRadius: 11, backgroundColor: '#ffffff', padding: 4 },
-  heroTeamLogoWide: { width: 120, height: 48 },
+  heroTeamLogoWide: { width: 190, height: 84, marginVertical: -6 },
   heroTeamName: { flexShrink: 1, fontFamily: fonts.displayBlack, fontSize: 15, letterSpacing: 1.6, color: surface.text },
   poweredRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   poweredLogo: { width: 16, height: 16, borderRadius: 8, backgroundColor: '#ffffff' },
