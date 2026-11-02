@@ -17,6 +17,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Activi
 import { useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
+import { sortCodStages, codStageLabel } from '../src/components/cod/stageOrder';
 import { useColors } from '../src/theme/ThemeContext';
 import { fonts } from '../src/theme/brand';
 import { api, apiService } from '../src/api/client';
@@ -84,7 +85,7 @@ export default function BaWeekScreen() {
 
   const focus = focusQ.data?.focus;
   const options: any[] = focusQ.data?.options || [];
-  const stages = useMemo(() => Array.from(new Set(options.map((o) => o.stage))).sort(), [options]);
+  const stages = useMemo(() => sortCodStages(Array.from(new Set(options.map((o) => o.stage)))), [options]);
   useEffect(() => {
     if (stage == null && stages.length) setStage(focus?.stage ?? stages[0]);
   }, [stages, focus, stage]);
@@ -207,7 +208,7 @@ export default function BaWeekScreen() {
             <View style={s.stageRow}>
               {stages.map((st) => (
                 <TouchableOpacity key={st} onPress={() => setStage(st)} style={[s.stageChip, stage === st && s.stageChipOn]}>
-                  <Text style={[s.stageTxt, stage === st && s.stageTxtOn]}>Stage {st}</Text>
+                  <Text style={[s.stageTxt, stage === st && s.stageTxtOn]}>Stage {codStageLabel(st)}</Text>
                 </TouchableOpacity>
               ))}
             </View>

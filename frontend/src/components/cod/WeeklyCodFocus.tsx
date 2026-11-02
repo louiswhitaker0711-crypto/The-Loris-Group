@@ -12,6 +12,7 @@
 import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, TextInput, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { sortByCodStage } from './stageOrder';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useColors, fonts } from '../../theme/ThemeContext';
 import { apiService } from '../../api/client';
@@ -28,7 +29,9 @@ const stageName = (n: number) => (n === 5 ? 'SL' : `Stage ${n}`);
 
 function Picker({ options, value, onPick, s, c }: { options: Item[]; value: string; onPick: (id: string | null) => void; s: any; c: any }) {
   const [search, setSearch] = useState('');
-  const shown = options.filter((o) => o.topic.toLowerCase().includes(search.trim().toLowerCase())).slice(0, 60);
+  // Every item, in COD order (SL between 3 and 4). It used to stop at 60,
+  // which cut off SL, the last stored stage.
+  const shown = sortByCodStage(options.filter((o) => o.topic.toLowerCase().includes(search.trim().toLowerCase())), (o) => o.stage);
   return (
     <View style={{ gap: 4, marginTop: 6 }}>
       <TextInput value={search} onChangeText={setSearch} placeholder="Search the COD" placeholderTextColor={c.textMuted} style={s.input} />
