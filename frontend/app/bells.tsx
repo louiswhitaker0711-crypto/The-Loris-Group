@@ -186,15 +186,14 @@ function BellsScreen() {
           {/* Office switcher (super admins only — renders nothing otherwise) */}
           <OfficeToggle style={{ marginBottom: 10 }} />
 
-          {/* Which week, Table or Team, and the Admin's two weekly tools. */}
+          {/* Which week, and Table or Team, on one line. */}
           <View style={styles.bar}>
             <View style={styles.weekNav}>
               <TouchableOpacity style={styles.navBtn} onPress={() => setWeekEnding(isoAddDays(weekEnding, -7))} accessibilityLabel="Previous week">
                 <Ionicons name="chevron-back" size={16} color={colors.text} />
               </TouchableOpacity>
               <View style={styles.weekPill}>
-                <Ionicons name="calendar-outline" size={13} color={colors.primary} />
-                <Text style={styles.weekText} numberOfLines={1}>{isCurrentWeek ? 'This week · ' : ''}{prettyWeekRange(weekEnding)}</Text>
+                <Text style={styles.weekText} numberOfLines={1}>{prettyWeekRange(weekEnding)}</Text>
               </View>
               <TouchableOpacity style={styles.navBtn} onPress={() => setWeekEnding(isoAddDays(weekEnding, 7))} accessibilityLabel="Next week">
                 <Ionicons name="chevron-forward" size={16} color={colors.text} />
@@ -211,42 +210,6 @@ function BellsScreen() {
               onChange={(k) => setViewMode(k as 'table' | 'team')}
             />
             <View style={{ flex: 1 }} />
-            {(user?.role === 'admin' || user?.role === 'leader') && (
-              <View style={styles.tools}>
-                <TouchableOpacity style={styles.ghostBtn} onPress={() => router.push('/bells-paste' as any)} testID="bells-paste-btn">
-                  <Ionicons name="logo-whatsapp" size={14} color={colors.text} />
-                  <Text style={styles.ghostBtnText}>Paste from WhatsApp</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.ghostBtn} onPress={() => router.push('/sector' as any)} testID="bells-sector-btn">
-                  <Ionicons name="people-circle-outline" size={14} color={colors.text} />
-                  <Text style={styles.ghostBtnText}>Set-up & breakdown</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.ghostBtn} onPress={() => router.push('/sectors' as any)} testID="bells-sectors-btn">
-                  <Ionicons name="grid-outline" size={14} color={colors.text} />
-                  <Text style={styles.ghostBtnText}>Sectors</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.ghostBtn} onPress={() => router.push('/field-reset' as any)} testID="bells-reset-btn">
-                  <Ionicons name="refresh-circle-outline" size={14} color={colors.text} />
-                  <Text style={styles.ghostBtnText}>6pm reset</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-            {user?.role === 'admin' && (
-              <View style={styles.tools}>
-                <TouchableOpacity style={styles.ghostBtn} onPress={() => router.push('/snapshot' as any)} testID="bells-snapshot-btn">
-                  <Ionicons name="speedometer-outline" size={14} color={colors.text} />
-                  <Text style={styles.ghostBtnText}>Weekly Snapshot</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.ghostBtn} onPress={() => router.push('/bulletin' as any)} testID="bells-bulletin-btn">
-                  <Ionicons name="trophy-outline" size={14} color={colors.text} />
-                  <Text style={styles.ghostBtnText}>Weekly Bulletin</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.ghostBtn} onPress={exportExcel} disabled={exporting} testID="bells-export-btn">
-                  <Ionicons name="download-outline" size={14} color={colors.text} />
-                  <Text style={styles.ghostBtnText}>{exporting ? 'Exporting…' : 'Export to Excel'}</Text>
-                </TouchableOpacity>
-              </View>
-            )}
           </View>
 
           {/* The office's week at a glance: the navy hero card (Nov 2026 look). */}
@@ -347,6 +310,14 @@ function BellsScreen() {
             />
           ) : (
             <TableView entries={entries} weekEnding={weekEnding} onRefresh={onRefresh} miniGoal={list.data?.mini_team_goal ?? null} officeId={officeId} onShowWeek={setWeekEnding} />
+          )}
+          {/* The one weekly tool that's used (the Owner, 2 Nov 2026): the bulletin, at the bottom. */}
+          {user?.role === 'admin' && (
+            <TouchableOpacity style={styles.bottomBtn} onPress={() => router.push('/bulletin' as any)} testID="bells-bulletin-btn">
+              <Ionicons name="trophy-outline" size={18} color={colors.primary} />
+              <Text style={styles.bottomBtnText}>Weekly Bulletin</Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
           )}
           </View>
         </ScrollView>
@@ -531,6 +502,8 @@ const createStyles = (colors: any) => StyleSheet.create({
   weekPill: { flexDirection: 'row', alignItems: 'center', gap: 7, height: 36, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background },
   weekText: { fontFamily: fonts.bodySemibold, fontSize: 13, color: colors.text },
   tools: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, maxWidth: '100%', flexShrink: 1 },
+  bottomBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14, paddingHorizontal: 16, minHeight: 52, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background },
+  bottomBtnText: { flex: 1, fontFamily: fonts.bodySemibold, fontSize: 15, color: colors.text },
   ghostBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background },
   ghostBtnText: { fontFamily: fonts.bodySemibold, fontSize: 12.5, color: colors.text },
 
