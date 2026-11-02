@@ -118,8 +118,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const setPreview = usePreviewStore((s) => s.setPreview);
   const clearPreview = usePreviewStore((s) => s.clear);
   const isPreviewing = !!previewUser;
+  // Their team and team look too, so a preview shows the app exactly as they
+  // see it (/auth/me answers as the previewed person).
+  const [previewTeam, setPreviewTeam] = useState<Partial<User> | null>(null);
+  useEffect(() => {
+    setPreviewTeam(null);
+    if (!previewUser?.id) return;
+    let live = true;
+    apiService.getMe().then((r) => {
+      const d: any = r.data || {};
+      if (!live || String(d.id) !== String(previewUser.id)) return;
+      setPreviewTeam({ has_team: d.has_team, team_name: d.team_name, team_logo: d.team_logo,
+        team_colors: d.team_colors, team_colors_auto: d.team_colors_auto, profile_image: d.profile_image } as any);
+    }).catch(() => {});
+    return () => { live = false; };
+  }, [previewUser?.id]);
   const user: User | null = previewUser
-    ? { id: previewUser.id, email: previewUser.email || '', name: previewUser.name, role: previewUser.role }
+    ? { id: previewUser.id, email: previewUser.email || '', name: previewUser.name, role: previewUser.role, ...(previewTeam || {}) } as User
     : realUser;
 
   const startPreview = (u: PreviewUser) => {
