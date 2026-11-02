@@ -1683,6 +1683,12 @@ export default function HomeScreen() {
       {/* A team leader's look: their logo faded in the corner, and its name on top.
           A logo on its own white background gets the white look instead: it
           sits on the white band as it is, with no box round it. */}
+      {/* The Loris look: the TLG mark faded in the corner, where a team leader's logo goes. */}
+      {!surface.team ? (
+        <View pointerEvents="none" style={styles.heroMarkWatermark}>
+          <VertexMark size={230} gradient opacity={0.16} />
+        </View>
+      ) : null}
       {surface.team?.logo && !surface.light ? (
         <View pointerEvents="none" style={styles.heroWatermark}>
           <Image source={{ uri: surface.team.logo }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
@@ -1862,6 +1868,7 @@ const createStyles = (colors: any, isDark: boolean, surface: Surface) => {
   headerAvatar: { width: 48, height: 48, borderRadius: 15, borderWidth: 2, borderColor: surface.accent },
   headerAvatarFallback: { backgroundColor: surface.mid, alignItems: 'center', justifyContent: 'center' },
   heroWatermark: { position: 'absolute', right: -70, top: 40, width: 300, height: 190, opacity: 0.14 },
+  heroMarkWatermark: { position: 'absolute', right: -40, top: 10 },
   heroTeamRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   heroTeamTile: { width: 36, height: 36, borderRadius: 11, backgroundColor: '#ffffff', padding: 4 },
   heroTeamLogoWide: { width: 120, height: 48 },
