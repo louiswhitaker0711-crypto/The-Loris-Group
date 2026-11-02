@@ -50,6 +50,7 @@ import SuggestionsCard from '../../src/components/home/today/SuggestionsCard';
 import MeetingsTodayCard from '../../src/components/home/today/MeetingsTodayCard';
 import QualityNewCard from '../../src/components/home/QualityNewCard';
 import EarningsPlanCard from '../../src/components/home/EarningsPlanCard';
+import AiCoachCard from '../../src/components/home/AiCoachCard';
 import { dayTargetChips } from '../../src/utils/dayTargets';
 import PrimetimeCard from '../../src/components/home/PrimetimeCard';
 import CoachingTodayCard from '../../src/components/home/CoachingTodayCard';
@@ -1622,6 +1623,9 @@ export default function HomeScreen() {
       {isTrainee && !!nextPending && nextPending.day_number >= 4 && <EarningsPlanCard onlyMissing />}
       {/* The week's quality, for a week after the report is added. */}
       <QualityNewCard />
+      {/* The AI coach: Analyse me (once a day), Suggest my plan, Ask the AI (the Owner, 2 Nov 2026).
+          Not on BA Academy days; hidden until the AI key is added. */}
+      {!(user as any)?.is_viewer && !(isTrainee && nextPending && nextPending.day_number <= 2) && <AiCoachCard />}
       {pReviewCard}
       {isAdmin && isPlanningSunday && pWeeklyPlans}
       {pBaWeek}
