@@ -57,6 +57,7 @@ import AcademyWorkbookCard from '../../src/components/home/AcademyWorkbookCard';
 import AcademyClassCard from '../../src/components/home/AcademyClassCard';
 import NewStartsButton from '../../src/components/home/NewStartsButton';
 import PitchCard from '../../src/components/home/PitchCard';
+import PrimetimeNowCard from '../../src/components/home/PrimetimeNowCard';
 import CodWeekCard from '../../src/components/cod/CodWeekCard';
 import SectorPromptCard from '../../src/components/home/SectorPromptCard';
 import ResetBoardCard from '../../src/components/home/ResetBoardCard';
@@ -1609,6 +1610,8 @@ export default function HomeScreen() {
       {isAdmin && <AcademyClassCard />}
       {/* The pitch near the top: everyone in Primetime (11:00–11:45); a new start from 18:00 on their first day. */}
       <PitchCard place="top" />
+      {/* 11:00–11:45: today's Primetime plan, published to everyone (the Owner, 2 Nov 2026). */}
+      <PrimetimeNowCard />
       {/* Stage 2-3: this week's COD focus and what to do on it, or a prompt to pick one (the Owner, 27 Oct 2026). */}
       {(codStage === 2 || codStage === 3) && !(isTrainee && nextPending) && !(user as any)?.is_viewer && <CodWeekCard />}
       {/* Breakeven: kept up to date in the Monthly Goal Planner (opens from Profile).

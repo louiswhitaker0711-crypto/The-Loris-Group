@@ -409,11 +409,14 @@ async def _snapshot_names(user_ids: list, office_id: str, limit: int = MAX_WITH_
 async def get_primetime_week(request: Request, week: Optional[str] = None, office: Optional[str] = None):
     """The whole office's Primetime plan for one week.
 
-    Readable by every leader/admin in the office — cross-team visibility is
-    the entire point of the feature. Write permission is reported per person
-    via `can_edit` so the UI can render other teams read-only.
+    Readable by everyone in the office — cross-team visibility is the entire
+    point of the feature, and the plan is shown to the whole office during
+    Primetime (the Owner, 2 Nov 2026). Write permission is reported per person
+    via `can_edit` so the UI can render other teams read-only; a BA can read
+    the board but places nobody on it.
     """
-    me = await require_admin_or_leader(request)
+    me = await get_current_user(request)
+    coach = (me.get("role") or "") in ("admin", "leader") and not me.get("is_viewer")
     office_id = await resolve_office_id(request, me, office)
     week_ending = await _resolve_week(week)
 
@@ -423,7 +426,7 @@ async def get_primetime_week(request: Request, week: Optional[str] = None, offic
     ).to_list(MAX_ROSTER * len(DAYS))
     entries = _dedupe_entries([_scrub(e) for e in entries])
 
-    editable = await _editable_ids(me, office_id)
+    editable = await _editable_ids(me, office_id) if coach else set()
     known_ids = {p["user_id"] for p in roster}
 
     # Ghosts: someone with a row this week who is no longer in the roster

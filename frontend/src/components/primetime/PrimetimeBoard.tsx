@@ -110,6 +110,7 @@ export default function PrimetimeBoard({ data, week, dayIndex, office, canEdit }
       qc.invalidateQueries({ queryKey: ['primetime-week'] });
       qc.invalidateQueries({ queryKey: ['primetime-home'] });
       qc.invalidateQueries({ queryKey: ['sector-primetime'] });
+      qc.invalidateQueries({ queryKey: ['sector-day'] });   // the WhatsApp breakdown carries the plan
       const skipped = r.data?.skipped || [];
       if (skipped.length) showAlert('Saved, with one thing', `${skipped.join(', ')} ${skipped.length === 1 ? 'is' : 'are'} on another Coach's team, so they stay where their Coach put them. Ask their Coach to move them.`);
       else toast.success('Primetime saved');
