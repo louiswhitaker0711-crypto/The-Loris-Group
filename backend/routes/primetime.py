@@ -200,10 +200,12 @@ def _left_on(u: dict) -> Optional[str]:
 def _on_grid(left: Optional[str], day_date: str) -> bool:
     """Does this person still belong on the plan for this day?
 
-    Inclusive of the last day itself: someone whose last day is Wednesday is
-    at Primetime on Wednesday. They drop off Thursday onward.
+    `left_on` is the exit day (Admin's Exit sets it, today by default), and
+    from that day they're off, the same as Bells, which shows them red from it
+    (the Owner, 3 Nov 2026: someone exited this morning was still on today's
+    Primetime). Days before it they were here.
     """
-    return left is None or day_date <= left
+    return left is None or day_date < left
 
 
 def _person(u: dict, left: Optional[str]) -> dict:
@@ -243,6 +245,26 @@ async def _office_roster(office_id: str, week_ending: str) -> list:
          "left_on": 1, "deleted": 1, "deleted_at": 1, "is_active": 1},
     ).to_list(MAX_ROSTER)
     return [_person(u, _left_on(u)) for u in rows]
+
+
+ACADEMY_DAYS = 2   # BA Academy Days 1-2: in the office, not at Primetime
+
+
+async def _academy_dates(office_id: str, user_ids: list) -> dict:
+    """user_id -> the dates of their BA Academy days (Day 1 and Day 2, from
+    their start date). New starts are in product coaching on those days, so
+    they're not at Primetime until their Wednesday (the Owner, 3 Nov 2026)."""
+    if not user_ids:
+        return {}
+    out: dict = {}
+    async for h in db.new_hires.find({"office_id": office_id, "trainee_user_id": {"$in": list(user_ids)},
+                                      "active": {"$ne": False}}, {"_id": 0, "trainee_user_id": 1, "start_date": 1}):
+        try:
+            start = date.fromisoformat(str(h.get("start_date") or "")[:10])
+        except ValueError:
+            continue
+        out[str(h["trainee_user_id"])] = {(start + timedelta(days=i)).isoformat() for i in range(ACADEMY_DAYS)}
+    return out
 
 
 async def _day_statuses(office_id: str, week_ending: str, user_ids: list) -> dict:
@@ -454,6 +476,7 @@ async def get_primetime_week(request: Request, week: Optional[str] = None, offic
         leader_names = await _snapshot_names(leader_ids, office_id, limit=MAX_ROSTER)
 
     statuses = await _day_statuses(office_id, week_ending, [p["user_id"] for p in roster])
+    academy = await _academy_dates(office_id, [p["user_id"] for p in roster])
 
     people = []
     for p in roster:
@@ -472,7 +495,9 @@ async def get_primetime_week(request: Request, week: Optional[str] = None, offic
             "day_statuses": day_st,
             # Only an explicit `ab` counts. A blank Bells cell means nobody has
             # filled the sheet in yet, not that the person is away.
-            "absent_days": [d for d in DAYS if day_st[d] in NOT_IN],
+            # Not in that day: not scheduled, no-show, off, exited, or a BA Academy day.
+            "absent_days": [d for d in DAYS if day_st[d] in NOT_IN
+                            or _day_date(week_ending, d) in academy.get(p["user_id"], set())],
         })
     people.sort(key=lambda p: ((p.get("name") or "").lower()))
 
@@ -537,6 +562,8 @@ async def get_primetime_home(request: Request, office: Optional[str] = None):
         list({p["user_id"] for p in roster} | {e["subject_user_id"] for e in entries}),
     )
     absent_ids = {uid for uid, st in statuses.items() if st[day_index] in NOT_IN}
+    academy = await _academy_dates(office_id, [p["user_id"] for p in roster])
+    absent_ids |= {uid for uid, ds in academy.items() if day_date in ds}
 
     # Who on MY OWN team still has nothing set. Deliberately my team and not
     # the office: the office-wide list above is for seeing what's on offer,
@@ -695,6 +722,7 @@ async def primetime_nudge_tick(now: Optional[datetime] = None) -> int:
         planned = {e["subject_user_id"] for e in entries if e.get("mode")}
         statuses = await _day_statuses(office_id, week_ending, list(on_grid))
         absent = {uid for uid, st in statuses.items() if st[day_index] in NOT_IN}
+        absent |= {uid for uid, ds in (await _academy_dates(office_id, list(on_grid))).items() if day_date in ds}
 
         for leader_id in leader_ids:
             # A leader who is off themselves doesn't need chasing.
@@ -1167,7 +1195,9 @@ async def plan_lines(office_id: str, sector_date: str, user_ids: list) -> list[s
     entries = _dedupe_entries([e async for e in db.primetime_entries.find(
         {"office_id": office_id, "week_ending": week_ending, "day_index": day_index})])
     statuses = await _day_statuses(office_id, week_ending, ids)
-    ids = [i for i in ids if not is_not_in((statuses.get(i) or [""] * len(DAYS))[day_index])]
+    academy = await _academy_dates(office_id, ids)
+    ids = [i for i in ids if not is_not_in((statuses.get(i) or [""] * len(DAYS))[day_index])
+           and target.isoformat() not in academy.get(i, set())]
     mine = [e for e in entries if e.get("subject_user_id") in ids and e.get("mode")]
     if not mine:
         return []
@@ -1210,8 +1240,10 @@ async def sector_primetime(request: Request, date: Optional[str] = None, scope: 
     rows = {e["subject_user_id"]: e for e in entries}
     # Nobody who isn't in that day: not scheduled, no-show, off (the Owner, 29 Oct 2026).
     statuses = await _day_statuses(office_id, week_ending, [p["user_id"] for p in people])
+    academy = await _academy_dates(office_id, [p["user_id"] for p in people])
     people = [p for p in people if p["user_id"] == str(me["id"])
-              or not is_not_in((statuses.get(p["user_id"]) or [""] * len(DAYS))[day_index])]
+              or not (is_not_in((statuses.get(p["user_id"]) or [""] * len(DAYS))[day_index])
+                      or target.isoformat() in academy.get(p["user_id"], set()))]
     ids = {p["user_id"] for p in people}
     out = []
     for p in people:

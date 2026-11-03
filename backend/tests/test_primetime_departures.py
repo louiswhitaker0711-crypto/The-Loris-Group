@@ -61,15 +61,13 @@ def test_garbage_left_on_falls_through_rather_than_crashing():
 # _on_grid — the actual rule the user asked for
 # --------------------------------------------------------------------------
 
-def test_someone_who_leaves_wednesday_works_wednesday():
-    """"Removed from any future team plans after the day that person's left."
-
-    Inclusive of the last day itself — she is at Primetime on her last day.
-    """
+def test_someone_exited_on_wednesday_is_off_from_wednesday():
+    """The exit day is the first day they're gone (the Owner, 3 Nov 2026),
+    the same as Bells."""
     left = WED
     assert pt._on_grid(left, MON) is True
     assert pt._on_grid(left, TUE) is True
-    assert pt._on_grid(left, WED) is True
+    assert pt._on_grid(left, WED) is False
     assert pt._on_grid(left, THU) is False
     assert pt._on_grid(left, FRI) is False
     assert pt._on_grid(left, SAT) is False
@@ -152,7 +150,7 @@ def test_roster_keeps_the_present_drops_the_long_gone_and_keeps_the_recent(monke
 
     ben = next(p for p in people if p["name"] == "Ben")
     assert ben["left_on"] == WED
-    assert [d for d in range(6) if pt._on_grid(ben["left_on"], pt._day_date(WEEK, d))] == [0, 1, 2]
+    assert [d for d in range(6) if pt._on_grid(ben["left_on"], pt._day_date(WEEK, d))] == [0, 1]
 
     ana = next(p for p in people if p["name"] == "Ana")
     assert ana["left_on"] is None

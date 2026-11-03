@@ -133,3 +133,18 @@ def test_not_in_that_day_means_not_in_primetime():
     # 'off' is what an unfilled Bells day reads as: still in.
     for st in ("", None, "in", "off", "pc", "sd", "rt"):
         assert not pt.is_not_in(st)
+
+
+def test_academy_days_are_day_1_and_2_from_the_start_date():
+    import asyncio as _a
+    from mongomock_motor import AsyncMongoMockClient
+    from routes import primetime as pt
+    db = AsyncMongoMockClient()["pt_academy"]
+    pt_db, pt.db = pt.db, db
+    try:
+        _a.new_event_loop().run_until_complete(db.new_hires.insert_one(
+            {"office_id": "o1", "trainee_user_id": "u1", "start_date": "2026-11-02", "active": True}))
+        out = _a.new_event_loop().run_until_complete(pt._academy_dates("o1", ["u1", "u2"]))
+        assert out == {"u1": {"2026-11-02", "2026-11-03"}}
+    finally:
+        pt.db = pt_db
