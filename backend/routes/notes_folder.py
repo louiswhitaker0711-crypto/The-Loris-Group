@@ -396,6 +396,8 @@ async def edit_note(note_id: str, request: Request):
             raise HTTPException(status_code=404, detail="Note not found in your planner")
         upd = {"slot_notes": clean_slot_notes(slot_notes)}
     upd["updated_at"] = datetime.now(timezone.utc).isoformat()
+    from core.notes_safety import snapshot
+    await snapshot(planner, {**planner, **upd}, reason="notes-edit")
     await db.weekly_planners.update_one({"_id": planner["_id"]}, {"$set": upd})
     planner.update(upd)
     await _refile(user, planner)
@@ -433,4 +435,63 @@ async def add_note(request: Request):
     await db.weekly_planners.update_one({"_id": planner["_id"]}, {"$set": upd})
     planner.update(upd)
     await _refile(user, planner)
-    return {"ok": True, "id": nid}
+    # The folder note's own id, so the editor can keep saving as you type.
+    fn = await db.folder_notes.find_one({"ref": f"planner:{me}:{week}:{day}:n:{nid}"}, {"_id": 0, "id": 1})
+    return {"ok": True, "id": nid, "note_id": (fn or {}).get("id")}
+
+
+# ── Recently removed notes (the Owner, 3 Nov 2026) ─────────────────────────
+# Anything a save took out of a planner week, from planner_history, with a
+# Put back button. Your own; an Admin can open anyone's in their office.
+
+async def _recover_target(user: dict, user_id: Optional[str]) -> str:
+    me = str(user["id"])
+    if not user_id or user_id == me:
+        return me
+    if (user.get("role") or "").lower() != "admin" or user.get("is_viewer"):
+        raise HTTPException(status_code=403, detail="Only the Owner can open someone else\u2019s notes")
+    if not user.get("is_super_admin"):
+        from bson import ObjectId
+        try:
+            u = await db.users.find_one({"_id": ObjectId(user_id)}, {"office_id": 1})
+        except Exception:  # noqa: BLE001
+            u = None
+        if not u or u.get("office_id") != user.get("office_id"):
+            raise HTTPException(status_code=403, detail="That person isn\u2019t in your office")
+    return user_id
+
+
+@router.get("/notes/removed")
+async def notes_removed(request: Request, user_id: Optional[str] = None):
+    user = await get_current_user(request)
+    uid = await _recover_target(user, user_id)
+    from core.notes_safety import removed_notes
+    return {"items": await removed_notes(uid)}
+
+
+@router.post("/notes/removed/restore")
+async def notes_restore(request: Request):
+    user = await get_current_user(request)
+    if user.get("is_viewer"):
+        raise HTTPException(status_code=403, detail="Read-only account")
+    raw = await request.json()
+    raw = raw if isinstance(raw, dict) else {}
+    uid = await _recover_target(user, raw.get("user_id"))
+    from core.notes_safety import restore
+    p = await restore(uid, str(raw.get("history_id") or ""), str(raw.get("key") or ""))
+    if not p:
+        raise HTTPException(status_code=404, detail="Couldn\u2019t find that note any more")
+    owner = user if uid == str(user["id"]) else (await _user_doc(uid)) or user
+    await _refile(owner, p)
+    return {"ok": True}
+
+
+async def _user_doc(uid: str) -> Optional[dict]:
+    from bson import ObjectId
+    try:
+        u = await db.users.find_one({"_id": ObjectId(uid)})
+    except Exception:  # noqa: BLE001
+        return None
+    if u:
+        u["id"] = str(u["_id"])
+    return u

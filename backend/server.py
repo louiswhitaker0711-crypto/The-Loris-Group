@@ -517,6 +517,7 @@ async def _startup_work():
     await db.ai_analyses.create_index([("user_id", 1), ("date", 1)], unique=True)
     await db.ai_conversations.create_index([("user_id", 1), ("date", 1)])
     await db.connector_links.create_index("token_hash", unique=True)
+    await db.planner_history.create_index([("user_id", 1), ("week_ending", 1), ("at", -1)])
     # New-start join codes (routes/new_starts.py), looked up by their hash.
     await db.join_tokens.create_index("token_hash")
     await db.room_codes.create_index([("code", 1), ("closed_at", 1)])

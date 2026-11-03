@@ -1833,6 +1833,13 @@ async def upsert_weekly_planner(week: str, request: Request):
     now = datetime.now(timezone.utc).isoformat()
     existing = await db.weekly_planners.find_one({"user_id": me["id"], "week_ending": week_ending}, {"_id": 0})
     if existing:
+        # Never drop a note the phone didn't know about (added from Notes or
+        # another tab since it loaded); keep the old version before any save
+        # that takes something away (the Owner, 3 Nov 2026).
+        from core.notes_safety import merge_slot_notes, snapshot
+        slot_notes = clean_slot_notes(merge_slot_notes(existing.get("slot_notes"), slot_notes,
+                                                       body.get("removed_note_ids")))
+        await snapshot(existing, {"days": days, "notes": notes, "slot_notes": slot_notes})
         update = {"review": review, "days": days, "times": times, "notes": notes, "folder": folder,
                   "slot_notes": slot_notes, "updated_at": now}
         await db.weekly_planners.update_one({"id": existing["id"]}, {"$set": update})
