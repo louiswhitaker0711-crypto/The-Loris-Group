@@ -16,9 +16,21 @@ def test_week_total_counts_silver_and_gold():
     assert week_total(e) == 4
 
 
-def test_typed_breakeven_wins_over_the_plan():
+def test_plan_wins_over_a_stored_breakeven():
+    # A stored BE was usually the plan's old figure saved back by a day edit
+    # (the Owner, 3 Nov 2026), so the plan always wins when there is one.
     plan = {"needs": [{"label": "Rent", "amount": 260, "per": "week"}]}
-    assert breakeven_for({"break_even": 5}, plan, FEES) == 5
+    assert breakeven_for({"break_even": 5}, plan, FEES, 26) == 10
+
+
+def test_typed_breakeven_when_no_plan():
+    assert breakeven_for({"break_even": 5}, None, FEES) == 5
+
+
+def test_monthly_bills_become_weekly():
+    # £1,300 a month = £300 a week; at £30 a sign-up that's 10 a week, not 44.
+    plan = {"needs": [{"label": "Rent", "amount": 1300, "per": "month"}]}
+    assert breakeven_for({}, plan, FEES, 30) == 10
 
 
 def test_plan_breakeven_when_nothing_typed():

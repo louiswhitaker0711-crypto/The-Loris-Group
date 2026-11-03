@@ -569,20 +569,25 @@ def _safe_num(x) -> float:
 def _compute_budget_totals(b: dict) -> dict:
     needs = b.get("needs") or []
     wants = b.get("wants") or []
-    # Monthly totals: a per-week row counts as × 52 ÷ 12.
-    def _monthly(r: dict) -> float:
+    # Weekly totals, because they're paid weekly (the Owner, 3 Nov 2026): a
+    # per-month row counts as × 12 ÷ 52. Breakeven is needs only; the target
+    # is needs + wants. Both are sign-ups a week, rounded up.
+    def _weekly(r: dict) -> float:
         n = _safe_num(r.get("amount"))
-        return n * 52 / 12 if r.get("per") == "week" else n
-    tm_n = sum(_monthly(r) for r in needs)
+        return n * 12 / 52 if r.get("per", "month") != "week" else n
+    tm_n = sum(_weekly(r) for r in needs)
     ts_n = sum(_safe_num(r.get("sales")) for r in needs)
-    tm_w = sum(_monthly(r) for r in wants)
+    tm_w = sum(_weekly(r) for r in wants)
     ts_w = sum(_safe_num(r.get("sales")) for r in wants)
     sale_v = _safe_num(b.get("sale_value"))
+    import math as _m
     if sale_v > 0:
-        # Recompute sales-required from money totals if sale_value is set
-        derived = round((tm_n + tm_w) / sale_v) if sale_v else 0
+        b["breakeven_week"] = _m.ceil(tm_n / sale_v) if tm_n > 0 else 0
+        derived = _m.ceil((tm_n + tm_w) / sale_v) if (tm_n + tm_w) > 0 else 0
     else:
+        b["breakeven_week"] = ts_n
         derived = ts_n + ts_w
+    b["per"] = "week"
     b["total_money_needs"] = round(tm_n, 2)
     b["total_sales_needs"] = round(ts_n, 2)
     b["total_money_wants"] = round(tm_w, 2)

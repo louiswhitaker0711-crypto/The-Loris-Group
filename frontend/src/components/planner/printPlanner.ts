@@ -228,10 +228,14 @@ export function buildPlannerHtml({ ownerName, month, draft, traits, showGap }: P
       ${budget.sale_value ? `<p class="meta">Sign-up value: <strong>${fmtMoney(budget.sale_value)}</strong></p>` : ''}
       ${budgetTable('Needs', budget.needs)}
       ${budgetTable('Wants', budget.wants)}
-      ${(Number(budget.total_sales_required) > 0) ? `
+      ${(Number(budget.breakeven_week) > 0) ? `
         <div class="kpi-row">
           <div class="kpi big">
-            <div class="kpi-label">Total sign-ups required</div>
+            <div class="kpi-label">Breakeven: sign-ups a week</div>
+            <div class="kpi-value">${fmtNum(budget.breakeven_week)}</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-label">With wants: sign-ups a week</div>
             <div class="kpi-value">${fmtNum(budget.total_sales_required)}</div>
           </div>
         </div>` : ''}

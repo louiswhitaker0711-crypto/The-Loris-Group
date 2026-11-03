@@ -39,12 +39,13 @@ def week_total(entry: dict) -> int:
 
 
 def breakeven_for(entry: dict, plan: Optional[dict], fees: Optional[dict], rate: Optional[float] = None) -> Optional[int]:
+    # The plan wins (as on Bells); a typed BE only counts with no plan.
+    if plan and (plan.get("needs") or plan.get("wants")):
+        be = compute(plan, fees, rate).get("breakeven")
+        return int(be) if be else None
     typed = entry.get("break_even")
     if isinstance(typed, (int, float)) and typed > 0:
         return int(typed)
-    if plan:
-        be = compute(plan, fees, rate).get("breakeven")
-        return int(be) if be else None
     return None
 
 
@@ -79,7 +80,7 @@ async def run_hits(database, now_uk: Optional[datetime] = None, send=None) -> li
             fees_by_office[office_id] = (await database.commission_fees.find_one({"office_id": office_id}, {"_id": 0})
                                          or await database.commission_fees.find_one({}, {"_id": 0}))
         rate = None
-        if person.get("earnings_plan") and not e.get("break_even"):
+        if person.get("earnings_plan"):
             from core.sign_up_value import rate_for
             rate = (await rate_for(database, person, fees_by_office[office_id]))["per_sign_up"]
         be = breakeven_for(e, person.get("earnings_plan"), fees_by_office[office_id], rate)

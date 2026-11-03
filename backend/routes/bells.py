@@ -1288,17 +1288,17 @@ async def bells_week_for(user: dict, week: Optional[str] = None, office: Optiona
         e["coach_name"] = (people.get(str(coach_id)) or {}).get("name") if coach_id else None
         e["coach_id"] = str(coach_id) if coach_id else None
         e["stage_label"] = _stage_label((people.get(uid) or {}).get("owneriq_stage")) if uid else None
-        # BE comes from their Plan your earnings unless it's typed on the
-        # sheet (the Owner, 26 Oct 2026: nobody types it in by hand).
-        if uid and e.get("break_even") is None:
-            plan = (people.get(uid) or {}).get("earnings_plan")
-            if plan:
-                from core.earnings_plan import compute as _be
-                from core.sign_up_value import per_sign_up_for as _rate
-                be = _be(plan, fees, await _rate(db, uid, fees)).get("breakeven")
-                if be is not None:
-                    e["break_even"] = be
-                    e["break_even_source"] = "plan"
+        # BE comes from their Plan your earnings (the Owner, 26 Oct 2026:
+        # nobody types it in by hand). The plan wins over anything stored on
+        # the row: saving a day used to send the shown BE back, which froze it
+        # (the Owner, 3 Nov 2026). A typed BE only counts with no plan.
+        plan = (people.get(uid) or {}).get("earnings_plan") if uid else None
+        if uid and plan and (plan.get("needs") or plan.get("wants")):
+            from core.earnings_plan import compute as _be
+            from core.sign_up_value import per_sign_up_for as _rate
+            be = _be(plan, fees, await _rate(db, uid, fees)).get("breakeven")
+            e["break_even"] = be
+            e["break_even_source"] = "plan"
         if show_mc:
             e["mc_fees"] = mc_fees(e.get("total_under30"), e.get("total_over30"), fees)
     if show_mc:

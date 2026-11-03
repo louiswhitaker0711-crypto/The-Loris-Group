@@ -580,7 +580,7 @@ export default function TableView({ entries, weekEnding, onRefresh, miniGoal, of
         user_id: entry.user_id,
         office_id: entry.office_id,
         stage: null,
-        break_even: entry.break_even,
+        break_even: (entry as any).break_even_source === 'plan' ? null : entry.break_even,
         weekly_goal: entry.weekly_goal,
         days,
       });

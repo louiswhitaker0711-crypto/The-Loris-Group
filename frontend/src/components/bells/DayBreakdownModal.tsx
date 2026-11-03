@@ -136,7 +136,7 @@ export default function DayBreakdownModal({ dayIdx, entries, weekEnding, onClose
           user_id: person.entry.user_id,
           office_id: person.entry.office_id,
           stage: null,
-          break_even: person.entry.break_even,
+          break_even: (person.entry as any).break_even_source === 'plan' ? null : person.entry.break_even,
           weekly_goal: person.entry.weekly_goal,
           days: fullDays,
         });

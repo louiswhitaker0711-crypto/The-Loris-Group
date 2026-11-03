@@ -730,12 +730,14 @@ function BudgetSection({ budget, canEdit, onChange }: { budget: any; canEdit: bo
 
   // Derive totals for live display (server also recomputes on save)
   const num = (x: any) => parseFloat(String(x || '').replace(/[£$,]/g, '')) || 0;
-  // Monthly totals: a per-week row counts as × 52 ÷ 12.
-  const monthly = (r: any) => (r.per === 'week' ? num(r.amount) * 52 / 12 : num(r.amount));
-  const tmN = (budget.needs || []).reduce((acc: number, r: any) => acc + monthly(r), 0);
-  const tmW = (budget.wants || []).reduce((acc: number, r: any) => acc + monthly(r), 0);
+  // Weekly totals, because everyone's paid weekly (the Owner, 3 Nov 2026):
+  // a per-month row counts as × 12 ÷ 52. Same sums as Bells' BE.
+  const weekly = (r: any) => (r.per === 'week' ? num(r.amount) : num(r.amount) * 12 / 52);
+  const tmN = (budget.needs || []).reduce((acc: number, r: any) => acc + weekly(r), 0);
+  const tmW = (budget.wants || []).reduce((acc: number, r: any) => acc + weekly(r), 0);
   const sv = num(budget.sale_value);
-  const totalSales = sv > 0 ? Math.round((tmN + tmW) / sv) : ((budget.needs || []).reduce((a: number, r: any) => a + num(r.sales), 0) + (budget.wants || []).reduce((a: number, r: any) => a + num(r.sales), 0));
+  const beWeek = sv > 0 && tmN > 0 ? Math.ceil(tmN / sv) : 0;
+  const targetWeek = sv > 0 && tmN + tmW > 0 ? Math.ceil((tmN + tmW) / sv) : 0;
 
   return (
     <Section icon="calculator" title="Budget · Break-Even Calculator">
@@ -801,7 +803,7 @@ function BudgetSection({ budget, canEdit, onChange }: { budget: any; canEdit: bo
             </TouchableOpacity>
           )}
           <View style={s.tblTotal}>
-            <Text style={s.tblTotalLabel}>Total {group === 'needs' ? 'NEEDS' : 'WANTS'}</Text>
+            <Text style={s.tblTotalLabel}>Total {group === 'needs' ? 'NEEDS' : 'WANTS'} a week</Text>
             <Text style={s.tblTotalNum}>{formatMoney(group === 'needs' ? tmN : tmW, 2)}</Text>
           </View>
         </View>
@@ -828,15 +830,15 @@ function BudgetSection({ budget, canEdit, onChange }: { budget: any; canEdit: bo
             </Text>
           );
         })()}
-        <View style={s.summaryRow}>
-          <Text style={s.summaryLabel}>Total £ needed (Needs + Wants)</Text>
-          <Text style={s.summaryValue}>{formatMoney(tmN + tmW, 2)}</Text>
-        </View>
         <View style={[s.summaryRow, { backgroundColor: 'rgba(40, 100, 217,0.08)', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 10, marginTop: 4 }]}>
-          <Text style={[s.summaryLabel, { color: colors.primary, fontWeight: '800' }]}>Total sign-ups required to break even</Text>
-          <AnimatedNumber value={totalSales} decimals={0} style={[s.summaryValue, { color: colors.primary, fontSize: 18 }]} />
+          <Text style={[s.summaryLabel, { color: colors.primary, fontWeight: '800' }]}>Breakeven: sign-ups a week (needs {formatMoney(tmN, 2)} a week)</Text>
+          <AnimatedNumber value={beWeek} decimals={0} style={[s.summaryValue, { color: colors.primary, fontSize: 18 }]} />
         </View>
-        <Text style={[s.summaryLabel, { marginTop: 6 }]}>Saving this updates your weekly breakeven on Bells and your weekly plan.</Text>
+        <View style={s.summaryRow}>
+          <Text style={s.summaryLabel}>With wants: sign-ups a week ({formatMoney(tmN + tmW, 2)} a week)</Text>
+          <AnimatedNumber value={targetWeek} decimals={0} style={s.summaryValue} />
+        </View>
+        <Text style={[s.summaryLabel, { marginTop: 6 }]}>Monthly bills are turned into a week (× 12 ÷ 52). Saving this updates your breakeven a week on Bells and your weekly plan.</Text>
       </View>
     </Section>
   );
