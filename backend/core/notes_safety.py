@@ -142,7 +142,8 @@ async def restore(user_id: str, history_id: str, key: str) -> dict | None:
     await snapshot(p, None, reason="restore")
     upd: dict = {}
     if key.startswith("note:"):
-        _, slot, nid = key.split(":", 2)
+        _, d, box, nid = key.split(":", 3)
+        slot = f"{d}:{box}"
         slot_notes = {k: list(v) for k, v in (p.get("slot_notes") or {}).items()}
         notes = slot_notes.setdefault(slot, [])
         i = next((j for j, n in enumerate(notes) if n.get("id") == nid), None)
