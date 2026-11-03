@@ -10,13 +10,14 @@
  * anything Behind or Ahead. Same for every Coach, new or experienced.
  * Hidden when you're not with a new start. (GET /coaching/today)
  */
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useColors, fonts } from '../../theme/ThemeContext';
 import { api } from '../../api/client';
+import { toast } from '../../utils/toast';
 import { inFieldHours, fieldStarted, ukNow } from '../../utils/fieldTime';
 
 export type CoachItem = { id: string; topic: string; category: string; confidence_expected: string; taught: boolean;
@@ -99,6 +100,24 @@ function PersonCard({ p, s, c }: { p: CoachPerson; s: any; c: any }) {
   const who = firstName(p.name);
   const changedItems = kept.filter((i) => i.changed_from);
   const guide = () => router.push(`/coaching-guide?hire=${encodeURIComponent(p.hire_id)}` as never);
+  // Tap the circle to mark a topic taught, right here on Home (the Owner,
+  // 3 Nov 2026); tap the topic itself to open the guide.
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState<string | null>(null);
+  const tick = async (it: CoachItem) => {
+    if (busy) return;
+    setBusy(it.id);
+    const flip = (v: boolean) => qc.setQueryData(['coaching-today'], (old: any) => old && ({
+      ...old, people: old.people.map((x: CoachPerson) => x.hire_id !== p.hire_id ? x : {
+        ...x, checklist: x.checklist.map((y) => (y.id === it.id ? { ...y, taught: v } : y)) }) }));
+    flip(!it.taught);
+    try {
+      await api.put('/coaching/today/taught', { item_id: it.id, taught: !it.taught });
+    } catch (e: any) {
+      flip(it.taught);
+      toast.error('Couldn\u2019t save that', typeof e?.response?.data?.detail === 'string' ? e.response.data.detail : undefined);
+    } finally { setBusy(null); }
+  };
 
   return (
     <View style={s.card} testID={`home-coaching-${p.hire_id}`}>
@@ -123,17 +142,20 @@ function PersonCard({ p, s, c }: { p: CoachPerson; s: any; c: any }) {
       {fresh.length ? fresh.map((it) => {
         const aim = aimOf(it.confidence_expected, c);
         return (
-          <Pressable key={it.id} onPress={guide} style={s.teach} accessibilityRole="button">
-            <Ionicons name={it.taught ? 'checkmark-circle' : 'ellipse-outline'} size={20} color={it.taught ? c.green : c.textMuted} style={{ marginTop: 1 }} />
-            <View style={{ flex: 1 }}>
+          <View key={it.id} style={s.teach}>
+            <Pressable onPress={() => tick(it)} disabled={busy === it.id} hitSlop={12} accessibilityRole="checkbox"
+              accessibilityState={{ checked: it.taught }} accessibilityLabel={`Mark ${it.topic} as taught`} testID={`coaching-tick-${it.id}`}>
+              <Ionicons name={it.taught ? 'checkmark-circle' : 'ellipse-outline'} size={26} color={it.taught ? c.green : c.textMuted} />
+            </Pressable>
+            <Pressable onPress={guide} style={{ flex: 1 }} accessibilityRole="button">
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <Text style={[s.teachText, it.taught && s.teachDone]} numberOfLines={1}>{it.topic}</Text>
                 {!!aim && <View style={[s.aim, { backgroundColor: aim.bg }]}><Text style={[s.aimText, { color: aim.fg }]}>{aim.label}</Text></View>}
                 {it.ahead && <Text style={s.aheadText}>Ahead</Text>}
               </View>
               {!!detailOf(it) && <Text style={s.aimDo}>{detailOf(it)}</Text>}
-            </View>
-          </Pressable>
+            </Pressable>
+          </View>
         );
       }) : <Text style={s.sub}>{kept.length ? `Nothing new: build on ${kept.length} from yesterday` : 'Their day plan is on the guide.'}</Text>}
       {changedItems.length > 0 && (
