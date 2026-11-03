@@ -268,6 +268,28 @@ async def _fix_quality_percents(db) -> int:
     return fixed
 
 
+# WE 25 Oct 2026 got the 4th Delivery page's customer counts read as 4th
+# week percentages (8 customers → 8%); the Owner asked for them cleared
+# (3 Nov 2026). Only 4th week goes; everything else on that week stays.
+_BAD_FOURTH_WEEK = "2026-10-25"
+
+
+async def _clear_bad_fourth_week(db) -> int:
+    from core.quality import FOURTH_WEEK_KEYS
+    fixed = 0
+    async for doc in db.quality_weeks.find({"week_ending": _BAD_FOURTH_WEEK, "fourth_week_from": {"$exists": False},
+                                            "fw_cleared": {"$ne": True}}, {"bas": 1, "total": 1}):
+        bas = doc.get("bas") or []
+        for b in bas:
+            b["metrics"] = {k: v for k, v in (b.get("metrics") or {}).items() if k not in FOURTH_WEEK_KEYS}
+        total = {k: v for k, v in (doc.get("total") or {}).items() if k not in FOURTH_WEEK_KEYS}
+        await db.quality_weeks.update_one({"_id": doc["_id"]}, {"$set": {"bas": bas, "total": total, "fw_cleared": True}})
+        fixed += 1
+    if fixed:
+        logger.info(f"content_fixes: misread 4th week cleared on {fixed} saved week(s)")
+    return fixed
+
+
 _OLD_SL = ("Sector/Site Leader", "Sector-Site Leader", "Sector / Site Leader")
 
 
@@ -309,6 +331,10 @@ async def run_content_fixes(db) -> dict:
         result["quality_weeks_checked"] = await _fix_quality_percents(db)
     except Exception as e:
         logger.warning(f"content_fixes: quality percent fix failed: {e}")
+    try:
+        result["bad_fourth_week_cleared"] = await _clear_bad_fourth_week(db)
+    except Exception as e:
+        logger.warning(f"content_fixes: clearing the misread 4th week failed: {e}")
     try:
         result["sl_renamed"] = await _fix_sl_name(db)
     except Exception as e:

@@ -31,7 +31,7 @@ from fastapi import APIRouter, HTTPException, Request
 from auth import get_current_user, get_subtree_ids, require_admin, sees_whole_office
 from core.quality import (AI_PROMPT, merge_week, LABELS, MEASURES, TARGETS, VIEWS, aggregate, clean_metrics,
                           is_filter_note, percent_fix, from_ai, from_tables, merge, month_label, parse_week,
-                          pick_weeks, rag, week_label, xlsx_tables)
+                          pick_weeks, rag, week_label, xlsx_tables, is_fourth_week_report, fourth_week_shows_on)
 from core.app_time import APP_TZ
 from core.quality_alerts import is_current
 from core.rate_limit import take_ai_quota
@@ -163,8 +163,15 @@ async def read_quality(request: Request):
             parts.append(percent_fix(await _read_image(admin, raw, "image/jpeg")))
         else:
             raise HTTPException(status_code=400, detail=f"{f.get('filename') or 'That file'}: send a screenshot (PNG or JPG) or an Excel export")
-    rep = merge(parts)
-    week = parse_week(body.get("week_ending")) or rep.get("week_ending")
+    # The 4th Delivery page comes with a later week's report (4th week for
+    # WE 30 Aug with the report for WE 25 Oct): it shows on that later week,
+    # and remembers which week's sign-ups it's from.
+    fw_parts = [p for p in parts if is_fourth_week_report(p)]
+    q_parts = [p for p in parts if not is_fourth_week_report(p)]
+    fw_from = merge(fw_parts).get("week_ending") if fw_parts else None
+    rep = merge(q_parts + fw_parts)   # the 4th Delivery page wins for 4th week
+    q_week = merge(q_parts).get("week_ending") if q_parts else None
+    week = parse_week(body.get("week_ending")) or q_week or fourth_week_shows_on(fw_from)
     office_id = admin.get("office_id")
     users = await _office_people(office_id)
     by_badge, by_name = await _badge_index(office_id, users)
@@ -181,7 +188,7 @@ async def read_quality(request: Request):
     people = sorted(({"id": str(u["_id"]), "name": u.get("name") or ""} for u in users
                      if u.get("is_active") is not False and not u.get("deleted")),
                     key=lambda p: p["name"].lower())
-    return {"week_ending": week, "rows": rows, "total": rep.get("total") or {},
+    return {"week_ending": week, "fourth_week_from": fw_from, "rows": rows, "total": rep.get("total") or {},
             "fourth_week_due": rep.get("fourth_week_due", True), "existing": existing, "people": people,
             "newest_saved": (newest or {}).get("week_ending"),
             "current": bool(week and is_current(week, datetime.now(APP_TZ).date())),
@@ -205,6 +212,8 @@ async def import_quality(request: Request):
         if not badge or is_filter_note(r.get("label")):
             continue
         uid = r.get("user_id") if r.get("user_id") in ids else None
+        if not uid:
+            continue   # nobody on the Hub: a stray batch number, left out (the Owner, 3 Nov 2026)
         bas.append({"label": str(r.get("label") or badge)[:80], "badge": badge, "user_id": uid,
                     "metrics": clean_metrics(r.get("metrics"))})
         # Remember a link the Admin made by hand, so next week matches itself.
@@ -214,7 +223,7 @@ async def import_quality(request: Request):
                                                         "set_at": datetime.now(timezone.utc).isoformat()}},
                                               upsert=True)
     if not bas:
-        raise HTTPException(status_code=400, detail="No rows to save")
+        raise HTTPException(status_code=400, detail="Nobody on this report is on the Hub yet. Link at least one row to a person.")
     # Adding to a week already saved (e.g. The Round and 4th week from
     # another page of the report) fills in what's new and keeps the rest.
     existing = await db.quality_weeks.find_one({"office_id": office_id, "week_ending": week}, {"bas": 1, "total": 1})
@@ -222,11 +231,12 @@ async def import_quality(request: Request):
     if existing:
         bas, total = merge_week(existing.get("bas") or [], existing.get("total") or {}, bas, total)
     percent_fix({"rows": bas, "total": total})
-    await db.quality_weeks.update_one(
-        {"office_id": office_id, "week_ending": week},
-        {"$set": {"office_id": office_id, "week_ending": week, "bas": bas, "total": total, "pct_ok": True,
-                  "imported_at": datetime.now(timezone.utc).isoformat(), "imported_by": admin.get("id")}},
-        upsert=True)
+    fields = {"office_id": office_id, "week_ending": week, "bas": bas, "total": total, "pct_ok": True,
+              "imported_at": datetime.now(timezone.utc).isoformat(), "imported_by": admin.get("id")}
+    fw_from = parse_week(body.get("fourth_week_from"))
+    if fw_from:
+        fields["fourth_week_from"] = fw_from   # which week's sign-ups the 4th week is from
+    await db.quality_weeks.update_one({"office_id": office_id, "week_ending": week}, {"$set": fields}, upsert=True)
     try:
         await relink_saved(office_id, users)
     except Exception as ex:  # linking older weeks must never stop a save
@@ -302,7 +312,11 @@ async def get_quality(request: Request, view: str = "week", week: Optional[str] 
         print(f"[quality] relinking saved weeks failed: {ex}")
     now, before, label = pick_weeks(weeks, view, week, month)
     docs = {d["week_ending"]: d async for d in db.quality_weeks.find(
-        {"office_id": office_id, "week_ending": {"$in": now + before}}, {"_id": 0, "week_ending": 1, "bas": 1, "total": 1, "imported_at": 1})}
+        {"office_id": office_id, "week_ending": {"$in": now + before}},
+        {"_id": 0, "week_ending": 1, "bas": 1, "total": 1, "imported_at": 1, "fourth_week_from": 1})}
+    # Which sign-up weeks the 4th week figures in view are from (8 weeks back).
+    fw_from = [{"week_ending": w, "from": docs[w]["fourth_week_from"], "label": week_label(docs[w]["fourth_week_from"])}
+               for w in now if (docs.get(w) or {}).get("fourth_week_from")]
 
     uid = str(user.get("id"))
     role = user.get("role")
@@ -316,6 +330,8 @@ async def get_quality(request: Request, view: str = "week", week: Optional[str] 
     people: dict[str, dict] = {}
     for w in now + before:
         for b in (docs.get(w) or {}).get("bas") or []:
+            if not b.get("user_id"):
+                continue   # nobody on the Hub (a stray batch number): never shown
             if visible is not None and b.get("user_id") not in visible:
                 continue
             key = b.get("user_id") or f"badge:{b['badge']}"
@@ -421,7 +437,7 @@ async def get_quality(request: Request, view: str = "week", week: Optional[str] 
                    "metrics": _coloured(aggregate([m for r in rows for m in people_now(people, r)])), "prev": {}}
 
     return {**base, "week_ending": now[0], "month": now[0][:7] if view == "month" else None,
-            "label": label, "period_weeks": len(now), "me": me, "team": team, "teams": teams, "box": box,
+            "label": label, "period_weeks": len(now), "fourth_week_from": fw_from, "me": me, "team": team, "teams": teams, "box": box,
             # when the newest week in view was added: Home shows the quality card for a week after
             "imported_at": (docs.get(now[0]) or {}).get("imported_at"),
             # older screens read these two

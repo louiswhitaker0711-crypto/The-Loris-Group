@@ -422,7 +422,8 @@ async def tool_get_quality(owner: dict, args: dict) -> dict:
         return {"message": "No quality report uploaded for that week.", "weeks_available": weeks}
     people = await _office_people(owner, include_left=True)
     bas = [{"name": (people.get(str(b.get("user_id"))) or {}).get("name") or b.get("label"),
-            "metrics": b.get("metrics")} for b in doc.get("bas") or [] if _sees(owner, b.get("user_id"))]
+            "metrics": b.get("metrics")} for b in doc.get("bas") or []
+           if b.get("user_id") and _sees(owner, b.get("user_id"))]   # unmatched batch numbers are left out
     return {"week_ending": doc["week_ending"], "measures": LABELS,
             "targets": {k: v["text"] for k, v in TARGETS.items()},
             "office_total": doc.get("total"), "bas": bas, "weeks_available": weeks}

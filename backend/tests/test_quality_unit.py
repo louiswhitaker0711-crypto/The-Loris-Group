@@ -276,3 +276,81 @@ def test_power_bis_filter_note_is_never_a_ba():
     grid = [["MC", "Sales Volume"], ["Example A MMC1234", 5],
             ["Applied filters: WeekEnding_Date is 11 October 2026", None]]
     assert [r["badge"] for r in from_tables([grid])["rows"]] == ["MMC1234"]
+
+
+def test_fourth_delivery_page_reads_counts_and_rate():
+    from core.quality import percent_fix
+    from core.quality import is_fourth_week_report
+    grid = [["WE 30/08/2026"], ["MC", "1st Week", "4th Week", "4th Week Rate"],
+            ["Ginger Leeds", 12, 9, 0.75],
+            ["Example A - MMC1234", 10, 8, 0.8], ["Example B - MMC5678", 2, 1, 0.5],
+            ["Total", 12, 9, 0.75]]
+    rep = percent_fix(from_tables([grid]))
+    assert rep["week_ending"] == "2026-08-30"
+    a = rep["rows"][0]["metrics"]
+    assert a == {"fourth_week_of": 10, "fourth_week_n": 8, "fourth_week": 80.0}   # 8 is a count, never 8%
+    assert rep["total"] == {"fourth_week_of": 12, "fourth_week_n": 9, "fourth_week": 75.0}
+    assert is_fourth_week_report(rep)
+
+
+def test_fourth_week_rate_worked_out_from_counts_and_zeros_kept():
+    grid = [["MC", "1st Week", "4th Week"], ["Example A MMC1234", 4, 0], ["Example B MMC5678", 3, 0]]
+    rep = from_tables([grid])
+    assert [r["metrics"]["fourth_week"] for r in rep["rows"]] == [0.0, 0.0]   # real zeros, not "not due"
+
+
+def test_fourth_week_shows_8_weeks_later():
+    from core.quality import fourth_week_shows_on
+    assert fourth_week_shows_on("2026-08-30") == "2026-10-25"
+    assert fourth_week_shows_on("2026-08-16") == "2026-10-11"
+    assert fourth_week_shows_on(None) is None
+
+
+def test_quality_report_is_not_a_fourth_week_report():
+    from core.quality import is_fourth_week_report
+    rep = from_tables([[["MC", "Sales Volume", "Fail Rate"], ["Example A MMC1234", 8, 0.1]]])
+    assert not is_fourth_week_report(rep)
+
+
+def test_fourth_week_averages_by_customers():
+    from core.quality import aggregate
+    out = aggregate([{"sales": 3, "fourth_week": 80, "fourth_week_n": 8, "fourth_week_of": 10},
+                     {"sales": 9, "fourth_week": 40, "fourth_week_n": 2, "fourth_week_of": 5}])
+    assert out["fourth_week_n"] == 10 and out["fourth_week_of"] == 15
+    assert out["fourth_week"] == 66.67   # 10 of 15, not weighted by sales
+
+
+def test_misread_fourth_week_on_25_oct_is_cleared_once():
+    import asyncio
+    from core.content_fixes import _clear_bad_fourth_week
+
+    class Coll:
+        def __init__(self, docs):
+            self.docs = docs
+
+        def find(self, q, proj=None):
+            docs = [d for d in self.docs if d["week_ending"] == q["week_ending"]
+                    and "fourth_week_from" not in d and d.get("fw_cleared") is not True]
+
+            async def gen():
+                for d in docs:
+                    yield d
+            return gen()
+
+        async def update_one(self, q, upd):
+            next(d for d in self.docs if d["_id"] == q["_id"]).update(upd["$set"])
+
+    weeks = Coll([
+        {"_id": 1, "week_ending": "2026-10-25", "bas": [{"badge": "MMC1234", "metrics": {"sales": 8, "fourth_week": 8}}],
+         "total": {"sales": 38, "fourth_week": 32}},
+        {"_id": 2, "week_ending": "2026-10-18", "bas": [{"badge": "MMC1234", "metrics": {"fourth_week": 50}}], "total": {}},
+    ])
+
+    class DB:
+        quality_weeks = weeks
+
+    assert asyncio.run(_clear_bad_fourth_week(DB())) == 1
+    a, b = weeks.docs
+    assert a["bas"][0]["metrics"] == {"sales": 8} and a["total"] == {"sales": 38}
+    assert b["bas"][0]["metrics"] == {"fourth_week": 50}      # other weeks untouched
+    assert asyncio.run(_clear_bad_fourth_week(DB())) == 0

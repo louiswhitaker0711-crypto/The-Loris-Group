@@ -127,6 +127,15 @@ export default function QualityScreen() {
     if (f == null) return null;
     return n != null ? `${f} fail${f === 1 ? '' : 's'} of ${n} sign-up${n === 1 ? '' : 's'}` : `${f} fail${f === 1 ? '' : 's'}`;
   };
+  // "8 of 10 · from WE 30 Aug": the 4th week report shows on the week 8 weeks
+  // after those customers signed up.
+  const fwFrom: { label: string }[] = d?.fourth_week_from || [];
+  const fourthText = (m: Record<string, Cell> | undefined) => {
+    if ((m as any)?.fourth_week?.value == null) return null;
+    const n = (m as any)?.fourth_week_n?.value, of = (m as any)?.fourth_week_of?.value;
+    const from = fwFrom.length === 1 ? `from ${fwFrom[0].label.replace(/ \d{4}$/, '')}` : fwFrom.length > 1 ? `from ${fwFrom.length} weeks` : null;
+    return [of != null ? `${n ?? 0} of ${of}` : null, from].filter(Boolean).join(' · ') || null;
+  };
   // A card of tiles: the same look for you, your team and the office.
   const statBox = (testID: string, title: string, row: any, note: string | null) => (
     <View style={s.card} testID={testID}>
@@ -137,7 +146,7 @@ export default function QualityScreen() {
           const cell: Cell | undefined = row.metrics?.[m.key];
           const t = tone(cell?.rag ?? null);
           const dir = better(m.key, cell?.value, row.prev?.[m.key]);
-          const extra = m.key === 'fail_rate' ? failText(row.metrics) : m.key === 'sales' && row.metrics?.signups?.value != null ? `${row.metrics.signups.value} signed up` : null;
+          const extra = m.key === 'fail_rate' ? failText(row.metrics) : m.key === 'sales' && row.metrics?.signups?.value != null ? `${row.metrics.signups.value} signed up` : m.key === 'fourth_week' ? fourthText(row.metrics) : null;
           return (
             <View key={m.key} style={[s.tile, { backgroundColor: t.bg }]}>
               <Text style={s.tileLabel}>{m.label}</Text>
@@ -385,7 +394,7 @@ function Upload({ onSaved }: { onSaved: (week: string) => void }) {
     setBusy('save');
     try {
       const rows = (preview.rows || []).map((r: any) => ({ label: r.label, badge: r.badge, metrics: r.metrics, user_id: links[r.badge] || null }));
-      const r = await apiService.importQuality({ week_ending: iso, rows, total: preview.total || {}, notify });
+      const r = await apiService.importQuality({ week_ending: iso, rows, total: preview.total || {}, notify, fourth_week_from: preview.fourth_week_from || undefined });
       toast.success(`${r.data.added_to_saved_week ? 'Added to' : 'Saved'} WE ${ukDate(iso)}${r.data.notified ? ` · ${r.data.notified} told` : ''}${r.data.retrain_alerts ? ` · ${r.data.retrain_alerts} retrain alert${r.data.retrain_alerts === 1 ? '' : 's'}` : ''}`);
       setPreview(null); setAdded([]);
       qc.invalidateQueries({ queryKey: ['quality'] });
@@ -440,10 +449,12 @@ function Upload({ onSaved }: { onSaved: (week: string) => void }) {
             <TextInput value={weekText} onChangeText={setWeekText} placeholder="DD/MM/YYYY" placeholderTextColor={c.textMuted}
               style={s.input} inputMode="numeric" maxLength={10} />
           </View>
+          {preview.fourth_week_from ? <Text style={s.note}>4th week is from WE {ukDate(preview.fourth_week_from)}'s sign-ups and shows on this week.</Text> : null}
+          {(preview.rows || []).some((r: any) => !links[r.badge]) ? <Text style={s.note}>Anyone not on the Hub is a stray batch number and is left out. Tap a row to link it to someone if it's really them.</Text> : null}
           {preview.fourth_week_due === false && <Text style={s.note}>4th week is 0% for everyone this week, so it's left blank until it's due.</Text>}
           {(preview.rows || []).map((r: any) => {
             const linked = links[r.badge];
-            const bits = measures.filter((m) => r.metrics[m.key] != null).map((m) => `${m.label} ${fmt(m.key, r.metrics[m.key])}`);
+            const bits = measures.filter((m) => r.metrics[m.key] != null).map((m) => `${m.label} ${fmt(m.key, r.metrics[m.key])}${m.key === 'fourth_week' && r.metrics.fourth_week_of != null ? ` (${r.metrics.fourth_week_n ?? 0} of ${r.metrics.fourth_week_of})` : ''}`);
             return (
               <View key={r.badge} style={s.prow}>
                 <View style={s.prowHead}>
@@ -451,7 +462,7 @@ function Upload({ onSaved }: { onSaved: (week: string) => void }) {
                   <Pressable onPress={() => setChoosing(choosing === r.badge ? null : r.badge)} hitSlop={6}
                     style={[s.match, { backgroundColor: linked ? c.greenBg : c.yellowBg }]}>
                     <Text style={[s.matchText, { color: linked ? c.green : c.yellow }]} numberOfLines={1}>
-                      {linked ? `→ ${nameOf(linked) || 'linked'}${r.matched_by === 'name' && linked === r.user_id ? ' (by name)' : ''}` : 'Link to…'}
+                      {linked ? `→ ${nameOf(linked) || 'linked'}${r.matched_by === 'name' && linked === r.user_id ? ' (by name)' : ''}` : 'Not on the Hub · left out'}
                     </Text>
                   </Pressable>
                 </View>

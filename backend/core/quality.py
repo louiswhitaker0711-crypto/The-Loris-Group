@@ -35,7 +35,10 @@ MEASURES = [
     ("fourth_week", "4th week", "pct"),
     ("fail_rate", "Fails", "pct"),
 ]
-KINDS = {k: kind for k, _, kind in MEASURES}
+# The 4th week report's counts: how many signed up that week ("1st Week")
+# and how many of them reached their 4th delivery ("4th Week").
+COUNTS = {"fourth_week_n": "int", "fourth_week_of": "int"}
+KINDS = {**{k: kind for k, _, kind in MEASURES}, **COUNTS}
 LABELS = {k: label for k, label, _ in MEASURES}
 
 # Green at or above `green`, amber at or above `amber`, red below; for fails
@@ -66,7 +69,7 @@ ROLLUP_LABELS = {"total", "grand total"}
 NAME_HEADERS = {"namebadge", "name", "ba", "rep", "badge"}
 BADGE_RE = re.compile(r"\s([A-Z]{0,4}\d{3,})$")
 # Sane limits, so a misread number can't land as something silly.
-LIMITS = {"sales": (0, 1000), "aov": (0, 500), "drops": (0, 7), "the_round": (0, 100),
+LIMITS = {"fourth_week_n": (0, 1000), "fourth_week_of": (0, 1000), "sales": (0, 1000), "aov": (0, 500), "drops": (0, 7), "the_round": (0, 100),
           "fourth_week": (0, 100), "fail_rate": (0, 100)}
 
 
@@ -126,6 +129,12 @@ def header_key(text: str) -> str | None:
     t = (text or "").strip().lower()
     if not t or t == "mc":
         return None
+    # The 4th Delivery page: "1st Week" and "4th Week" are counts of
+    # customers, "4th Week Rate" the percentage.
+    if "1st week" in t or "first week" in t:
+        return "fourth_week_of"
+    if ("4th week" in t or "fourth week" in t) and "rate" not in t and "%" not in t:
+        return "fourth_week_n"
     for needle, key in HEADER_KEYS:
         if needle in t:
             return key
@@ -254,14 +263,42 @@ def finish(rep: dict) -> dict:
     """4th week only counts once it's due: a week where everyone (and the
     total) shows 0% hasn't reached the 4th delivery yet, so it's left blank."""
     rows = rep.get("rows") or []
+    for m in [r["metrics"] for r in rows] + [rep.get("total") or {}]:
+        # Counts but no rate: work the rate out (8 of 10 → 80%).
+        if m.get("fourth_week") is None and m.get("fourth_week_of") and m.get("fourth_week_n") is not None:
+            m["fourth_week"] = round(m["fourth_week_n"] / m["fourth_week_of"] * 100, 2)
+    counted = any("fourth_week_of" in r["metrics"] for r in rows)
     fw = [r["metrics"].get("fourth_week") for r in rows if "fourth_week" in r["metrics"]]
-    if fw and all(v == 0 for v in fw) and not (rep.get("total") or {}).get("fourth_week"):
+    if fw and not counted and all(v == 0 for v in fw) and not (rep.get("total") or {}).get("fourth_week"):
         for r in rows:
             r["metrics"].pop("fourth_week", None)
         (rep.get("total") or {}).pop("fourth_week", None)
         rep["fourth_week_due"] = False
     rows.sort(key=lambda r: r["label"].lower())
     return rep
+
+
+# The 4th week report for a week's sign-ups comes in 8 weeks later, alongside
+# that week's quality report (4th week for WE 30 Aug with the report for WE
+# 25 Oct), and shows on that later week (the Owner, 3 Nov 2026).
+FOURTH_WEEK_LAG_DAYS = 56
+FOURTH_WEEK_KEYS = {"fourth_week", "fourth_week_n", "fourth_week_of"}
+
+
+def is_fourth_week_report(rep: dict) -> bool:
+    """A reading holding only 4th week figures: the 4th Delivery page."""
+    keys = set((rep.get("total") or {}).keys())
+    for r in rep.get("rows") or []:
+        keys |= set((r.get("metrics") or {}).keys())
+    return bool(keys) and keys <= FOURTH_WEEK_KEYS
+
+
+def fourth_week_shows_on(signed_up_week: str | None) -> str | None:
+    """The week a sign-up week's 4th week figures show on: 8 weeks later."""
+    if not signed_up_week:
+        return None
+    from datetime import timedelta
+    return (date.fromisoformat(signed_up_week) + timedelta(days=FOURTH_WEEK_LAG_DAYS)).isoformat()
 
 
 def signups(w: dict) -> float | None:
@@ -295,6 +332,10 @@ def aggregate(weeks: list[dict]) -> dict:
     A row with no sales figure counts once; 0 sales and no fails doesn't
     count towards the averages."""
     out: dict = {}
+    for key in COUNTS:
+        vals = [w[key] for w in weeks if w.get(key) is not None]
+        if vals:
+            out[key] = sum(vals)
     sales = [w["sales"] for w in weeks if w.get("sales") is not None]
     if sales:
         out["sales"] = sum(sales)
@@ -314,6 +355,8 @@ def aggregate(weeks: list[dict]) -> dict:
             if key in ("aov", "drops", "fail_rate"):
                 g = signups(w)
                 weight = 1.0 if g is None else g
+            elif key == "fourth_week" and w.get("fourth_week_of") is not None:
+                weight = w["fourth_week_of"]   # 8 of 10 and 2 of 5 is 10 of 15
             else:
                 weight = 1.0 if w.get("sales") is None else w["sales"]
             num += v * weight
@@ -441,11 +484,15 @@ AI_PROMPT = """This is a screenshot of a weekly quality report (Power BI) for a 
 It has a week ending ("WE") and one or more tables. Each table's first column is "MC": an office row,
 then one row per person written like "Example P MMC1234" or "Example P 12345", then "Total".
 The tables are measures such as Sales Volume, AOV, Drops, 4th Delivery %, Fail Rate and possibly The Round.
+It may instead be the 4th Delivery page: columns "1st Week" (customers signed up), "4th Week" (how many
+reached their 4th delivery) and "4th Week Rate" (a percentage). Put those in fourth_week_of, fourth_week_n
+and fourth_week.
 
 Read every number exactly as shown. Return ONLY JSON, no commentary:
 {"week_ending": "YYYY-MM-DD or null",
  "rows": [{"label": "the MC text exactly, name and badge", "sales": number|null, "aov": number|null,
-           "drops": number|null, "fourth_week": number|null, "fail_rate": number|null, "the_round": number|null}],
- "total": {"sales": ..., "aov": ..., "drops": ..., "fourth_week": ..., "fail_rate": ..., "the_round": ...}}
+           "drops": number|null, "fourth_week": number|null, "fail_rate": number|null, "the_round": number|null,
+           "fourth_week_n": number|null, "fourth_week_of": number|null}],
+ "total": {"sales": ..., "aov": ..., "drops": ..., "fourth_week": ..., "fail_rate": ..., "the_round": ..., "fourth_week_n": ..., "fourth_week_of": ...}}
 Percentages as plain numbers (13.10 % → 13.1). Money without the £. Use null for a measure not in the
 screenshot. One entry per person, combining all the tables. Leave out the office row."""
