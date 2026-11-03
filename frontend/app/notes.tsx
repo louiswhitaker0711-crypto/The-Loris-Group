@@ -6,7 +6,7 @@
  * notes are yours; the Owner's posted notes are marked and come first.
  * Search finds any word in any note. (GET /notes/folder, GET /notes)
  */
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, ActivityIndicator, Image, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -18,6 +18,7 @@ import { APP_LOCALE } from '../src/utils/appTime';
 import { useDeviceInsets } from '../src/nav/AppShell';
 import { toast } from '../src/utils/toast';
 import FolderTag from '../src/components/notes/FolderTag';
+import { readBackup, writeBackup, clearBackup, onLeave } from '../src/utils/draftBackup';
 
 type Note = { id: string; head: string; head_label: string; title: string; body: string; date: string;
   source_label: string; shared: boolean; author_name: string; mine: boolean; photos?: string[] };
@@ -35,8 +36,14 @@ export default function NotesScreen() {
   const [view, setView] = useState<View_>({ kind: 'root' });
   const [q, setQ] = useState('');
   // Tap your own note to change it; Write a note adds one (under the heading you're in).
-  const [editing, setEditing] = useState<null | { note?: Note; head: string }>(null);
+  const [editing, setEditing] = useState<null | { note?: Note; head: string; restored?: NoteDraft }>(null);
   const folder = useQuery({ queryKey: ['notes-folder'], queryFn: async () => (await api.get('/notes/folder')).data });
+  // A note that was being written when the app closed opens again by itself.
+  useEffect(() => {
+    readBackup<NoteDraft>('note:open').then((b) => {
+      if (b?.pending && b.value) setEditing({ note: b.value.note, head: b.value.head, restored: b.value });
+    });
+  }, []);
   const search = q.trim();
   const listQ = useQuery({
     enabled: view.kind === 'head' || search.length >= 2,
@@ -103,6 +110,11 @@ export default function NotesScreen() {
                 ))}
               </View>
               {!d?.total && <Text style={[s.small, { textAlign: 'center' }]}>Notes you write in your planner’s note boxes land here by themselves, under the heading you give them.</Text>}
+              <Pressable onPress={() => router.push('/notes-removed' as any)} style={[s.row, s.list]} accessibilityRole="button" testID="notes-removed">
+                <Ionicons name="arrow-undo-outline" size={16} color={c.primary} />
+                <Text style={s.rowT}>Recently removed</Text>
+                <Ionicons name="chevron-forward" size={15} color={c.textMuted} />
+              </Pressable>
             </>
           ) : view.kind === 'stage' && stage ? (
             <>
@@ -133,42 +145,100 @@ export default function NotesScreen() {
           ) : null}
         </View>
       </ScrollView>
-      {editing && <NoteEditor note={editing.note} head={editing.head} onClose={() => setEditing(null)} />}
+      {editing && <NoteEditor note={editing.note} head={editing.head} restored={editing.restored} onClose={() => setEditing(null)} />}
     </View>
   );
 }
 
-function NoteEditor({ note, head, onClose }: { note?: Note; head: string; onClose: () => void }) {
+type NoteDraft = { note?: Note; head: string; id?: string; title: string; body: string; h: string };
+
+// Saves as you type (the Owner, 3 Nov 2026: a BA lost her notes). A new note
+// is created on the first words and kept up to date after that; the phone
+// also keeps a copy until the server has it, so nothing typed is lost if the
+// app closes, the signal drops or the page reloads.
+function NoteEditor({ note, head, restored, onClose }: { note?: Note; head: string; restored?: NoteDraft; onClose: () => void }) {
   const c = useColors();
   const s = useMemo(() => styles(c), [c]);
   const insets = useDeviceInsets();
   const qc = useQueryClient();
-  const [title, setTitle] = useState(note?.title || '');
-  const [body, setBody] = useState(note?.body || '');
-  const [h, setH] = useState(note?.head || head || '');
+  const [title, setTitle] = useState(restored?.title ?? note?.title ?? '');
+  const [body, setBody] = useState(restored?.body ?? note?.body ?? '');
+  const [h, setH] = useState(restored?.h ?? note?.head ?? head ?? '');
   const [busy, setBusy] = useState(false);
+  const [state, setState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const idRef = useRef<string | undefined>(restored?.id ?? note?.id);
+  const lastSaved = useRef(JSON.stringify([note?.title || '', note?.body || '', note?.head || head || '']));
+  const timer = useRef<any>(null);
+  const inFlight = useRef<Promise<void> | null>(null);
+  const latest = useRef({ title, body, h });
+  latest.current = { title, body, h };
+
+  const push = async (): Promise<void> => {
+    if (inFlight.current) { await inFlight.current; }
+    const { title: t, body: b, h: hh } = latest.current;
+    const sig = JSON.stringify([t, b, hh]);
+    if (sig === lastSaved.current) return;
+    if (!idRef.current && !(b.trim() || t.trim())) return;
+    setState('saving');
+    const run = (async () => {
+      try {
+        if (idRef.current) await api.put(`/notes/${idRef.current}`, { title: t, body: b, head: hh });
+        else {
+          const r = await api.post('/notes', { title: t, body: b, head: hh });
+          idRef.current = r.data?.note_id || undefined;
+        }
+        lastSaved.current = sig;
+        setState('saved');
+        if (sig === JSON.stringify([latest.current.title, latest.current.body, latest.current.h])) clearBackup('note:open');
+        qc.invalidateQueries({ queryKey: ['notes-folder'] });
+        qc.invalidateQueries({ queryKey: ['notes-list'] });
+        qc.invalidateQueries({ queryKey: ['weekly-planner'] });
+      } catch (e: any) {
+        setState('error');
+        throw e;
+      }
+    })();
+    inFlight.current = run.finally(() => { inFlight.current = null; }).catch(() => {});
+    return run;
+  };
+
+  // Every change: keep a copy on the phone, then save a moment later.
+  useEffect(() => {
+    const sig = JSON.stringify([title, body, h]);
+    if (sig === lastSaved.current) return;
+    writeBackup<NoteDraft>('note:open', { note, head, id: idRef.current, title, body, h });
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => { push().catch(() => {}); }, 900);
+  }, [title, body, h]);
+  useEffect(() => onLeave(() => { if (timer.current) clearTimeout(timer.current); push().catch(() => {}); }), []);
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+
+  // Done / back: save what's there and close. Only closes once it's saved;
+  // if it can't save, it stays open with the text kept.
   const save = async () => {
+    if (timer.current) clearTimeout(timer.current);
     setBusy(true);
     try {
-      if (note) await api.put(`/notes/${note.id}`, { title, body, head: h });
-      else await api.post('/notes', { title, body, head: h });
-      qc.invalidateQueries({ queryKey: ['notes-folder'] });
-      qc.invalidateQueries({ queryKey: ['notes-list'] });
-      qc.invalidateQueries({ queryKey: ['weekly-planner'] });
-      toast.success(note ? 'Note saved' : 'Note added');
+      await push();
+      clearBackup('note:open');
+      if (idRef.current || note) toast.success(note ? 'Note saved' : 'Note added');
       onClose();
     } catch (e: any) {
-      toast.error('Couldn\u2019t save', typeof e?.response?.data?.detail === 'string' ? e.response.data.detail : 'Try again.');
+      toast.error('Couldn\u2019t save yet', typeof e?.response?.data?.detail === 'string' ? e.response.data.detail : 'Your note is kept on this phone and will save when you\u2019re back online.');
     } finally { setBusy(false); }
   };
+  const statusText = state === 'saving' ? 'Saving\u2026' : state === 'saved' ? 'Saved' : state === 'error' ? 'Not saved yet \u2014 kept on this phone' : '';
   return (
-    <Modal visible animationType="slide" onRequestClose={onClose}>
+    <Modal visible animationType="slide" onRequestClose={save}>
       <View style={[s.edRoot, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 8 }]}>
         <View style={s.edHead}>
-          <Pressable onPress={onClose} hitSlop={8} accessibilityRole="button"><Text style={s.back}>Cancel</Text></Pressable>
-          <Text style={s.edTitle}>{note ? 'Edit note' : 'New note'}</Text>
-          <Pressable onPress={save} disabled={busy} hitSlop={8} accessibilityRole="button" testID="note-save">
-            {busy ? <ActivityIndicator color={c.primary} /> : <Text style={[s.back, { fontFamily: fonts.bodyBold }]}>Save</Text>}
+          <View style={{ width: 60 }} />
+          <View style={{ alignItems: 'center' }}>
+            <Text style={s.edTitle}>{note ? 'Edit note' : 'New note'}</Text>
+            {!!statusText && <Text style={s.small}>{statusText}</Text>}
+          </View>
+          <Pressable onPress={save} disabled={busy} hitSlop={8} accessibilityRole="button" testID="note-save" style={{ width: 60, alignItems: 'flex-end' }}>
+            {busy ? <ActivityIndicator color={c.primary} /> : <Text style={[s.back, { fontFamily: fonts.bodyBold }]}>Done</Text>}
           </Pressable>
         </View>
         <ScrollView contentContainerStyle={{ padding: 16, gap: 10 }} keyboardShouldPersistTaps="handled">

@@ -940,6 +940,11 @@ export default function AdminScreen() {
                                   <Text style={styles.actText}>Reset password</Text>
                                 </TouchableOpacity>
                               )}
+                              <TouchableOpacity style={styles.act} testID={`admin-recover-notes-${u.id}`}
+                                onPress={() => router.push({ pathname: '/notes-removed', params: { user_id: u.id, name: u.name } } as any)}>
+                                <Ionicons name="arrow-undo-outline" size={15} color={colors.primary} />
+                                <Text style={styles.actText}>Recover notes</Text>
+                              </TouchableOpacity>
                               {u.profile_image && (
                                 <TouchableOpacity style={styles.act} onPress={() => showAlert('Remove Photo', `Remove ${u.name}'s profile picture?`, [
                                   { text: 'Cancel', style: 'cancel' },

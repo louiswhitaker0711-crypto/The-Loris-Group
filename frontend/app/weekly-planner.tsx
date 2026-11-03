@@ -37,6 +37,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDeviceInsets } from '../src/nav/AppShell';
 import { goalVsBreakeven } from '../src/utils/breakeven';
 import SlotNotesEditor, { SlotNote } from '../src/components/planner/SlotNotesEditor';
+import { readBackup, writeBackup, clearBackup, onLeave } from '../src/utils/draftBackup';
 import { SetFollowUpButton, FollowUpsForDay } from '../src/components/planner/FollowUps';
 import { APP_LOCALE, formatMoney } from '../src/utils/appTime';
 
@@ -432,40 +433,93 @@ export default function WeeklyPlannerScreen() {
   const [savingState, setSavingState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const debounceRef = useRef<any>(null);
   const loadedKeyRef = useRef<string>('');
+  // Notes the person deleted since the last save: the server only drops a
+  // note when it's told to, so a stale copy can't wipe newer notes.
+  const removedIdsRef = useRef<Set<string>>(new Set());
+  const pendingRef = useRef<Planner | null>(null);
+  const backupKey = `planner:${week}|${targetUserId || 'me'}`;
+  const editorRef = useRef<any>(null);
 
   useEffect(() => {
     if (!q.data) return;
     const key = `${q.data.week_ending}|${targetUserId || 'me'}`;
-    setDraft((cur) => {
-      // While EDITING, only (re)seed the draft when the week/person actually
-      // changes. Autosave responses must never clobber what's being typed —
-      // the server strips empty bullet rows, so re-seeding used to make a
-      // just-added "+ Add" row vanish right as you started typing in it.
-      if (q.data.can_edit && loadedKeyRef.current === key && cur) return cur;
-      loadedKeyRef.current = key;
-      return q.data.planner || null;
+    // While EDITING, only (re)seed the draft when the week/person actually
+    // changes. Autosave responses must never clobber what's being typed —
+    // the server strips empty bullet rows, so re-seeding used to make a
+    // just-added "+ Add" row vanish right as you started typing in it.
+    if (q.data.can_edit && loadedKeyRef.current === key) return;
+    loadedKeyRef.current = key;
+    setDraft(q.data.planner || null);
+    if (!q.data.can_edit) return;
+    // Anything typed here that never reached the server (app closed, no
+    // signal, the page reloaded): put it back, reopen the box, and save it.
+    readBackup<Planner>(`planner:${key}`).then((b) => {
+      if (!b?.pending || !b.value || loadedKeyRef.current !== key) return;
+      const server = q.data.planner as any;
+      const serverAt = server?.updated_at ? Date.parse(server.updated_at) : 0;
+      if (serverAt && serverAt > b.at) { clearBackup(`planner:${key}`); return; }
+      const restored = { ...(server || {}), ...b.value, id: server?.id || b.value.id } as Planner;
+      setDraft(restored);
+      pendingRef.current = restored;
+      saveMut.mutate(restored);
+      if (b.open) setEditorFieldRaw(b.open);
+      toast.success('Your unsaved notes are back', 'They\u2019re saving now.');
     });
   }, [q.data, targetUserId]);
 
   const saveMut = useMutation({
-    mutationFn: (p: Planner) =>
-      apiService.upsertWeeklyPlanner(p.week_ending, { review: p.review, days: p.days, times: p.times || {}, notes: p.notes, folder: p.folder || {}, slot_notes: p.slot_notes || {} }).then((r) => r.data),
+    mutationFn: (p: Planner) => {
+      const removed = Array.from(removedIdsRef.current);
+      return apiService.upsertWeeklyPlanner(p.week_ending, { review: p.review, days: p.days, times: p.times || {}, notes: p.notes, folder: p.folder || {}, slot_notes: p.slot_notes || {}, removed_note_ids: removed })
+        .then((r) => ({ data: r.data as Planner, sent: p, removed }));
+    },
     onMutate: () => setSavingState('saving'),
-    onSuccess: (data: Planner) => {
+    onSuccess: ({ data, sent, removed }) => {
       setSavingState('saved');
+      removed.forEach((id) => removedIdsRef.current.delete(id));
+      // Saved: the phone's copy is no longer needed (unless more was typed since).
+      if (pendingRef.current === sent) { pendingRef.current = null; clearBackup(backupKey); }
       queryClient.setQueryData(['weekly-planner', week, targetUserId || 'me'], (prev: any) =>
         prev ? { ...prev, exists: true, planner: data } : prev);
-      setDraft((d) => (d && (!d.id || d.id !== data.id) ? { ...d, id: data.id } : d));
+      setDraft((d) => {
+        if (!d) return d;
+        let next = d;
+        if (!d.id || d.id !== data.id) next = { ...next, id: data.id };
+        // Notes added somewhere else (Notes, another tab) show up here too.
+        const have = new Set(Object.values(d.slot_notes || {}).flat().map((n) => n.id));
+        const extra = Object.entries(data.slot_notes || {}).flatMap(([k, ns]) =>
+          ns.filter((n) => !have.has(n.id) && !removedIdsRef.current.has(n.id)).map((n) => [k, n] as const));
+        if (extra.length) {
+          const sn = { ...(next.slot_notes || {}) };
+          extra.forEach(([k, n]) => { sn[k] = [...(sn[k] || []), n]; });
+          next = { ...next, slot_notes: sn };
+        }
+        return next;
+      });
       setTimeout(() => setSavingState((s) => (s === 'saved' ? 'idle' : s)), 1500);
     },
-    onError: () => setSavingState('error'),
+    onError: () => {
+      setSavingState('error');
+      // Try again shortly; the phone keeps its copy until it lands.
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => { if (pendingRef.current) saveMut.mutate(pendingRef.current); }, 8000);
+    },
   });
 
   const scheduleSave = useCallback((next: Planner) => {
     if (!canEdit) return;
+    pendingRef.current = next;
+    writeBackup(backupKey, next, true, editorRef.current);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => saveMut.mutate(next), 1200);
-  }, [canEdit, saveMut]);
+    debounceRef.current = setTimeout(() => saveMut.mutate(next), 800);
+  }, [canEdit, saveMut, backupKey]);
+
+  // Leaving the app or closing the page: save straight away, don't wait.
+  useEffect(() => onLeave(() => {
+    if (!pendingRef.current) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    saveMut.mutate(pendingRef.current);
+  }), [saveMut]);
 
   const update = (mutator: (cur: Planner) => Planner) => {
     setDraft((cur) => {
@@ -497,10 +551,16 @@ export default function WeeklyPlannerScreen() {
     setEditorMode(f?.notesOnly ? 'notes' : mode);
     setEditorFieldRaw(f);
   };
+  // Which box is open goes in the phone's copy, so it reopens after a reload.
+  useEffect(() => { editorRef.current = editorField; }, [editorField]);
   const slotKey = editorField?.where === 'day' && editorField.tab != null && editorField.key ? `${editorField.tab}:${editorField.key}` : '';
   const slotNotes: SlotNote[] = (slotKey && draft?.slot_notes?.[slotKey]) || [];
   const setSlotNotes = (k: string, v: SlotNote[]) =>
-    update((cur) => ({ ...cur, slot_notes: { ...(cur.slot_notes || {}), [k]: v } }));
+    update((cur) => {
+      const keep = new Set(v.map((n) => n.id));
+      (cur.slot_notes?.[k] || []).forEach((n) => { if (!keep.has(n.id)) removedIdsRef.current.add(n.id); });
+      return { ...cur, slot_notes: { ...(cur.slot_notes || {}), [k]: v } };
+    });
   const notesCount = (tab: number, key: string) => (draft?.slot_notes?.[`${tab}:${key}`] || []).length;
   // Under a slot: how many notes it holds; tap to open them.
   const notesChip = (tab: number, key: string, title: string) => {
