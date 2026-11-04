@@ -131,7 +131,7 @@ export default function QualityScreen() {
     setSharing(true);
     try {
       await exportPdfFromHtml(buildQualityBulletinHtml(d), {
-        filename: `quality-bulletin-${d.week_ending}.pdf`, dialogTitle: 'Share Quality Bulletin', width: 612, sizeToContent: true,
+        filename: `quality-bulletin-${d.week_ending}.pdf`, dialogTitle: `${d.label} ${d.kind === 'fourth' ? '4th Week' : 'Quality'} Report`, width: 612, sizeToContent: true,
       }, win);
     } catch (e: any) {
       if (win && !win.closed) { try { win.close(); } catch { /* ignore */ } }
