@@ -383,7 +383,6 @@ async def get_quality(request: Request, view: str = "week", week: Optional[str] 
     docs = {d["week_ending"]: d async for d in db.quality_weeks.find(
         {"office_id": office_id, "week_ending": {"$in": now + before}},
         {"_id": 0, "week_ending": 1, "bas": 1, "total": 1, "imported_at": 1, "fourth_week_from": 1, "fail_reasons": 1})}
-    bells = await _bells_sales(office_id, now + before)
     # Which sign-up weeks the 4th week figures in view are from (8 weeks back).
     fw_from = [{"week_ending": w, "from": docs[w]["fourth_week_from"], "label": week_label(docs[w]["fourth_week_from"])}
                for w in now if (docs.get(w) or {}).get("fourth_week_from")]
@@ -421,11 +420,9 @@ async def get_quality(request: Request, view: str = "week", week: Optional[str] 
             continue
         rows.append({"user_id": p["user_id"], "name": names.get(p["user_id"]) or p["label"], "badge": p["badge"],
                      "linked": bool(p["user_id"]), "weeks": len(p["now"]),
-                     # Sales are the Hub's own (Bells); the rest is Power BI's quality.
-                     "metrics": _use_bells(_coloured(aggregate(list(p["now"].values()))), _bells_n(bells, now, p["user_id"])),
-                     "prev": _use_bells(aggregate(p["before"]), _bells_n(bells, before, p["user_id"]), False),
-                     "history": [{"week_ending": w, "label": week_label(w),
-                                  "metrics": _use_bells(_coloured(aggregate([p["now"][w]])), _bells_n(bells, [w], p["user_id"]))}
+                     "metrics": _coloured(aggregate(list(p["now"].values()))),
+                     "prev": aggregate(p["before"]),
+                     "history": [{"week_ending": w, "label": week_label(w), "metrics": _coloured(aggregate([p["now"][w]]))}
                                  for w in now if w in p["now"]],
                      "_key": key})
 
@@ -459,18 +456,11 @@ async def get_quality(request: Request, view: str = "week", week: Optional[str] 
             g = groups.setdefault(k, {"key": k, "team_name": t.get("team_name") or None,
                                       "leader_name": t.get("leader_name"), "people": 0, "weeks": [], "before": []})
             g["people"] += 1
-            g.setdefault("uids", set()).add(r["user_id"])
             g["weeks"].extend(p["now"].values())
             g["before"].extend(p["before"])
-    def team_bells(uids: set, weeks: list[str]):
-        got = [_bells_n(bells, weeks, u) for u in uids]
-        got = [n for n in got if n is not None]
-        return sum(got) if got else None
-
     for g in groups.values():
-        uids = g.pop("uids", set())
-        g["metrics"] = _use_bells(_coloured(aggregate(g.pop("weeks"))), team_bells(uids, now))
-        g["prev"] = _use_bells(aggregate(g.pop("before")), team_bells(uids, before), False)
+        g["metrics"] = _coloured(aggregate(g.pop("weeks")))
+        g["prev"] = aggregate(g.pop("before"))
         g["parent_key"] = parent.get(g["key"]) if parent.get(g["key"]) in groups else None
     sales_of = lambda g: -((g["metrics"].get("sales") or {}).get("value") or 0)
     teams: list[dict] = []
@@ -504,11 +494,9 @@ async def get_quality(request: Request, view: str = "week", week: Optional[str] 
     box = None
     if whole:
         box = {"title": "The office", "kind": "office",
-               "metrics": _use_bells(_coloured(aggregate([(docs.get(w) or {}).get("total") or {} for w in now])), _bells_n(bells, now, None)),
-               "prev": _use_bells(aggregate([(docs.get(w) or {}).get("total") or {} for w in before]), _bells_n(bells, before, None), False),
-               "history": [{"week_ending": w, "label": week_label(w),
-                            "metrics": _use_bells(_coloured(aggregate([(docs.get(w) or {}).get("total") or {}])), _bells_n(bells, [w], None))}
-                           for w in now],
+               "metrics": _coloured(aggregate([(docs.get(w) or {}).get("total") or {} for w in now])),
+               "prev": aggregate([(docs.get(w) or {}).get("total") or {} for w in before]),
+               "history": [{"week_ending": w, "label": week_label(w), "metrics": _coloured(aggregate([(docs.get(w) or {}).get("total") or {}]))} for w in now],
                "fail_reasons": _sum_reasons([(docs.get(w) or {}).get("fail_reasons") or [] for w in now])}
     elif role == "leader":
         g = groups.get(uid)
@@ -516,8 +504,7 @@ async def get_quality(request: Request, view: str = "week", week: Optional[str] 
             box = {"title": f"Your team · {team_title(g)}", "kind": "team", "metrics": g["metrics"], "prev": g["prev"]}
         elif team:
             box = {"title": "Your team", "kind": "team",
-                   "metrics": _use_bells(_coloured(aggregate([m for r in rows for m in people_now(people, r)])),
-                                         team_bells({r["user_id"] for r in rows if r["user_id"]}, now)), "prev": {}}
+                   "metrics": _coloured(aggregate([m for r in rows for m in people_now(people, r)])), "prev": {}}
 
     return {**base, "week_ending": now[0], "month": now[0][:7] if view == "month" else None,
             "label": label, "period_weeks": len(now), "fourth_week_from": fw_from, "me": me, "team": team, "teams": teams, "box": box,
@@ -526,45 +513,6 @@ async def get_quality(request: Request, view: str = "week", week: Optional[str] 
             # older screens read these two
             "total": box["metrics"] if box and box["kind"] == "office" else None,
             "total_history": box.get("history") if box and box["kind"] == "office" else None}
-
-
-async def _bells_sales(office_id: str, weeks: list[str]) -> dict[str, dict]:
-    """Sign-ups from the Hub's own numbers (Bells, filled from the
-    breakdowns) for each week: {week: {user_id: n, None: office total}}.
-    The quality report is only for quality (the Owner, 4 Nov 2026), so sales
-    on the Quality page come from here, never from Power BI. A week with no
-    Bells at all is left out."""
-    out: dict[str, dict] = {}
-    async for e in db.bells_entries.find({"office_id": office_id, "week_ending": {"$in": weeks}},
-                                         {"_id": 0, "week_ending": 1, "user_id": 1, "days": 1}):
-        n = 0
-        for d in e.get("days") or []:
-            for k in ("over30", "under30"):
-                try:
-                    n += int(float((d or {}).get(k) or 0))
-                except (TypeError, ValueError):
-                    pass
-        wk = out.setdefault(e["week_ending"], {None: 0})
-        wk[None] += n
-        if e.get("user_id"):
-            wk[str(e["user_id"])] = wk.get(str(e["user_id"]), 0) + n
-    return out
-
-
-def _bells_n(bells: dict, weeks: list[str], uid: str | None):
-    """A person's (or, with None, the office's) Bells sign-ups over `weeks`;
-    None when none of those weeks has Bells."""
-    have = [w for w in weeks if w in bells]
-    return sum(bells[w].get(uid, 0) for w in have) if have else None
-
-
-def _use_bells(metrics: dict | None, n, coloured: bool = True) -> dict:
-    """Swap Power BI's sales for the Hub's sign-ups in a set of numbers (and
-    drop the sign-ups worked back from Power BI's sales)."""
-    m = {k: v for k, v in (metrics or {}).items() if k not in ("sales", "signups")}
-    if n is not None:
-        m["sales"] = {"value": n, "rag": None} if coloured else n
-    return m
 
 
 def _sum_reasons(weeks: list[list]) -> list[dict]:

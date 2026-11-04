@@ -614,7 +614,8 @@ def from_pdf(data: bytes) -> list[dict]:
         sign = office.get("sales") or office.get("signups_n")
         total = quality.setdefault("total", {})
         if sign is not None:
-            total["signups_n"] = sign  # for the fail count; sales on the page come from Bells
+            total["sales"] = sign      # the bigger figure, as Bells counts it
+            total["signups_n"] = sign
         if office.get("fails_n") is not None:
             total["fails_n"] = office["fails_n"]
         if reasons:

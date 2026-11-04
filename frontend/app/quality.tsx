@@ -123,10 +123,9 @@ export default function QualityScreen() {
     } finally { setSharing(false); }
   };
   const failText = (m: Record<string, Cell> | undefined) => {
-    // The count is Power BI's; sales on this page are the Hub's own (Bells).
-    const f = (m as any)?.fails?.value;
+    const f = (m as any)?.fails?.value, n = (m as any)?.signups?.value;
     if (f == null) return null;
-    return `${f} fail${f === 1 ? '' : 's'}`;
+    return n != null ? `${f} fail${f === 1 ? '' : 's'} of ${n} sign-up${n === 1 ? '' : 's'}` : `${f} fail${f === 1 ? '' : 's'}`;
   };
   // "8 of 10 · from WE 30 Aug": the 4th week report shows on the week 8 weeks
   // after those customers signed up.
@@ -207,7 +206,7 @@ export default function QualityScreen() {
           {d.me && statBox('quality-me', `Your quality · ${d.label}`, d.me,
             multi ? `Your average over ${d.me.weeks} week${d.me.weeks === 1 ? '' : 's'} on the report (sales added up).` : null)}
           {d.box && statBox('quality-box', `${d.box.title} · ${d.label}`, d.box,
-            d.box.kind === 'office' ? 'Quality as Power BI adds it up; sales from Bells.' : 'Everyone in your team, including the teams under it.')}
+            d.box.kind === 'office' ? 'Everyone on the report, as Power BI adds it up.' : 'Everyone in your team, including the teams under it.')}
           {!d.me && !d.box && (
             <View style={s.card}><Text style={s.muted}>You're not on the report for {d.label}.</Text></View>
           )}
@@ -456,15 +455,14 @@ function Upload({ onSaved }: { onSaved: (week: string) => void }) {
             <TextInput value={weekText} onChangeText={setWeekText} placeholder="DD/MM/YYYY" placeholderTextColor={c.textMuted}
               style={s.input} inputMode="numeric" maxLength={10} />
           </View>
-          {preview.total?.fails_n != null ? <Text style={s.note}>The office: {preview.total.fails_n} fail{preview.total.fails_n === 1 ? '' : 's'}{(preview.fail_reasons || []).length ? ` (${preview.fail_reasons.map((r: any) => `${r.reason} ${r.count}`).join(' · ')})` : ''}. Sales come from the Hub's own numbers, not this report.</Text> : null}
+          {preview.total?.signups_n != null ? <Text style={s.note}>The office: {preview.total.signups_n} signed up{preview.total.fails_n != null ? `, ${preview.total.fails_n} failed` : ''}{(preview.fail_reasons || []).length ? ` (${preview.fail_reasons.map((r: any) => `${r.reason} ${r.count}`).join(' · ')})` : ''}.</Text> : null}
           {preview.fourth_week ? <Text style={s.note}>4th week from WE {ukDate(preview.fourth_week.from)}'s sign-ups ({preview.fourth_week.total?.fourth_week_n ?? '?'} of {preview.fourth_week.total?.fourth_week_of ?? '?'}) goes on WE {ukDate(preview.fourth_week.week_ending)}{preview.fourth_week.existing ? ', added to what’s saved there' : ''}.</Text> : null}
           {preview.fourth_week_from ? <Text style={s.note}>4th week is from WE {ukDate(preview.fourth_week_from)}'s sign-ups and shows on this week.</Text> : null}
           {(preview.rows || []).some((r: any) => !links[r.badge]) ? <Text style={s.note}>Anyone not on the Hub is a stray batch number and is left out. Tap a row to link it to someone if it's really them.</Text> : null}
           {preview.fourth_week_due === false && <Text style={s.note}>4th week is 0% for everyone this week, so it's left blank until it's due.</Text>}
           {(preview.rows || []).map((r: any) => {
             const linked = links[r.badge];
-            // Sales come from the Hub's own numbers (Bells), so Power BI's aren't shown.
-            const bits = measures.filter((m) => m.key !== 'sales' && r.metrics[m.key] != null).map((m) => `${m.label} ${fmt(m.key, r.metrics[m.key])}${m.key === 'fourth_week' && r.metrics.fourth_week_of != null ? ` (${r.metrics.fourth_week_n ?? 0} of ${r.metrics.fourth_week_of})` : ''}`);
+            const bits = measures.filter((m) => r.metrics[m.key] != null).map((m) => `${m.label} ${fmt(m.key, r.metrics[m.key])}${m.key === 'fourth_week' && r.metrics.fourth_week_of != null ? ` (${r.metrics.fourth_week_n ?? 0} of ${r.metrics.fourth_week_of})` : ''}`);
             return (
               <View key={r.badge} style={s.prow}>
                 <View style={s.prowHead}>
