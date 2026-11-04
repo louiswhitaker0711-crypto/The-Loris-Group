@@ -469,7 +469,10 @@ async def get_quality(request: Request, view: str = "week", week: Optional[str] 
     # listed under their nearest team; anyone with no team is the Mini team.
     from routes.bells import _enrich_entries_with_teams
     entries = [{"user_id": r["user_id"], "office_id": office_id} for r in rows] + [{"user_id": uid, "office_id": office_id}]
-    await _enrich_entries_with_teams(entries)
+    # Teams as they stood in the newest week in view (core/team_history.py),
+    # the same as Bells: e.g. WE 25 Oct shows Rockodia with the teams that
+    # were inside it that week, not today's teams (the Owner, 4 Nov 2026).
+    await _enrich_entries_with_teams(entries, now[0])
     my_chain = [t for t in (entries[-1].get("teams") or []) if t.get("leader_id")]
     my_team = my_chain[0]["leader_id"] if my_chain else "mini"
     meta: dict[str, dict] = {"mini": {"leader_id": "mini"}}
