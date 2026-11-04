@@ -445,9 +445,16 @@ async def get_quality(request: Request, view: str = "week", week: Optional[str] 
     names = {str(u["_id"]): u.get("name") async for u in db.users.find(
         {"_id": {"$in": [ObjectId(x) for x in ids if ObjectId.is_valid(x)]}}, {"name": 1})}
 
+    def empty(m: dict) -> bool:
+        """A row with nothing to show: no sign-ups and no quality figures
+        (a 0% fail rate on no sales is a blank line on the report)."""
+        if kind == "fourth":
+            return m.get("fourth_week") is None
+        return not m.get("sales") and all(m.get(k) is None for k in ("aov", "drops", "the_round"))
+
     rows = []
     for key, p in people.items():
-        if not p["now"]:
+        if not p["now"] or empty(aggregate(list(p["now"].values()))):
             continue
         rows.append({"user_id": p["user_id"], "name": names.get(p["user_id"]) or p["label"], "badge": p["badge"],
                      "linked": bool(p["user_id"]), "weeks": len(p["now"]),

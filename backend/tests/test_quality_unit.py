@@ -110,7 +110,7 @@ def test_averages_count_each_person_by_their_volume():
         {"sales": 0, "aov": 30.0},                                     # nothing signed: no weight
     ]
     agg = aggregate(people)
-    assert agg["sales"] == 10
+    assert agg["sales"] == 12          # everything signed up, fails included
     assert agg["aov"] == round((10 * 12 + 2 * 17) / 12, 2)            # 12.83, not the plain 14.50
     assert agg["drops"] == round((10 * 2 + 2 * 3) / 12, 2)
     assert agg["fail_rate"] == round(100 * 2 / 12, 2)                  # 2 fails in 12 sign-ups
@@ -124,7 +124,7 @@ def test_matches_the_reports_own_total():
     rows = [(6, 7.58, 2.57, 0), (17, 13.06, 1.72, 5.26), (4, 15.75, 2.50, 0), (16, 7.69, 2.11, 0),
             (1, 9.65, 2.00, 0), (3, 11.65, 3.00, 0), (10, 13.00, 2.36, 9.09), (12, 12.32, 2.58, 0)]
     agg = aggregate([{"sales": s, "aov": a, "drops": d, "fail_rate": f} for s, a, d, f in rows])
-    assert agg["sales"] == 69
+    assert agg["sales"] == 72          # sign-ups: 17 at 5.26% is 19, 10 at 9.09% is 11
     assert abs(agg["aov"] - 11.10) < 0.25 and abs(agg["drops"] - 2.23) < 0.02
     plain = sum(r[1] for r in rows) / len(rows)
     assert abs(plain - 11.10) > abs(agg["aov"] - 11.10)
@@ -148,7 +148,7 @@ def test_picking_the_weeks_for_a_period():
 def test_fails_as_a_count():
     from core.quality import aggregate
     agg = aggregate([{"sales": 10, "fail_rate": 9.09}, {"sales": 17, "fail_rate": 5.26}, {"sales": 4, "fail_rate": 0}])
-    assert agg["fails"] == 2 and agg["signups"] == 33
+    assert agg["fails"] == 2 and agg["signups"] == 34   # 1 of 11, 1 of 19, 0 of 4
     assert "fails" not in aggregate([{"sales": 3}])
 
 
@@ -442,3 +442,18 @@ def test_ba_sign_ups_still_worked_back_from_sales():
     from core.quality import aggregate
     a = aggregate([{"sales": 8, "fail_rate": 20}])
     assert (a["fails"], a["signups"]) == (2, 10)
+
+
+def test_fails_and_sign_ups_worked_out_exactly_from_the_fail_rate():
+    """Power BI gives each BA a fail % only: 28.57% can only be 2 of 7."""
+    from core.quality import aggregate, counts
+    assert counts({"sales": 2, "fail_rate": 28.57}) == (2, 7)
+    assert counts({"sales": 7, "fail_rate": 27.27}) == (3, 11)
+    assert counts({"sales": 5, "fail_rate": 11.11}) == (1, 9)
+    assert counts({"sales": 38, "fail_rate": 13.21}) == (7, 53)   # an office saved without its counts
+    assert counts({"fail_rate": 100}) == (1, 1)                    # all failed, no sales
+    assert counts({"sales": 10, "fail_rate": 0}) == (0, 10)
+    assert counts({"sales": 38, "fail_rate": 13.21, "signups_n": 53, "fails_n": 7}) == (7, 53)
+    # A team's fail % and fail count always agree: 1 of 11 is 9.09%, not "9.1% but 0 fails".
+    team = aggregate([{"sales": 10, "fail_rate": 0}, {"fail_rate": 100, "aov": 10.85}])
+    assert (team["fails"], team["sales"], team["fail_rate"]) == (1, 11, 9.09)

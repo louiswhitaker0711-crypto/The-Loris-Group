@@ -304,67 +304,89 @@ def fourth_week_shows_on(signed_up_week: str | None) -> str | None:
     return (date.fromisoformat(signed_up_week) + timedelta(days=FOURTH_WEEK_LAG_DAYS)).isoformat()
 
 
-def signups(w: dict) -> float | None:
-    """Everything a person signed up that week, fails included, worked back
-    from their sales (which leave fails out) and fail rate: 8 sales at a 20%
-    fail rate is 10 sign-ups. All failed with no sales counts as 1."""
+def counts(w: dict) -> tuple | None:
+    """(fails, sign-ups) for one person's or the office's week, exactly.
+
+    Power BI gives each BA a fail % but no counts, and its per-BA "Sales
+    Volume" is a smaller figure than everything they signed up. A fail % is
+    a fraction, though: 28.57% can only be 2 of 7, 27.27% 3 of 11. So the
+    sign-ups are the smallest whole number, at least their sales, that
+    gives that % exactly (the Owner, 4 Nov 2026: sales on the Quality page
+    and bulletin are everything signed up, fails included). 0% is no fails
+    out of their sales; 100% with no sales is 1 of 1. The office's own
+    counts from the PDF (`signups_n`, `fails_n`) win."""
+    rate, s = w.get("fail_rate"), w.get("sales")
     if w.get("signups_n") is not None:
-        return float(w["signups_n"])   # counted by Power BI (the office, from a PDF)
-    s, f = w.get("sales"), w.get("fail_rate")
-    if s is None:
+        n = int(w["signups_n"])
+        if w.get("fails_n") is not None:
+            return int(w["fails_n"]), n
+        return (int(round(rate * n / 100)) if rate is not None else None), n
+    if rate is None:
+        return (None, int(s)) if s is not None else None
+    if rate <= 0:
+        return 0, int(s or 0)
+    lo = max(1, int(s or 0))
+    for d in range(lo, lo + 1000):
+        k = int(round(rate * d / 100))
+        if k >= 1 and abs(k * 100 / d - rate) <= 0.0051:
+            return k, d
+    if s is None or rate >= 100:
         return None
-    if f is None or f <= 0:
-        return float(s)
-    if f >= 100:
-        return float(s) if s else 1.0
-    return s / (1 - f / 100)
+    g = int(round(s / (1 - rate / 100)))
+    return g - int(s), g
+
+
+def signups(w: dict) -> float | None:
+    """Everything signed up that week, fails included (see counts)."""
+    c = counts(w)
+    return float(c[1]) if c else None
 
 
 def aggregate(weeks: list[dict]) -> dict:
     """Several people's or weeks' numbers → one set, the way the Power BI
     report adds them up: by volume, never a plain average of everyone's
-    figures, so someone with 17 sales counts 17 times as much as someone
+    figures, so someone with 17 sign-ups counts 17 times as much as someone
     with 1.
 
-      sales            added up
-      fails            total fails ÷ total sign-ups (sales + fails); also
-                       the counts, as `fails` and `signups`
-      order value,     weighted by sign-ups (the report's order value
-      drop days        includes the failed orders)
-      The Round,       weighted by sales
-      4th week
+      sales            everything signed up, fails included (counts()),
+                       added up; also as `signups`
+      fails            the fail counts added up (`fails`), and the % is
+                       fails ÷ sign-ups, so the two always agree
+      order value,     weighted by sign-ups
+      drop days,
+      The Round
+      4th week         customers kept ÷ customers signed, from its counts
 
-    A row with no sales figure counts once; 0 sales and no fails doesn't
-    count towards the averages."""
+    A row with no sign-ups counts once in the averages."""
     out: dict = {}
     for key in COUNTS:
         vals = [w[key] for w in weeks if w.get(key) is not None]
         if vals:
             out[key] = sum(vals)
-    sales = [w["sales"] for w in weeks if w.get("sales") is not None]
-    if sales:
-        out["sales"] = sum(sales)
-    # Fails as a count ("1 fail out of 11 sign-ups"), from sales and fail rate.
-    known = [(signups(w), w["sales"]) for w in weeks if w.get("sales") is not None and w.get("fail_rate") is not None]
-    if known:
-        out["signups"] = int(round(sum(g for g, _ in known)))
-        out["fails"] = int(round(sum(w["fails_n"] if w.get("fails_n") is not None else signups(w) - w["sales"]
-                                     for w in weeks if w.get("sales") is not None and w.get("fail_rate") is not None)))
+    cs = [(w, counts(w)) for w in weeks]
+    got = [c for _, c in cs if c is not None]
+    if got:
+        out["sales"] = sum(c[1] for c in got)
+        out["signups"] = out["sales"]
+    rated = [c for w, c in cs if c is not None and w.get("fail_rate") is not None and c[0] is not None]
+    if rated:
+        out["fails"] = sum(c[0] for c in rated)
+        den = sum(c[1] for c in rated)
+        if den:
+            out["fail_rate"] = round(out["fails"] * 100 / den, 2)
     for key, _, _ in MEASURES:
-        if key == "sales":
+        if key in ("sales", "fail_rate") and key in out:
             continue
         num = den = 0.0
         for w in weeks:
             v = w.get(key)
             if v is None:
                 continue
-            if key in ("aov", "drops", "fail_rate"):
-                g = signups(w)
-                weight = 1.0 if g is None else g
-            elif key == "fourth_week" and w.get("fourth_week_of") is not None:
+            if key == "fourth_week" and w.get("fourth_week_of") is not None:
                 weight = w["fourth_week_of"]   # 8 of 10 and 2 of 5 is 10 of 15
             else:
-                weight = 1.0 if w.get("sales") is None else w["sales"]
+                g = signups(w)
+                weight = 1.0 if g is None else g   # 0 signed up: no weight
             num += v * weight
             den += weight
         if den:
