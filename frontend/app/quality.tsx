@@ -146,7 +146,7 @@ export default function QualityScreen() {
           const cell: Cell | undefined = row.metrics?.[m.key];
           const t = tone(cell?.rag ?? null);
           const dir = better(m.key, cell?.value, row.prev?.[m.key]);
-          const extra = m.key === 'fail_rate' ? failText(row.metrics) : m.key === 'sales' && row.metrics?.signups?.value != null ? `${row.metrics.signups.value} signed up` : m.key === 'fourth_week' ? fourthText(row.metrics) : null;
+          const extra = m.key === 'fail_rate' ? failText(row.metrics) : m.key === 'sales' && row.metrics?.signups?.value != null && row.metrics.signups.value !== cell?.value ? `${row.metrics.signups.value} signed up` : m.key === 'fourth_week' ? fourthText(row.metrics) : null;
           return (
             <View key={m.key} style={[s.tile, { backgroundColor: t.bg }]}>
               <Text style={s.tileLabel}>{m.label}</Text>
@@ -160,6 +160,7 @@ export default function QualityScreen() {
           );
         })}
       </View>
+      {row.fail_reasons?.length > 0 && <Text style={s.note}>Fail reasons: {row.fail_reasons.map((r: any) => `${r.reason} ${r.count}`).join(' · ')}</Text>}
       {row.metrics?.fourth_week == null && <Text style={s.note}>4th week shows once those customers reach their 4th delivery.</Text>}
       {multi && row.history?.length > 0 && (
         <FitTable>
@@ -327,8 +328,9 @@ function Upload({ onSaved }: { onSaved: (week: string) => void }) {
       setWeekText(r.data.week_ending ? ukDate(r.data.week_ending) : '');
             // Tell the team only for this week's report; never when loading old weeks.
       setNotify(!!r.data.current);
-      setLinks(Object.fromEntries((r.data.rows || []).map((row: any) => [row.badge, row.user_id || null])));
-      if (!(r.data.rows || []).length) showAlert('Nothing to read', 'No BA rows found. Try a screenshot that shows the tables with names down the left.');
+      // The PDF's 4th week rows (for an earlier week) link the same way: by badge.
+      setLinks(Object.fromEntries([...(r.data.fourth_week?.rows || []), ...(r.data.rows || [])].map((row: any) => [row.badge, row.user_id || null])));
+      if (!(r.data.rows || []).length) showAlert('Nothing to read', 'No BA rows found. Export the whole report from Power BI as a PDF, or try a screenshot that shows the tables with names down the left.');
     } catch (e: any) {
       showAlert('Could not read that', e?.response?.data?.detail || e?.message || 'Try again.');
     } finally { setBusy(null); }
@@ -342,7 +344,7 @@ function Upload({ onSaved }: { onSaved: (week: string) => void }) {
       const input = document.createElement('input');
       input.type = 'file';
       input.multiple = true;
-      input.accept = 'image/png,image/jpeg,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      input.accept = 'application/pdf,.pdf,image/png,image/jpeg,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
       input.onchange = () => {
         const files = Array.from(input.files || []).map((f) => ({ name: f.name || 'report', blob: f as Blob }));
         if (files.length) readRef.current(files, keep);
@@ -350,7 +352,7 @@ function Upload({ onSaved }: { onSaved: (week: string) => void }) {
       input.click();
       return;
     }
-    const res = await DocumentPicker.getDocumentAsync({ type: ['image/*', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'], multiple: true, copyToCacheDirectory: true });
+    const res = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'image/*', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'], multiple: true, copyToCacheDirectory: true });
     if (res.canceled) return;
     const files = await Promise.all(res.assets.map(async (a) => ({ name: a.name || 'report.png', blob: await (await fetch(a.uri)).blob() })));
     read(files, keep);
@@ -394,8 +396,12 @@ function Upload({ onSaved }: { onSaved: (week: string) => void }) {
     setBusy('save');
     try {
       const rows = (preview.rows || []).map((r: any) => ({ label: r.label, badge: r.badge, metrics: r.metrics, user_id: links[r.badge] || null }));
-      const r = await apiService.importQuality({ week_ending: iso, rows, total: preview.total || {}, notify, fourth_week_from: preview.fourth_week_from || undefined });
-      toast.success(`${r.data.added_to_saved_week ? 'Added to' : 'Saved'} WE ${ukDate(iso)}${r.data.notified ? ` · ${r.data.notified} told` : ''}${r.data.retrain_alerts ? ` · ${r.data.retrain_alerts} retrain alert${r.data.retrain_alerts === 1 ? '' : 's'}` : ''}`);
+      const fw = preview.fourth_week;
+      const fourth_week = fw ? { week_ending: fw.week_ending, from: fw.from, total: fw.total || {},
+        rows: (fw.rows || []).map((r: any) => ({ label: r.label, badge: r.badge, metrics: r.metrics, user_id: links[r.badge] || null })) } : undefined;
+      const r = await apiService.importQuality({ week_ending: iso, rows, total: preview.total || {}, notify, fourth_week_from: preview.fourth_week_from || undefined,
+        fourth_week, fail_reasons: preview.fail_reasons || [] });
+      toast.success(`${r.data.added_to_saved_week ? 'Added to' : 'Saved'} WE ${ukDate(iso)}${r.data.fourth_week_saved_on ? ` · 4th week on WE ${ukDate(r.data.fourth_week_saved_on)}` : ''}${r.data.notified ? ` · ${r.data.notified} told` : ''}${r.data.retrain_alerts ? ` · ${r.data.retrain_alerts} retrain alert${r.data.retrain_alerts === 1 ? '' : 's'}` : ''}`);
       setPreview(null); setAdded([]);
       qc.invalidateQueries({ queryKey: ['quality'] });
       qc.invalidateQueries({ queryKey: ['coach-suggestions'] });
@@ -414,7 +420,7 @@ function Upload({ onSaved }: { onSaved: (week: string) => void }) {
       <Text style={s.h}>Add this week's quality report</Text>
       {!preview ? (
         <>
-          <Text style={s.muted}>Screenshot the Power BI page with everyone's rows showing, then drop it here or paste it (Ctrl/⌘ V). An Excel export works too.</Text>
+          <Text style={s.muted}>In Power BI, export the Modern Milkman KPI report as a PDF (File → Export → PDF) and drop it here. The numbers are read exactly. A screenshot or an Excel export works too.</Text>
           <View ref={drop} style={[s.drop, over && { borderColor: c.primary, backgroundColor: c.surface }]}>
             {busy === 'read' ? (
               <>
@@ -424,11 +430,11 @@ function Upload({ onSaved }: { onSaved: (week: string) => void }) {
             ) : (
               <>
                 <Ionicons name="image-outline" size={26} color={c.primary} />
-                <Text style={s.muted}>{over ? 'Drop it' : 'Drag the screenshot here, or paste it'}</Text>
+                <Text style={s.muted}>{over ? 'Drop it' : 'Drag the PDF here, or paste a screenshot'}</Text>
                 <Pressable onPress={() => pick(false)} style={s.btn} accessibilityRole="button">
                   <Text style={s.btnText}>Choose files</Text>
                 </Pressable>
-                <Text style={s.muted}>Pick several at once: screenshots or Excel exports, up to {MAX_FILES}.</Text>
+                <Text style={s.muted}>Pick several at once: PDFs, screenshots or Excel exports, up to {MAX_FILES}.</Text>
               </>
             )}
           </View>
@@ -449,6 +455,8 @@ function Upload({ onSaved }: { onSaved: (week: string) => void }) {
             <TextInput value={weekText} onChangeText={setWeekText} placeholder="DD/MM/YYYY" placeholderTextColor={c.textMuted}
               style={s.input} inputMode="numeric" maxLength={10} />
           </View>
+          {preview.total?.signups_n != null ? <Text style={s.note}>The office: {preview.total.signups_n} signed up{preview.total.fails_n != null ? `, ${preview.total.fails_n} failed` : ''}{(preview.fail_reasons || []).length ? ` (${preview.fail_reasons.map((r: any) => `${r.reason} ${r.count}`).join(' · ')})` : ''}.</Text> : null}
+          {preview.fourth_week ? <Text style={s.note}>4th week from WE {ukDate(preview.fourth_week.from)}'s sign-ups ({preview.fourth_week.total?.fourth_week_n ?? '?'} of {preview.fourth_week.total?.fourth_week_of ?? '?'}) goes on WE {ukDate(preview.fourth_week.week_ending)}{preview.fourth_week.existing ? ', added to what’s saved there' : ''}.</Text> : null}
           {preview.fourth_week_from ? <Text style={s.note}>4th week is from WE {ukDate(preview.fourth_week_from)}'s sign-ups and shows on this week.</Text> : null}
           {(preview.rows || []).some((r: any) => !links[r.badge]) ? <Text style={s.note}>Anyone not on the Hub is a stray batch number and is left out. Tap a row to link it to someone if it's really them.</Text> : null}
           {preview.fourth_week_due === false && <Text style={s.note}>4th week is 0% for everyone this week, so it's left blank until it's due.</Text>}

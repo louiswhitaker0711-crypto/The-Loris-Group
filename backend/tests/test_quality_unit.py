@@ -354,3 +354,91 @@ def test_misread_fourth_week_on_25_oct_is_cleared_once():
     assert a["bas"][0]["metrics"] == {"sales": 8} and a["total"] == {"sales": 38}
     assert b["bas"][0]["metrics"] == {"fourth_week": 50}      # other weeks untouched
     assert asyncio.run(_clear_bad_fourth_week(DB())) == 0
+
+
+# The Power BI PDF, as pypdf lays its pages out (made-up people and badges).
+_PDF_WEEKLY = """\
+    Weekly KPIs             4th Delivery            Fail Report           Doors Knocked           KPI Comparison
+ Month                          WE                            MC Name                        Name_Badge
+ All                           25/10/2026                    All                           All
+MC                                      Sales Volume     AOV    Drops          Doors     Memberships       Membership
+                                                                            Knocked          on signup     on signup %
+  Example Office                                  20   11.14     2.67         2,335                 21          0
+   Total                                           20   11.14    2.67          2,335                 21          0
+"""
+_PDF_FOURTH = """\
+                   Weekly KPIs             4th Delivery            Fail Report           Doors Knocked          KPI Comparison
+Month                         WE                            MC Name                        Name_Badge                    Membership Status
+All                           30/08/2026                   All                          All                          All
+                               MC                                        1st Week    4th Week   4th Week Rate
+                                  Example Office                                  12          9         75.00%
+                                    Example A - MMC1234                           10           8          80.00%
+                                    Example B - MMC5678                            2           1          50.00%
+                                  Total                                         12          9         75.00%
+"""
+_PDF_FAILS = """\
+                    Weekly KPIs               4th Delivery               Fail Report            Doors Knocked            KPI Comparison
+                 Month                             WE                              MC Name                          Name_Badge
+                  All                             25/10/2026                      All                            All
+ MC                                              Total Sales   Fail Count   Fail Rate                   Fail Reason                   Fail Count
+  Example Office                                          20             3   15.00 %                    Customer Cancelled                      2
+    Total                                                 20             3  15.00 %                     Start Date is Over 8 Days               1
+                                                                                                        Total                                   3
+                                                                                                                               (Blank)
+0%                     20%                     40%                     60%                      80%                    100%
+                                                       Fail count
+"""
+_PDF_DOORS = """\
+DayOfWeekName                       Monday                          Total
+MC                                    Doors      Spoken     Total    Doors      Spoken     Total
+     Example A - MMC1234              99.00       53.00     4.00     99.00      53.00      4.00
+"""
+def _side(*cols):
+    """Tables side by side, each 34 characters wide, as the PDF lays them out."""
+    return "\n".join("".join(f"{c:<34}" for c in row) for row in zip(*cols)) + "\n"
+
+
+_PDF_COMPARE = "                     WE\n                      25/10/2026\n" + _side(
+    ["MC          Sales Volume", "  Example Office      16", "    Example A - MMC1234   12", "    Example B - MMC5678    4", "  Total               16"],
+    ["MC                 AOV", "  Example Office    11.14", "    Example B - MMC5678   9.75", "    Example A - MMC1234  12.86", "  Total             11.14"],
+    ["MC               Drops", "  Example Office     2.67", "    Example A - MMC1234   3.00", "    Example B - MMC5678   2.80", "  Total              2.67"],
+    ["MC      4th Delivery %", "  Example Office   0.00 %", "    Example A - MMC1234  0.00 %", "    Example B - MMC5678  0.00 %", "  Total            0.00 %"],
+    ["MC           Fail rate", "  Example Office  15.00 %", "    Example A - MMC1234  20.00 %", "    Example B - MMC5678   0.00 %", "  Total           15.00 %"])
+
+
+def _pdf(monkeypatch, pages):
+    from core.quality import percent_fix
+    import core.quality as cq
+    monkeypatch.setattr(cq, "pdf_pages", lambda data: pages)
+    return [percent_fix(r) for r in cq.from_pdf(b"%PDF-")]
+
+
+def test_pdf_reads_each_ba_and_the_offices_sign_ups(monkeypatch):
+    from core.quality import aggregate
+    reps = _pdf(monkeypatch, [_PDF_WEEKLY, _PDF_FOURTH, _PDF_FAILS, _PDF_DOORS, _PDF_COMPARE])
+    q, fw = reps
+    assert q["week_ending"] == "2026-10-25"
+    by = {r["badge"]: r["metrics"] for r in q["rows"]}
+    assert by["MMC1234"] == {"sales": 12, "aov": 12.86, "drops": 3.0, "fail_rate": 20.0}   # 4th week 0%: left out
+    assert by["MMC5678"] == {"sales": 4, "aov": 9.75, "drops": 2.8, "fail_rate": 0.0}
+    # The office: the bigger figure (as Bells counts it), with its own fail count.
+    assert q["total"]["sales"] == 20 and q["total"]["signups_n"] == 20 and q["total"]["fails_n"] == 3
+    assert q["fail_reasons"] == [{"reason": "Customer Cancelled", "count": 2},
+                                 {"reason": "Start Date is Over 8 Days", "count": 1}]
+    a = aggregate([q["total"]])
+    assert (a["fails"], a["signups"]) == (3, 20)   # "3 fails of 20", not worked back from sales
+    assert fw["week_ending"] == "2026-08-30"
+    assert {r["badge"]: r["metrics"]["fourth_week_n"] for r in fw["rows"]} == {"MMC1234": 8, "MMC5678": 1}
+
+
+def test_pdf_office_pages_on_another_week_are_not_mixed_in(monkeypatch):
+    other = _PDF_FAILS.replace("25/10/2026", "18/10/2026")
+    q = _pdf(monkeypatch, [other, _PDF_COMPARE])[0]
+    assert "fails_n" not in q["total"] and "fail_reasons" not in q
+    assert q["total"]["sales"] == 16
+
+
+def test_ba_sign_ups_still_worked_back_from_sales():
+    from core.quality import aggregate
+    a = aggregate([{"sales": 8, "fail_rate": 20}])
+    assert (a["fails"], a["signups"]) == (2, 10)

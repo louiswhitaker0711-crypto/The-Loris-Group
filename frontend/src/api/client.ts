@@ -1310,7 +1310,7 @@ export const apiService = {
     api.get('/quality', { params: Object.fromEntries(Object.entries(p).filter(([, v]) => v)) }),
   readQuality: (body: { files: { filename: string; data_b64: string }[]; week_ending?: string }) =>
     api.post('/quality/read', body, { timeout: 120000 }),
-  importQuality: (body: { week_ending: string; rows: any[]; total: any; notify?: boolean; fourth_week_from?: string }) => api.post('/quality/import', body),
+  importQuality: (body: { week_ending: string; rows: any[]; total: any; notify?: boolean; fourth_week_from?: string; fourth_week?: any; fail_reasons?: { reason: string; count: number }[] }) => api.post('/quality/import', body),
   getCoachSuggestions: () => api.get<{ through: string; suggestions: any[] }>('/coach/suggestions'),
   listViewers: () => api.get<{ viewers: any[] }>('/admin/viewers'),
   exitedTeams: () => api.get<{ exited: { id: string; name: string; left_on: string; team: string[] }[]; people: { id: string; name: string }[] }>('/admin/exited-teams'),

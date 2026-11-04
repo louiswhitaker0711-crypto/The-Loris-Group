@@ -37,7 +37,10 @@ MEASURES = [
 ]
 # The 4th week report's counts: how many signed up that week ("1st Week")
 # and how many of them reached their 4th delivery ("4th Week").
-COUNTS = {"fourth_week_n": "int", "fourth_week_of": "int"}
+COUNTS = {"fourth_week_n": "int", "fourth_week_of": "int",
+          # The office's own counts from the PDF: everyone signed up (fails
+          # included) and how many failed.
+          "signups_n": "int", "fails_n": "int"}
 KINDS = {**{k: kind for k, _, kind in MEASURES}, **COUNTS}
 LABELS = {k: label for k, label, _ in MEASURES}
 
@@ -69,7 +72,7 @@ ROLLUP_LABELS = {"total", "grand total"}
 NAME_HEADERS = {"namebadge", "name", "ba", "rep", "badge"}
 BADGE_RE = re.compile(r"\s([A-Z]{0,4}\d{3,})$")
 # Sane limits, so a misread number can't land as something silly.
-LIMITS = {"fourth_week_n": (0, 1000), "fourth_week_of": (0, 1000), "sales": (0, 1000), "aov": (0, 500), "drops": (0, 7), "the_round": (0, 100),
+LIMITS = {"fourth_week_n": (0, 1000), "fourth_week_of": (0, 1000), "signups_n": (0, 5000), "fails_n": (0, 5000), "sales": (0, 1000), "aov": (0, 500), "drops": (0, 7), "the_round": (0, 100),
           "fourth_week": (0, 100), "fail_rate": (0, 100)}
 
 
@@ -305,6 +308,8 @@ def signups(w: dict) -> float | None:
     """Everything a person signed up that week, fails included, worked back
     from their sales (which leave fails out) and fail rate: 8 sales at a 20%
     fail rate is 10 sign-ups. All failed with no sales counts as 1."""
+    if w.get("signups_n") is not None:
+        return float(w["signups_n"])   # counted by Power BI (the office, from a PDF)
     s, f = w.get("sales"), w.get("fail_rate")
     if s is None:
         return None
@@ -343,7 +348,8 @@ def aggregate(weeks: list[dict]) -> dict:
     known = [(signups(w), w["sales"]) for w in weeks if w.get("sales") is not None and w.get("fail_rate") is not None]
     if known:
         out["signups"] = int(round(sum(g for g, _ in known)))
-        out["fails"] = int(round(sum(g - s for g, s in known)))
+        out["fails"] = int(round(sum(w["fails_n"] if w.get("fails_n") is not None else signups(w) - w["sales"]
+                                     for w in weeks if w.get("sales") is not None and w.get("fail_rate") is not None)))
     for key, _, _ in MEASURES:
         if key == "sales":
             continue
@@ -496,3 +502,123 @@ Read every number exactly as shown. Return ONLY JSON, no commentary:
  "total": {"sales": ..., "aov": ..., "drops": ..., "fourth_week": ..., "fail_rate": ..., "the_round": ..., "fourth_week_n": ..., "fourth_week_of": ...}}
 Percentages as plain numbers (13.10 % → 13.1). Money without the £. Use null for a measure not in the
 screenshot. One entry per person, combining all the tables. Leave out the office row."""
+
+
+# ── The Power BI report as a PDF ──────────────────────────────────────────
+# Power BI's "Export to PDF" keeps the numbers as text, so they're read
+# exactly, with no AI. One page per tab of the report:
+#   Weekly KPIs     the office's sign-ups (the bigger figure, the one that
+#                   matches Bells: everything signed up, fails included)
+#   4th Delivery    each BA's 4th week, for whatever week that page was on
+#   Fail Report     the office's fails and why
+#   Doors Knocked   not used
+#   KPI Comparison  each BA's sales, order value, drop days and fails
+# (the Owner, 4 Nov 2026).
+_DATE_RE = re.compile(r"\b(\d{2}/\d{2}/\d{4})\b")
+_MC_RE = re.compile(r"(?<![A-Za-z])MC(?![A-Za-z])")
+
+
+def _cells(line: str) -> list:
+    """A layout line → its cells: columns are 2+ spaces apart, a name has 1."""
+    line = re.sub(r"[\ue000-\uf8ff]", " ", line)   # Power BI's expand/collapse icons
+    return [c for c in re.split(r"\s{2,}", line.strip()) if c]
+
+
+def _after_header(lines: list[str]) -> list[str]:
+    """The lines under a table's 'MC' header (the tabs and filters above it
+    hold words like '4th Delivery' and dates that aren't figures)."""
+    i = next((i for i, ln in enumerate(lines) if (_cells(ln) or [""])[0] == "MC"), None)
+    return lines[i + 1:] if i is not None else []
+
+
+def pdf_pages(data: bytes) -> list[str]:
+    from pypdf import PdfReader
+    return [p.extract_text(extraction_mode="layout") or "" for p in PdfReader(io.BytesIO(data)).pages]
+
+
+def _page_week(text: str) -> str | None:
+    m = _DATE_RE.search(text)
+    return parse_week(m.group(1)) if m else None
+
+
+def _side_by_side(lines: list[str]) -> list[list[list]]:
+    """The KPI Comparison page: tables side by side, each starting 'MC'.
+    Cut every line at the header's 'MC's, then read each table alone."""
+    head = next(i for i, ln in enumerate(lines) if len(_MC_RE.findall(ln)) >= 2)
+    starts = [max(0, m.start() - 2) for m in _MC_RE.finditer(lines[head])]
+    bounds = list(zip(starts, starts[1:] + [10 ** 6]))
+    grids: list[list[list]] = [[] for _ in bounds]
+    for ln in lines[head:]:
+        for g, (a, b) in zip(grids, bounds):
+            cells = _cells(ln[a:b])
+            if cells:
+                g.append(cells)
+    return grids
+
+
+def from_pdf(data: bytes) -> list[dict]:
+    """A Power BI PDF → readings like from_tables: the week's quality (each
+    BA from KPI Comparison, the office's sign-ups and fails from Weekly KPIs
+    and the Fail Report, with `fail_reasons`) and, as its own reading, the
+    4th Delivery page. Pages it doesn't know are skipped."""
+    quality = None
+    office: dict = {}
+    reasons: list[dict] = []
+    office_week = None
+    out = []
+    for text in pdf_pages(data):
+        lines = [ln for ln in text.splitlines() if ln.strip()]
+        low = text.lower()
+        week = _page_week(text)
+        if "dayofweekname" in low:
+            continue                                   # Doors Knocked
+        if any(len(_MC_RE.findall(ln)) >= 2 for ln in lines):
+            rep = from_tables(_side_by_side(lines))    # KPI Comparison
+            rep["week_ending"] = rep.get("week_ending") or week
+            quality = rep
+            continue
+        if "1st week" in low and "4th week" in low:     # 4th Delivery
+            rep = from_tables([[_cells(ln) for ln in lines if not _DATE_RE.search(ln)]])
+            rep["week_ending"] = week
+            out.append(finish(rep))
+            continue
+        if "fail reason" in low or ("total sales" in low and "fail count" in low):
+            office_week = office_week or week          # Fail Report
+            for ln in _after_header(lines):
+                c = _cells(ln)
+                if not c:
+                    continue
+                if c[0].lower() not in ROLLUP_LABELS and len(c) >= 4 and "fails_n" not in office \
+                        and parse_value(c[1], "int") is not None and parse_value(c[2], "int") is not None:
+                    office["signups_n"] = parse_value(c[1], "int")
+                    office["fails_n"] = parse_value(c[2], "int")
+                # The reasons table sits on the right: its last two cells.
+                if len(c) >= 2 and re.fullmatch(r"\d+", c[-1]) and re.search(r"[A-Za-z]", c[-2]):
+                    name = c[-2].strip()
+                    if name.lower() not in ROLLUP_LABELS and "fail" not in name.lower() \
+                            and not any(r["reason"] == name for r in reasons):
+                        reasons.append({"reason": name[:60], "count": int(c[-1])})
+            continue
+        if "sales volume" in low:                      # Weekly KPIs
+            office_week = office_week or week
+            for ln in _after_header(lines):
+                c = _cells(ln)
+                if c and c[0].lower() not in ROLLUP_LABELS and c[0].lower() != "mc" and len(c) >= 2 \
+                        and parse_value(c[1], "int") is not None and "sales" not in office:
+                    office["sales"] = parse_value(c[1], "int")
+    if quality is None and (office or reasons):
+        quality = {"week_ending": office_week, "rows": [], "total": {}}
+    if quality is not None:
+        if office_week and quality.get("week_ending") and office_week != quality["week_ending"]:
+            office, reasons = {}, []   # those pages were on another week: don't mix them in
+        sign = office.get("sales") or office.get("signups_n")
+        total = quality.setdefault("total", {})
+        if sign is not None:
+            total["sales"] = sign      # the bigger figure, as Bells counts it
+            total["signups_n"] = sign
+        if office.get("fails_n") is not None:
+            total["fails_n"] = office["fails_n"]
+        if reasons:
+            quality["fail_reasons"] = reasons
+        out.insert(0, quality)
+    return out
