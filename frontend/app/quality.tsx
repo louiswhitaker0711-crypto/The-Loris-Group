@@ -97,7 +97,7 @@ export default function QualityScreen() {
           <View key={m.key} style={[s.col, m.key === 'fail_rate' && s.failCol]}>
             <Text style={[s.pill, (opts.bold || opts.team) && s.pillBold, opts.sub && s.pillSub, { backgroundColor: t.bg, color: t.fg }]}>{fmt(m.key, cell?.value)}</Text>
             {m.key === 'fourth_week' && (metrics as any)?.fourth_week_of?.value != null ? (
-              <Text style={s.failCount}>{(metrics as any).fourth_week_n?.value ?? 0} of {(metrics as any).fourth_week_of.value}</Text>
+              <Text style={s.failCount}>{(metrics as any).fourth_week_n?.value ?? 0} of {(metrics as any).fourth_week_of.value} sales</Text>
             ) : null}
             {m.key === 'fail_rate' && (metrics as any)?.fails?.value != null ? (
               <Text style={s.failCount}>{(metrics as any).fails.value} fail{(metrics as any).fails.value === 1 ? '' : 's'}</Text>
@@ -145,12 +145,12 @@ export default function QualityScreen() {
   };
   // "8 of 10 · from WE 30 Aug": the 4th week report shows on the week 8 weeks
   // after those customers signed up.
-  const fwFrom: { label: string }[] = d?.fourth_week_from || [];
   const fourthText = (m: Record<string, Cell> | undefined) => {
     if ((m as any)?.fourth_week?.value == null) return null;
+    // The counts behind the %: sales that week, and how many reached their 4th delivery.
     const n = (m as any)?.fourth_week_n?.value, of = (m as any)?.fourth_week_of?.value;
-    const from = fwFrom.length === 1 ? `from ${fwFrom[0].label.replace(/ \d{4}$/, '')}` : fwFrom.length > 1 ? `from ${fwFrom.length} weeks` : null;
-    return [of != null ? `${n ?? 0} of ${of}` : null, from].filter(Boolean).join(' · ') || null;
+    if (of == null) return 'Sales and 4th weeks not in yet';
+    return `${of} sale${of === 1 ? '' : 's'} · ${n ?? 0} reached 4th week`;
   };
   // A card of tiles: the same look for you, your team and the office.
   const statBox = (testID: string, title: string, row: any, note: string | null) => (
@@ -251,7 +251,10 @@ export default function QualityScreen() {
             );
           })()}
 
-          {d.kind === 'fourth' && <Text style={s.note}>4th week for the customers signed up {d.view === 'week' ? 'in' : 'up to'} {d.label}: how many were still ordering at their 4th delivery.</Text>}
+          {d.kind === 'fourth' && <Text style={s.note}>4th week for the customers signed up {d.view === 'week' ? 'in' : 'up to'} {d.label}: the sales that week, and how many were still ordering at their 4th delivery (e.g. 32 of 73 sales = 43.8%).</Text>}
+          {d.kind === 'fourth' && d.box?.metrics?.fourth_week != null && d.box?.metrics?.fourth_week_of == null && (
+            <Text style={s.note}>This week went in before the Hub read the sales and 4th week counts. Upload its 4th Delivery page again (PDF or Excel) to add them.</Text>
+          )}
           {d.me && statBox('quality-me', `${d.kind === 'fourth' ? 'Your 4th week' : 'Your quality'} · ${d.label}`, d.me,
             multi ? `Your average over ${d.me.weeks} week${d.me.weeks === 1 ? '' : 's'} on the report (sales added up).` : null)}
           {d.box && statBox('quality-box', `${d.box.title} · ${d.label}`, d.box,
