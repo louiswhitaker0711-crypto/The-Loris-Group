@@ -26,6 +26,10 @@
  *   • Someone new on Bells gets a row straight under their Coach's name on
  *     this week's tab (first name; "First L" if two share a first name), with
  *     ST and PR from the app. Formulas and totals stretch to include them.
+ *   • A new start with a Coach sits straight under that Coach, in the
+ *     Coach's team, as on Bells; one added before they had a Coach is moved.
+ *     The office totals (and any team total) always count every person's
+ *     row. Every week's tab is tidied this way once after an update.
  *   • Sunday from 21:00 it makes next week's tab ("WE 01/11/2026") as a copy
  *     of this week's, put first: ST, PR and Break even kept, Last Week = each
  *     person's total, Goal from the app, Focus/Was/Goal/Team Goal cleared,
@@ -94,11 +98,15 @@ function updateBells() {
     try {
       const people = fetchWeek(sunday);
       const added = sunday === thisWeek ? addNewPeople(tab, people) : [];
+      const moved = placeNewStarts(tab, people, sunday);
       const mended = repairTeamBlocks(tab);
       if (mended.length) log.push([tab.getName(), 'Team labels mended: ' + mended.join(', '), '']);
+      const totals = fixTotals(tab);
       const r = fillTab(tab, people, sunday);
-      log.push([tab.getName(), 'Filled ' + r.filled + ' people' + (added.length ? ' · added ' + added.join(', ') : ''),
-        r.unmatched.length ? 'Not matched: ' + r.unmatched.join(', ') : '']);
+      log.push([tab.getName(), 'Filled ' + r.filled + ' people' + (added.length ? ' · added ' + added.join(', ') : '')
+        + (moved.length ? ' · moved ' + moved.join(', ') : '') + (totals.changed ? ' · totals now count everyone' : ''),
+        (r.unmatched.length ? 'Not matched: ' + r.unmatched.join(', ') : '')
+        + (totals.skipped.length ? (r.unmatched.length ? ' · ' : '') + 'Totals to check by hand: ' + totals.skipped.join(', ') : '')]);
     } catch (e) {
       log.push([tab.getName(), 'Failed: ' + e.message, '']);
     }
@@ -107,6 +115,7 @@ function updateBells() {
   if (isSundayEvening(now) && !findWeekTab(book, nextWeek)) {
     try { makeWeekTab(book, nextWeek, log); } catch (e) { log.push([weekLabel(nextWeek), 'Could not make the tab: ' + e.message, '']); }
   }
+  tidyAllWeeks(book, log);
   writeLog(book, log);
 }
 
@@ -191,6 +200,13 @@ function insertPersonRow(tab, row) {
     tab.insertRowBefore(row);
     tab.getRange(row + 1, NAME_COLUMN, 1, cols).copyTo(tab.getRange(row, NAME_COLUMN, 1, cols));
     target = row + 1;
+    // A one-person team has no merged label to stretch: its label moved down
+    // with the old row, so give the new top row the label too and let
+    // repairTeamBlocks merge them into one.
+    const labelCell = tab.getRange(row + 1, 1);
+    if (!labelCell.isPartOfMerge() && String(labelCell.getDisplayValue()).trim() && !String(tab.getRange(row, 1).getDisplayValue()).trim()) {
+      tab.getRange(row, 1).setValue(labelCell.getValue());
+    }
   }
   tab.getRange(target, NAME_COLUMN, 1, COL.focusTo - NAME_COLUMN + 1).clearContent();
   const days = tab.getRange(target, MONDAY_GOLD_COLUMN, 1, 14);
@@ -253,6 +269,214 @@ function repairTeamBlocks(tab) {
     i = j + 1;
   }
   return mended;
+}
+
+// ── New starts under their Coach ─────────────────────────────────────────────
+/** A new start (started in the 6 weeks up to this tab's Sunday) whose Coach
+ *  is on the tab sits straight under that Coach, inside the Coach's team, the
+ *  way Bells shows them (the Owner, 4 Nov 2026). Anyone sitting somewhere
+ *  else (e.g. added before they had a Coach) is moved: a new row at the end
+ *  of the Coach's group, their details and days copied in, the old row
+ *  deleted. Returns the names moved. */
+function placeNewStarts(tab, people, sunday) {
+  const moved = [];
+  const from = isoDate(addDays(sunday, -42));
+  const fresh = people.filter(function (p) {
+    return p.live && p.coach && p.startDate && p.startDate >= from && p.startDate <= isoDate(sunday);
+  });
+  fresh.forEach(function (p) {
+    const rows = personRows(tab);
+    const who = rows.map(function (r) { return matchPerson(r.name, people); });
+    const mine = who.indexOf(p);
+    if (mine < 0) return;
+    const coachAt = who.findIndex(function (q) { return q && clean(q.name) === clean(p.coach); });
+    if (coachAt < 0) return;
+    // The Coach's group: the Coach's row and the rows straight under it of
+    // people the same Coach coaches, in the same team block.
+    const block = blockOfRow(tab, rows[coachAt].row);
+    let end = coachAt;
+    while (end + 1 < rows.length && who[end + 1] && clean(who[end + 1].coach) === clean(p.coach)
+      && rows[end + 1].row === rows[end].row + 1
+      && (!block || rows[end + 1].row <= block.bottom)) end++;
+    if (mine > coachAt && mine <= end) return;   // already in place
+    const oldRow = rows[mine].row;
+    const at = rows[end].row;
+    const width = tab.getLastColumn();
+    const cols = width - NAME_COLUMN + 1;
+    const src = tab.getRange(oldRow, NAME_COLUMN, 1, cols);
+    const values = src.getValues()[0], formulas = src.getFormulas()[0];
+    const dayFills = tab.getRange(oldRow, MONDAY_GOLD_COLUMN, 1, 14).getBackgrounds()[0];
+    const target = insertPersonRow(tab, at);
+    const old = oldRow > at ? oldRow + 1 : oldRow;
+    // Their own typed details and days; the new row keeps its own formulas.
+    const lastTyped = MONDAY_GOLD_COLUMN + 13;
+    for (let c = 0; c < cols; c++) {
+      const col = NAME_COLUMN + c;
+      if (col > lastTyped || formulas[c]) continue;
+      if (tab.getRange(target, col).getFormula()) continue;
+      tab.getRange(target, col).setValue(values[c]);
+    }
+    tab.getRange(target, MONDAY_GOLD_COLUMN, 1, 14).setBackgrounds([dayFills]);
+    tab.deleteRow(old);
+    moved.push(String(values[0]) + ' → under ' + rows[coachAt].name);
+  });
+  return moved;
+}
+
+/** The team block (merged label in column A) a row sits in: {top, bottom}. */
+function blockOfRow(tab, row) {
+  const m = tab.getRange(row, 1).getMergedRanges()[0];
+  return m ? { top: m.getRow(), bottom: m.getLastRow() } : { top: row, bottom: row };
+}
+
+// ── Totals ───────────────────────────────────────────────────────────────────
+/** The office totals under the people (Total, Scoring BAs, BAs in field …)
+ *  count every person on the tab, and a team's own total row counts its
+ *  whole team, however rows have been added or moved (the Owner, 4 Nov 2026:
+ *  new starts' rows weren't being counted). Only references inside the
+ *  people's rows are touched. Returns the cells changed and any it couldn't. */
+function fixTotals(tab) {
+  const out = { changed: 0, skipped: [] };
+  const last = tab.getLastRow();
+  if (last < FIRST_ROW) return out;
+  const width = tab.getLastColumn();
+  const labels = tab.getRange(FIRST_ROW, 1, last - FIRST_ROW + 1, 2).getDisplayValues();
+  let totalAt = -1;
+  for (let i = 0; i < labels.length; i++) {
+    if (/\btotal\b/.test((labels[i][0] + ' ' + labels[i][1]).toLowerCase())) { totalAt = FIRST_ROW + i; break; }
+  }
+  if (totalAt < 0) return out;
+  const peopleEnd = totalAt - 1;
+  const blocks = teamBlocks(tab, peopleEnd);
+  const rowCount = last - totalAt + 1;
+  const text = tab.getRange(totalAt, 1, rowCount, Math.min(width, COL.focusTo)).getDisplayValues();
+  const formulas = tab.getRange(totalAt, 1, rowCount, width).getFormulas();
+  let officeGroup = true;
+  for (let i = 0; i < rowCount; i++) {
+    const label = text[i].join(' ').trim();
+    if (!label && !formulas[i].some(function (f) { return f; })) { officeGroup = false; continue; }
+    let span = null;
+    if (officeGroup) span = { top: FIRST_ROW, bottom: peopleEnd };
+    else {
+      const l = clean(label);
+      const team = blocks.filter(function (b) { return b.label && l.indexOf(clean(b.label)) >= 0; })[0];
+      if (team) span = { top: team.top, bottom: team.bottom };
+    }
+    if (!span) continue;
+    for (let c = 0; c < width; c++) {
+      const f = formulas[i][c];
+      if (!f) continue;
+      const fixed = widenFormula(f, span, FIRST_ROW, peopleEnd);
+      if (fixed === null) { out.skipped.push(tab.getRange(totalAt + i, c + 1).getA1Notation()); continue; }
+      if (fixed !== f) { tab.getRange(totalAt + i, c + 1).setFormula(fixed); out.changed++; }
+    }
+  }
+  return out;
+}
+
+/** The team blocks above the totals: [{label, top, bottom}]. */
+function teamBlocks(tab, peopleEnd) {
+  const out = [];
+  if (peopleEnd < FIRST_ROW) return out;
+  tab.getRange(FIRST_ROW, 1, peopleEnd - FIRST_ROW + 1, 1).getMergedRanges().forEach(function (m) {
+    out.push({ label: String(m.getCell(1, 1).getDisplayValue() || '').trim(), top: m.getRow(), bottom: m.getLastRow() });
+  });
+  return out;
+}
+
+/** `f` with every reference to the people's rows (rows `areaTop`–`areaBottom`)
+ *  in a column turned into one range over `span`. Several references to the
+ *  same column joined by "," or "+" become one range. Returns null when a
+ *  formula uses the people's rows in a way it can't safely widen. */
+function widenFormula(f, span, areaTop, areaBottom) {
+  // Hide quoted text so nothing inside it is read as a cell.
+  const masked = f.replace(/"[^"]*"/g, function (s) { return s.replace(/[^"]/g, ' '); });
+  const re = /(\$?)([A-Z]{1,3})(\$?)(\d+)(?::(\$?)([A-Z]{1,3})(\$?)(\d+))?/g;
+  const refs = [];
+  let m;
+  while ((m = re.exec(masked))) {
+    const before = masked.charAt(m.index - 1), after = masked.charAt(m.index + m[0].length);
+    if (/[A-Za-z0-9_!'.]/.test(before) || /[A-Za-z0-9_(]/.test(after)) continue;   // another sheet, a name or a function
+    const r1 = Number(m[4]), r2 = m[8] ? Number(m[8]) : r1;
+    const top = Math.min(r1, r2), bottom = Math.max(r1, r2);
+    if (bottom < areaTop || top > areaBottom) continue;   // not the people's rows
+    refs.push({ at: m.index, len: m[0].length, c1: m[2], c2: m[6] || m[2], d1: m[1], d2: m[6] ? m[5] : m[1],
+      r1d: m[3], r2d: m[6] ? m[7] : m[3], range: !!m[6] });
+  }
+  if (!refs.length) return f;
+  const groups = {};
+  refs.forEach(function (r) { (groups[r.c1 + ':' + r.c2] = groups[r.c1 + ':' + r.c2] || []).push(r); });
+  const edits = [];
+  for (const key in groups) {
+    const g = groups[key];
+    const r0 = g[0];
+    const whole = r0.d1 + r0.c1 + r0.r1d + span.top + ':' + r0.d2 + r0.c2 + r0.r2d + span.bottom;
+    if (g.length === 1) {
+      if (!r0.range) return null;      // a single cell: leave the formula alone
+      edits.push({ at: r0.at, len: r0.len, text: whole });
+      continue;
+    }
+    // Several: they must sit in a row joined only by "," or "+".
+    let sep = '';
+    for (let k = 1; k < g.length; k++) {
+      const gap = masked.slice(g[k - 1].at + g[k - 1].len, g[k].at);
+      if (!/^\s*[,+]\s*$/.test(gap)) return null;
+      const s = gap.trim();
+      if (sep && s !== sep) return null;
+      sep = s;
+    }
+    const start = r0.at, stop = g[g.length - 1].at + g[g.length - 1].len;
+    edits.push({ at: start, len: stop - start, text: sep === '+' ? 'SUM(' + whole + ')' : whole });
+  }
+  edits.sort(function (a, b) { return b.at - a.at; });
+  let out = f;
+  edits.forEach(function (e) { out = out.slice(0, e.at) + e.text + out.slice(e.at + e.len); });
+  return out;
+}
+
+/** The Sunday a week tab is for, from its name ("WE 08/11/2026", "WE 25102026"), or null. */
+function tabSunday(tab) {
+  const raw = tab.getName().toUpperCase().replace(/^\s*W\s*\/?\s*E\s*/, '');
+  if (raw === tab.getName().toUpperCase()) return null;
+  let parts = raw.split(/[\/.\-\s]+/).filter(String);
+  let cands = [];
+  if (parts.length === 3) cands = [[parts[0], parts[1], parts[2]]];
+  else if (parts.length === 1 && /^\d{6,8}$/.test(parts[0])) {
+    const s = parts[0], y = s.slice(-4), dm = s.slice(0, -4);
+    for (let k = 1; k < dm.length; k++) cands.push([dm.slice(0, k), dm.slice(k), y]);
+  }
+  for (let i = 0; i < cands.length; i++) {
+    const d = Number(cands[i][0]), mo = Number(cands[i][1]), y = Number(cands[i][2]);
+    if (!d || !mo || mo > 12 || d > 31) continue;
+    const date = new Date(y, mo - 1, d);
+    if (date.getDay() === 0 && date.getDate() === d) return date;
+  }
+  return null;
+}
+
+/** Once after each change to how the sheet is tidied: every week's tab gets
+ *  its new starts put under their Coach and its totals counting everyone. */
+const TIDY_VERSION = 'new-starts-under-coach-1';
+function tidyAllWeeks(book, log) {
+  const props = PropertiesService.getScriptProperties();
+  if (props.getProperty('tidied') === TIDY_VERSION) return;
+  let ok = true;
+  book.getSheets().forEach(function (tab) {
+    const sunday = tabSunday(tab);
+    if (!sunday) return;
+    try {
+      let people = [];
+      try { people = fetchWeek(sunday); } catch (e) { people = []; }
+      const moved = people.length ? placeNewStarts(tab, people, sunday) : [];
+      repairTeamBlocks(tab);
+      const t = fixTotals(tab);
+      if (moved.length || t.changed || t.skipped.length) {
+        log.push([tab.getName(), 'Tidied' + (moved.length ? ' · moved ' + moved.join(', ') : '') + (t.changed ? ' · ' + t.changed + ' total formulas now count everyone' : ''),
+          t.skipped.length ? 'Totals to check by hand: ' + t.skipped.join(', ') : '']);
+      }
+    } catch (e) { ok = false; log.push([tab.getName(), 'Tidy failed: ' + e.message, '']); }
+  });
+  if (ok) props.setProperty('tidied', TIDY_VERSION);
 }
 
 /** First name, or "First L" when someone else on Bells has the same first name. */
