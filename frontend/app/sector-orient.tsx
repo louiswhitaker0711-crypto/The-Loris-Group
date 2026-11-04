@@ -103,8 +103,8 @@ export default function SectorOrientScreen() {
   }, [show, q.dataUpdatedAt]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => { if (map.current) { map.current.remove(); map.current = null; } }, []);
 
-  // Two-finger twist → rotate. Leaflet's own touch handling is off here, so
-  // there's nothing to fight over the gesture.
+  // One finger drags, two fingers twist/pinch/drag. Leaflet's own touch
+  // handling is off here (it can't cope with the CSS rotation), so we do it all.
   useEffect(() => {
     if (Platform.OS !== 'web' || !show) return;
     const clip = clipRef.current as unknown as HTMLElement | null;
@@ -113,24 +113,67 @@ export default function SectorOrientScreen() {
     // ones addEventListener expects, so we read the fields off directly.
     const angleOf = (t: any) => Math.atan2(t[1].clientY - t[0].clientY, t[1].clientX - t[0].clientX) * 180 / Math.PI;
     const distOf = (t: any) => Math.hypot(t[1].clientX - t[0].clientX, t[1].clientY - t[0].clientY);
-    const onStart = (e: any) => {
-      if (e.touches.length === 2) gesture.current = {
-        startAngle: angleOf(e.touches), startBearing: bearing.current,
-        startDist: distOf(e.touches), startZoom: map.current ? map.current.getZoom() : 15,
+    const midOf = (t: any) => ({ x: (t[0].clientX + t[1].clientX) / 2, y: (t[0].clientY + t[1].clientY) / 2 });
+    // Drag the map by a screen-pixel amount. The map element is turned with CSS,
+    // so turn the finger movement back into the map's own frame first.
+    const panScreen = (dx: number, dy: number) => {
+      if (!map.current || (!dx && !dy)) return;
+      const r = (bearing.current * Math.PI) / 180;
+      const mx = dx * Math.cos(r) + dy * Math.sin(r);
+      const my = -dx * Math.sin(r) + dy * Math.cos(r);
+      map.current.panBy([-mx, -my], { animate: false });
+    };
+    const startPan = (t: any) => { gesture.current = { mode: 'pan', x: t.clientX, y: t.clientY }; };
+    const startTwist = (t: any) => {
+      const mid = midOf(t);
+      gesture.current = {
+        mode: 'twist', startAngle: angleOf(t), startBearing: bearing.current,
+        startDist: distOf(t), startZoom: map.current ? map.current.getZoom() : 15, mx: mid.x, my: mid.y,
       };
     };
+    const onStart = (e: any) => {
+      if (e.touches.length === 1) startPan(e.touches[0]);
+      else if (e.touches.length === 2) startTwist(e.touches);
+    };
     const onMove = (e: any) => {
-      if (e.touches.length === 2 && gesture.current) {
+      const g = gesture.current;
+      if (!g) return;
+      if (e.touches.length === 1 && g.mode === 'pan') {
+        // One finger → move the map around.
         e.preventDefault();
-        // Twist → rotate, pinch → zoom, both from the same two-finger gesture.
-        apply(gesture.current.startBearing + (angleOf(e.touches) - gesture.current.startAngle));
+        const t = e.touches[0];
+        panScreen(t.clientX - g.x, t.clientY - g.y);
+        g.x = t.clientX; g.y = t.clientY;
+      } else if (e.touches.length === 2 && g.mode === 'twist') {
+        e.preventDefault();
+        // Twist → rotate, pinch → zoom, and moving both fingers together → pan.
+        apply(g.startBearing + (angleOf(e.touches) - g.startAngle));
         const dist = distOf(e.touches);
-        if (map.current && gesture.current.startDist > 0) {
-          map.current.setZoom(gesture.current.startZoom + Math.log2(dist / gesture.current.startDist), { animate: false });
+        if (map.current && g.startDist > 0) {
+          map.current.setZoom(g.startZoom + Math.log2(dist / g.startDist), { animate: false });
         }
+        const mid = midOf(e.touches);
+        panScreen(mid.x - g.mx, mid.y - g.my);
+        g.mx = mid.x; g.my = mid.y;
       }
     };
-    const onEnd = (e: any) => { if (e.touches.length < 2) gesture.current = null; };
+    const onEnd = (e: any) => {
+      // Lifting one of two fingers carries on as a one-finger drag, no jump.
+      if (e.touches.length === 1) startPan(e.touches[0]);
+      else if (e.touches.length === 0) gesture.current = null;
+    };
+    // Mouse drag too, for checking it on a computer.
+    let mouse: { x: number; y: number } | null = null;
+    const onMouseDown = (e: any) => { mouse = { x: e.clientX, y: e.clientY }; e.preventDefault(); };
+    const onMouseMove = (e: any) => {
+      if (!mouse) return;
+      panScreen(e.clientX - mouse.x, e.clientY - mouse.y);
+      mouse = { x: e.clientX, y: e.clientY };
+    };
+    const onMouseUp = () => { mouse = null; };
+    clip.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
     clip.addEventListener('touchstart', onStart, { passive: false });
     clip.addEventListener('touchmove', onMove, { passive: false });
     clip.addEventListener('touchend', onEnd);
@@ -140,6 +183,9 @@ export default function SectorOrientScreen() {
       clip.removeEventListener('touchmove', onMove);
       clip.removeEventListener('touchend', onEnd);
       clip.removeEventListener('touchcancel', onEnd);
+      clip.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
     };
   }, [show]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -160,7 +206,7 @@ export default function SectorOrientScreen() {
         <View style={[s.center, { flex: 1 }]}><Text style={s.muted}>No area to orient yet today.</Text></View>
       ) : (
         <>
-          <View ref={clipRef} style={s.mapBox}>
+          <View ref={clipRef} style={[s.mapBox, Platform.OS === 'web' ? ({ touchAction: 'none' } as any) : null]}>
             <View ref={box} style={s.mapInner} />
             {rotated && (
               <Pressable onPress={reset} style={s.compass} accessibilityRole="button" accessibilityLabel="Reset to north">
@@ -170,7 +216,7 @@ export default function SectorOrientScreen() {
             )}
             <Text style={s.attrib}>© OpenStreetMap</Text>
           </View>
-          <Text style={s.hint}>Twist with two fingers to turn the map to face the way you’re looking. Tap N to snap back to north.</Text>
+          <Text style={s.hint}>Drag to move, pinch to zoom, twist with two fingers to face the way you’re looking. Tap N to snap back to north.</Text>
         </>
       )}
 
