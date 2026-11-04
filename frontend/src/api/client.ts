@@ -1306,7 +1306,7 @@ export const apiService = {
   setCodTests: (userId: string, moduleIds: string[]) => api.post('/cod/test-requests', { user_id: userId, module_ids: moduleIds }),
   getMyCodTests: () => api.get<{ requests: any[] }>('/cod/test-requests/mine'),
   // Weekly quality report (routes/quality.py)
-  getQuality: (p: { view?: string; week?: string; month?: string } = {}) =>
+  getQuality: (p: { view?: string; week?: string; month?: string; kind?: 'quality' | 'fourth' } = {}) =>
     api.get('/quality', { params: Object.fromEntries(Object.entries(p).filter(([, v]) => v)) }),
   readQuality: (body: { files: { filename: string; data_b64: string }[]; week_ending?: string }) =>
     api.post('/quality/read', body, { timeout: 120000 }),

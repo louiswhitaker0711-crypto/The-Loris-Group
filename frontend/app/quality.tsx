@@ -41,6 +41,18 @@ const better = (key: string, now?: number | null, before?: number | null) =>
   now == null || before == null || now === before ? 0 : (key === 'fail_rate' ? (now < before ? 1 : -1) : (now > before ? 1 : -1));
 
 const ukDate = (iso: string) => { const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}`; };
+// Each quality week lines up with the 4th week 8 weeks before it: those
+// customers' 4th delivery report comes in with that week's quality report.
+const addDays = (iso: string, n: number) => {
+  const [y, m, d] = iso.split('-').map(Number);
+  const t = new Date(Date.UTC(y, m - 1, d + n));
+  return `${t.getUTCFullYear()}-${String(t.getUTCMonth() + 1).padStart(2, '0')}-${String(t.getUTCDate()).padStart(2, '0')}`;
+};
+const FOURTH_WEEK_LAG = 56;
+const shortWeek = (iso: string) => {
+  const [y, m, d] = iso.split('-').map(Number);
+  return `WE ${d} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][m - 1]} ${y}`;
+};
 const isoFromUk = (t: string) => {
   const m = t.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : null;
@@ -54,14 +66,15 @@ export default function QualityScreen() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin' && !(user as any)?.is_demo;
   const [view, setView] = useState('week');
+  const [kind, setKind] = useState<'quality' | 'fourth'>('quality');
   const [week, setWeek] = useState<string | undefined>(undefined);
   const [month, setMonth] = useState<string | undefined>(undefined);
   const [open, setOpen] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
   const canBulletin = user?.role === 'admin' || user?.role === 'leader';
   const q = useQuery({
-    queryKey: ['quality', view, week || '', month || ''],
-    queryFn: () => apiService.getQuality({ view, week, month }).then((r) => r.data),
+    queryKey: ['quality', kind, view, week || '', month || ''],
+    queryFn: () => apiService.getQuality({ view, week, month, kind }).then((r) => r.data),
     placeholderData: (prev: any) => prev,
   });
   const d = q.data;
@@ -83,6 +96,9 @@ export default function QualityScreen() {
         return (
           <View key={m.key} style={[s.col, m.key === 'fail_rate' && s.failCol]}>
             <Text style={[s.pill, (opts.bold || opts.team) && s.pillBold, opts.sub && s.pillSub, { backgroundColor: t.bg, color: t.fg }]}>{fmt(m.key, cell?.value)}</Text>
+            {m.key === 'fourth_week' && (metrics as any)?.fourth_week_of?.value != null ? (
+              <Text style={s.failCount}>{(metrics as any).fourth_week_n?.value ?? 0} of {(metrics as any).fourth_week_of.value}</Text>
+            ) : null}
             {m.key === 'fail_rate' && (metrics as any)?.fails?.value != null ? (
               <Text style={s.failCount}>{(metrics as any).fails.value} fail{(metrics as any).fails.value === 1 ? '' : 's'}</Text>
             ) : null}
@@ -161,7 +177,6 @@ export default function QualityScreen() {
         })}
       </View>
       {row.fail_reasons?.length > 0 && <Text style={s.note}>Fail reasons: {row.fail_reasons.map((r: any) => `${r.reason} ${r.count}`).join(' · ')}</Text>}
-      {row.metrics?.fourth_week == null && <Text style={s.note}>4th week shows once those customers reach their 4th delivery.</Text>}
       {multi && row.history?.length > 0 && (
         <FitTable>
           <View>
@@ -175,7 +190,7 @@ export default function QualityScreen() {
 
   return (
     <ScrollView style={s.page} contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + clearance + 40 }]}>
-      {isAdmin && <Upload onSaved={(w) => { setView('week'); setWeek(w); }} />}
+      {isAdmin && <Upload onSaved={(w) => { setKind('quality'); setView('week'); setWeek(w); }} />}
 
       {q.isLoading ? <ActivityIndicator color={c.primary} style={{ marginTop: 30 }} /> : !d?.week_ending ? (
         <View style={s.card}>
@@ -197,13 +212,47 @@ export default function QualityScreen() {
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.weeks}>
               {(d.months || []).map((m: any) => chip(m.month, m.label, m.month === d.month, () => setMonth(m.month)))}
             </ScrollView>
-          ) : d.view !== 'all' ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.weeks}>
-              {(d.weeks || []).map((w: any) => chip(w.week_ending, d.view === 'week' ? w.label : `To ${w.label}`, w.week_ending === d.week_ending, () => setWeek(w.week_ending)))}
-            </ScrollView>
           ) : null}
+          {d.view === 'month' || d.view === 'all' ? (
+            <View style={s.views}>
+              {chip('k-quality', 'Quality KPIs', d.kind !== 'fourth', () => { setKind('quality'); setMonth(undefined); })}
+              {chip('k-fourth', '4th weeks', d.kind === 'fourth', () => { setKind('fourth'); setMonth(undefined); })}
+            </View>
+          ) : (() => {
+            // Two rows in columns: each quality week, with the 4th week 8
+            // weeks before it underneath (the Owner, 4 Nov 2026).
+            const qList: string[] = (d.quality_weeks || []).map((w: any) => String(w.week_ending));
+            const fList: string[] = (d.fourth_weeks || []).map((w: any) => String(w.week_ending));
+            const qw = new Set<string>(qList);
+            const fw = new Set<string>(fList);
+            const cols = Array.from(new Set<string>(qList.concat(fList.map((f) => addDays(f, FOURTH_WEEK_LAG))))).sort().reverse();
+            const pre = d.view === 'week' ? '' : 'To ';
+            const on = (k: string, w: string) => d.kind === k && d.week_ending === w;
+            return (
+              <View style={s.pairs}>
+                <View style={s.pairLabels}>
+                  <Text style={s.pairLabel}>Quality KPIs</Text>
+                  <Text style={s.pairLabel}>4th weeks</Text>
+                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.weeks}>
+                  {cols.map((q) => {
+                    const f = addDays(q, -FOURTH_WEEK_LAG);
+                    return (
+                      <View key={q} style={s.pairCol}>
+                        {qw.has(q) ? chip(`q-${q}`, `${pre}${shortWeek(q)}`, on('quality', q), () => { setKind('quality'); setWeek(q); setOpen(null); })
+                          : <View style={[s.chip, s.chipEmpty]}><Text style={[s.chipText, { color: c.textMuted }]}>{shortWeek(q)}</Text></View>}
+                        {fw.has(f) ? chip(`f-${f}`, `${pre}${shortWeek(f)}`, on('fourth', f), () => { setKind('fourth'); setWeek(f); setOpen(null); })
+                          : <View style={[s.chip, s.chipEmpty]}><Text style={[s.chipText, { color: c.textMuted }]}>–</Text></View>}
+                      </View>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            );
+          })()}
 
-          {d.me && statBox('quality-me', `Your quality · ${d.label}`, d.me,
+          {d.kind === 'fourth' && <Text style={s.note}>4th week for the customers signed up {d.view === 'week' ? 'in' : 'up to'} {d.label}: how many were still ordering at their 4th delivery.</Text>}
+          {d.me && statBox('quality-me', `${d.kind === 'fourth' ? 'Your 4th week' : 'Your quality'} · ${d.label}`, d.me,
             multi ? `Your average over ${d.me.weeks} week${d.me.weeks === 1 ? '' : 's'} on the report (sales added up).` : null)}
           {d.box && statBox('quality-box', `${d.box.title} · ${d.label}`, d.box,
             d.box.kind === 'office' ? 'Everyone on the report, as Power BI adds it up.' : 'Everyone in your team, including the teams under it.')}
@@ -401,7 +450,7 @@ function Upload({ onSaved }: { onSaved: (week: string) => void }) {
         rows: (fw.rows || []).map((r: any) => ({ label: r.label, badge: r.badge, metrics: r.metrics, user_id: links[r.badge] || null })) } : undefined;
       const r = await apiService.importQuality({ week_ending: iso, rows, total: preview.total || {}, notify, fourth_week_from: preview.fourth_week_from || undefined,
         fourth_week, fail_reasons: preview.fail_reasons || [] });
-      toast.success(`${r.data.added_to_saved_week ? 'Added to' : 'Saved'} WE ${ukDate(iso)}${r.data.fourth_week_saved_on ? ` · 4th week on WE ${ukDate(r.data.fourth_week_saved_on)}` : ''}${r.data.notified ? ` · ${r.data.notified} told` : ''}${r.data.retrain_alerts ? ` · ${r.data.retrain_alerts} retrain alert${r.data.retrain_alerts === 1 ? '' : 's'}` : ''}`);
+      toast.success(`${r.data.added_to_saved_week ? 'Added to' : 'Saved'} WE ${ukDate(iso)}${r.data.fourth_week_saved_on ? ` · 4th week for WE ${ukDate(r.data.fourth_week_saved_on)}` : ''}${r.data.notified ? ` · ${r.data.notified} told` : ''}${r.data.retrain_alerts ? ` · ${r.data.retrain_alerts} retrain alert${r.data.retrain_alerts === 1 ? '' : 's'}` : ''}`);
       setPreview(null); setAdded([]);
       qc.invalidateQueries({ queryKey: ['quality'] });
       qc.invalidateQueries({ queryKey: ['coach-suggestions'] });
@@ -456,8 +505,7 @@ function Upload({ onSaved }: { onSaved: (week: string) => void }) {
               style={s.input} inputMode="numeric" maxLength={10} />
           </View>
           {preview.total?.signups_n != null ? <Text style={s.note}>The office: {preview.total.signups_n} signed up{preview.total.fails_n != null ? `, ${preview.total.fails_n} failed` : ''}{(preview.fail_reasons || []).length ? ` (${preview.fail_reasons.map((r: any) => `${r.reason} ${r.count}`).join(' · ')})` : ''}.</Text> : null}
-          {preview.fourth_week ? <Text style={s.note}>4th week from WE {ukDate(preview.fourth_week.from)}'s sign-ups ({preview.fourth_week.total?.fourth_week_n ?? '?'} of {preview.fourth_week.total?.fourth_week_of ?? '?'}) goes on WE {ukDate(preview.fourth_week.week_ending)}{preview.fourth_week.existing ? ', added to what’s saved there' : ''}.</Text> : null}
-          {preview.fourth_week_from ? <Text style={s.note}>4th week is from WE {ukDate(preview.fourth_week_from)}'s sign-ups and shows on this week.</Text> : null}
+          {preview.fourth_week ? <Text style={s.note}>4th week for WE {ukDate(preview.fourth_week.week_ending)} ({preview.fourth_week.total?.fourth_week_n ?? '?'} of {preview.fourth_week.total?.fourth_week_of ?? '?'}) is saved too, under 4th weeks{preview.fourth_week.existing ? ', added to what’s there' : ''}.</Text> : null}
           {(preview.rows || []).some((r: any) => !links[r.badge]) ? <Text style={s.note}>Anyone not on the Hub is a stray batch number and is left out. Tap a row to link it to someone if it's really them.</Text> : null}
           {preview.fourth_week_due === false && <Text style={s.note}>4th week is 0% for everyone this week, so it's left blank until it's due.</Text>}
           {(preview.rows || []).map((r: any) => {
@@ -520,6 +568,11 @@ const styles = (c: any) => StyleSheet.create({
   weeks: { gap: 8, paddingVertical: 2 },
   views: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   bulletinChip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderColor: c.primary },
+  pairs: { flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
+  pairLabels: { gap: 8, paddingVertical: 2 },
+  pairLabel: { fontFamily: fonts.bodySemibold, fontSize: 12, color: c.textMuted, height: 33, lineHeight: 33 },
+  pairCol: { gap: 8, alignItems: 'stretch' },
+  chipEmpty: { borderStyle: 'dashed', alignItems: 'center' },
   chip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: c.border, backgroundColor: c.background },
   chipText: { fontFamily: fonts.bodySemibold, fontSize: 13, color: c.text },
   tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },

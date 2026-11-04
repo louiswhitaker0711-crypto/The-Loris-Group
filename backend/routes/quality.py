@@ -29,9 +29,9 @@ from bson import ObjectId
 from fastapi import APIRouter, HTTPException, Request
 
 from auth import get_current_user, get_subtree_ids, require_admin, sees_whole_office
-from core.quality import (AI_PROMPT, merge_week, LABELS, MEASURES, TARGETS, VIEWS, aggregate, clean_metrics,
+from core.quality import (FOURTH_WEEK_KEYS, AI_PROMPT, merge_week, LABELS, MEASURES, TARGETS, VIEWS, aggregate, clean_metrics,
                           is_filter_note, percent_fix, from_ai, from_tables, merge, month_label, parse_week,
-                          pick_weeks, rag, week_label, xlsx_tables, is_fourth_week_report, fourth_week_shows_on,
+                          pick_weeks, rag, week_label, xlsx_tables, is_fourth_week_report,
                           from_pdf)
 from core.app_time import APP_TZ
 from core.quality_alerts import is_current
@@ -200,7 +200,9 @@ async def read_quality(request: Request):
     q_parts = [p for p in parts if not is_fourth_week_report(p)]
     fw_from = merge(fw_parts).get("week_ending") if fw_parts else None
     q_week = merge(q_parts).get("week_ending") if q_parts else None
-    week = parse_week(body.get("week_ending")) or q_week or fourth_week_shows_on(fw_from)
+    # Each 4th week is saved on the week those customers signed up (the
+    # Owner, 4 Nov 2026); the screen lines it up 8 weeks before its quality week.
+    week = parse_week(body.get("week_ending")) or q_week or fw_from
     office_id = admin.get("office_id")
     users = await _office_people(office_id)
     by_badge, by_name = await _badge_index(office_id, users)
@@ -217,7 +219,7 @@ async def read_quality(request: Request):
         return out
 
     fourth = None
-    fw_on = fourth_week_shows_on(fw_from)
+    fw_on = fw_from
     if q_parts and fw_parts and fw_on != week:
         # A PDF holds both: the quality for its week, and the 4th Delivery
         # page for an earlier week's sign-ups, which goes on its own week.
@@ -234,7 +236,7 @@ async def read_quality(request: Request):
     people = sorted(({"id": str(u["_id"]), "name": u.get("name") or ""} for u in users
                      if u.get("is_active") is not False and not u.get("deleted")),
                     key=lambda p: p["name"].lower())
-    return {"week_ending": week, "fourth_week_from": fw_from, "fourth_week": fourth, "fail_reasons": reasons,
+    return {"week_ending": week, "fourth_week_from": None, "fourth_week": fourth, "fail_reasons": reasons,
             "rows": rows, "total": rep.get("total") or {},
             "fourth_week_due": rep.get("fourth_week_due", True), "existing": existing, "people": people,
             "newest_saved": (newest or {}).get("week_ending"),
@@ -302,8 +304,8 @@ async def import_quality(request: Request):
     fw = body.get("fourth_week") or None
     if isinstance(fw, dict):
         fw_week, fw_from = parse_week(fw.get("week_ending")), parse_week(fw.get("from"))
-        if fw_week and fw_from and fw_week == fourth_week_shows_on(fw_from):
-            got, _ = await _save_week(admin, office_id, users, fw_week, fw.get("rows"), fw.get("total"), fw_from)
+        if fw_week and fw_week == (fw_from or fw_week):
+            got, _ = await _save_week(admin, office_id, users, fw_week, fw.get("rows"), fw.get("total"))
             fourth_saved = fw_week if got else None
     try:
         await relink_saved(office_id, users)
@@ -361,18 +363,44 @@ def _coloured(metrics: dict | None) -> dict:
 
 
 @router.get("/quality")
-async def get_quality(request: Request, view: str = "week", week: Optional[str] = None, month: Optional[str] = None):
+async def get_quality(request: Request, view: str = "week", week: Optional[str] = None, month: Optional[str] = None,
+                      kind: str = "quality"):
     """A period's numbers. view: week | 4w | month | 13w | all (all time is
     the running average). Each person's row is their average for the period
-    (core.quality.aggregate) plus their week-by-week history in it."""
+    (core.quality.aggregate) plus their week-by-week history in it.
+
+    kind: "quality" (the quality KPIs) or "fourth" (4th week only). Each 4th
+    week is saved on the week those customers signed up; the screen lines
+    each quality week up with the 4th week 8 weeks before it (the Owner,
+    4 Nov 2026)."""
     user = await get_current_user(request)
     office_id = user.get("office_id")
     view = view if view in {v for v, _ in VIEWS} else "week"
-    weeks = [d["week_ending"] async for d in db.quality_weeks.find({"office_id": office_id}, {"week_ending": 1}).sort("week_ending", -1).limit(156)]
-    base = {"weeks": [{"week_ending": w, "label": week_label(w)} for w in weeks],
+    kind = "fourth" if kind == "fourth" else "quality"
+    q_weeks, f_weeks = [], []
+    async for d in db.quality_weeks.find({"office_id": office_id}, {"week_ending": 1, "total": 1, "bas.metrics": 1}
+                                         ).sort("week_ending", -1).limit(156):
+        keys = set((d.get("total") or {}).keys())
+        for b in d.get("bas") or []:
+            keys |= set((b.get("metrics") or {}).keys())
+        if keys - FOURTH_WEEK_KEYS:
+            q_weeks.append(d["week_ending"])
+        if "fourth_week" in keys:
+            f_weeks.append(d["week_ending"])
+    weeks = f_weeks if kind == "fourth" else q_weeks
+
+    def keep(m: dict | None) -> dict:
+        """Only this kind's numbers: 4th week, or everything else."""
+        return {k: v for k, v in (m or {}).items() if (k in FOURTH_WEEK_KEYS) == (kind == "fourth")}
+
+    measures = [(k, LABELS[k]) for k, _, _ in MEASURES if (k == "fourth_week") == (kind == "fourth")]
+    base = {"kind": kind,
+            "weeks": [{"week_ending": w, "label": week_label(w)} for w in weeks],
+            "quality_weeks": [{"week_ending": w, "label": week_label(w)} for w in q_weeks],
+            "fourth_weeks": [{"week_ending": w, "label": week_label(w)} for w in f_weeks],
             "months": [{"month": m, "label": month_label(m)} for m in sorted({w[:7] for w in weeks}, reverse=True)],
             "views": [{"key": k, "label": label} for k, label in VIEWS], "view": view,
-            "measures": [{"key": k, "label": LABELS[k], "target": (TARGETS.get(k) or {}).get("text")} for k, _, _ in MEASURES]}
+            "measures": [{"key": k, "label": label, "target": (TARGETS.get(k) or {}).get("text")} for k, label in measures]}
     if not weeks:
         return {**base, "week_ending": None, "me": None, "team": [], "total": None}
     try:
@@ -403,13 +431,16 @@ async def get_quality(request: Request, view: str = "week", week: Optional[str] 
                 continue   # nobody on the Hub (a stray batch number): never shown
             if visible is not None and b.get("user_id") not in visible:
                 continue
+            m = keep(b.get("metrics"))
+            if not m:
+                continue   # nothing of this kind for them that week
             key = b.get("user_id") or f"badge:{b['badge']}"
             p = people.setdefault(key, {"user_id": b.get("user_id"), "badge": b["badge"], "label": b.get("label"),
                                         "now": {}, "before": []})
             if w in now:
-                p["now"][w] = b.get("metrics") or {}
+                p["now"][w] = m
             else:
-                p["before"].append(b.get("metrics") or {})
+                p["before"].append(m)
     ids = [p["user_id"] for p in people.values() if p["user_id"]]
     names = {str(u["_id"]): u.get("name") async for u in db.users.find(
         {"_id": {"$in": [ObjectId(x) for x in ids if ObjectId.is_valid(x)]}}, {"name": 1})}
@@ -494,10 +525,10 @@ async def get_quality(request: Request, view: str = "week", week: Optional[str] 
     box = None
     if whole:
         box = {"title": "The office", "kind": "office",
-               "metrics": _coloured(aggregate([(docs.get(w) or {}).get("total") or {} for w in now])),
-               "prev": aggregate([(docs.get(w) or {}).get("total") or {} for w in before]),
-               "history": [{"week_ending": w, "label": week_label(w), "metrics": _coloured(aggregate([(docs.get(w) or {}).get("total") or {}]))} for w in now],
-               "fail_reasons": _sum_reasons([(docs.get(w) or {}).get("fail_reasons") or [] for w in now])}
+               "metrics": _coloured(aggregate([keep((docs.get(w) or {}).get("total")) for w in now])),
+               "prev": aggregate([keep((docs.get(w) or {}).get("total")) for w in before]),
+               "history": [{"week_ending": w, "label": week_label(w), "metrics": _coloured(aggregate([keep((docs.get(w) or {}).get("total"))]))} for w in now],
+               "fail_reasons": _sum_reasons([(docs.get(w) or {}).get("fail_reasons") or [] for w in now]) if kind == "quality" else []}
     elif role == "leader":
         g = groups.get(uid)
         if g:
