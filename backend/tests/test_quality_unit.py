@@ -421,8 +421,8 @@ def test_pdf_reads_each_ba_and_the_offices_sign_ups(monkeypatch):
     by = {r["badge"]: r["metrics"] for r in q["rows"]}
     assert by["MMC1234"] == {"sales": 12, "aov": 12.86, "drops": 3.0, "fail_rate": 20.0}   # 4th week 0%: left out
     assert by["MMC5678"] == {"sales": 4, "aov": 9.75, "drops": 2.8, "fail_rate": 0.0}
-    # The office: the bigger figure (as Bells counts it), with its own fail count.
-    assert q["total"]["sales"] == 20 and q["total"]["signups_n"] == 20 and q["total"]["fails_n"] == 3
+    # The office: Power BI's own sign-ups and fail count (sales shown come from Bells).
+    assert q["total"]["sales"] == 16 and q["total"]["signups_n"] == 20 and q["total"]["fails_n"] == 3
     assert q["fail_reasons"] == [{"reason": "Customer Cancelled", "count": 2},
                                  {"reason": "Start Date is Over 8 Days", "count": 1}]
     a = aggregate([q["total"]])
@@ -442,3 +442,36 @@ def test_ba_sign_ups_still_worked_back_from_sales():
     from core.quality import aggregate
     a = aggregate([{"sales": 8, "fail_rate": 20}])
     assert (a["fails"], a["signups"]) == (2, 10)
+
+
+def test_quality_page_sales_come_from_bells_not_power_bi(monkeypatch):
+    """Sales on the Quality page are the Hub's own sign-ups (Bells, from the
+    breakdowns); Power BI is only for quality (the Owner, 4 Nov 2026)."""
+    import asyncio
+    from routes import quality as rq
+
+    class Coll:
+        def find(self, q, proj=None):
+            docs = [{"week_ending": "2026-10-25", "user_id": "u1", "days": [{"over30": 2, "under30": 1}, {"under30": "3"}]},
+                    {"week_ending": "2026-10-25", "user_id": "u2", "days": [{"over30": 4}, None]},
+                    {"week_ending": "2026-10-18", "user_id": "u1", "days": [{"over30": 1}]}]
+
+            async def gen():
+                for d in docs:
+                    if d["week_ending"] in q["week_ending"]["$in"]:
+                        yield d
+            return gen()
+
+    class DB:
+        bells_entries = Coll()
+
+    monkeypatch.setattr(rq, "db", DB())
+    bells = asyncio.run(rq._bells_sales("o1", ["2026-10-25", "2026-10-18"]))
+    assert bells["2026-10-25"] == {None: 10, "u1": 6, "u2": 4}
+    assert rq._bells_n(bells, ["2026-10-25", "2026-10-18"], "u1") == 7
+    assert rq._bells_n(bells, ["2026-10-25"], "u3") == 0          # on no Bells that week: 0
+    assert rq._bells_n(bells, ["2026-10-04"], "u1") is None       # no Bells that week at all
+    m = rq._use_bells({"sales": {"value": 38, "rag": None}, "signups": {"value": 44, "rag": None},
+                       "fails": {"value": 7, "rag": None}}, 10)
+    assert m == {"sales": {"value": 10, "rag": None}, "fails": {"value": 7, "rag": None}}
+    assert rq._use_bells({"sales": 38, "aov": 11.0}, None, False) == {"aov": 11.0}
