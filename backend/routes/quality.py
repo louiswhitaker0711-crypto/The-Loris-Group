@@ -532,9 +532,13 @@ async def get_quality(request: Request, view: str = "week", week: Optional[str] 
     box = None
     if whole:
         box = {"title": "The office", "kind": "office",
-               "metrics": _coloured(aggregate([keep((docs.get(w) or {}).get("total")) for w in now])),
-               "prev": aggregate([keep((docs.get(w) or {}).get("total")) for w in before]),
-               "history": [{"week_ending": w, "label": week_label(w), "metrics": _coloured(aggregate([keep((docs.get(w) or {}).get("total"))]))} for w in now],
+               # Everyone on the Hub, added up: never Power BI's own total, which
+               # counts old badges reused by mistake (the Owner, 4 Nov 2026).
+               "metrics": _coloured(aggregate([m for p in people.values() for m in p["now"].values()])),
+               "prev": aggregate([m for p in people.values() for m in p["before"]]),
+               "history": [{"week_ending": w, "label": week_label(w),
+                            "metrics": _coloured(aggregate([p["now"][w] for p in people.values() if w in p["now"]]))}
+                           for w in now],
                "fail_reasons": _sum_reasons([(docs.get(w) or {}).get("fail_reasons") or [] for w in now]) if kind == "quality" else []}
     elif role == "leader":
         g = groups.get(uid)

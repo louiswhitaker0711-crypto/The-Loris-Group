@@ -258,7 +258,7 @@ export default function QualityScreen() {
           {d.me && statBox('quality-me', `${d.kind === 'fourth' ? 'Your 4th week' : 'Your quality'} · ${d.label}`, d.me,
             multi ? `Your average over ${d.me.weeks} week${d.me.weeks === 1 ? '' : 's'} on the report (sales added up).` : null)}
           {d.box && statBox('quality-box', `${d.box.title} · ${d.label}`, d.box,
-            d.box.kind === 'office' ? 'Everyone on the report, as Power BI adds it up.' : 'Everyone in your team, including the teams under it.')}
+            d.box.kind === 'office' ? 'Everyone on the Hub, added up. Old badges on the report are left out.' : 'Everyone in your team, including the teams under it.')}
           {!d.me && !d.box && (
             <View style={s.card}><Text style={s.muted}>You're not on the report for {d.label}.</Text></View>
           )}
