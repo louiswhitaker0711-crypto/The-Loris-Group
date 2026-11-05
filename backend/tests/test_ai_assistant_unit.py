@@ -81,10 +81,16 @@ def test_analyse_once_a_day_and_never_calls_the_model_twice(db, monkeypatch):
         return "{}"
     monkeypatch.setattr(ai, "_ask", fake_ask)
     monkeypatch.setattr(ai, "context_text", fake_ctx)
+    monkeypatch.setattr(ai, "coaching_material", fake_ctx)
     first = _run(ai.analyse(_Req()))["analysis"]
     assert first["result"]["headline"] == "Good week"
     again = _run(ai.analyse(_Req()))["analysis"]
     assert again["id"] == first["id"] and len(calls) == 1
+    # An analysis in the old shape is done again once, at no extra cost.
+    _run(db.ai_analyses.update_one({"id": first["id"]}, {"$unset": {"v": ""}}))
+    assert _run(ai.get_analysis(_Req()))["analysis"] is None
+    redo = _run(ai.analyse(_Req()))["analysis"]
+    assert redo["id"] != first["id"] and redo["v"] == ai.ANALYSE_VERSION and len(calls) == 2
 
 
 def test_ai_is_off_without_the_key_and_for_viewers(db, monkeypatch):
