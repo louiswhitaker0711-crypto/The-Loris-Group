@@ -231,7 +231,7 @@ export default function AiScreen() {
                 {/* 1 · Where you are: the app's own figures against what good looks like. */}
                 {!!analysisQ.data?.numbers && (() => {
                   const n = analysisQ.data!.numbers!;
-                  const tone = (you: number | null, good: number) => (you == null ? c.textMuted : you >= good ? c.green : you >= good * 0.85 ? (c.amber || c.text) : c.red);
+                  const tone = (you: number | null, good: number) => (you == null ? c.textMuted : you >= good ? c.green : you >= good * 0.85 ? c.yellow : c.red);
                   return (
                     <View style={s.card} testID="ai-numbers">
                       <Text style={s.label}><Text style={s.stepNo}>1 </Text>Where you are · last {n.days} days</Text>
