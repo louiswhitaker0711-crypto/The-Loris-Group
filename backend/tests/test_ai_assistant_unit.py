@@ -86,6 +86,10 @@ def test_analyse_once_a_day_and_never_calls_the_model_twice(db, monkeypatch):
     async def no_notes(_u):
         return ""
     monkeypatch.setattr(ai, "private_guidance", no_notes)
+
+    async def no_numbers(_u):
+        return None
+    monkeypatch.setattr(ai, "numbers_vs_good", no_numbers)
     first = _run(ai.analyse(_Req()))["analysis"]
     assert first["result"]["headline"] == "Good week"
     again = _run(ai.analyse(_Req()))["analysis"]
@@ -224,3 +228,18 @@ def test_own_ai_gets_notes_only_as_private_guidance(db, monkeypatch):
     g = _run(ai.private_guidance({"id": "u9"}))
     assert "Goes quiet after a no" in g and "never" in g.lower()
     assert _run(ai.private_guidance({"id": "u8"})) == ""
+
+
+def test_numbers_vs_good_are_the_apps_own_figures(monkeypatch):
+    async def page(_viewer, _uid):
+        return {"loa": {"recent": {"active_days": 12, "avg_per_day": {
+            "doors_knocked": 86.5, "spoken_to": 51.6, "pitches_commenced": 12.5, "pitches_closed": 7.9, "sales": 2.2},
+            "steps": [{"from": "doors_knocked", "to": "spoken_to", "pct": 60},
+                      {"from": "spoken_to", "to": "pitches_commenced", "pct": 24},
+                      {"from": "pitches_commenced", "to": "pitches_closed", "pct": 64},
+                      {"from": "pitches_closed", "to": "sales", "pct": 28}]}}}
+    monkeypatch.setattr("routes.people.person_breakdown_for", page)
+    n = _run(ai.numbers_vs_good({"id": "u1"}))
+    assert n["days"] == 12
+    assert n["per_day"][0] == {"label": "Doors", "you": 86.5, "good": 120}
+    assert n["steps"][1] == {"label": "Spoken to → Pitched", "you": 24, "good": 36}
