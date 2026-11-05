@@ -1,7 +1,7 @@
 /**
  * "Your AI coach" on Home (the Owner, 2 + 5 Nov 2026): one bar across the top
  * of Home, above the quick actions. Tapping it opens app/ai.tsx (Analyse me,
- * My plan, Ask). Once today's analysis is done, the bar shows its headline.
+ * Ask). Once today's analysis is done, the bar shows its headline.
  * Hidden until the Owner adds the AI key, and on read-only accounts.
  * (GET /ai/status, GET /ai/analyse)
  */
@@ -32,7 +32,7 @@ export default function AiCoachCard() {
   });
   if (!status.data?.enabled) return null;
   const headline: string = today.data?.result?.headline || '';
-  const sub = headline || (status.data.left?.analyse ? 'Tap to analyse your day, plan, or ask' : 'Plan your day, or ask a question');
+  const sub = headline || (status.data.left?.analyse ? 'Tap to analyse your day, or ask for help' : 'Ask for help with anything on the doors');
   return (
     <Pressable onPress={() => router.push(`/ai?part=${today.data ? 'chat' : 'analyse'}` as never)} style={s.bar}
       accessibilityRole="button" accessibilityLabel="Your AI coach" testID="home-ai-coach">

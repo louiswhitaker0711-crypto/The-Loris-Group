@@ -1,8 +1,7 @@
 /**
- * The Hub's AI (route: /ai?part=analyse|plan|chat). The Owner, 2 Nov 2026:
+ * The Hub's AI (route: /ai?part=analyse|chat). The Owner, 2 Nov 2026:
  *   - Analyse me: once a day, a full look at your breakdowns, results, trends
  *     and plans against the office (and your team's, if you have one).
- *   - Suggest my plan: tomorrow's set-up, this week's goal and planner boxes.
  *   - Ask the AI: a chat that knows what you can see in the app.
  * Nothing changes until you tap "Use this" (POST /ai/apply), which fills it
  * in as you, with the same permissions as the rest of the app.
@@ -21,7 +20,7 @@ import { APP_LOCALE, APP_TZ } from '../src/utils/appTime';
 import type { AiStatus } from '../src/components/home/AiCoachCard';
 import AiText from '../src/components/ai/AiText';
 
-type Part = 'analyse' | 'plan' | 'chat';
+type Part = 'analyse' | 'chat';
 type Msg = { role: 'user' | 'assistant'; text: string };
 type Tomorrow = { focus?: string; kpi_metric?: string; kpi_target?: number; goal?: number };
 type Analysis = {
@@ -37,15 +36,6 @@ type Analysis = {
     tomorrow?: Tomorrow; this_week?: { weekly_goal?: number; why?: string };
     team?: string;
   };
-};
-type PlanItem = { date: string; box: string; box_label?: string; text: string };
-type NoteItem = { date: string; title: string; body: string };
-type Suggestion = {
-  summary?: string;
-  weekly_goal?: { goal?: number; why?: string } | null;
-  setup?: (Tomorrow & { date?: string; positive?: string }) | null;
-  planner?: PlanItem[];
-  notes?: NoteItem[];
 };
 
 const KPI_WORDS: Record<string, string> = { doors: 'doors', spoken: 'spoken to', pitched: 'pitched', closes: 'closes', callbacks: 'call backs' };
@@ -69,7 +59,7 @@ export default function AiScreen() {
   const tabClear = useTabBarClearance();
   const kb = useKeyboardInset();
   const params = useLocalSearchParams<{ part?: string }>();
-  const startPart: Part = params.part === 'plan' || params.part === 'chat' ? params.part : 'analyse';
+  const startPart: Part = params.part === 'chat' ? 'chat' : 'analyse';
   const [part, setPart] = useState<Part>(startPart);
   const scroll = useRef<ScrollView>(null);
 
@@ -126,24 +116,6 @@ export default function AiScreen() {
       toast.error('No analysis', errText(e, 'The AI didn’t answer. Try again in a moment.'));
     } finally {
       setAnalysing(false);
-    }
-  };
-
-  // ── Suggest my plan ──
-  const [ask, setAsk] = useState('');
-  const [plan, setPlan] = useState<Suggestion | null>(null);
-  const [planning, setPlanning] = useState(false);
-  const suggest = async () => {
-    setPlanning(true);
-    try {
-      const r = (await api.post('/ai/suggest-plan', { ask })).data?.suggestion as Suggestion;
-      setPlan(r);
-      setApplied({});
-      qc.invalidateQueries({ queryKey: ['ai', 'status'] });
-    } catch (e) {
-      toast.error('No plan', errText(e, 'The AI didn’t answer. Try again in a moment.'));
-    } finally {
-      setPlanning(false);
     }
   };
 
@@ -205,7 +177,7 @@ export default function AiScreen() {
     <ScrollView ref={scroll} style={s.page} contentContainerStyle={[s.content, { paddingBottom: 32 + tabClear + kb }]} keyboardShouldPersistTaps="handled">
       <View style={s.shell}>
         <View style={s.tabs}>
-          {([['analyse', 'Analyse me'], ['plan', 'My plan'], ['chat', 'Ask']] as [Part, string][]).map(([k, label]) => (
+          {([['analyse', 'Analyse me'], ['chat', 'Ask']] as [Part, string][]).map(([k, label]) => (
             <Pressable key={k} onPress={() => setPart(k)} style={[s.tab, part === k && s.tabOn]} accessibilityRole="tab"
               accessibilityState={{ selected: part === k }} testID={`ai-tab-${k}`}>
               <Text style={[s.tabText, part === k && s.tabTextOn]}>{label}</Text>
@@ -343,59 +315,6 @@ export default function AiScreen() {
           </>
         )}
 
-        {part === 'plan' && (
-          <>
-            <View style={s.card}>
-              <Text style={s.h2}>Suggest my plan</Text>
-              <Text style={s.hint}>Tomorrow’s set-up, this week’s goal and what to put in your planner, from your numbers and what you said you’d change. Nothing changes until you tap Use this.</Text>
-              <TextInput value={ask} onChangeText={setAsk} placeholder="Anything to add? e.g. I’m leading a sector tomorrow" placeholderTextColor={c.textMuted}
-                style={s.input} multiline maxLength={600} testID="ai-plan-ask" />
-              <Pressable onPress={suggest} disabled={planning || !left.suggest} style={[s.primary, (planning || !left.suggest) && { opacity: 0.6 }]}
-                accessibilityRole="button" testID="ai-suggest">
-                {planning ? <ActivityIndicator color={c.onPrimary} /> : <Text style={s.primaryText}>{plan ? 'Suggest again' : 'Suggest my plan'}</Text>}
-              </Pressable>
-              <Text style={s.small}>{left.suggest ?? 0} left today</Text>
-            </View>
-            {plan && (
-              <>
-                {!!plan.summary && <View style={s.hero}><Text style={s.heroText}>{plan.summary}</Text></View>}
-                {!!plan.setup && (
-                  <View style={s.card}>
-                    <Text style={s.label}>{plan.setup.date ? `${dayLabel(plan.setup.date)}’s set-up` : 'Set-up'}</Text>
-                    {plan.setup.goal != null && <Text style={s.body}><Text style={s.bold}>Goal: </Text>{plan.setup.goal} sign-ups</Text>}
-                    {!!plan.setup.focus && <Text style={s.body}><Text style={s.bold}>Focus: </Text>{plan.setup.focus}</Text>}
-                    {!!kpiText(plan.setup) && <Text style={s.body}><Text style={s.bold}>KPI: </Text>{kpiText(plan.setup)}</Text>}
-                    {!!plan.setup.positive && <Text style={s.body}><Text style={s.bold}>Keep doing: </Text>{plan.setup.positive}</Text>}
-                    <UseThis k="pl-setup" kind="setup" data={{ ...plan.setup }} done="It’s in your sector set-up." />
-                  </View>
-                )}
-                {plan.weekly_goal?.goal != null && (
-                  <View style={s.card}>
-                    <Text style={s.label}>This week’s goal</Text>
-                    <Text style={s.body}><Text style={s.bold}>{plan.weekly_goal.goal} sign-ups</Text>{plan.weekly_goal.why ? `: ${plan.weekly_goal.why}` : ''}</Text>
-                    <UseThis k="pl-goal" kind="weekly_goal" data={{ goal: plan.weekly_goal.goal }} done="Your weekly goal is set on Bells." />
-                  </View>
-                )}
-                {(plan.planner || []).map((p, i) => (
-                  <View key={`p${i}`} style={s.card}>
-                    <Text style={s.label}>Planner · {dayLabel(p.date)} · {p.box_label || p.box}</Text>
-                    <Text style={s.body}>{p.text}</Text>
-                    <UseThis k={`pl-p${i}`} kind="planner" data={{ date: p.date, box: p.box, text: p.text }} done="Added to your planner." />
-                  </View>
-                ))}
-                {(plan.notes || []).map((n, i) => (
-                  <View key={`n${i}`} style={s.card}>
-                    <Text style={s.label}>Note · {dayLabel(n.date)}</Text>
-                    <Text style={[s.body, s.bold]}>{n.title}</Text>
-                    <Text style={s.body}>{n.body}</Text>
-                    <UseThis k={`pl-n${i}`} kind="note" data={{ date: n.date, title: n.title, body: n.body }} done="Saved in your planner’s notes." />
-                  </View>
-                ))}
-              </>
-            )}
-          </>
-        )}
-
         {part === 'chat' && (
           <>
             {!msgs.length && (
@@ -413,7 +332,7 @@ export default function AiScreen() {
             ))}
             {sending && <View style={[s.bubble, s.theirs]}><ActivityIndicator color={c.primary} /></View>}
             <View style={s.composer}>
-              <TextInput value={draft} onChangeText={setDraft} placeholder="Ask anything about your numbers or plan" placeholderTextColor={c.textMuted}
+              <TextInput value={draft} onChangeText={setDraft} placeholder="Ask anything about your numbers or how to improve" placeholderTextColor={c.textMuted}
                 style={[s.input, { flex: 1, minHeight: 44 }]} multiline maxLength={2000} testID="ai-chat-input" />
               <Pressable onPress={send} disabled={sending || !draft.trim() || !left.chat} style={[s.send, (sending || !draft.trim() || !left.chat) && { opacity: 0.5 }]}
                 accessibilityRole="button" accessibilityLabel="Send" testID="ai-chat-send">
