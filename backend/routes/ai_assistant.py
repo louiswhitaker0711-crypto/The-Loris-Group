@@ -30,7 +30,7 @@ from pymongo.errors import DuplicateKeyError
 from auth import get_current_user
 from core.ai_context import context_text, next_field_day, today_uk
 from core.brand import APP_NAME, BRITISH_ENGLISH, SELF_EMPLOYED_TERMS
-from core.sales_coaching import PLAYBOOK, RESPONSE_STYLE
+from core.sales_coaching import BIG_COACH, PLAYBOOK, RESPONSE_STYLE
 from core.llm_guard import acquire_llm_slot
 from core.llm_keys import llm_configured
 from core.rate_limit import take_ai_quota
@@ -76,7 +76,7 @@ ABOUT = (
     "invent numbers that aren't in the data; if something is missing, say so. Don't invent Modern Milkman facts "
     "or prices. When coaching_notes_on_my_people says what someone is struggling with, use it when advising on "
     "them. Short sentences, no waffle: it's read on a phone between doors.\n\n"
-    + PLAYBOOK + "\n" + RESPONSE_STYLE + "\n"
+    + BIG_COACH + "\n" + PLAYBOOK + "\n" + RESPONSE_STYLE + "\n"
     + BRITISH_ENGLISH + " " + SELF_EMPLOYED_TERMS
 )
 
@@ -218,10 +218,10 @@ async def chat(request: Request):
         + (f"The office's own coaching material that matches:\n{material}\n\n" if material else "")
         + (f"The conversation so far today:\n{transcript}\n\n" if transcript else "")
         + f"Their message: {question}\n\n"
-        + "Reply to their message. If it's a coaching or sales question, answer it the way the response style "
-          "says: where they are, what to focus on, how to do it on the doors, what will happen, go and try it, "
-          "how they'll track it, with plenty of practical advice in the how (3–5 specific things to do: the words, "
-          "how to make the customer feel, tone, body language). Otherwise answer in a few short lines. Format for a phone: each "
+        + "Reply to their message as their big coach: work out what kind of question it is and answer to fit "
+          "(in the field right now: short and urgent, using right_now; getting better: the full coaching shape "
+          "with 3–5 specific things to do on the doors; people: what to say and how; running the office: step "
+          "by step). Simple questions get a few short lines. Format for a phone: each "
           "section starts with a short heading on its own line in **double asterisks**, then short lines or '- ' "
           "bullets; no tables, no # headings, no other formatting."
     )
