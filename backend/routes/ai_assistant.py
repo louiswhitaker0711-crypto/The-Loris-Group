@@ -41,7 +41,7 @@ router = APIRouter()
 
 # Daily caps per person (the Owner, 2 Nov 2026: Analyse once a day; chat
 # capped so one person can't run the bill up).
-DAILY_LIMITS = {"chat": 20, "analyse": 1, "setup": 25}
+DAILY_LIMITS = {"chat": 30, "analyse": 1, "setup": 25}
 CHAT_HISTORY_TURNS = 10
 
 ABOUT = (
@@ -221,7 +221,9 @@ async def chat(request: Request):
         + "Reply to their message as their big coach: work out what kind of question it is and answer to fit "
           "(in the field right now: short and urgent, using right_now; getting better: the full coaching shape "
           "with 3–5 specific things to do on the doors; people: what to say and how; running the office: step "
-          "by step). Simple questions get a few short lines. Format for a phone: each "
+          "by step). If you need something you don't have, ask 1–2 short follow-up questions first (with one quick "
+          "first move if it's urgent); if their message answers your earlier question, coach with what they told "
+          "you. Simple questions get a few short lines. Format for a phone: each "
           "section starts with a short heading on its own line in **double asterisks**, then short lines or '- ' "
           "bullets; no tables, no # headings, no other formatting."
     )
