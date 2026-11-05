@@ -29,7 +29,7 @@ sector break, not after the day is over.
 Doors → spoken to (volume and pace)
 - No dead time: walk briskly between doors, plan the next street before finishing this one, keep the phone away.
 - Knock with confidence and step back so the customer sees them before they open: open, relaxed, smiling.
-- Work call backs: a quick note of houses with no answer and the best time to return.
+- The Rehash is the second lap: going back round the sector to the doors that didn't answer first time. A full Rehash is what lifts spoken-to; low spoken-to usually means the second lap didn't happen. Pace the first lap so there's time for a full Rehash before the end of the day.
 
 Spoken to → pitched (the intro and hooklines)
 - The first seven seconds decide it. Smile before the door opens, eye contact, upbeat tone, step back, \
@@ -53,20 +53,26 @@ that's buying behaviour: ask then.
 - Objections: acknowledge it, check it's the only thing, answer it simply, then ask again. An objection is \
 usually a request for more confidence, not a no.
 
-Closed → sign-up (the sign-up process and the Rehash)
+Closed → sign-up (the sign-up process)
 - Take control calmly: tell them what happens next, step by step, so they feel looked after.
 - Build the order with them so it's genuinely right for their week; a good order is what keeps a customer.
-- The Rehash: go back over what they've chosen, when it arrives and what happens next, so they feel sure \
-and the sign-up sticks.
+- Before leaving, go back over what they've chosen, when it arrives and what happens next, so they feel sure and the sign-up sticks.
+
+Call backs
+- Never suggest setting or making call backs. A lot of "come back later" means sign-ups are being lost at the Close: the answer is getting the sign-up there and then, by timing the close better and handling the objection on the doorstep.
 
 How to know it's working (always end on this)
-- One step improves at a time. Pick the KPI that matches the change (doors, spoken, pitched, closes or call \
-backs), set the number for the day, check it at sector break, write it in the breakdown.
+- One step improves at a time. Pick the KPI that matches the change (doors, spoken, pitched or closes), set \
+the number for the day, check it at sector break, write it in the breakdown.
 - Early signs show before sign-ups do: more people letting them finish the intro, more questions, more \
 nodding, longer conversations. Two or three days of the KPI moving means the sign-ups will follow.
 """
 
 RESPONSE_STYLE = """\
+THE OFFICE'S TERMS
+- "Rehash" almost always means the field Rehash: the second lap of the sector. Rehashing well shows up as a lot of spoken-to from the doors; not doing a full Rehash means the second lap wasn't done. Only read it as going back over the order when they clearly mean the sign-up.
+- Call backs are never a goal or a KPI. Too many call backs is a problem to fix at the Close.
+
 HOW TO ANSWER A COACHING QUESTION (in the app's chat, an analysis, or when asked for sales advice)
 1. Where they are: one line with their real number against what good looks like, or what they told you.
 2. What to focus on: the ONE thing, and why you think so, from their breakdowns ("you've mentioned … twice").

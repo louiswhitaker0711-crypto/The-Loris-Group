@@ -72,7 +72,7 @@ ABOUT = (
     "pitched→closed, closed→sign-up, or simply not enough doors) and give practical tips they can use on the "
     "very next door: what to say or do differently, in the team's own language (S.E.E., hooklines, K.I.S.S., "
     "tone of voice, body language, building trust, taking control, timing the close, handling objections, "
-    "qualifying early, the Rehash, call backs, not wasting time). When coaching material from the Hub is given, "
+    "qualifying early, the Rehash (the second lap), not wasting time). When coaching material from the Hub is given, "
     "base your tips on it. Don't compare them with the office's average or other people unless they ask. Never "
     "invent numbers that aren't in the data; if something is missing, say so. Don't invent Modern Milkman facts "
     "or prices. When coaching_notes_on_my_people says what someone is struggling with, use it when advising on "
@@ -160,10 +160,16 @@ async def private_guidance(user: dict) -> str:
 @router.get("/ai/status")
 async def ai_status(request: Request):
     user = await get_current_user(request)
-    used = await _used(str(user["id"]), today_uk().isoformat())
+    day = today_uk().isoformat()
+    used = await _used(str(user["id"]), day)
+    left = {k: max(0, DAILY_LIMITS[k] - used[k]) for k in DAILY_LIMITS}
+    # Analyse me is used up only by an analysis in today's shape: one made
+    # before the analysis changed can be done again (POST /ai/analyse gives
+    # the old one back first).
+    done = await db.ai_analyses.find_one({"user_id": str(user["id"]), "date": day}, {"v": 1})
+    left["analyse"] = 0 if done and done.get("v") == ANALYSE_VERSION else 1
     return {"enabled": llm_configured() and not user.get("is_viewer"),
-            "limits": DAILY_LIMITS,
-            "left": {k: max(0, DAILY_LIMITS[k] - used[k]) for k in DAILY_LIMITS}}
+            "limits": DAILY_LIMITS, "left": left}
 
 
 # ── Chat ──────────────────────────────────────────────────────────────────────
@@ -213,8 +219,14 @@ async def chat(request: Request):
         + f"What this person can see in the app (JSON):\n{await context_text(user)}\n\n"
         + (f"The office's own coaching material that matches:\n{material}\n\n" if material else "")
         + (f"The conversation so far today:\n{transcript}\n\n" if transcript else "")
-        + f"Their message: {question}\n\nReply to their message. If they ask for a plan, keep it practical "
-          "and tell them they can tap 'Suggest my plan' to get it with Use this buttons."
+        + f"Their message: {question}\n\n"
+        + "Reply to their message. If it's a coaching or sales question, answer it the way the response style "
+          "says: where they are, what to focus on, how to do it on the doors, what will happen, go and try it, "
+          "how they'll track it, with plenty of practical advice in the how (3–5 specific things to do: the words, "
+          "how to make the customer feel, tone, body language). Otherwise answer in a few short lines. If they ask "
+          "for a plan, tell them they can tap My plan to get it with Use this buttons. Format for a phone: each "
+          "section starts with a short heading on its own line in **double asterisks**, then short lines or '- ' "
+          "bullets; no tables, no # headings, no other formatting."
     )
     try:
         reply = await _ask(user, ABOUT, prompt)
@@ -249,7 +261,7 @@ ANALYSE_SHAPE = (
     '"result": "what will change if they do it, worked out from their own ratios, e.g. \'5 more pitched a day '
     'is about 1 more sign-up a day: 6 more a week\', max 25 words", '
     '"tomorrow": {"focus": "the change, max 8 words", "kpi_metric": one of "doors", "spoken", "pitched", '
-    '"closes", "callbacks", "kpi_target": a number, "goal": sign-ups goal for tomorrow}, '
+    '"closes", "kpi_target": a number, "goal": sign-ups goal for tomorrow}, '
     '"this_week": {"weekly_goal": a realistic stretch number of sign-ups for this week, "why": "max 12 words"}, '
     '"track": "how they will know it is working: the number to check at sector break and the early signs, e.g. '
     '\'Pitched at 16:30: 12 or more. Early sign: more people let you finish the intro\', max 25 words", '
@@ -368,7 +380,7 @@ PLAN_SHAPE = (
     '"weekly_goal": {"goal": number of sign-ups, "why": "short"} or null if it\'s Saturday or they have one '
     'that already fits, '
     '"setup": {"date": "YYYY-MM-DD (the next field day)", "goal": number, "focus": "short", "kpi_metric": one '
-    'of "doors", "spoken", "pitched", "closes", "callbacks", "kpi_target": number, "positive": "what to keep '
+    'of "doors", "spoken", "pitched", "closes", "kpi_target": number, "positive": "what to keep '
     'doing"}, '
     '"planner": [{"date": "YYYY-MM-DD", "box": one of BOXES, "text": "what to write"}] (0–6 items, only boxes '
     'that suit this person; Coaches plan Primetime, Sector, Crew Meetings, Stage 1/Stage 2 coaching; BAs '
@@ -423,7 +435,7 @@ async def suggest_plan(request: Request):
 
 SETUP_SHAPE = (
     'Reply with JSON only: {"focus": "today\'s one focus, max 8 words", "kpi_metric": one of "doors", '
-    '"spoken", "pitched", "closes", "callbacks", "kpi_target": a number, "goal": sign-ups goal for today, '
+    '"spoken", "pitched", "closes", "kpi_target": a number, "goal": sign-ups goal for today, '
     '"tip": "one practical thing to say or do on the doors today, max 25 words", '
     '"positive": "something they do well to keep doing, max 8 words, or empty string"}'
 )
