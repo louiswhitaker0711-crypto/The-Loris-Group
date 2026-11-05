@@ -1630,9 +1630,6 @@ export default function HomeScreen() {
       {isTrainee && !!nextPending && nextPending.day_number >= 4 && <EarningsPlanCard onlyMissing />}
       {/* The week's quality, for a week after the report is added. */}
       <QualityNewCard />
-      {/* The AI coach: Analyse me (once a day), Suggest my plan, Ask the AI (the Owner, 2 Nov 2026).
-          Not on BA Academy days; hidden until the AI key is added. */}
-      {!(user as any)?.is_viewer && !(isTrainee && nextPending && nextPending.day_number <= 2) && <AiCoachCard />}
       {pReviewCard}
       {isAdmin && isPlanningSunday && pWeeklyPlans}
       {pBaWeek}
@@ -1758,6 +1755,10 @@ export default function HomeScreen() {
           </View>
         </View>
       ) : null}
+
+      {/* ── The AI coach: one bar at the very top, above the quick actions (the Owner, 5 Nov 2026).
+          Not on BA Academy days or read-only accounts; hidden until the AI key is added. ── */}
+      {!(user as any)?.is_viewer && !academyHome && <AiCoachCard />}
 
       {/* ── Quick actions: the four things for this time of day, at the top ── */}
       <View style={styles.actionsGrid}>
