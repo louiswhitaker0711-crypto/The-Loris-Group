@@ -296,6 +296,8 @@ function RootNavigator() {
       <Stack.Screen name="welcome" options={{ headerShown: false }} />
       <Stack.Screen name="pitch" options={{ headerShown: true, title: 'Your pitch', headerBackTitle: 'Back', ...MASTHEAD_COMPACT }} />
       <Stack.Screen name="notes" options={{ headerShown: true, title: 'Notes', headerBackTitle: 'Back', ...MASTHEAD_COMPACT }} />
+      <Stack.Screen name="meetup" options={{ headerShown: true, title: 'Meet-up', headerBackTitle: 'Back', ...MASTHEAD_COMPACT }} />
+      <Stack.Screen name="meetups-admin" options={{ headerShown: true, title: 'Meet-ups', headerBackTitle: 'Back', ...MASTHEAD_COMPACT }} />
       <Stack.Screen name="library" options={{ headerShown: true, title: 'Library', headerBackTitle: 'Back', ...MASTHEAD_COMPACT }} />
       <Stack.Screen name="coaching-guide" options={{ headerShown: true, title: 'Today\u2019s guide', headerBackTitle: 'Back', ...MASTHEAD_COMPACT }} />
       <Stack.Screen name="earnings-plan" options={{ headerShown: true, title: 'Plan your earnings', headerBackTitle: 'Back', ...MASTHEAD_COMPACT }} />

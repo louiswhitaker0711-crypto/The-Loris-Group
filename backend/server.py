@@ -91,6 +91,7 @@ from routes.viewers import router as viewers_router
 from routes.team_history import router as team_history_router
 from routes.cod_focus import router as cod_focus_router
 from routes.ai_assistant import router as ai_assistant_router
+from routes.meetups import router as meetups_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -204,6 +205,7 @@ api_router.include_router(viewers_router)
 api_router.include_router(team_history_router)
 api_router.include_router(cod_focus_router)
 api_router.include_router(ai_assistant_router)
+api_router.include_router(meetups_router)
 
 app.include_router(api_router)
 
@@ -844,6 +846,18 @@ async def _startup_work():
                 logger.error(f"monthly breakeven job failed: {ex}")
 
         scheduler.add_job(_breakeven_month_job, "cron", day=1, hour=9, minute=12, id="breakeven_month",
+                          replace_existing=True, max_instances=1, coalesce=True)
+
+        # Meet-ups: the day after one ends, a push to message the people you met
+        # (routes/meetups.py; the Owner, 5 Nov 2026).
+        async def _meetup_followup_job():
+            try:
+                from routes.meetups import followup_tick
+                logger.info(f"meet-up follow-ups: {await followup_tick()} sent")
+            except Exception as ex:
+                logger.error(f"meet-up follow-up job failed: {ex}")
+
+        scheduler.add_job(_meetup_followup_job, "cron", hour=10, minute=7, id="meetup_followup",
                           replace_existing=True, max_instances=1, coalesce=True)
 
         # ── Weekly Bulletin reminder push (Monday 9:00 AM UK time) ───────────

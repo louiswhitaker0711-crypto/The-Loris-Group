@@ -269,7 +269,15 @@ async def notes_folder(request: Request):
         owner_name = ((owner or {}).get("name") or "").split(" ")[0]
     except Exception:  # noqa: BLE001
         pass
-    return {"latest_from_owner": latest, "pitch": pitch, "cod": cod, "total": sum(counts.values()),
+    # Meet-ups (the Owner, 5 Nov 2026): Notes → Meet-ups → <meet-up name>.
+    meetups = []
+    mids = [h[7:] for h in counts if h.startswith("meetup:")]
+    if mids:
+        async for m in db.meetups.find({"id": {"$in": mids}, "office_id": user.get("office_id")},
+                                       {"_id": 0, "id": 1, "name": 1, "start_date": 1}).sort("start_date", -1):
+            meetups.append({"head": f"meetup:{m['id']}", "label": m.get("name") or "Meet-up",
+                            "date": m.get("start_date"), "count": counts.get(f"meetup:{m['id']}", 0)})
+    return {"latest_from_owner": latest, "pitch": pitch, "cod": cod, "meetups": meetups, "total": sum(counts.values()),
             "owner_name": owner_name or "the Owner"}
 
 
@@ -279,7 +287,8 @@ async def list_notes(request: Request, head: Optional[str] = None, q: Optional[s
     me = str(user["id"])
     query: dict = _visible(user)
     if head:
-        if not _HEAD.match(head):
+        from routes.meetups import MEETUP_HEAD
+        if not (_HEAD.match(head) or MEETUP_HEAD.match(head)):
             raise HTTPException(status_code=400, detail="Unknown heading")
         query = {"$and": [query, {"head": head}]}
     words = " ".join(str(q or "").split())[:80]
@@ -362,6 +371,11 @@ async def edit_note(note_id: str, request: Request):
         raise HTTPException(status_code=404, detail="Note not found")
     raw = await request.json()
     e = _clean_edit(raw if isinstance(raw, dict) else {})
+    if str(note.get("ref") or "").startswith("meetup:"):
+        from routes.meetups import edit_from_notes
+        if not await edit_from_notes(user, note, e["title"], e["body"]):
+            raise HTTPException(status_code=404, detail="Note not found")
+        return {"ok": True}
     r = _parse_ref(note.get("ref"))
     planner = await db.weekly_planners.find_one({"user_id": me, "week_ending": r["week"]}) if r and r["uid"] == me else None
     if not planner:
@@ -413,9 +427,14 @@ async def add_note(request: Request):
         raise HTTPException(status_code=403, detail="Read-only account")
     me = str(user["id"])
     raw = await request.json()
-    e = _clean_edit(raw if isinstance(raw, dict) else {})
+    raw = raw if isinstance(raw, dict) else {}
+    e = _clean_edit(raw)
     if not (e["body"].strip() or e["title"]):
         raise HTTPException(status_code=400, detail="Write something first")
+    from routes.meetups import MEETUP_HEAD, add_from_notes
+    if MEETUP_HEAD.match(str(raw.get("head") or "")):
+        nid = await add_from_notes(user, str(raw["head"])[7:], e["title"], e["body"])
+        return {"ok": True, "id": nid, "note_id": nid}
     from core.app_time import APP_TZ
     from routes.weekly_planners import _seed
     today = datetime.now(APP_TZ).date()
