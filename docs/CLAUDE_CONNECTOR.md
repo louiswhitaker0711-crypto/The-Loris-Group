@@ -17,7 +17,7 @@ Admins can always make a personal link. Anyone else can once an Admin switches i
 
 | Tool | What it reads |
 | --- | --- |
-| `get_me` | Everything about the link's person in one go: their weeks, the office's weeks, their page, recent set-ups and breakdowns, this week's planner, their team's weeks, latest quality |
+| `get_me` | Everything about the link's person in one go: their weeks, the office's weeks, their page, recent set-ups and breakdowns, this week's planner, their team's weeks, private coaching notes on the people they coach (never notes about themselves), latest quality |
 | `get_team` | People in the office: role, team, Coach, stage, start date, new-start day |
 | `get_bells_week` | One week's Bells: each day's status and Gold / Silver / The Round, goal, last week, traffic light, piece average, scoring, reliability, office totals |
 | `get_recent_weeks` | Each person's and the office's weekly totals over the last N weeks |

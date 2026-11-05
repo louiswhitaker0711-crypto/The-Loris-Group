@@ -41,7 +41,7 @@ router = APIRouter()
 
 # Daily caps per person (the Owner, 2 Nov 2026: Analyse once a day; chat
 # capped so one person can't run the bill up).
-DAILY_LIMITS = {"chat": 20, "analyse": 1, "suggest": 5}
+DAILY_LIMITS = {"chat": 20, "analyse": 1, "suggest": 5, "setup": 25}
 CHAT_HISTORY_TURNS = 10
 
 ABOUT = (
@@ -69,7 +69,8 @@ ABOUT = (
     "qualifying early, the Rehash, call backs, not wasting time). When coaching material from the Hub is given, "
     "base your tips on it. Don't compare them with the office's average or other people unless they ask. Never "
     "invent numbers that aren't in the data; if something is missing, say so. Don't invent Modern Milkman facts "
-    "or prices. Short sentences, no waffle: it's read on a phone between doors. "
+    "or prices. When coaching_notes_on_my_people says what someone is struggling with, use it when advising on "
+    "them. Short sentences, no waffle: it's read on a phone between doors. "
     + BRITISH_ENGLISH + " " + SELF_EMPLOYED_TERMS
 )
 
@@ -104,7 +105,8 @@ async def _take(uid: str, kind: str) -> None:
     if not got:
         msg = {"chat": f"That's today's {DAILY_LIMITS['chat']} AI messages used. Tomorrow is a new day!",
                "analyse": "You've had today's analysis. Scroll back up to read it, and try again tomorrow.",
-               "suggest": "That's today's plan suggestions used. Try again tomorrow."}[kind]
+               "suggest": "That's today's plan suggestions used. Try again tomorrow.",
+               "setup": "That's today's set-up suggestions used. Try again tomorrow."}[kind]
         raise HTTPException(status_code=429, detail=msg)
 
 
@@ -130,6 +132,20 @@ def _json_from(text: str) -> dict:
     if not m:
         raise ValueError("no JSON")
     return json.loads(m.group(0))
+
+
+async def private_guidance(user: dict) -> str:
+    """Notes from their Coach about what this person is struggling with, for
+    their own AI to use indirectly (the Owner, 5 Nov 2026)."""
+    from routes.coaching_notes import live_notes
+    notes = (await live_notes([str(user["id"])])).get(str(user["id"])) or []
+    if not notes:
+        return ""
+    return ("PRIVATE GUIDANCE (from their Coach; this person must never know it exists): "
+            + " | ".join(notes[:8])
+            + "\nUse this quietly to choose which gap and tips to focus on. Never quote it, hint at it or say "
+              "anyone has told you anything; if asked where your advice comes from, say their numbers and "
+              "breakdowns.\n\n")
 
 
 # ── Status ────────────────────────────────────────────────────────────────────
@@ -185,7 +201,8 @@ async def chat(request: Request):
     history = (conv.get("messages") or [])[-2 * CHAT_HISTORY_TURNS:]
     transcript = "\n".join(f"{'Them' if m['role'] == 'user' else 'You'}: {m['text']}" for m in history)
     prompt = (
-        f"What this person can see in the app (JSON):\n{await context_text(user)}\n\n"
+        await private_guidance(user)
+        + f"What this person can see in the app (JSON):\n{await context_text(user)}\n\n"
         + (f"The conversation so far today:\n{transcript}\n\n" if transcript else "")
         + f"Their message: {question}\n\nReply to their message. If they ask for a plan, keep it practical "
           "and tell them they can tap 'Suggest my plan' to get it with Use this buttons."
@@ -269,7 +286,8 @@ async def analyse(request: Request):
         await _give_back(uid, "analyse")
     await _take(uid, "analyse")
     material = await coaching_material(user)
-    prompt = (f"What this person can see in the app (JSON):\n{await context_text(user)}\n\n"
+    prompt = (await private_guidance(user)
+              + f"What this person can see in the app (JSON):\n{await context_text(user)}\n\n"
               + (f"Coaching material from the Hub that matches their recent gaps:\n{material}\n\n" if material else "")
               + "Give them today's analysis: their breakdowns, results, trends and plans against what good "
                 f"looks like, with practical tips. {ANALYSE_SHAPE}")
@@ -321,7 +339,8 @@ async def suggest_plan(request: Request):
     uid = str(user["id"])
     await _take(uid, "suggest")
     boxes = ", ".join(f'"{k}"' for k in planner_boxes())
-    prompt = (f"What this person can see in the app (JSON):\n{await context_text(user)}\n\n"
+    prompt = (await private_guidance(user)
+              + f"What this person can see in the app (JSON):\n{await context_text(user)}\n\n"
               + (f"What they asked for: {ask}\n\n" if ask else "")
               + "Suggest their plan: tomorrow's sector set-up, this week's goal and what to put in their "
                 "planner. Base it on their numbers against what good looks like, their breakdowns and what they said "
@@ -345,6 +364,74 @@ async def suggest_plan(request: Request):
     return {"suggestion": result}
 
 
+# ── Today's focus for a set-up ───────────────────────────────────────────────
+# A suggested focus, KPI, goal and one tip for someone's sector set-up, from
+# their numbers, breakdowns and any private coaching notes about them (the
+# Owner, 5 Nov 2026). Whoever can fill in their set-up can ask; one suggestion
+# per person per day is kept, so asking again is free unless they refresh.
+
+SETUP_SHAPE = (
+    'Reply with JSON only: {"focus": "today\'s one focus, max 8 words", "kpi_metric": one of "doors", '
+    '"spoken", "pitched", "closes", "callbacks", "kpi_target": a number, "goal": sign-ups goal for today, '
+    '"tip": "one practical thing to say or do on the doors today, max 25 words", '
+    '"positive": "something they do well to keep doing, max 8 words, or empty string"}'
+)
+
+
+@router.post("/ai/setup-suggestion")
+async def setup_suggestion(request: Request):
+    from bson import ObjectId
+    from core.ai_context import build_context, _fit
+    from routes.coaching_notes import live_notes
+    from routes.sector import _can_edit
+    actor = await get_current_user(request)
+    _require_ai(actor)
+    body = await request.json() or {}
+    target_id = str(body.get("user_id") or actor["id"])
+    day = str(body.get("date") or today_uk().isoformat())[:10]
+    shadow = bool(body.get("shadow"))
+    if not await _can_edit(actor, target_id, day):
+        raise HTTPException(status_code=403, detail="That person is not on your team or in your sector")
+    if not body.get("refresh"):
+        cached = await db.ai_setup_suggestions.find_one({"user_id": target_id, "date": day}, {"_id": 0})
+        if cached:
+            return {"suggestion": cached["result"], "for": cached.get("name")}
+    person = await db.users.find_one({"_id": ObjectId(target_id), "deleted": {"$ne": True}}, {"password_hash": 0}) \
+        if ObjectId.is_valid(target_id) else None
+    if not person:
+        raise HTTPException(status_code=404, detail="Person not found")
+    person["id"] = str(person.pop("_id"))
+    await _take(str(actor["id"]), "setup")
+    ctx = await build_context(person)
+    for k in ("team", "coaching_notes_on_my_people", "my_plan_this_week"):
+        ctx.pop(k, None)
+    notes = (await live_notes([target_id])).get(target_id) or []
+    guidance = ("PRIVATE COACHING NOTES about this person (from the Owner or their Coach; the person may see "
+                "your answer, so never quote or hint at them, just let them shape the focus and tip): "
+                + " | ".join(notes[:8]) + "\n\n") if notes else ""
+    prompt = (guidance + f"This person's numbers and recent set-ups and breakdowns (JSON):\n{_fit(ctx)}\n\n"
+              + f"Suggest their sector set-up for {day}. "
+              + ("It's a shadow day: no sales goal or KPI, so set kpi_metric, kpi_target and goal to null. "
+                 if shadow else "")
+              + "Aim it at the one gap costing them most against what good looks like. " + SETUP_SHAPE)
+    try:
+        text = await _ask(actor, ABOUT, prompt)
+        result = _json_from(text)
+    except HTTPException:
+        await _give_back(str(actor["id"]), "setup")
+        raise
+    except Exception:
+        await _give_back(str(actor["id"]), "setup")
+        raise HTTPException(status_code=502, detail="The AI's answer came back garbled. Try again.")
+    if shadow:
+        result.update({"kpi_metric": None, "kpi_target": None, "goal": None})
+    await db.ai_setup_suggestions.update_one(
+        {"user_id": target_id, "date": day},
+        {"$set": {"result": result, "name": person.get("name"), "by_id": str(actor["id"]), "created_at": _now()}},
+        upsert=True)
+    return {"suggestion": result, "for": person.get("name")}
+
+
 # ── Use this ──────────────────────────────────────────────────────────────────
 
 @router.post("/ai/apply")
@@ -358,7 +445,7 @@ async def apply(request: Request):
     if kind == "weekly_goal":
         return await ai_actions.set_weekly_goal(user, data.get("goal"))
     if kind == "setup":
-        return await ai_actions.save_setup(user, str(user["id"]), data.get("date"), data)
+        return await ai_actions.save_setup(user, str(data.get("user_id") or user["id"]), data.get("date"), data)
     if kind == "planner":
         return await ai_actions.set_planner_box(user, data.get("date"), data.get("box"), data.get("text"))
     if kind == "note":

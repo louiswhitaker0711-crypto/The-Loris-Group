@@ -82,6 +82,10 @@ def test_analyse_once_a_day_and_never_calls_the_model_twice(db, monkeypatch):
     monkeypatch.setattr(ai, "_ask", fake_ask)
     monkeypatch.setattr(ai, "context_text", fake_ctx)
     monkeypatch.setattr(ai, "coaching_material", fake_ctx)
+
+    async def no_notes(_u):
+        return ""
+    monkeypatch.setattr(ai, "private_guidance", no_notes)
     first = _run(ai.analyse(_Req()))["analysis"]
     assert first["result"]["headline"] == "Good week"
     again = _run(ai.analyse(_Req()))["analysis"]
@@ -153,3 +157,70 @@ def test_personal_links_admins_only_until_allowed(db, monkeypatch):
     # A new link replaces the old one.
     _run(ai.make_connector_link(_Req()))
     assert _run(db.connector_links.count_documents({"user_id": ba["id"], "revoked": {"$ne": True}})) == 1
+
+
+# ── Private coaching notes (routes/coaching_notes.py) ────────────────────────
+
+def _notes_db(monkeypatch, d):
+    import auth
+    import core.ai_context as ctx
+    from routes import coaching_notes as cn
+    for mod in (cn, auth, ctx):
+        monkeypatch.setattr(mod, "db", d)
+    return cn
+
+
+def _people(d):
+    owner, coach, ba, other = ObjectId(), ObjectId(), ObjectId(), ObjectId()
+    _run(d.users.insert_many([
+        {"_id": owner, "name": "Owner Example", "role": "admin", "office_id": "o1"},
+        {"_id": coach, "name": "Coach Example", "role": "leader", "office_id": "o1", "reports_to": str(owner)},
+        {"_id": ba, "name": "Alpha Example", "role": "trainee", "office_id": "o1", "reports_to": str(coach)},
+        {"_id": other, "name": "Beta Example", "role": "trainee", "office_id": "o1"},
+    ]))
+    as_user = lambda oid, role: {"id": str(oid), "role": role, "office_id": "o1"}  # noqa: E731
+    return as_user(owner, "admin"), as_user(coach, "leader"), as_user(ba, "trainee"), as_user(other, "trainee")
+
+
+def test_coaching_notes_are_for_the_owner_and_their_coach_only(db, monkeypatch):
+    cn = _notes_db(monkeypatch, db)
+    owner, coach, ba, other = _people(db)
+    _run(cn.may_note(owner, ba["id"]))
+    _run(cn.may_note(coach, ba["id"]))
+    for who, about in ((ba, ba["id"]), (other, ba["id"]), (coach, other["id"]), ({**owner, "is_viewer": True}, ba["id"])):
+        with pytest.raises(HTTPException):
+            _run(cn.may_note(who, about))       # themselves, a peer, not their team, read-only
+
+
+def test_notes_live_until_sorted_and_reach_the_coach_ai_not_the_person(db, monkeypatch):
+    cn = _notes_db(monkeypatch, db)
+    import core.ai_context as ctx
+    owner, coach, ba, _other = _people(db)
+
+    async def me(_req):
+        return coach
+    monkeypatch.setattr(cn, "get_current_user", me)
+    note = _run(cn.add_note(ba["id"], _Req({"text": "Rushes the close when nervous"})))
+    assert _run(cn.live_notes([ba["id"]])) == {ba["id"]: ["Rushes the close when nervous"]}
+    # The Coach's AI sees it, by name; the BA's own context never does.
+    assert _run(cn.noteable_ids(coach, {ba["id"], coach["id"]})) == {ba["id"]}
+    assert _run(cn.noteable_ids(ba, {ba["id"]})) == set()
+
+    async def no_page(*_a, **_k):
+        raise HTTPException(status_code=403)
+    monkeypatch.setattr("routes.people.person_breakdown_for", no_page)
+    mine = _run(ctx.build_context({**ba, "name": "Alpha Example"}))
+    assert "Rushes" not in json.dumps(mine, default=str)
+    theirs = _run(ctx.build_context({**coach, "name": "Coach Example"}))
+    assert theirs["coaching_notes_on_my_people"] == [{"name": "Alpha Example", "notes": ["Rushes the close when nervous"]}]
+    _run(cn.sort_note(ba["id"], note["id"], _Req()))
+    assert _run(cn.live_notes([ba["id"]])) == {}
+
+
+def test_own_ai_gets_notes_only_as_private_guidance(db, monkeypatch):
+    _notes_db(monkeypatch, db)
+    _run(db.coaching_notes.insert_one({"subject_id": "u9", "text": "Goes quiet after a no", "sorted_at": None,
+                                       "created_at": "2026-11-05T10:00:00+00:00"}))
+    g = _run(ai.private_guidance({"id": "u9"}))
+    assert "Goes quiet after a no" in g and "never" in g.lower()
+    assert _run(ai.private_guidance({"id": "u8"})) == ""

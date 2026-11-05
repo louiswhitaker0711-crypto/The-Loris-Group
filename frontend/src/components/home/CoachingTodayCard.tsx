@@ -19,6 +19,8 @@ import { useColors, fonts } from '../../theme/ThemeContext';
 import { api } from '../../api/client';
 import { toast } from '../../utils/toast';
 import { inFieldHours, fieldStarted, ukNow } from '../../utils/fieldTime';
+import AiFocusSuggest from '../ai/AiFocusSuggest';
+import { todayISO } from '../../utils/calendarDates';
 
 export type CoachItem = { id: string; topic: string; category: string; confidence_expected: string; taught: boolean;
   what_good_looks_like?: string | null; expected_outcome?: string | null;
@@ -129,6 +131,13 @@ function PersonCard({ p, s, c }: { p: CoachPerson; s: any; c: any }) {
         </View>
       </View>
       {!!p.objective && <Text style={s.body}>{p.objective}</Text>}
+      {/* The AI's focus for their day, shaped by any private coaching notes (the Owner, 5 Nov 2026).
+          Field days only (Day 3 = shadow day: focus, no goal); Use this puts it in their set-up. */}
+      {!!p.trainee_user_id && p.day_number >= 3 && (
+        <View style={{ marginTop: 10 }}>
+          <AiFocusSuggest userId={p.trainee_user_id} date={todayISO()} shadow={p.day_number === 3} label={`Suggest ${who}’s focus today`} />
+        </View>
+      )}
 
       {/* What to teach today (the Owner, 29 Oct 2026): no ladder, just today. */}
       {behind > 0 && (
