@@ -217,6 +217,10 @@ def test_notes_live_until_sorted_and_reach_the_coach_ai_not_the_person(db, monke
     async def no_live(_u):
         return {}
     monkeypatch.setattr(ctx, "today_in_field", no_live)
+
+    async def no_dev(_u):
+        return {}
+    monkeypatch.setattr(ctx, "development_of", no_dev)
     mine = _run(ctx.build_context({**ba, "name": "Alpha Example"}))
     assert "Rushes" not in json.dumps(mine, default=str)
     theirs = _run(ctx.build_context({**coach, "name": "Coach Example"}))
@@ -363,3 +367,34 @@ def test_chat_caches_the_stable_part_of_the_prompt(monkeypatch):
     # Without a prefix (Analyse me, set-up focus) nothing is marked for the cache.
     _run(c.send_message(chat_mod.UserMessage(text="once")))
     assert sent["system"] == "SYSTEM" and "cache_control" not in json.dumps(sent["messages"])
+
+
+
+def test_development_tells_the_ai_someone_is_signing_up_on_their_own(db, monkeypatch):
+    import core.ai_context as ctx
+    import routes.people as people
+    monkeypatch.setattr(ctx, "db", db)
+    monkeypatch.setattr(people, "db", db)
+    ba = ObjectId()
+    _run(db.users.insert_one({"_id": ba, "name": "Alpha Example", "role": "trainee", "new_hire_id": "h1"}))
+    _run(db.new_hires.insert_one({"id": "h1", "trainee_user_id": str(ba), "start_date": "2026-10-26", "current_day": 8}))
+    _run(db.daily_assessments.insert_many([
+        {"new_hire_id": "h1", "day_number": 4, "completed": True, "kpi_sales": 2, "leader_assisted_sales": 2,
+         "skill_intro": 4, "skill_close": 4},
+        {"new_hire_id": "h1", "day_number": 6, "completed": True, "kpi_sales": 3, "leader_assisted_sales": 0,
+         "skill_intro": 10, "skill_close": 7, "biggest_weakness": "Rushes the close"},
+    ]))
+    _run(db.sector_days.insert_many([{"user_id": str(ba), "date": f"2026-10-{d}", "breakdown": {"doors": 100}}
+                                     for d in (29, 30, 31)]))
+    dev = _run(ctx.development_of(str(ba)))
+    assert "signing up on their own" in dev["stage_of_development"]
+    assert dev["days_in_field_with_a_breakdown"] == 3 and dev["new_start"]["on_day"] == 8
+    last = dev["new_start"]["recent_graded_days"][-1]
+    assert last["skills"] == {"intro": "Excellent", "close": "Average"} and last["own_sign_ups"] == 3
+    assert last["biggest_weakness"] == "Rushes the close"
+
+
+def test_coaching_fits_the_persons_stage():
+    from core.sales_coaching import BIG_COACH
+    assert "COACH THEM FOR THEIR STAGE" in BIG_COACH and "never suggest demonstrating" in BIG_COACH
+    assert "each on their own doors" in BIG_COACH
