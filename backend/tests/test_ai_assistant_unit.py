@@ -306,3 +306,8 @@ def test_both_ais_are_told_to_be_a_big_coach():
     from core.sales_coaching import BIG_COACH
     assert BIG_COACH in ai.ABOUT and BIG_COACH in cc.instructions()
     assert "right_now" in BIG_COACH and "no call backs" in BIG_COACH
+
+
+def test_the_big_coach_asks_follow_up_questions_when_it_needs_to():
+    from core.sales_coaching import BIG_COACH
+    assert "FOLLOW-UP QUESTIONS" in BIG_COACH and "1–2 short" in BIG_COACH and "never more" in BIG_COACH
