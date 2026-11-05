@@ -26,9 +26,10 @@ type Tomorrow = { focus?: string; kpi_metric?: string; kpi_target?: number; goal
 type Analysis = {
   id: string; date: string; next_field_day?: string;
   result: {
-    headline?: string; strengths?: string[];
-    biggest_gap?: { step?: string; numbers?: string; why?: string };
-    trend?: string; tomorrow?: Tomorrow; this_week?: { weekly_goal?: number; why?: string };
+    headline?: string; going_well?: string[];
+    gap?: { what?: string; numbers?: string; why?: string };
+    tips?: { tip?: string; why?: string }[];
+    tomorrow?: Tomorrow; this_week?: { weekly_goal?: number; why?: string };
     team?: string; quality?: string;
   };
 };
@@ -212,7 +213,7 @@ export default function AiScreen() {
             {!a ? (
               <View style={s.card}>
                 <Text style={s.h2}>Your analysis for today</Text>
-                <Text style={s.hint}>The AI reads your breakdowns, results, trends and plans, compares them with the office, and tells you the one thing to work on. You get one a day, so it’s worth doing after your breakdown or before you plan tomorrow.</Text>
+                <Text style={s.hint}>Your numbers against what good looks like, your biggest gap, and three tips to fix it on the doors. One a day: best after your breakdown or before you plan tomorrow.</Text>
                 <Pressable onPress={analyse} disabled={analysing || !left.analyse} style={[s.primary, (analysing || !left.analyse) && { opacity: 0.6 }]}
                   accessibilityRole="button" testID="ai-analyse">
                   {analysing ? <ActivityIndicator color={c.onPrimary} /> : <Text style={s.primaryText}>Analyse me</Text>}
@@ -222,20 +223,34 @@ export default function AiScreen() {
             ) : (
               <>
                 {!!a.headline && <View style={s.hero}><Text style={s.heroText}>{a.headline}</Text></View>}
-                {!!a.strengths?.length && (
-                  <View style={s.card}>
-                    <Text style={s.label}>Going well</Text>
-                    {a.strengths.map((x, i) => <Text key={i} style={s.bullet}>• {x}</Text>)}
-                  </View>
-                )}
-                {!!a.biggest_gap?.step && (
+                {!!a.gap?.what && (
                   <View style={s.card}>
                     <Text style={s.label}>Biggest gap</Text>
-                    <Text style={s.body}><Text style={s.bold}>{a.biggest_gap.step}</Text>{a.biggest_gap.numbers ? `: ${a.biggest_gap.numbers}` : ''}</Text>
-                    {!!a.biggest_gap.why && <Text style={s.hint}>Why: {a.biggest_gap.why}</Text>}
+                    <Text style={s.gapTitle}>{a.gap.what}</Text>
+                    {!!a.gap.numbers && <Text style={s.body}>{a.gap.numbers}</Text>}
+                    {!!a.gap.why && <Text style={s.hint}>{a.gap.why}</Text>}
                   </View>
                 )}
-                {!!a.trend && <View style={s.card}><Text style={s.label}>Trend</Text><Text style={s.body}>{a.trend}</Text></View>}
+                {!!a.tips?.length && (
+                  <View style={s.card}>
+                    <Text style={s.label}>Try this on the doors</Text>
+                    {a.tips.filter((t) => t?.tip).map((t, i) => (
+                      <View key={i} style={s.tipRow}>
+                        <View style={s.tipNum}><Text style={s.tipNumText}>{i + 1}</Text></View>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text style={s.body}>{t.tip}</Text>
+                          {!!t.why && <Text style={s.small}>{t.why}</Text>}
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                )}
+                {!!a.going_well?.length && (
+                  <View style={s.card}>
+                    <Text style={s.label}>Keep doing</Text>
+                    {a.going_well.map((x, i) => <Text key={i} style={s.bullet}>• {x}</Text>)}
+                  </View>
+                )}
                 {!!a.tomorrow?.focus && (
                   <View style={s.card}>
                     <Text style={s.label}>{tomorrowDate ? `${dayLabel(tomorrowDate)}’s set-up` : 'Tomorrow'}</Text>
@@ -365,6 +380,10 @@ const styles = (c: any) => StyleSheet.create({
   body: { fontFamily: fonts.body, fontSize: 15, lineHeight: 22, color: c.text },
   bold: { fontFamily: fonts.bodySemibold },
   bullet: { fontFamily: fonts.body, fontSize: 15, lineHeight: 22, color: c.text },
+  gapTitle: { fontFamily: fonts.display, fontSize: 19, color: c.text },
+  tipRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', paddingVertical: 2 },
+  tipNum: { width: 24, height: 24, borderRadius: 8, backgroundColor: c.primary, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+  tipNumText: { fontFamily: fonts.bodyBold, fontSize: 13, color: c.onPrimary },
   hint: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: c.textMuted },
   small: { fontFamily: fonts.body, fontSize: 12.5, lineHeight: 18, color: c.textMuted },
   link: { fontFamily: fonts.bodySemibold, fontSize: 13, color: c.primary },
