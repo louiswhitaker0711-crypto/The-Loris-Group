@@ -188,6 +188,85 @@ def _fit(ctx: dict) -> str:
     return text[:MAX_CONTEXT_CHARS]
 
 
+SKILLS = (("skill_intro", "intro"), ("skill_presentation", "presentation"), ("skill_short_story", "short story"),
+          ("skill_close", "close"), ("skill_signup", "sign-up"), ("skill_rehash", "Rehash"))
+
+
+def _grade(score) -> str | None:
+    """Day grades are out of 10 (Excellent 10, Average 7, Needs Work 4)."""
+    if score is None:
+        return None
+    try:
+        v = float(score)
+    except (TypeError, ValueError):
+        return None
+    return "Excellent" if v >= 8.5 else "Average" if v >= 5.5 else "Needs Work"
+
+
+async def development_of(uid: str) -> dict:
+    """Where someone is in their development, so the AI coaches them for their
+    stage (the Owner, 5 Nov 2026): new-start day, days in the field, how each
+    graded day went (skills, own sign-ups vs leader-assisted, biggest weakness,
+    focus), whether they're signing up on their own yet, and their COD stage."""
+    out: dict = {}
+    person = await db.users.find_one({"_id": ObjectId(uid)}, {"new_hire_id": 1, "role": 1, "owneriq_stage": 1,
+                                                              "created_at": 1}) if ObjectId.is_valid(uid) else None
+    if not person:
+        return out
+    hire = None
+    if person.get("new_hire_id"):
+        hire = await db.new_hires.find_one({"id": person["new_hire_id"]}, {"_id": 0})
+    if not hire:
+        hire = await db.new_hires.find_one({"trainee_user_id": uid}, {"_id": 0})
+    field_days = await db.sector_days.count_documents({"user_id": uid, "breakdown": {"$ne": None}})
+    out["days_in_field_with_a_breakdown"] = field_days
+    own_total = assisted_total = 0
+    if hire:
+        rows = await db.daily_assessments.find({"new_hire_id": hire["id"], "completed": True}, {"_id": 0}).to_list(20)
+        rows.sort(key=lambda a: int(a.get("day_number") or 0))
+        graded = []
+        for a in rows[-3:]:
+            sales = a.get("kpi_sales")
+            assisted = a.get("leader_assisted_sales")
+            own = max(0, int(sales or 0) - int(assisted or 0)) if sales is not None else None
+            graded.append({k: v for k, v in {
+                "day": a.get("day_number"),
+                "skills": {label: _grade(a.get(k)) for k, label in SKILLS if a.get(k) is not None} or None,
+                "own_sign_ups": own, "leader_assisted": assisted,
+                "biggest_weakness": a.get("biggest_weakness") or None, "focus_next": a.get("focus_tomorrow") or None,
+            }.items() if v not in (None, "", {})})
+        for a in rows:
+            if a.get("kpi_sales") is not None:
+                own_total += max(0, int(a.get("kpi_sales") or 0) - int(a.get("leader_assisted_sales") or 0))
+                assisted_total += int(a.get("leader_assisted_sales") or 0)
+        day = int(hire.get("current_day") or 1)
+        out["new_start"] = {"start_date": hire.get("start_date"), "on_day": day,
+                            "days_graded": len(rows), "recent_graded_days": graded}
+        independent = own_total > 0
+        if day <= 2 and not rows:
+            stage = "BA Academy (Days 1–2, in the office): not in the field yet"
+        elif day == 3 and own_total == 0:
+            stage = "shadow day: watching a bunny hop, no sales goal"
+        elif not independent:
+            stage = "first field days: still being shown, sign-ups so far leader-assisted"
+        elif day <= 8:
+            stage = "signing up on their own within their first 8 days: sharpen, don't demonstrate"
+        else:
+            stage = "past their new-start days and signing up on their own"
+    else:
+        stage = "established: past the new-start days"
+    out["stage_of_development"] = stage
+    try:
+        from routes.people import _cod
+        cod = await _cod({**person, "_id": person["_id"]}, uid)
+        cur = next((st for st in cod.get("stages") or [] if st.get("current")), None)
+        if cur:
+            out["cod"] = {"stage": cur.get("name"), "done": cur.get("done"), "of": cur.get("total")}
+    except Exception:
+        pass
+    return out
+
+
 def slim_page(page: dict | None) -> dict | None:
     """The parts of someone's person page the AI uses: who they are, their Law
     of Averages (this week and the last 28 days) and where they are on the COD.
@@ -238,8 +317,25 @@ async def build_context(user: dict) -> dict:
                 "this_week": {"days": this.get("days_worked"), "piece_avg": this.get("piece_average"),
                               "goal": this.get("goal")},
                 "gold_pct": round(100 * gold / signed) if signed else None}
+    try:
+        live = await today_in_field(user)
+    except Exception:
+        live = None
+    try:
+        my_dev = await development_of(me)
+    except Exception:
+        my_dev = None
     team = [_team_row(i) for i in names]
-    team.sort(key=lambda r: -sum(r["sign_ups_by_week"]))
+    for row, i in zip(team, list(names)):
+        try:
+            row["development"] = await development_of(i)
+        except Exception:
+            pass
+    # If the picture has to be trimmed, the end goes first: so people in my
+    # sector today and new starts come first, then by sign-ups.
+    in_sector = {p.get("name") for p in (((live or {}).get("sector") or {}).get("people") or [])}
+    team.sort(key=lambda r: (r["name"] not in in_sector, "new_start" not in (r.get("development") or {}),
+                             -sum(r["sign_ups_by_week"])))
     quality = await latest_quality(office_id, ids)
     if quality:
         for q in quality["people"]:
@@ -254,17 +350,13 @@ async def build_context(user: dict) -> dict:
     notes = await live_notes(allowed)
     coaching_notes = [{"name": names[i], "notes": n} for i, n in notes.items() if i in names]
 
-    try:
-        live = await today_in_field(user)
-    except Exception:
-        live = None
 
     from core.brand import role_label
     return {
         "today": today.isoformat(), "weekday": today.strftime("%A"),
         "right_now": live,
         "next_field_day": next_field_day(today).isoformat(),
-        "me": {"name": user.get("name"), "role": role_label(user.get("role")),
+        "me": {"name": user.get("name"), "role": role_label(user.get("role")), "development": my_dev,
                "sees": "the whole office" if whole else ("my team" if team_ids else "only myself")},
         "my_weeks": rows.get(me, {}).get("weeks", {}),
         "weeks_oldest_first": weeks,
