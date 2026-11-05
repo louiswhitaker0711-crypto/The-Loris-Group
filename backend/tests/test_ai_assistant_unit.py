@@ -82,6 +82,10 @@ def test_analyse_once_a_day_and_never_calls_the_model_twice(db, monkeypatch):
     monkeypatch.setattr(ai, "_ask", fake_ask)
     monkeypatch.setattr(ai, "context_text", fake_ctx)
     monkeypatch.setattr(ai, "coaching_material", fake_ctx)
+
+    async def no_notes(_u):
+        return ""
+    monkeypatch.setattr(ai, "private_guidance", no_notes)
     first = _run(ai.analyse(_Req()))["analysis"]
     assert first["result"]["headline"] == "Good week"
     again = _run(ai.analyse(_Req()))["analysis"]
