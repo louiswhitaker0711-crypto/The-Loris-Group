@@ -19,6 +19,7 @@ import { useKeyboardInset } from '../src/hooks/useKeyboardInset';
 import { toast } from '../src/utils/toast';
 import { APP_LOCALE, APP_TZ } from '../src/utils/appTime';
 import type { AiStatus } from '../src/components/home/AiCoachCard';
+import AiText from '../src/components/ai/AiText';
 
 type Part = 'analyse' | 'plan' | 'chat';
 type Msg = { role: 'user' | 'assistant'; text: string };
@@ -405,7 +406,9 @@ export default function AiScreen() {
             )}
             {msgs.map((m, i) => (
               <View key={i} style={[s.bubble, m.role === 'user' ? s.mine : s.theirs]}>
-                <Text style={[s.body, m.role === 'user' && { color: c.onPrimary }]} selectable>{m.text}</Text>
+                {m.role === 'user'
+                  ? <Text style={[s.body, { color: c.onPrimary }]} selectable>{m.text}</Text>
+                  : <AiText text={m.text} />}
               </View>
             ))}
             {sending && <View style={[s.bubble, s.theirs]}><ActivityIndicator color={c.primary} /></View>}
@@ -474,7 +477,7 @@ const styles = (c: any) => StyleSheet.create({
   usedText: { fontFamily: fonts.bodySemibold, fontSize: 13, color: c.primary },
   bubble: { maxWidth: '88%', borderRadius: 16, paddingHorizontal: 14, paddingVertical: 10 },
   mine: { alignSelf: 'flex-end', backgroundColor: c.primary },
-  theirs: { alignSelf: 'flex-start', backgroundColor: c.background, borderWidth: 1, borderColor: c.border },
+  theirs: { alignSelf: 'stretch', maxWidth: '100%', backgroundColor: c.background, borderWidth: 1, borderColor: c.border },
   composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
   send: { width: 44, height: 44, borderRadius: 22, backgroundColor: c.primary, alignItems: 'center', justifyContent: 'center' },
   chatFoot: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

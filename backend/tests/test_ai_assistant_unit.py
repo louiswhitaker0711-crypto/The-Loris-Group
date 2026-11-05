@@ -255,3 +255,20 @@ def test_coaching_playbook_reaches_both_ais_and_keeps_house_terms():
         assert not re.search(rf"\b{word}", PLAYBOOK + RESPONSE_STYLE, re.I), word
     names = {t["name"] for t in cc.tools_list()}
     assert "get_coaching" in names and "get_coaching" not in cc.WRITE_TOOLS
+
+
+def test_analyse_me_stays_open_when_todays_analysis_is_in_the_old_shape(db, monkeypatch):
+    user = _ba()
+    _login(monkeypatch, user)
+    monkeypatch.setattr(ai, "llm_configured", lambda: True)
+    _run(ai._take(user["id"], "analyse"))
+    _run(db.ai_analyses.insert_one({"user_id": user["id"], "date": ai.today_uk().isoformat(), "v": 2}))
+    assert _run(ai.ai_status(_Req()))["left"]["analyse"] == 1
+    _run(db.ai_analyses.update_one({"user_id": user["id"]}, {"$set": {"v": ai.ANALYSE_VERSION}}))
+    assert _run(ai.ai_status(_Req()))["left"]["analyse"] == 0
+
+
+def test_the_ai_never_pushes_call_backs_and_reads_rehash_as_the_second_lap():
+    from core.sales_coaching import PLAYBOOK, RESPONSE_STYLE
+    assert '"callbacks"' not in ai.ANALYSE_SHAPE and '"callbacks"' not in ai.SETUP_SHAPE
+    assert "second lap" in RESPONSE_STYLE and "Never suggest setting or making call backs" in PLAYBOOK
