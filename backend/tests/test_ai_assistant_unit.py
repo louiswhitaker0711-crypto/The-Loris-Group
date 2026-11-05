@@ -310,4 +310,4 @@ def test_both_ais_are_told_to_be_a_big_coach():
 
 def test_the_big_coach_asks_follow_up_questions_when_it_needs_to():
     from core.sales_coaching import BIG_COACH
-    assert "FOLLOW-UP QUESTIONS" in BIG_COACH and "1–2 short" in BIG_COACH and "never more" in BIG_COACH
+    assert "FOLLOW-UP QUESTIONS" in BIG_COACH and "in one go" in BIG_COACH and "One round of questions at most" in BIG_COACH
