@@ -28,11 +28,13 @@ type Analysis = {
   numbers?: { days: number; per_day: { label: string; you: number; good: number }[];
     steps: { label: string; you: number | null; good: number }[] } | null;
   result: {
-    headline?: string; going_well?: string[]; findings?: string[];
-    gap?: { what?: string; numbers?: string; why?: string };
-    tips?: { tip?: string; why?: string }[];
+    headline?: string;
+    target?: { now?: string; next?: string; week?: string };
+    change?: { what?: string; now?: string; need?: string; why?: string };
+    how?: { step?: string; why?: string }[];
+    result?: string; keep_doing?: string;
     tomorrow?: Tomorrow; this_week?: { weekly_goal?: number; why?: string };
-    team?: string; quality?: string;
+    team?: string;
   };
 };
 type PlanItem = { date: string; box: string; box_label?: string; text: string };
@@ -215,7 +217,7 @@ export default function AiScreen() {
             {!a ? (
               <View style={s.card}>
                 <Text style={s.h2}>Your analysis for today</Text>
-                <Text style={s.hint}>Your numbers against what good looks like, what they show, your biggest gap, and three tips to help you get better on the doors. One a day: best after your breakdown or before you plan tomorrow.</Text>
+                <Text style={s.hint}>Where you are, where you want to be, the one thing to change, how to do it on the doors, and what it’ll do for you. One a day: best after your breakdown or before you plan tomorrow.</Text>
                 <Pressable onPress={analyse} disabled={analysing || !left.analyse} style={[s.primary, (analysing || !left.analyse) && { opacity: 0.6 }]}
                   accessibilityRole="button" testID="ai-analyse">
                   {analysing ? <ActivityIndicator color={c.onPrimary} /> : <Text style={s.primaryText}>Analyse me</Text>}
@@ -225,12 +227,14 @@ export default function AiScreen() {
             ) : (
               <>
                 {!!a.headline && <View style={s.hero}><Text style={s.heroText}>{a.headline}</Text></View>}
+
+                {/* 1 · Where you are: the app's own figures against what good looks like. */}
                 {!!analysisQ.data?.numbers && (() => {
                   const n = analysisQ.data!.numbers!;
                   const tone = (you: number | null, good: number) => (you == null ? c.textMuted : you >= good ? c.green : you >= good * 0.85 ? (c.amber || c.text) : c.red);
                   return (
                     <View style={s.card} testID="ai-numbers">
-                      <Text style={s.label}>Your numbers · last {n.days} days in the field</Text>
+                      <Text style={s.label}><Text style={s.stepNo}>1 </Text>Where you are · last {n.days} days</Text>
                       <View style={s.numHead}><Text style={[s.numCell, s.numName]} /><Text style={[s.numCell, s.small]}>You</Text><Text style={[s.numCell, s.small]}>Good</Text></View>
                       {n.per_day.map((r) => (
                         <View key={r.label} style={s.numRow}>
@@ -249,59 +253,83 @@ export default function AiScreen() {
                     </View>
                   );
                 })()}
-                {!!a.findings?.length && (
+
+                {/* 2 · Where you want to be: a realistic next step up. */}
+                {!!a.target?.next && (
                   <View style={s.card}>
-                    <Text style={s.label}>What the numbers say</Text>
-                    {a.findings.map((x, i) => <Text key={i} style={s.bullet}>• {x}</Text>)}
+                    <Text style={s.label}><Text style={s.stepNo}>2 </Text>Where you want to be</Text>
+                    <View style={s.targetRow}>
+                      {!!a.target.now && <Text style={s.targetFrom}>{a.target.now}</Text>}
+                      <Ionicons name="arrow-forward" size={20} color={c.primary} />
+                      <Text style={s.targetTo}>{a.target.next}</Text>
+                    </View>
+                    {!!a.target.week && <Text style={s.hint}>{a.target.week}</Text>}
                   </View>
                 )}
-                {!!a.gap?.what && (
+
+                {/* 3 · What to change: the one thing. */}
+                {!!a.change?.what && (
                   <View style={s.card}>
-                    <Text style={s.label}>Biggest gap</Text>
-                    <Text style={s.gapTitle}>{a.gap.what}</Text>
-                    {!!a.gap.numbers && <Text style={s.body}>{a.gap.numbers}</Text>}
-                    {!!a.gap.why && <Text style={s.hint}>{a.gap.why}</Text>}
+                    <Text style={s.label}><Text style={s.stepNo}>3 </Text>What to change</Text>
+                    <Text style={s.gapTitle}>{a.change.what}</Text>
+                    {(!!a.change.now || !!a.change.need) && (
+                      <Text style={s.body}>
+                        {!!a.change.now && <><Text style={s.bold}>Now </Text>{a.change.now}</>}
+                        {!!a.change.now && !!a.change.need && '  ·  '}
+                        {!!a.change.need && <><Text style={s.bold}>Good </Text>{a.change.need}</>}
+                      </Text>
+                    )}
+                    {!!a.change.why && <Text style={s.hint}>{a.change.why}</Text>}
                   </View>
                 )}
-                {!!a.tips?.length && (
+
+                {/* 4 · How to do it: three steps to try on the doors, in order. */}
+                {!!a.how?.length && (
                   <View style={s.card}>
-                    <Text style={s.label}>Try this on the doors</Text>
-                    {a.tips.filter((t) => t?.tip).map((t, i) => (
+                    <Text style={s.label}><Text style={s.stepNo}>4 </Text>How to do it</Text>
+                    {a.how.filter((t) => t?.step).map((t, i) => (
                       <View key={i} style={s.tipRow}>
                         <View style={s.tipNum}><Text style={s.tipNumText}>{i + 1}</Text></View>
                         <View style={{ flex: 1, minWidth: 0 }}>
-                          <Text style={s.body}>{t.tip}</Text>
+                          <Text style={s.body}>{t.step}</Text>
                           {!!t.why && <Text style={s.small}>{t.why}</Text>}
                         </View>
                       </View>
                     ))}
                   </View>
                 )}
-                {!!a.going_well?.length && (
-                  <View style={s.card}>
-                    <Text style={s.label}>Keep doing</Text>
-                    {a.going_well.map((x, i) => <Text key={i} style={s.bullet}>• {x}</Text>)}
+
+                {/* 5 · What will change if they do it. */}
+                {!!a.result && (
+                  <View style={[s.card, s.resultCard]}>
+                    <Text style={s.label}><Text style={s.stepNo}>5 </Text>What will change</Text>
+                    <Text style={s.resultText}>{a.result}</Text>
                   </View>
                 )}
-                {!!a.tomorrow?.focus && (
+
+                {/* 6 · Lock it in: into tomorrow's set-up and this week's goal. */}
+                {(!!a.tomorrow?.focus || a.this_week?.weekly_goal != null) && (
                   <View style={s.card}>
-                    <Text style={s.label}>{tomorrowDate ? `${dayLabel(tomorrowDate)}’s set-up` : 'Tomorrow'}</Text>
-                    <Text style={s.body}><Text style={s.bold}>Focus: </Text>{a.tomorrow.focus}</Text>
-                    {!!kpiText(a.tomorrow) && <Text style={s.body}><Text style={s.bold}>KPI: </Text>{kpiText(a.tomorrow)}</Text>}
-                    {a.tomorrow.goal != null && <Text style={s.body}><Text style={s.bold}>Goal: </Text>{a.tomorrow.goal} sign-ups</Text>}
-                    <UseThis k="an-setup" kind="setup" done="It’s in your sector set-up."
-                      data={{ date: tomorrowDate, focus: a.tomorrow.focus, kpi_metric: a.tomorrow.kpi_metric, kpi_target: a.tomorrow.kpi_target, goal: a.tomorrow.goal }} />
+                    <Text style={s.label}><Text style={s.stepNo}>6 </Text>Lock it in</Text>
+                    {!!a.tomorrow?.focus && (
+                      <View style={{ gap: 2 }}>
+                        <Text style={s.body}><Text style={s.bold}>{tomorrowDate ? `${dayLabel(tomorrowDate)}: ` : 'Tomorrow: '}</Text>{a.tomorrow.focus}</Text>
+                        <Text style={s.hint}>{[kpiText(a.tomorrow) && `KPI ${kpiText(a.tomorrow)}`, a.tomorrow.goal != null && `Goal ${a.tomorrow.goal}`].filter(Boolean).join(' · ')}</Text>
+                        <UseThis k="an-setup" kind="setup" done="It’s in your sector set-up."
+                          data={{ date: tomorrowDate, focus: a.tomorrow.focus, kpi_metric: a.tomorrow.kpi_metric, kpi_target: a.tomorrow.kpi_target, goal: a.tomorrow.goal }} />
+                      </View>
+                    )}
+                    {a.this_week?.weekly_goal != null && (
+                      <View style={{ gap: 2, marginTop: 8 }}>
+                        <Text style={s.body}><Text style={s.bold}>This week: </Text>{a.this_week.weekly_goal} sign-ups{a.this_week.why ? `. ${a.this_week.why}` : ''}</Text>
+                        <UseThis k="an-goal" kind="weekly_goal" data={{ goal: a.this_week.weekly_goal }} done="Your weekly goal is set on Bells." />
+                      </View>
+                    )}
                   </View>
                 )}
-                {a.this_week?.weekly_goal != null && (
-                  <View style={s.card}>
-                    <Text style={s.label}>This week’s goal</Text>
-                    <Text style={s.body}><Text style={s.bold}>{a.this_week.weekly_goal} sign-ups</Text>{a.this_week.why ? `: ${a.this_week.why}` : ''}</Text>
-                    <UseThis k="an-goal" kind="weekly_goal" data={{ goal: a.this_week.weekly_goal }} done="Your weekly goal is set on Bells." />
-                  </View>
-                )}
+
+                {!!a.keep_doing && <Text style={[s.hint, { textAlign: 'center' }]}>Keep doing: {a.keep_doing}</Text>}
                 {!!a.team && <View style={s.card}><Text style={s.label}>Your team</Text><Text style={s.body}>{a.team}</Text></View>}
-                {!!a.quality && <View style={s.card}><Text style={s.label}>Quality</Text><Text style={s.body}>{a.quality}</Text></View>}
                 <Text style={[s.small, { textAlign: 'center' }]}>One analysis a day. Got a question about it? Tap Ask.</Text>
               </>
             )}
@@ -417,6 +445,12 @@ const styles = (c: any) => StyleSheet.create({
   numCell: { width: 56, textAlign: 'right' },
   numName: { flex: 1, width: undefined, textAlign: 'left' },
   numVal: { fontFamily: fonts.bodyBold, fontSize: 15 },
+  stepNo: { color: c.primary },
+  targetRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 4 },
+  targetFrom: { fontFamily: fonts.display, fontSize: 22, color: c.textMuted },
+  targetTo: { fontFamily: fonts.display, fontSize: 26, color: c.text },
+  resultCard: { borderColor: c.primaryLight, backgroundColor: c.primary + '0d' },
+  resultText: { fontFamily: fonts.display, fontSize: 18, lineHeight: 25, color: c.text },
   gapTitle: { fontFamily: fonts.display, fontSize: 19, color: c.text },
   tipRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', paddingVertical: 2 },
   tipNum: { width: 24, height: 24, borderRadius: 8, backgroundColor: c.primary, alignItems: 'center', justifyContent: 'center', marginTop: 1 },

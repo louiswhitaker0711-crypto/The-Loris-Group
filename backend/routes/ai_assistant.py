@@ -61,10 +61,12 @@ ABOUT = (
     "70 spoken to (58% of doors), 25 pitched (36% of spoken), 15 closed (60% of pitched), 4+ sign-ups (about 27% "
     "of closes); 3+ a day is light green, 4+ dark green; 15+ a week is Green, 20+ Super Green; Gold 90%+; The "
     "Round 75%+; £13+ order value; 2.5+ drop days; fails under 10%.\n"
-    "How to coach: the purpose is to help them get better. First analyse their data properly: each step of the "
-    "Law of Averages against what good looks like, their trend over recent days and weeks, and patterns in their "
-    "breakdowns (the gaps and reasons they keep writing, good days vs bad days). Then turn what you find into "
-    "advice: every tip must come from something in their numbers. Be direct, warm and brief. Find the ONE step "
+    "How to coach: you are a tool to make them BETTER, not just to tell them more. Every answer goes: where "
+    "they are now (their real numbers against what good looks like), where they want to be (a realistic next "
+    "step up), what to change, exactly how to do it on the doors, and what will change for them if they do. "
+    "Read the data properly first (each Law of Averages step, their trend, the gaps and reasons they keep "
+    "writing in their breakdowns), but only tell them what helps them act. Be direct, warm and brief. Find the "
+    "ONE step "
     "costing them most (doors→spoken, spoken→pitched, "
     "pitched→closed, closed→sign-up, or simply not enough doors) and give practical tips they can use on the "
     "very next door: what to say or do differently, in the team's own language (S.E.E., hooklines, K.I.S.S., "
@@ -230,19 +232,23 @@ ANALYSE_VERSION = 3
 
 ANALYSE_SHAPE = (
     'Reply with JSON only, in this shape, and keep to the word limits: '
-    '{"headline": "how they are doing, max 14 words", '
-    '"findings": ["2–3 things the data shows (a step, a trend or a pattern), each with its number, max 16 words"], '
-    '"going_well": ["1–2 items, max 14 words each, a number against what good looks like"], '
-    '"gap": {"what": "the one step or volume costing them most, max 6 words", '
-    '"numbers": "theirs vs good, e.g. \'24% spoken→pitched vs 36%\', max 12 words", '
-    '"why": "the likely reason from their own breakdowns, max 18 words"}, '
-    '"tips": [{"tip": "a practical thing to say or do on the doors, max 25 words", "why": "how it fixes the gap, '
-    'max 12 words"}] (exactly 3 tips, all aimed at the gap), '
-    '"tomorrow": {"focus": "max 8 words", "kpi_metric": one of "doors", "spoken", "pitched", "closes", '
-    '"callbacks", "kpi_target": a number, "goal": sign-ups goal for tomorrow}, '
+    '{"headline": "where they are at, in plain words, max 14 words", '
+    '"target": {"now": "their sign-ups a day now, e.g. \'2.2 a day\'", "next": "a realistic next step up, e.g. '
+    '\'3 a day\' (not straight to 4+ if they are far off)", "week": "what that means for a week, e.g. \'15 a week: '
+    'Green\'"}, '
+    '"change": {"what": "the ONE thing to change, as an action, max 8 words, e.g. \'Pitch more of the people you '
+    'speak to\'", "now": "their number for it, e.g. \'24% (12 a day)\'", "need": "what good is, e.g. \'36% (25 a '
+    'day)\'", "why": "why it is happening, from their own breakdowns, max 18 words"}, '
+    '"how": [{"step": "exactly what to say or do on the doors, max 25 words", "why": "what it fixes, max 10 '
+    'words"}] (exactly 3, in the order to try them), '
+    '"result": "what will change if they do it, worked out from their own ratios, e.g. \'5 more pitched a day '
+    'is about 1 more sign-up a day: 6 more a week\', max 25 words", '
+    '"tomorrow": {"focus": "the change, max 8 words", "kpi_metric": one of "doors", "spoken", "pitched", '
+    '"closes", "callbacks", "kpi_target": a number, "goal": sign-ups goal for tomorrow}, '
     '"this_week": {"weekly_goal": a realistic stretch number of sign-ups for this week, "why": "max 12 words"}, '
-    '"team": "only if they have a team: who needs help with what, max 25 words, else empty string", '
-    '"quality": "only if something is off target: max 14 words, else empty string"}'
+    '"keep_doing": "one thing they do well to keep doing, with its number, max 14 words", '
+    '"team": "only if they have a team: who needs help with what, and what to do with them, max 30 words, else '
+    'empty string"}'
 )
 
 
