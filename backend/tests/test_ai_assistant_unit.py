@@ -311,3 +311,46 @@ def test_both_ais_are_told_to_be_a_big_coach():
 def test_the_big_coach_asks_follow_up_questions_when_it_needs_to():
     from core.sales_coaching import BIG_COACH
     assert "FOLLOW-UP QUESTIONS" in BIG_COACH and "in one go" in BIG_COACH and "One round of questions at most" in BIG_COACH
+
+
+def test_context_is_slim_person_page_sends_no_duplicate_weeks():
+    from core.ai_context import slim_page, MAX_CONTEXT_CHARS
+    page = {"person": {"stage": "2", "coach": {"name": "Coach Example"}, "team": {"total": 3}, "profile_image": "x"},
+            "weeks": [{"week_ending": "2026-11-08", "days": [1] * 7}] * 6, "badges": [1, 2, 3],
+            "loa": {"recent": {"active_days": 12, "avg_per_day": {"sales": 2.2},
+                               "steps": [{"from": "spoken_to", "to": "pitches_commenced", "pct": 24}],
+                               "office_avg_per_day": {"sales": 1.5}}},
+            "cod": {"stages": [{"stage": 2, "name": "Self Management", "current": True, "done": 4, "total": 10}]}}
+    out = slim_page(page)
+    text = json.dumps(out)
+    assert "weeks" not in out and "badges" not in text and "office_avg" not in text and "profile_image" not in text
+    assert out["coach"] == "Coach Example" and out["law_of_averages"]["recent"]["steps"] == {"spoken_to→pitches_commenced": 24}
+    assert out["cod_now"]["name"] == "Self Management"
+    assert MAX_CONTEXT_CHARS <= 24_000
+
+
+def test_chat_caches_the_stable_part_of_the_prompt(monkeypatch):
+    from emergentintegrations.llm import chat as chat_mod
+    sent = {}
+
+    class FakeMessages:
+        async def create(self, **kw):
+            sent.update(kw)
+            return type("R", (), {"content": [type("B", (), {"type": "text", "text": "ok"})()]})()
+
+    class FakeClient:
+        def __init__(self, api_key=None):
+            self.messages = FakeMessages()
+
+    import anthropic
+    monkeypatch.setattr(anthropic, "AsyncAnthropic", FakeClient)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    c = chat_mod.LlmChat(system_message="SYSTEM").with_model("anthropic")
+    _run(c.send_message(chat_mod.UserMessage(text="question", cache_prefix="their picture")))
+    blocks = sent["messages"][0]["content"]
+    assert blocks[0] == {"type": "text", "text": "their picture", "cache_control": {"type": "ephemeral"}}
+    assert blocks[1]["text"] == "question"
+    assert sent["system"][0]["cache_control"] == {"type": "ephemeral"}
+    # Without a prefix (Analyse me, set-up focus) nothing is marked for the cache.
+    _run(c.send_message(chat_mod.UserMessage(text="once")))
+    assert sent["system"] == "SYSTEM" and "cache_control" not in json.dumps(sent["messages"])
