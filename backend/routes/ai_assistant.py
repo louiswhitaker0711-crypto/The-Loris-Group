@@ -120,13 +120,13 @@ async def _give_back(uid: str, kind: str) -> None:
     await db.ai_usage.update_one({"_id": f"{uid}:{today_uk().isoformat()}", kind: {"$gt": 0}}, {"$inc": {kind: -1}})
 
 
-async def _ask(user: dict, system: str, prompt: str) -> str:
+async def _ask(user: dict, system: str, prompt: str, cache_prefix: str = "") -> str:
     from emergentintegrations.llm.chat import LlmChat, UserMessage
     take_ai_quota(user)
     chat = LlmChat(session_id=str(uuid.uuid4()), system_message=system).with_model("anthropic")
     async with acquire_llm_slot():
         try:
-            return await chat.send_message(UserMessage(text=prompt))
+            return await chat.send_message(UserMessage(text=prompt, cache_prefix=cache_prefix))
         except Exception as ex:
             logger.exception("ai assistant: model call failed")
             raise HTTPException(status_code=502, detail="The AI didn't answer. Try again in a moment.") from ex
@@ -212,9 +212,16 @@ async def chat(request: Request):
     history = (conv.get("messages") or [])[-2 * CHAT_HISTORY_TURNS:]
     transcript = "\n".join(f"{'Them' if m['role'] == 'user' else 'You'}: {m['text']}" for m in history)
     material = await coaching_material(user, question)
+    # The person's picture changes little within a conversation, so it goes
+    # first and is cached: follow-ups re-read it at about a tenth of the price.
+    # What changes by the minute (right_now) goes after it.
+    from core.ai_context import _fit, build_context
+    ctx = await build_context(user)
+    right_now = ctx.pop("right_now", None)
+    stable = (await private_guidance(user)
+              + f"What this person can see in the app (JSON):\n{_fit(ctx)}\n\n")
     prompt = (
-        await private_guidance(user)
-        + f"What this person can see in the app (JSON):\n{await context_text(user)}\n\n"
+        f"right_now (JSON): {json.dumps(right_now, ensure_ascii=False, default=str)}\n\n"
         + (f"The office's own coaching material that matches:\n{material}\n\n" if material else "")
         + (f"The conversation so far today:\n{transcript}\n\n" if transcript else "")
         + f"Their message: {question}\n\n"
@@ -228,7 +235,7 @@ async def chat(request: Request):
           "bullets; no tables, no # headings, no other formatting."
     )
     try:
-        reply = await _ask(user, ABOUT, prompt)
+        reply = await _ask(user, ABOUT, prompt, cache_prefix=stable)
     except HTTPException:
         await _give_back(uid, "chat")
         raise

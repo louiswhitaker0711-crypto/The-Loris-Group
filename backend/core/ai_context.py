@@ -24,7 +24,7 @@ from core.app_time import APP_TZ
 from database import db
 
 # The whole context is capped so one AI call stays a few pence.
-MAX_CONTEXT_CHARS = 60_000
+MAX_CONTEXT_CHARS = 24_000
 WEEKS_OF_TREND = 6
 DAYS_OF_SECTORS = 7
 
@@ -186,18 +186,40 @@ async def today_in_field(user: dict) -> dict:
 
 def _fit(ctx: dict) -> str:
     """JSON, trimmed to the cap: the team block shrinks first, then sectors."""
-    text = json.dumps(ctx, ensure_ascii=False, default=str)
+    dump = lambda x: json.dumps(x, ensure_ascii=False, default=str, separators=(",", ":"))  # noqa: E731
+    text = dump(ctx)
     for key in ("team", "my_recent_sector_days", "my_page"):
         if len(text) <= MAX_CONTEXT_CHARS:
             break
         if isinstance(ctx.get(key), list):
             while ctx[key] and len(text) > MAX_CONTEXT_CHARS:
                 ctx[key] = ctx[key][: max(0, len(ctx[key]) // 2)] if len(ctx[key]) > 1 else []
-                text = json.dumps(ctx, ensure_ascii=False, default=str)
+                text = dump(ctx)
         elif key in ctx and len(text) > MAX_CONTEXT_CHARS:
             ctx[key] = "(left out: too long)"
-            text = json.dumps(ctx, ensure_ascii=False, default=str)
+            text = dump(ctx)
     return text[:MAX_CONTEXT_CHARS]
+
+
+def slim_page(page: dict | None) -> dict | None:
+    """The parts of someone's person page the AI uses: who they are, their Law
+    of Averages (this week and the last 28 days) and where they are on the COD.
+    The weekly rows are already in my_weeks, so they aren't sent twice."""
+    if not page:
+        return None
+    person = page.get("person") or {}
+    loa = {}
+    for k in ("week", "recent"):
+        x = (page.get("loa") or {}).get(k) or {}
+        if x.get("active_days"):
+            loa[k] = {"days": x.get("active_days"), "avg_per_day": x.get("avg_per_day"),
+                      "steps": {f'{st.get("from")}→{st.get("to")}': st.get("pct") for st in x.get("steps") or []}}
+    cod = page.get("cod") or {}
+    current = next((st for st in cod.get("stages") or [] if st.get("current")), None)
+    return {"stage": person.get("stage"), "coach": (person.get("coach") or {}).get("name") if isinstance(person.get("coach"), dict) else person.get("coach"),
+            "team_size": (person.get("team") or {}).get("total"), "start_date": person.get("start_date"),
+            "law_of_averages": loa,
+            "cod_now": {k: current.get(k) for k in ("stage", "name", "done", "total") if k in current} if current else None}
 
 
 async def build_context(user: dict) -> dict:
@@ -213,15 +235,24 @@ async def build_context(user: dict) -> dict:
     rows, office = await weekly_rows(office_id, ids, weeks)
 
     try:
-        page = strip_private(await person_breakdown_for(user, me))
+        page = slim_page(strip_private(await person_breakdown_for(user, me)))
     except Exception:
         page = None
     team_ids = ids - {me}
     names = {str(u["_id"]): u.get("name") async for u in db.users.find(
         {"_id": {"$in": [ObjectId(i) for i in team_ids if ObjectId.is_valid(i)]},
          "deleted": {"$ne": True}, "is_active": {"$ne": False}}, {"name": 1})}
-    team = [{"name": names[i], "weeks": rows.get(i, {}).get("weeks", {})} for i in names]
-    team.sort(key=lambda r: -sum((w.get("sign_ups") or 0) for w in r["weeks"].values()))
+    def _team_row(i: str) -> dict:
+        w = rows.get(i, {}).get("weeks", {})
+        this = w.get(weeks[-1]) or {}
+        signed = sum((w.get(x) or {}).get("sign_ups") or 0 for x in weeks)
+        gold = sum((w.get(x) or {}).get("gold") or 0 for x in weeks)
+        return {"name": names[i], "sign_ups_by_week": [(w.get(x) or {}).get("sign_ups") or 0 for x in weeks],
+                "this_week": {"days": this.get("days_worked"), "piece_avg": this.get("piece_average"),
+                              "goal": this.get("goal")},
+                "gold_pct": round(100 * gold / signed) if signed else None}
+    team = [_team_row(i) for i in names]
+    team.sort(key=lambda r: -sum(r["sign_ups_by_week"]))
     quality = await latest_quality(office_id, ids)
     if quality:
         for q in quality["people"]:
@@ -249,7 +280,7 @@ async def build_context(user: dict) -> dict:
         "me": {"name": user.get("name"), "role": role_label(user.get("role")),
                "sees": "the whole office" if whole else ("my team" if team_ids else "only myself")},
         "my_weeks": rows.get(me, {}).get("weeks", {}),
-        "office_weeks": office,
+        "weeks_oldest_first": weeks,
         "my_page": page,
         "my_recent_sector_days": await recent_sector_days(me),
         "my_plan_this_week": await this_week_plan(me),

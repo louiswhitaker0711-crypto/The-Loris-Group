@@ -61,9 +61,12 @@ class FileContentWithMimeType:
 
 
 class UserMessage:
-    def __init__(self, text: str = "", file_contents=None):
+    def __init__(self, text: str = "", file_contents=None, cache_prefix: str = ""):
         self.text = text
         self.file_contents = file_contents or []
+        # Text sent before `text` and marked for Anthropic's prompt cache, so a
+        # follow-up within a few minutes re-reads it at about a tenth of the price.
+        self.cache_prefix = cache_prefix
 
 
 def _img_media_type(b64: str, fallback: str = "image/jpeg") -> str:
@@ -136,12 +139,18 @@ class LlmChat:
         from anthropic import AsyncAnthropic
 
         client = AsyncAnthropic(api_key=key)
+        content = self._content_blocks(msg)
+        prefix = getattr(msg, "cache_prefix", "") or ""
+        if prefix:
+            content = [{"type": "text", "text": prefix, "cache_control": {"type": "ephemeral"}}] + content
         kwargs = {
             "model": self.model,
             "max_tokens": MAX_TOKENS,
-            "messages": [{"role": "user", "content": self._content_blocks(msg)}],
+            "messages": [{"role": "user", "content": content}],
         }
         if self.system:
-            kwargs["system"] = self.system
+            # Cached too when the message is: the system prompt is the same every time.
+            kwargs["system"] = ([{"type": "text", "text": self.system, "cache_control": {"type": "ephemeral"}}]
+                                if prefix else self.system)
         resp = await client.messages.create(**kwargs)
         return "".join(b.text for b in resp.content if getattr(b, "type", None) == "text").strip()
