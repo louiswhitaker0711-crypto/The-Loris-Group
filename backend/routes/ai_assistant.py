@@ -7,7 +7,6 @@ suggestions with "Use this" buttons (the Owner, 2 Nov 2026).
   POST /api/ai/chat/new        start a fresh conversation
   POST /api/ai/analyse         the day's full analysis (once a person a day)
   GET  /api/ai/analyse         today's analysis, if done
-  POST /api/ai/suggest-plan    a plan for tomorrow and the week (5 a day)
   POST /api/ai/apply           "Use this": fill in a suggestion
 
 The AI sees what the person can see in the app (core/ai_context.py) and
@@ -42,7 +41,7 @@ router = APIRouter()
 
 # Daily caps per person (the Owner, 2 Nov 2026: Analyse once a day; chat
 # capped so one person can't run the bill up).
-DAILY_LIMITS = {"chat": 20, "analyse": 1, "suggest": 5, "setup": 25}
+DAILY_LIMITS = {"chat": 20, "analyse": 1, "setup": 25}
 CHAT_HISTORY_TURNS = 10
 
 ABOUT = (
@@ -112,7 +111,6 @@ async def _take(uid: str, kind: str) -> None:
     if not got:
         msg = {"chat": f"That's today's {DAILY_LIMITS['chat']} AI messages used. Tomorrow is a new day!",
                "analyse": "You've had today's analysis. Scroll back up to read it, and try again tomorrow.",
-               "suggest": "That's today's plan suggestions used. Try again tomorrow.",
                "setup": "That's today's set-up suggestions used. Try again tomorrow."}[kind]
         raise HTTPException(status_code=429, detail=msg)
 
@@ -223,8 +221,7 @@ async def chat(request: Request):
         + "Reply to their message. If it's a coaching or sales question, answer it the way the response style "
           "says: where they are, what to focus on, how to do it on the doors, what will happen, go and try it, "
           "how they'll track it, with plenty of practical advice in the how (3–5 specific things to do: the words, "
-          "how to make the customer feel, tone, body language). Otherwise answer in a few short lines. If they ask "
-          "for a plan, tell them they can tap My plan to get it with Use this buttons. Format for a phone: each "
+          "how to make the customer feel, tone, body language). Otherwise answer in a few short lines. Format for a phone: each "
           "section starts with a short heading on its own line in **double asterisks**, then short lines or '- ' "
           "bullets; no tables, no # headings, no other formatting."
     )
@@ -371,60 +368,6 @@ async def analyse(request: Request):
         doc = await db.ai_analyses.find_one({"user_id": uid, "date": day}, {"_id": 0})
     doc.pop("_id", None)
     return {"analysis": doc}
-
-
-# ── Suggest my plan ───────────────────────────────────────────────────────────
-
-PLAN_SHAPE = (
-    'Reply with JSON only: {"summary": "one or two sentences", '
-    '"weekly_goal": {"goal": number of sign-ups, "why": "short"} or null if it\'s Saturday or they have one '
-    'that already fits, '
-    '"setup": {"date": "YYYY-MM-DD (the next field day)", "goal": number, "focus": "short", "kpi_metric": one '
-    'of "doors", "spoken", "pitched", "closes", "kpi_target": number, "positive": "what to keep '
-    'doing"}, '
-    '"planner": [{"date": "YYYY-MM-DD", "box": one of BOXES, "text": "what to write"}] (0–6 items, only boxes '
-    'that suit this person; Coaches plan Primetime, Sector, Crew Meetings, Stage 1/Stage 2 coaching; BAs '
-    'mostly Sector and Primetime), '
-    '"notes": [{"date": "YYYY-MM-DD", "title": "short", "body": "a note to keep"}] (0–2 items)}'
-)
-
-
-@router.post("/ai/suggest-plan")
-async def suggest_plan(request: Request):
-    from core.ai_actions import planner_boxes
-    user = await get_current_user(request)
-    _require_ai(user)
-    try:
-        body = await request.json()
-    except Exception:
-        body = {}
-    ask = str((body or {}).get("ask") or "").strip()[:600]
-    uid = str(user["id"])
-    await _take(uid, "suggest")
-    boxes = ", ".join(f'"{k}"' for k in planner_boxes())
-    prompt = (await private_guidance(user)
-              + f"What this person can see in the app (JSON):\n{await context_text(user)}\n\n"
-              + (f"What they asked for: {ask}\n\n" if ask else "")
-              + "Suggest their plan: tomorrow's sector set-up, this week's goal and what to put in their "
-                "planner. Base it on their numbers against what good looks like, their breakdowns and what they said "
-                "they'd change. Keep every text short. "
-              + PLAN_SHAPE.replace("BOXES", boxes))
-    try:
-        text = await _ask(user, ABOUT, prompt)
-        result = _json_from(text)
-    except HTTPException:
-        await _give_back(uid, "suggest")
-        raise
-    except Exception:
-        await _give_back(uid, "suggest")
-        raise HTTPException(status_code=502, detail="The AI's answer came back garbled. Try again.")
-    labels = planner_boxes()
-    result["planner"] = [{**p, "box_label": labels.get(p.get("box"), p.get("box"))}
-                         for p in (result.get("planner") or []) if isinstance(p, dict) and p.get("box") in labels]
-    await db.ai_suggestions.insert_one({"id": str(uuid.uuid4()), "user_id": uid, "date": today_uk().isoformat(),
-                                        "result": result, "created_at": _now()})
-    result.pop("_id", None)
-    return {"suggestion": result}
 
 
 # ── Today's focus for a set-up ───────────────────────────────────────────────
