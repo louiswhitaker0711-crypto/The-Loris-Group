@@ -17,12 +17,12 @@
  * themes, like the Performance Hub it sits beside.
  */
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Image, ScrollView, ActivityIndicator, LayoutChangeEvent, Linking, Platform } from 'react-native';
+import { View, Text, TextInput, StyleSheet, Pressable, Image, ScrollView, ActivityIndicator, LayoutChangeEvent, Linking, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fonts } from '../../theme/ThemeContext';
-import { apiService } from '../../api/client';
+import { api, apiService } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { useTabBarClearance } from '../../customization/CustomTabBar';
 import { APP_LOCALE, APP_TZ, formatMoney } from '../../utils/appTime';
@@ -256,6 +256,9 @@ export function PersonBreakdown({ id }: { id: string }) {
           <Text style={s.updated}>You're seeing {p.name.split(' ')[0]}'s development. Their field numbers are with their own Coach.</Text>
         ) : (
         <>
+        {/* ── Private coaching notes: Admins and their Coach only, never the person (the Owner, 5 Nov 2026) ── */}
+        {!isSelf && <CoachingNotes personId={String(p.id)} firstName={String(p.name || '').split(' ')[0]} />}
+
         {/* ── This week ────────────────────────────────────────────────── */}
         <View style={s.card} testID="person-week">
           <View style={s.rowBetween}>
@@ -494,6 +497,74 @@ export function PersonBreakdown({ id }: { id: string }) {
   );
 }
 
+/** What they're struggling with, in the Owner's or their Coach's words. Private:
+ * the person never sees it; the AI uses it to shape their tips and set-up focus.
+ * Hidden when the viewer isn't allowed (GET /coaching-notes/{id} 403s). */
+function CoachingNotes({ personId, firstName }: { personId: string; firstName: string }) {
+  const qc = useQueryClient();
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [showSorted, setShowSorted] = useState(false);
+  const q = useQuery({
+    queryKey: ['coaching-notes', personId],
+    queryFn: async () => (await api.get(`/coaching-notes/${encodeURIComponent(personId)}`)).data,
+    retry: false,
+  });
+  if (!q.data) return null;
+  const live: any[] = q.data.notes || [];
+  const sorted: any[] = q.data.sorted || [];
+  const add = async () => {
+    if (!text.trim()) return;
+    setBusy(true);
+    try {
+      await api.post(`/coaching-notes/${encodeURIComponent(personId)}`, { text });
+      setText('');
+      qc.invalidateQueries({ queryKey: ['coaching-notes', personId] });
+    } catch { /* stays in the box to try again */ } finally { setBusy(false); }
+  };
+  const done = async (id: string) => {
+    try {
+      await api.put(`/coaching-notes/${encodeURIComponent(personId)}/${encodeURIComponent(id)}/sorted`);
+      qc.invalidateQueries({ queryKey: ['coaching-notes', personId] });
+    } catch { /* try again */ }
+  };
+  const when = (iso: string) => new Date(iso).toLocaleDateString(APP_LOCALE, { day: 'numeric', month: 'short', timeZone: APP_TZ });
+  return (
+    <View style={s.card} testID="person-coaching-notes">
+      <Section icon="lock-closed-outline" text="Coaching notes · private" />
+      <Text style={[s.noteLeft, { marginBottom: 10 }]}>What {firstName || 'they'} is struggling with. Only you, their Coach and the Owner see this. The AI uses it to shape {firstName ? `${firstName}’s` : 'their'} tips and set-up focus, without ever mentioning it.</Text>
+      {live.map((n) => (
+        <View key={n.id} style={s.noteRow}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={s.noteText}>{n.text}</Text>
+            <Text style={s.noteMeta}>{n.author_name ? `${n.author_name.split(' ')[0]} · ` : ''}{when(n.created_at)}</Text>
+          </View>
+          <Pressable onPress={() => done(n.id)} style={s.btnGhost} accessibilityRole="button" accessibilityLabel="Mark sorted" testID={`coaching-note-sorted-${n.id}`}>
+            <Ionicons name="checkmark" size={15} color={P.green} />
+            <Text style={s.btnGhostText}>Sorted</Text>
+          </Pressable>
+        </View>
+      ))}
+      <View style={[s.noteRow, { borderTopWidth: live.length ? 1 : 0 }]}>
+        <TextInput value={text} onChangeText={setText} placeholder="e.g. rushes the close when nervous" placeholderTextColor={P.faint}
+          style={s.noteInput} multiline maxLength={1000} testID="coaching-note-input" />
+        <Pressable onPress={add} disabled={busy || !text.trim()} style={[s.btn, (busy || !text.trim()) && { opacity: 0.5 }]} accessibilityRole="button" testID="coaching-note-add">
+          {busy ? <ActivityIndicator size="small" color={P.onLime} /> : <Ionicons name="add" size={16} color={P.onLime} />}
+          <Text style={s.btnText}>Add</Text>
+        </Pressable>
+      </View>
+      {!!sorted.length && (
+        <Pressable onPress={() => setShowSorted(!showSorted)} accessibilityRole="button" style={{ paddingTop: 8 }}>
+          <Text style={s.noteMeta}>{showSorted ? 'Hide' : 'Show'} sorted ({sorted.length})</Text>
+        </Pressable>
+      )}
+      {showSorted && sorted.map((n) => (
+        <Text key={n.id} style={[s.noteMeta, { paddingTop: 4, textDecorationLine: 'line-through' }]}>{n.text}</Text>
+      ))}
+    </View>
+  );
+}
+
 function Section({ icon, text }: { icon: Icon; text: string }) {
   return (
     <View style={s.section}>
@@ -538,6 +609,11 @@ function Kpi({ label, value, sub, good, wide }: { label: string; value: string; 
 }
 
 const s = StyleSheet.create({
+  noteLeft: { fontFamily: fonts.body, fontSize: 13, lineHeight: 19, color: P.muted },
+  noteRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderTopColor: P.lineSoft, borderTopWidth: 1 },
+  noteText: { fontFamily: fonts.body, fontSize: 14.5, lineHeight: 20, color: P.text },
+  noteMeta: { fontFamily: fonts.body, fontSize: 12, color: P.muted, marginTop: 2 },
+  noteInput: { flex: 1, minWidth: 0, minHeight: 42, fontFamily: fonts.body, fontSize: 14.5, color: P.text, backgroundColor: P.raised, borderRadius: 12, borderWidth: 1, borderColor: P.line, paddingHorizontal: 12, paddingVertical: 10 },
   page: { flex: 1, backgroundColor: P.canvas },
   shell: { width: '100%', maxWidth: 1080, alignSelf: 'center', gap: 12 },
   centre: { alignItems: 'center', justifyContent: 'center', gap: 10, padding: 32 },

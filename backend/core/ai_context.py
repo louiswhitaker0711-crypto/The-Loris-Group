@@ -176,6 +176,13 @@ async def build_context(user: dict) -> dict:
             q.pop("user_id", None)
         quality["people"] = [q for q in quality["people"] if q.get("name")]
 
+    # Coaching notes on the people this viewer coaches (never about themselves):
+    # what they're struggling with, from the Owner or their Coach.
+    from routes.coaching_notes import live_notes, noteable_ids
+    allowed = await noteable_ids(user, set(names))
+    notes = await live_notes(allowed)
+    coaching_notes = [{"name": names[i], "notes": n} for i, n in notes.items() if i in names]
+
     from core.brand import role_label
     return {
         "today": today.isoformat(), "weekday": today.strftime("%A"),
@@ -188,6 +195,7 @@ async def build_context(user: dict) -> dict:
         "my_recent_sector_days": await recent_sector_days(me),
         "my_plan_this_week": await this_week_plan(me),
         "team": team,
+        "coaching_notes_on_my_people": coaching_notes,
         "quality_latest": quality,
     }
 

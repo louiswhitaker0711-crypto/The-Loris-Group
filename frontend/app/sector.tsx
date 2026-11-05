@@ -21,6 +21,7 @@ import { openInWhatsApp, copyText } from '../src/utils/whatsapp';
 import { SectorPicker } from '../src/components/sector/SectorPicker';
 import { SectorMap } from '../src/components/sector/SectorMap';
 import BreakdownPrimetime from '../src/components/sector/BreakdownPrimetime';
+import AiFocusSuggest from '../src/components/ai/AiFocusSuggest';
 
 type Setup = { goal: number | null; kpi_metric: string | null; kpi_target: number | null; focus: string; positive?: string; cod_module_id?: string | null;
   teacher_id?: string | null; example_module_id?: string | null; example_text?: string };
@@ -429,6 +430,15 @@ function SetupCard({ p, date, opts, codOptions, sectorPeople, open, onToggle, on
       {open && (
         <View style={{ gap: 10 }}>
           <CodFocusBanner p={p} s={s} c={c} />
+          {/* The AI's focus, KPI, goal and a tip for today (the Owner, 5 Nov 2026): fills the form, then Save. */}
+          <AiFocusSuggest userId={p.user_id} date={date} shadow={shadow} onUse={(x) => {
+            if (x.focus) setFocus(x.focus);
+            if (!shadow) {
+              if (x.goal != null) setGoal(String(x.goal));
+              if (x.kpi_metric) { setMetric(x.kpi_metric); if (x.kpi_target != null) setTarget(String(x.kpi_target)); }
+            }
+            if (x.positive && !positive) setPositive(x.positive);
+          }} />
           {shadow && (
             <Text style={s.muted}>{p.hop || 'Shadow day'}. No sales goal or KPI today: set what they're learning and their focus.</Text>
           )}

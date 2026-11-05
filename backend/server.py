@@ -91,6 +91,7 @@ from routes.viewers import router as viewers_router
 from routes.team_history import router as team_history_router
 from routes.cod_focus import router as cod_focus_router
 from routes.ai_assistant import router as ai_assistant_router
+from routes.coaching_notes import router as coaching_notes_router
 from routes.meetups import router as meetups_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -205,6 +206,7 @@ api_router.include_router(viewers_router)
 api_router.include_router(team_history_router)
 api_router.include_router(cod_focus_router)
 api_router.include_router(ai_assistant_router)
+api_router.include_router(coaching_notes_router)
 api_router.include_router(meetups_router)
 
 app.include_router(api_router)
@@ -519,6 +521,8 @@ async def _startup_work():
     await db.ai_analyses.create_index([("user_id", 1), ("date", 1)], unique=True)
     await db.ai_conversations.create_index([("user_id", 1), ("date", 1)])
     await db.connector_links.create_index("token_hash", unique=True)
+    await db.coaching_notes.create_index([("subject_id", 1), ("sorted_at", 1)])
+    await db.ai_setup_suggestions.create_index([("user_id", 1), ("date", 1)], unique=True)
     await db.planner_history.create_index([("user_id", 1), ("week_ending", 1), ("at", -1)])
     # New-start join codes (routes/new_starts.py), looked up by their hash.
     await db.join_tokens.create_index("token_hash")
