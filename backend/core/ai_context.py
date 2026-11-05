@@ -133,8 +133,9 @@ async def latest_quality(office_id: str, user_ids: set[str]) -> dict | None:
 
 async def today_in_field(user: dict) -> dict:
     """Right now: the time, how long's left in the field, and the sector this
-    person is in today (goal, hops, each person's set-up and sign-ups so far
-    from Bells), so the AI can coach live ("we're behind with 2 hours left")."""
+    person is in today (goal, hops, each person's set-up), so the AI can coach
+    live ("we're behind with 2 hours left"). Never today's Bells: it's only
+    filled in at the end of the day (the Owner, 5 Nov 2026), so the AI asks."""
     from datetime import datetime as _dt
     from routes.sector import _my_sector
     now = _dt.now(APP_TZ)
@@ -153,34 +154,20 @@ async def today_in_field(user: dict) -> dict:
     ids = list(dict.fromkeys(ids))
     names = {str(u["_id"]): u.get("name") async for u in db.users.find(
         {"_id": {"$in": [ObjectId(i) for i in ids if ObjectId.is_valid(i)]}}, {"name": 1})}
-    week = week_ending_of(d)
-    today_idx = d.weekday()
-    signed: dict = {}
-    async for b in db.bells_entries.find({"office_id": user.get("office_id"), "week_ending": week, "user_id": {"$in": ids}},
-                                         {"_id": 0, "user_id": 1, "days": 1}):
-        day = (b.get("days") or [{}] * 7)[today_idx] if len(b.get("days") or []) > today_idx else {}
-        signed[str(b["user_id"])] = {"gold": day.get("over30") or 0, "silver": day.get("under30") or 0,
-                                     "the_round": day.get("memberships") or 0, "status": day.get("status")}
     setups = {sd["user_id"]: sd async for sd in db.sector_days.find(
         {"user_id": {"$in": ids}, "date": d.isoformat()}, {"_id": 0, "user_id": 1, "setup": 1, "breakdown": 1})}
     shadows = {str(m) for h in sec.get("hops") or [] for m in (h.get("shadow_ids") or [])}
     people = []
     for i in ids:
         su = (setups.get(i) or {}).get("setup") or {}
-        sg = signed.get(i) or {}
         people.append({"name": names.get(i) or "?", "leader": i == str(sec.get("leader_id")), "shadow": i in shadows,
                        "goal": su.get("goal"), "focus": su.get("focus"), "kpi": (f"{su.get('kpi_target')} {su.get('kpi_metric')}"
-                                                                                  if su.get("kpi_metric") else None),
-                       "sign_ups_so_far": (sg.get("gold") or 0) + (sg.get("silver") or 0) if sg else None,
-                       "gold": sg.get("gold"), "the_round": sg.get("the_round")})
+                                                                                  if su.get("kpi_metric") else None)})
     hops = [[names.get(str(m)) or "?" for m in h.get("member_ids") or []] for h in sec.get("hops") or []]
-    total = sum(p["sign_ups_so_far"] or 0 for p in people)
     out["sector"] = {"postcode": sec.get("postcode"), "leader": names.get(str(sec.get("leader_id"))),
                      "i_lead_it": str(sec.get("leader_id")) == str(user["id"]), "goal": sec.get("goal"),
-                     "sign_ups_so_far": total,
-                     "still_needed": max(0, int(sec["goal"]) - total) if isinstance(sec.get("goal"), (int, float)) else None,
                      "hops": hops, "people": people,
-                     "note": "Sign-ups so far are what's on Bells for today; the field may be ahead of what's been typed in."}
+                     "note": "Today's sign-ups aren't known: Bells is only filled in at the end of the day. Ask them."}
     return out
 
 
@@ -281,6 +268,8 @@ async def build_context(user: dict) -> dict:
                "sees": "the whole office" if whole else ("my team" if team_ids else "only myself")},
         "my_weeks": rows.get(me, {}).get("weeks", {}),
         "weeks_oldest_first": weeks,
+        "bells_note": "Bells is filled in at the end of each day, so today is never on it: this week's numbers run "
+                      "to yesterday. Ignore today's Bells; ask how today's going if you need it.",
         "my_page": page,
         "my_recent_sector_days": await recent_sector_days(me),
         "my_plan_this_week": await this_week_plan(me),

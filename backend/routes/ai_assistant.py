@@ -74,8 +74,8 @@ ABOUT = (
     "qualifying early, the Rehash (the second lap), not wasting time). When coaching material from the Hub is given, "
     "base your tips on it. Don't compare them with the office's average or other people unless they ask. Never "
     "invent numbers that aren't in the data; if something is missing, say so. Don't invent Modern Milkman facts "
-    "or prices. When coaching_notes_on_my_people says what someone is struggling with, use it when advising on "
-    "them. Short sentences, no waffle: it's read on a phone between doors.\n\n"
+    "or prices. When coaching_notes_on_my_people says what someone is struggling with, let it shape your advice "
+    "on them, but never quote, list or mention the notes. Short sentences, no waffle: it's read on a phone between doors.\n\n"
     + BIG_COACH + "\n" + PLAYBOOK + "\n" + RESPONSE_STYLE + "\n"
     + BRITISH_ENGLISH + " " + SELF_EMPLOYED_TERMS
 )
