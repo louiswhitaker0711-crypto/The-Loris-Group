@@ -57,11 +57,19 @@ ABOUT = (
     "motto: 'Tomorrow is a new day'. A bunny hop is a pair of BAs working one area of a sector; a solo is one BA "
     "alone. The breakdown is: numbers, one to three positives, the biggest gap (a step ratio or low volume), why, "
     "what will change, a Primetime topic and how they'll know it worked (a number to track).\n"
-    "How to coach: be direct, warm and specific; use their real numbers; find the ONE step that's costing them "
-    "most (doors→spoken, spoken→pitched, pitched→closed, closed→sign-up, or simply not enough volume) and say "
-    "what to do about it tomorrow. Compare them with the office's numbers when it helps. Never invent numbers "
-    "that aren't in the data; if something is missing, say so. Don't invent Modern Milkman facts or prices. "
-    "Keep answers short enough to read on a phone. "
+    "What good looks like (measure everyone against THIS, never against the office's average): a day of 120 doors, "
+    "70 spoken to (58% of doors), 25 pitched (36% of spoken), 15 closed (60% of pitched), 4+ sign-ups (about 27% "
+    "of closes); 3+ a day is light green, 4+ dark green; 15+ a week is Green, 20+ Super Green; Gold 90%+; The "
+    "Round 75%+; £13+ order value; 2.5+ drop days; fails under 10%.\n"
+    "How to coach: you are a top field Coach, not an analyst. Be direct, warm and brief. Use their real numbers "
+    "against what good looks like. Find the ONE step costing them most (doors→spoken, spoken→pitched, "
+    "pitched→closed, closed→sign-up, or simply not enough doors) and give practical tips they can use on the "
+    "very next door: what to say or do differently, in the team's own language (S.E.E., hooklines, K.I.S.S., "
+    "tone of voice, body language, building trust, taking control, timing the close, handling objections, "
+    "qualifying early, the Rehash, call backs, not wasting time). When coaching material from the Hub is given, "
+    "base your tips on it. Don't compare them with the office's average or other people unless they ask. Never "
+    "invent numbers that aren't in the data; if something is missing, say so. Don't invent Modern Milkman facts "
+    "or prices. Short sentences, no waffle: it's read on a phone between doors. "
     + BRITISH_ENGLISH + " " + SELF_EMPLOYED_TERMS
 )
 
@@ -196,25 +204,54 @@ async def chat(request: Request):
 
 # ── Analyse me ────────────────────────────────────────────────────────────────
 
+# Bump when the analysis changes shape: an analysis made today in the old
+# shape can be done again once, without using up the day's allowance.
+ANALYSE_VERSION = 2
+
 ANALYSE_SHAPE = (
-    'Reply with JSON only, in this shape: {"headline": "one sentence on how they are doing", '
-    '"strengths": ["up to 3, specific, with numbers"], '
-    '"biggest_gap": {"step": "the one step or volume costing them most", "numbers": "theirs vs the Law of '
-    'Averages / the office", "why": "the likely reason, from their breakdowns"}, '
-    '"trend": "how the last few weeks have gone, and vs the office", '
-    '"tomorrow": {"focus": "one thing to do differently tomorrow (short)", "kpi_metric": one of "doors", '
-    '"spoken", "pitched", "closes", "callbacks", "kpi_target": a number, "goal": sign-ups goal for tomorrow}, '
-    '"this_week": {"weekly_goal": a realistic stretch number of sign-ups for this week, "why": "short"}, '
-    '"team": "only if they have a team: who needs help and who is flying, else empty string", '
-    '"quality": "one line on Gold / The Round / quality if there is data, else empty string"}'
+    'Reply with JSON only, in this shape, and keep to the word limits: '
+    '{"headline": "how they are doing, max 14 words", '
+    '"going_well": ["1–2 items, max 14 words each, a number against what good looks like"], '
+    '"gap": {"what": "the one step or volume costing them most, max 6 words", '
+    '"numbers": "theirs vs good, e.g. \'24% spoken→pitched vs 36%\', max 12 words", '
+    '"why": "the likely reason from their own breakdowns, max 18 words"}, '
+    '"tips": [{"tip": "a practical thing to say or do on the doors, max 25 words", "why": "how it fixes the gap, '
+    'max 12 words"}] (exactly 3 tips, all aimed at the gap), '
+    '"tomorrow": {"focus": "max 8 words", "kpi_metric": one of "doors", "spoken", "pitched", "closes", '
+    '"callbacks", "kpi_target": a number, "goal": sign-ups goal for tomorrow}, '
+    '"this_week": {"weekly_goal": a realistic stretch number of sign-ups for this week, "why": "max 12 words"}, '
+    '"team": "only if they have a team: who needs help with what, max 25 words, else empty string", '
+    '"quality": "only if something is off target: max 14 words, else empty string"}'
 )
+
+
+async def coaching_material(user: dict) -> str:
+    """The Hub's own coaching content that matches their recent gaps, for tips."""
+    from core.ai_context import recent_sector_days
+    from routes.coaching_assistant import _retrieve_impacts
+    from routes.sector import GAP_LABELS
+    words = []
+    for d in (await recent_sector_days(str(user["id"])))[-3:]:
+        b = d.get("breakdown") or {}
+        words += [GAP_LABELS.get(b.get("gap") or "", ""), b.get("change") or "", b.get("why") or ""]
+    query = " ".join(w for w in words if w) or "closing pitching speaking to more people"
+    try:
+        found = await _retrieve_impacts(user, query, k=4)
+    except Exception:
+        return ""
+    out = []
+    for d in found:
+        body = " ".join(str(d.get("summary") or d.get("body") or "").split())[:700]
+        takeaways = "; ".join(str(x) for x in (d.get("key_takeaways") or [])[:4])
+        out.append(f"- {d.get('title')}: {body}" + (f" Key points: {takeaways}" if takeaways else ""))
+    return "\n".join(out)
 
 
 @router.get("/ai/analyse")
 async def get_analysis(request: Request):
     user = await get_current_user(request)
     doc = await db.ai_analyses.find_one({"user_id": str(user["id"]), "date": today_uk().isoformat()}, {"_id": 0})
-    return {"analysis": doc}
+    return {"analysis": doc if doc and doc.get("v") == ANALYSE_VERSION else None}
 
 
 @router.post("/ai/analyse")
@@ -224,12 +261,18 @@ async def analyse(request: Request):
     uid = str(user["id"])
     day = today_uk().isoformat()
     done = await db.ai_analyses.find_one({"user_id": uid, "date": day}, {"_id": 0})
-    if done:
+    if done and done.get("v") == ANALYSE_VERSION:
         return {"analysis": done}
+    if done:
+        # Made today in the old shape: do it again in the new one, at no cost.
+        await db.ai_analyses.delete_one({"user_id": uid, "date": day})
+        await _give_back(uid, "analyse")
     await _take(uid, "analyse")
+    material = await coaching_material(user)
     prompt = (f"What this person can see in the app (JSON):\n{await context_text(user)}\n\n"
-              "Give them their full analysis for today: their breakdowns, results, trends and plans, "
-              f"compared with the office. {ANALYSE_SHAPE}")
+              + (f"Coaching material from the Hub that matches their recent gaps:\n{material}\n\n" if material else "")
+              + "Give them today's analysis: their breakdowns, results, trends and plans against what good "
+                f"looks like, with practical tips. {ANALYSE_SHAPE}")
     try:
         text = await _ask(user, ABOUT, prompt)
         result = _json_from(text)
@@ -239,7 +282,7 @@ async def analyse(request: Request):
     except Exception:
         await _give_back(uid, "analyse")
         raise HTTPException(status_code=502, detail="The AI's answer came back garbled. Try again.")
-    doc = {"id": str(uuid.uuid4()), "user_id": uid, "date": day, "result": result,
+    doc = {"id": str(uuid.uuid4()), "user_id": uid, "date": day, "result": result, "v": ANALYSE_VERSION,
            "next_field_day": next_field_day().isoformat(), "created_at": _now()}
     try:
         await db.ai_analyses.insert_one(dict(doc))
@@ -281,7 +324,8 @@ async def suggest_plan(request: Request):
     prompt = (f"What this person can see in the app (JSON):\n{await context_text(user)}\n\n"
               + (f"What they asked for: {ask}\n\n" if ask else "")
               + "Suggest their plan: tomorrow's sector set-up, this week's goal and what to put in their "
-                "planner. Base it on their numbers, breakdowns and what they said they'd change. "
+                "planner. Base it on their numbers against what good looks like, their breakdowns and what they said "
+                "they'd change. Keep every text short. "
               + PLAN_SHAPE.replace("BOXES", boxes))
     try:
         text = await _ask(user, ABOUT, prompt)
