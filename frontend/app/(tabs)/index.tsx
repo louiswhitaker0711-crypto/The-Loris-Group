@@ -60,6 +60,7 @@ import AcademyWorkbookCard from '../../src/components/home/AcademyWorkbookCard';
 import AcademyClassCard from '../../src/components/home/AcademyClassCard';
 import NewStartsButton from '../../src/components/home/NewStartsButton';
 import PitchCard from '../../src/components/home/PitchCard';
+import MeetupCard from '../../src/components/home/MeetupCard';
 import PrimetimeNowCard from '../../src/components/home/PrimetimeNowCard';
 import { FollowUpsDueCard } from '../../src/components/planner/FollowUps';
 import CodWeekCard from '../../src/components/cod/CodWeekCard';
@@ -1614,6 +1615,8 @@ export default function HomeScreen() {
       {/* BA Academy (Days 1-2): a new start's workbook, the Owner's class. */}
       {isTrainee && nextPending && nextPending.day_number <= 2 && <AcademyWorkbookCard />}
       {isAdmin && <AcademyClassCard />}
+      {/* A meet-up you're going to: from a week before until your debrief (the Owner, 5 Nov 2026). */}
+      {!(user as any)?.is_viewer && <MeetupCard />}
       {/* The pitch near the top: everyone in Primetime (11:00–11:45); a new start from 18:00 on their first day. */}
       <PitchCard place="top" />
       {/* 11:00–11:45: today's Primetime plan, published to everyone (the Owner, 2 Nov 2026). */}

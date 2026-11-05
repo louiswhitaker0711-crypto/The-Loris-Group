@@ -484,6 +484,7 @@ export default function AdminScreen() {
     { key: 'territory', icon: 'earth-outline', title: 'Territory', sub: 'Sectors, worked streets and sales', testID: 'admin-territory', onPress: () => router.push('/territory' as any) },
     { key: 'review', icon: 'podium-outline', title: 'Weekly Review', sub: "Last week, everyone in it, and this week", onPress: () => router.push('/weekly-review' as any) },
     { key: 'goals', icon: 'flag-outline', title: 'Goal Planner', sub: 'KPI and Rock suggestions', onPress: () => router.push('/planner-goal-menu') },
+    { key: 'meetups', icon: 'airplane-outline', title: 'Meet-ups', sub: 'Send a networking planner to anyone going', testID: 'admin-meetups', onPress: () => router.push('/meetups-admin' as any) },
     usesExternalBadgeMaker
       ? { key: 'badges', icon: 'ribbon-outline', title: 'Badges', sub: 'Opens your badge maker in a new tab', testID: 'admin-badges', onPress: openBadgeMaker }
       : { key: 'badges', icon: 'ribbon-outline', title: 'Badges', sub: 'Make, edit and print ID badges', testID: 'admin-badges', onPress: () => router.push('/badges' as any) },

@@ -109,6 +109,18 @@ export default function NotesScreen() {
                   </Pressable>
                 ))}
               </View>
+              {(d?.meetups || []).length > 0 && <>
+                <Text style={s.kicker}>Meet-ups</Text>
+                <View style={s.list}>
+                  {(d?.meetups || []).map((mt: any, i: number) => (
+                    <Pressable key={mt.head} onPress={() => setView({ kind: 'head', head: mt.head, label: mt.label })} style={[s.row, i > 0 && s.rowLine]} accessibilityRole="button">
+                      <Text style={s.rowT}>{mt.label}</Text>
+                      <Count n={mt.count} owner={0} />
+                      <Ionicons name="chevron-forward" size={15} color={c.textMuted} />
+                    </Pressable>
+                  ))}
+                </View>
+              </>}
               {!d?.total && <Text style={[s.small, { textAlign: 'center' }]}>Notes you write in your planner’s note boxes land here by themselves, under the heading you give them.</Text>}
               <Pressable onPress={() => router.push('/notes-removed' as any)} style={[s.row, s.list]} accessibilityRole="button" testID="notes-removed">
                 <Ionicons name="arrow-undo-outline" size={16} color={c.primary} />
@@ -243,11 +255,11 @@ function NoteEditor({ note, head, restored, onClose }: { note?: Note; head: stri
         </View>
         <ScrollView contentContainerStyle={{ padding: 16, gap: 10 }} keyboardShouldPersistTaps="handled">
           <TextInput value={title} onChangeText={setTitle} placeholder="Title" placeholderTextColor={c.textMuted} style={s.edInput} maxLength={120} />
-          <FolderTag value={{ head: h, title, share: false }} defaultHead={h || 'pitch:other'} defaultTitle={title || 'Note'} isAdmin={false}
-            onChange={(v) => { setH(v.head); setTitle(v.title); }} />
+          {!h.startsWith('meetup:') && <FolderTag value={{ head: h, title, share: false }} defaultHead={h || 'pitch:other'} defaultTitle={title || 'Note'} isAdmin={false}
+            onChange={(v) => { setH(v.head); setTitle(v.title); }} />}
           <TextInput value={body} onChangeText={setBody} placeholder="Write the note…" placeholderTextColor={c.textMuted}
             style={[s.edInput, { minHeight: 260 }]} multiline textAlignVertical="top" autoFocus={!note} />
-          {!note && <Text style={s.small}>{'It also goes in today\u2019s Notes box in your planner.'}</Text>}
+          {!note && <Text style={s.small}>{h.startsWith('meetup:') ? 'It also goes in your meet-up planner.' : 'It also goes in today\u2019s Notes box in your planner.'}</Text>}
         </ScrollView>
       </View>
     </Modal>
