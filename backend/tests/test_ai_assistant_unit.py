@@ -278,7 +278,7 @@ def test_the_ai_never_pushes_call_backs_and_reads_rehash_as_the_second_lap():
     assert "second lap" in RESPONSE_STYLE and "Never suggest setting or making call backs" in PLAYBOOK
 
 
-def test_right_now_reads_todays_sector_goal_hops_and_sign_ups(db, monkeypatch):
+def test_right_now_reads_todays_sector_but_never_todays_bells(db, monkeypatch):
     import core.ai_context as ctx
     import routes.sector as sector
     monkeypatch.setattr(ctx, "db", db)
@@ -290,16 +290,25 @@ def test_right_now_reads_todays_sector_goal_hops_and_sign_ups(db, monkeypatch):
     _run(db.sectors.insert_one({"office_id": "o1", "date": today.isoformat(), "leader_id": str(lead),
                                 "member_ids": [str(a), str(b)], "goal": 12, "postcode": "DN1 1",
                                 "hops": [{"colour": "red", "member_ids": [str(lead), str(a)]}]}))
+    _run(db.sector_days.insert_one({"user_id": str(a), "date": today.isoformat(),
+                                    "setup": {"goal": 4, "focus": "Reset after every no"}}))
+    # Bells is only filled in at the end of the day (the Owner, 5 Nov 2026): never read for today.
     days = [{} for _ in range(7)]
-    days[today.weekday()] = {"over30": 2, "under30": 1, "memberships": 2, "status": "in"}
+    days[today.weekday()] = {"over30": 2, "under30": 1, "status": "in"}
     _run(db.bells_entries.insert_one({"office_id": "o1", "week_ending": ctx.week_ending_of(today),
                                       "user_id": str(a), "days": days}))
     out = _run(ctx.today_in_field({"id": str(lead), "office_id": "o1"}))
     sec = out["sector"]
-    assert sec["i_lead_it"] and sec["goal"] == 12 and sec["sign_ups_so_far"] == 3 and sec["still_needed"] == 9
-    assert sec["hops"] == [["Leader Example", "Alpha Example"]]
+    assert sec["i_lead_it"] and sec["goal"] == 12 and sec["hops"] == [["Leader Example", "Alpha Example"]]
+    assert "sign_ups_so_far" not in json.dumps(sec) and "Ask them" in sec["note"]
     alpha = next(p for p in sec["people"] if p["name"] == "Alpha Example")
-    assert alpha["sign_ups_so_far"] == 3 and alpha["gold"] == 2
+    assert alpha["focus"] == "Reset after every no" and alpha["goal"] == 4
+
+
+def test_no_ai_repeats_coaching_notes_back():
+    from core.sales_coaching import BIG_COACH
+    assert "Never quote, list or refer to coaching notes" in BIG_COACH
+    assert "never quote, list or mention the notes" in ai.ABOUT
 
 
 def test_both_ais_are_told_to_be_a_big_coach():
