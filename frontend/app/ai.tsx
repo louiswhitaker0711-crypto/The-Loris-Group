@@ -32,7 +32,7 @@ type Analysis = {
     target?: { now?: string; next?: string; week?: string };
     change?: { what?: string; now?: string; need?: string; why?: string };
     how?: { step?: string; why?: string }[];
-    result?: string; keep_doing?: string;
+    result?: string; track?: string; keep_doing?: string;
     tomorrow?: Tomorrow; this_week?: { weekly_goal?: number; why?: string };
     team?: string;
   };
@@ -300,10 +300,16 @@ export default function AiScreen() {
                 )}
 
                 {/* 5 · What will change if they do it. */}
-                {!!a.result && (
+                {(!!a.result || !!a.track) && (
                   <View style={[s.card, s.resultCard]}>
                     <Text style={s.label}><Text style={s.stepNo}>5 </Text>What will change</Text>
-                    <Text style={s.resultText}>{a.result}</Text>
+                    {!!a.result && <Text style={s.resultText}>{a.result}</Text>}
+                    {!!a.track && (
+                      <View style={s.trackRow}>
+                        <Ionicons name="pulse-outline" size={16} color={c.primary} />
+                        <Text style={[s.body, { flex: 1 }]}><Text style={s.bold}>You’ll know it’s working: </Text>{a.track}</Text>
+                      </View>
+                    )}
                   </View>
                 )}
 
@@ -449,6 +455,7 @@ const styles = (c: any) => StyleSheet.create({
   targetRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 4 },
   targetFrom: { fontFamily: fonts.display, fontSize: 22, color: c.textMuted },
   targetTo: { fontFamily: fonts.display, fontSize: 26, color: c.text },
+  trackRow: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', marginTop: 6 },
   resultCard: { borderColor: c.primaryLight, backgroundColor: c.primary + '0d' },
   resultText: { fontFamily: fonts.display, fontSize: 18, lineHeight: 25, color: c.text },
   gapTitle: { fontFamily: fonts.display, fontSize: 19, color: c.text },
