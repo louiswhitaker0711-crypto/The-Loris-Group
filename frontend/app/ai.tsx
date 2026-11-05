@@ -25,8 +25,10 @@ type Msg = { role: 'user' | 'assistant'; text: string };
 type Tomorrow = { focus?: string; kpi_metric?: string; kpi_target?: number; goal?: number };
 type Analysis = {
   id: string; date: string; next_field_day?: string;
+  numbers?: { days: number; per_day: { label: string; you: number; good: number }[];
+    steps: { label: string; you: number | null; good: number }[] } | null;
   result: {
-    headline?: string; going_well?: string[];
+    headline?: string; going_well?: string[]; findings?: string[];
     gap?: { what?: string; numbers?: string; why?: string };
     tips?: { tip?: string; why?: string }[];
     tomorrow?: Tomorrow; this_week?: { weekly_goal?: number; why?: string };
@@ -213,7 +215,7 @@ export default function AiScreen() {
             {!a ? (
               <View style={s.card}>
                 <Text style={s.h2}>Your analysis for today</Text>
-                <Text style={s.hint}>Your numbers against what good looks like, your biggest gap, and three tips to fix it on the doors. One a day: best after your breakdown or before you plan tomorrow.</Text>
+                <Text style={s.hint}>Your numbers against what good looks like, what they show, your biggest gap, and three tips to help you get better on the doors. One a day: best after your breakdown or before you plan tomorrow.</Text>
                 <Pressable onPress={analyse} disabled={analysing || !left.analyse} style={[s.primary, (analysing || !left.analyse) && { opacity: 0.6 }]}
                   accessibilityRole="button" testID="ai-analyse">
                   {analysing ? <ActivityIndicator color={c.onPrimary} /> : <Text style={s.primaryText}>Analyse me</Text>}
@@ -223,6 +225,36 @@ export default function AiScreen() {
             ) : (
               <>
                 {!!a.headline && <View style={s.hero}><Text style={s.heroText}>{a.headline}</Text></View>}
+                {!!analysisQ.data?.numbers && (() => {
+                  const n = analysisQ.data!.numbers!;
+                  const tone = (you: number | null, good: number) => (you == null ? c.textMuted : you >= good ? c.green : you >= good * 0.85 ? (c.amber || c.text) : c.red);
+                  return (
+                    <View style={s.card} testID="ai-numbers">
+                      <Text style={s.label}>Your numbers · last {n.days} days in the field</Text>
+                      <View style={s.numHead}><Text style={[s.numCell, s.numName]} /><Text style={[s.numCell, s.small]}>You</Text><Text style={[s.numCell, s.small]}>Good</Text></View>
+                      {n.per_day.map((r) => (
+                        <View key={r.label} style={s.numRow}>
+                          <Text style={[s.numCell, s.numName, s.body]}>{r.label} a day</Text>
+                          <Text style={[s.numCell, s.numVal, { color: tone(r.you, r.good) }]}>{r.you}</Text>
+                          <Text style={[s.numCell, s.small]}>{r.label === 'Sign-ups' ? `${r.good}+` : r.good}</Text>
+                        </View>
+                      ))}
+                      {n.steps.map((r) => (
+                        <View key={r.label} style={s.numRow}>
+                          <Text style={[s.numCell, s.numName, s.body]}>{r.label}</Text>
+                          <Text style={[s.numCell, s.numVal, { color: tone(r.you, r.good) }]}>{r.you == null ? '–' : `${r.you}%`}</Text>
+                          <Text style={[s.numCell, s.small]}>{r.good}%</Text>
+                        </View>
+                      ))}
+                    </View>
+                  );
+                })()}
+                {!!a.findings?.length && (
+                  <View style={s.card}>
+                    <Text style={s.label}>What the numbers say</Text>
+                    {a.findings.map((x, i) => <Text key={i} style={s.bullet}>• {x}</Text>)}
+                  </View>
+                )}
                 {!!a.gap?.what && (
                   <View style={s.card}>
                     <Text style={s.label}>Biggest gap</Text>
@@ -380,6 +412,11 @@ const styles = (c: any) => StyleSheet.create({
   body: { fontFamily: fonts.body, fontSize: 15, lineHeight: 22, color: c.text },
   bold: { fontFamily: fonts.bodySemibold },
   bullet: { fontFamily: fonts.body, fontSize: 15, lineHeight: 22, color: c.text },
+  numHead: { flexDirection: 'row', alignItems: 'center', paddingTop: 4 },
+  numRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 5, borderTopWidth: 1, borderTopColor: c.border },
+  numCell: { width: 56, textAlign: 'right' },
+  numName: { flex: 1, width: undefined, textAlign: 'left' },
+  numVal: { fontFamily: fonts.bodyBold, fontSize: 15 },
   gapTitle: { fontFamily: fonts.display, fontSize: 19, color: c.text },
   tipRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', paddingVertical: 2 },
   tipNum: { width: 24, height: 24, borderRadius: 8, backgroundColor: c.primary, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
