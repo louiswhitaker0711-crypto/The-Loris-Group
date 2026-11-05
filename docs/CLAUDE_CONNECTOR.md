@@ -18,6 +18,7 @@ Admins can always make a personal link. Anyone else can once an Admin switches i
 | Tool | What it reads |
 | --- | --- |
 | `get_me` | Everything about the link's person in one go: their weeks, the office's weeks, their page, recent set-ups and breakdowns, this week's planner, their team's weeks, private coaching notes on the people they coach (never notes about themselves), latest quality |
+| `get_coaching` | The office's own coaching material on a topic (closing, hooklines, getting more pitches…), from the Coaching library, so Claude's sales advice carries your coaching |
 | `get_team` | People in the office: role, team, Coach, stage, start date, new-start day |
 | `get_bells_week` | One week's Bells: each day's status and Gold / Silver / The Round, goal, last week, traffic light, piece average, scoring, reliability, office totals |
 | `get_recent_weeks` | Each person's and the office's weekly totals over the last N weeks |
@@ -27,6 +28,8 @@ Admins can always make a personal link. Anyone else can once an Admin switches i
 | `get_quality` | Acwyre's weekly quality report per BA, against the targets |
 
 On a personal link, people outside what that person can see are left out (office totals still count everyone).
+
+Claude is also given the office's coaching playbook and answer style (`backend/core/sales_coaching.py`): for sales or coaching questions it reads your numbers, pulls your coaching, and answers with where you are, what to focus on, how to do it on the doors, what will happen, go and try it, and how you'll track it.
 
 ## What Claude can fill in
 

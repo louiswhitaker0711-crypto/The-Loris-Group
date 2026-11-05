@@ -31,6 +31,7 @@ from pymongo.errors import DuplicateKeyError
 from auth import get_current_user
 from core.ai_context import context_text, next_field_day, today_uk
 from core.brand import APP_NAME, BRITISH_ENGLISH, SELF_EMPLOYED_TERMS
+from core.sales_coaching import PLAYBOOK, RESPONSE_STYLE
 from core.llm_guard import acquire_llm_slot
 from core.llm_keys import llm_configured
 from core.rate_limit import take_ai_quota
@@ -75,7 +76,8 @@ ABOUT = (
     "base your tips on it. Don't compare them with the office's average or other people unless they ask. Never "
     "invent numbers that aren't in the data; if something is missing, say so. Don't invent Modern Milkman facts "
     "or prices. When coaching_notes_on_my_people says what someone is struggling with, use it when advising on "
-    "them. Short sentences, no waffle: it's read on a phone between doors. "
+    "them. Short sentences, no waffle: it's read on a phone between doors.\n\n"
+    + PLAYBOOK + "\n" + RESPONSE_STYLE + "\n"
     + BRITISH_ENGLISH + " " + SELF_EMPLOYED_TERMS
 )
 
@@ -205,9 +207,11 @@ async def chat(request: Request):
     conv = await _todays_chat(uid, create=True)
     history = (conv.get("messages") or [])[-2 * CHAT_HISTORY_TURNS:]
     transcript = "\n".join(f"{'Them' if m['role'] == 'user' else 'You'}: {m['text']}" for m in history)
+    material = await coaching_material(user, question)
     prompt = (
         await private_guidance(user)
         + f"What this person can see in the app (JSON):\n{await context_text(user)}\n\n"
+        + (f"The office's own coaching material that matches:\n{material}\n\n" if material else "")
         + (f"The conversation so far today:\n{transcript}\n\n" if transcript else "")
         + f"Their message: {question}\n\nReply to their message. If they ask for a plan, keep it practical "
           "and tell them they can tap 'Suggest my plan' to get it with Use this buttons."
@@ -228,7 +232,7 @@ async def chat(request: Request):
 
 # Bump when the analysis changes shape: an analysis made today in the old
 # shape can be done again once, without using up the day's allowance.
-ANALYSE_VERSION = 3
+ANALYSE_VERSION = 4
 
 ANALYSE_SHAPE = (
     'Reply with JSON only, in this shape, and keep to the word limits: '
@@ -239,13 +243,16 @@ ANALYSE_SHAPE = (
     '"change": {"what": "the ONE thing to change, as an action, max 8 words, e.g. \'Pitch more of the people you '
     'speak to\'", "now": "their number for it, e.g. \'24% (12 a day)\'", "need": "what good is, e.g. \'36% (25 a '
     'day)\'", "why": "why it is happening, from their own breakdowns, max 18 words"}, '
-    '"how": [{"step": "exactly what to say or do on the doors, max 25 words", "why": "what it fixes, max 10 '
-    'words"}] (exactly 3, in the order to try them), '
+    '"how": [{"step": "exactly what to do on the doors: the words, how to make the customer feel, tone of voice '
+    'or body language, max 28 words", "why": "that way… what happens with the customer, max 12 words"}] (exactly 3, '
+    'in the order to try them, from the office\'s coaching material where it fits), '
     '"result": "what will change if they do it, worked out from their own ratios, e.g. \'5 more pitched a day '
     'is about 1 more sign-up a day: 6 more a week\', max 25 words", '
     '"tomorrow": {"focus": "the change, max 8 words", "kpi_metric": one of "doors", "spoken", "pitched", '
     '"closes", "callbacks", "kpi_target": a number, "goal": sign-ups goal for tomorrow}, '
     '"this_week": {"weekly_goal": a realistic stretch number of sign-ups for this week, "why": "max 12 words"}, '
+    '"track": "how they will know it is working: the number to check at sector break and the early signs, e.g. '
+    '\'Pitched at 16:30: 12 or more. Early sign: more people let you finish the intro\', max 25 words", '
     '"keep_doing": "one thing they do well to keep doing, with its number, max 14 words", '
     '"team": "only if they have a team: who needs help with what, and what to do with them, max 30 words, else '
     'empty string"}'
@@ -280,8 +287,9 @@ async def numbers_vs_good(user: dict) -> dict | None:
     }
 
 
-async def coaching_material(user: dict) -> str:
-    """The Hub's own coaching content that matches their recent gaps, for tips."""
+async def coaching_material(user: dict, extra: str = "") -> str:
+    """The Hub's own coaching content that matches their question and recent
+    gaps, so the AI's advice carries the office's own coaching."""
     from core.ai_context import recent_sector_days
     from routes.coaching_assistant import _retrieve_impacts
     from routes.sector import GAP_LABELS
@@ -289,7 +297,7 @@ async def coaching_material(user: dict) -> str:
     for d in (await recent_sector_days(str(user["id"])))[-3:]:
         b = d.get("breakdown") or {}
         words += [GAP_LABELS.get(b.get("gap") or "", ""), b.get("change") or "", b.get("why") or ""]
-    query = " ".join(w for w in words if w) or "closing pitching speaking to more people"
+    query = " ".join(w for w in [extra] + words if w) or "closing pitching speaking to more people"
     try:
         found = await _retrieve_impacts(user, query, k=4)
     except Exception:

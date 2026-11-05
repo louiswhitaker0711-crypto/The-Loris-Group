@@ -243,3 +243,15 @@ def test_numbers_vs_good_are_the_apps_own_figures(monkeypatch):
     assert n["days"] == 12
     assert n["per_day"][0] == {"label": "Doors", "you": 86.5, "good": 120}
     assert n["steps"][1] == {"label": "Spoken to → Pitched", "you": 24, "good": 36}
+
+
+def test_coaching_playbook_reaches_both_ais_and_keeps_house_terms():
+    from core.sales_coaching import PLAYBOOK, RESPONSE_STYLE
+    import re
+    assert PLAYBOOK in ai.ABOUT and RESPONSE_STYLE in ai.ABOUT
+    assert RESPONSE_STYLE in cc.instructions() and PLAYBOOK in cc.instructions()
+    # Self-employed language, and the Owner's word for the step is "pitched".
+    for word in ("staff", "employee", "manager", "job", "donor", "presented"):
+        assert not re.search(rf"\b{word}", PLAYBOOK + RESPONSE_STYLE, re.I), word
+    names = {t["name"] for t in cc.tools_list()}
+    assert "get_coaching" in names and "get_coaching" not in cc.WRITE_TOOLS

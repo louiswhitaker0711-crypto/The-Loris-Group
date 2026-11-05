@@ -472,6 +472,22 @@ async def tool_set_bunny_hops(owner: dict, args: dict) -> dict:
     return await set_hops(owner, args.get("date"), args.get("hops") or [], leader)
 
 
+async def tool_get_coaching(owner: dict, args: dict) -> dict:
+    """The office's own coaching material on a topic (the Coaching library)."""
+    from routes.coaching_assistant import _retrieve_impacts
+    topic = str(args.get("topic") or "").strip()
+    if not topic:
+        raise ValueError("Say what the coaching is about, e.g. 'closing' or 'getting more pitches'.")
+    found = await _retrieve_impacts(owner, topic, k=6)
+    if not found:
+        return {"topic": topic, "message": "Nothing in the office's coaching library matches that yet.", "items": []}
+    return {"topic": topic, "items": [{
+        "title": d.get("title"), "stage": d.get("stage"),
+        "summary": " ".join(str(d.get("summary") or "").split())[:800],
+        "body": " ".join(str(d.get("body") or "").split())[:2500],
+        "key_points": (d.get("key_takeaways") or [])[:8]} for d in found]}
+
+
 def _box_names() -> str:
     from core.ai_actions import planner_boxes
     return ", ".join(planner_boxes().values())
@@ -516,6 +532,11 @@ TOOLS: dict[str, tuple] = {
                     "Acwyre's weekly quality report per BA (order value, drop days, The Round %, 4th week %, "
                     "fails) against the Owner's targets. Defaults to the latest uploaded week.",
                     {"week_ending": {"type": "string", "description": "YYYY-MM-DD. Optional."}}),
+    "get_coaching": (tool_get_coaching,
+                     "The office's own coaching material on a topic, from the Hub's Coaching library (e.g. "
+                     "'closing', 'hooklines', 'getting more pitches', 'objections'). Use it before giving sales "
+                     "advice so the advice carries the office's own coaching and terms.",
+                     {"topic": {"type": "string", "description": "What the coaching is about."}}),
     "get_me": (tool_get_me,
                "Everything about the person this connector belongs to, in one go: their weeks, the office's "
                "weeks to compare with, their page, recent set-ups and breakdowns, this week's planner, their "
@@ -568,7 +589,12 @@ INSTRUCTIONS = (
 
 
 def instructions() -> str:
-    return INSTRUCTIONS + _box_names() + "."
+    from core.sales_coaching import PLAYBOOK, RESPONSE_STYLE
+    return (INSTRUCTIONS + _box_names() + ".\n\n"
+            "When they ask for sales or coaching advice, coach to make them better, not just to inform: read their "
+            "numbers (get_me or get_person) and breakdowns, pull the office's coaching with get_coaching, and "
+            "answer in this shape. Measure against what good looks like, not the office average.\n\n"
+            + RESPONSE_STYLE + "\n" + PLAYBOOK)
 
 
 def _schema(props: dict) -> dict:
