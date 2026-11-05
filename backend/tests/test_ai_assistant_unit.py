@@ -213,6 +213,10 @@ def test_notes_live_until_sorted_and_reach_the_coach_ai_not_the_person(db, monke
     async def no_page(*_a, **_k):
         raise HTTPException(status_code=403)
     monkeypatch.setattr("routes.people.person_breakdown_for", no_page)
+
+    async def no_live(_u):
+        return {}
+    monkeypatch.setattr(ctx, "today_in_field", no_live)
     mine = _run(ctx.build_context({**ba, "name": "Alpha Example"}))
     assert "Rushes" not in json.dumps(mine, default=str)
     theirs = _run(ctx.build_context({**coach, "name": "Coach Example"}))
@@ -272,3 +276,33 @@ def test_the_ai_never_pushes_call_backs_and_reads_rehash_as_the_second_lap():
     from core.sales_coaching import PLAYBOOK, RESPONSE_STYLE
     assert '"callbacks"' not in ai.ANALYSE_SHAPE and '"callbacks"' not in ai.SETUP_SHAPE
     assert "second lap" in RESPONSE_STYLE and "Never suggest setting or making call backs" in PLAYBOOK
+
+
+def test_right_now_reads_todays_sector_goal_hops_and_sign_ups(db, monkeypatch):
+    import core.ai_context as ctx
+    import routes.sector as sector
+    monkeypatch.setattr(ctx, "db", db)
+    monkeypatch.setattr(sector, "db", db)
+    lead, a, b = ObjectId(), ObjectId(), ObjectId()
+    today = ctx.today_uk()
+    _run(db.users.insert_many([{"_id": lead, "name": "Leader Example"}, {"_id": a, "name": "Alpha Example"},
+                               {"_id": b, "name": "Beta Example"}]))
+    _run(db.sectors.insert_one({"office_id": "o1", "date": today.isoformat(), "leader_id": str(lead),
+                                "member_ids": [str(a), str(b)], "goal": 12, "postcode": "DN1 1",
+                                "hops": [{"colour": "red", "member_ids": [str(lead), str(a)]}]}))
+    days = [{} for _ in range(7)]
+    days[today.weekday()] = {"over30": 2, "under30": 1, "memberships": 2, "status": "in"}
+    _run(db.bells_entries.insert_one({"office_id": "o1", "week_ending": ctx.week_ending_of(today),
+                                      "user_id": str(a), "days": days}))
+    out = _run(ctx.today_in_field({"id": str(lead), "office_id": "o1"}))
+    sec = out["sector"]
+    assert sec["i_lead_it"] and sec["goal"] == 12 and sec["sign_ups_so_far"] == 3 and sec["still_needed"] == 9
+    assert sec["hops"] == [["Leader Example", "Alpha Example"]]
+    alpha = next(p for p in sec["people"] if p["name"] == "Alpha Example")
+    assert alpha["sign_ups_so_far"] == 3 and alpha["gold"] == 2
+
+
+def test_both_ais_are_told_to_be_a_big_coach():
+    from core.sales_coaching import BIG_COACH
+    assert BIG_COACH in ai.ABOUT and BIG_COACH in cc.instructions()
+    assert "right_now" in BIG_COACH and "no call backs" in BIG_COACH

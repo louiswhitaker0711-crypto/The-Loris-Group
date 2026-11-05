@@ -131,6 +131,59 @@ async def latest_quality(office_id: str, user_ids: set[str]) -> dict | None:
             "office_total": doc.get("total"), "people": mine}
 
 
+async def today_in_field(user: dict) -> dict:
+    """Right now: the time, how long's left in the field, and the sector this
+    person is in today (goal, hops, each person's set-up and sign-ups so far
+    from Bells), so the AI can coach live ("we're behind with 2 hours left")."""
+    from datetime import datetime as _dt
+    from routes.sector import _my_sector
+    now = _dt.now(APP_TZ)
+    d = now.date()
+    end_h, end_m = (17, 0) if d.weekday() == 5 else (20, 0)
+    start_h, start_m = (10, 0) if d.weekday() == 5 else (13, 30)
+    mins = now.hour * 60 + now.minute
+    out: dict = {"now": now.strftime("%H:%M"), "day": now.strftime("%A"),
+                 "field": f"{start_h:02d}:{start_m:02d}–{end_h:02d}:{end_m:02d}" if d.weekday() < 6 else "no field on Sundays",
+                 "minutes_left_in_field": max(0, end_h * 60 + end_m - mins) if d.weekday() < 6 and mins >= start_h * 60 + start_m else None,
+                 "sector": None}
+    sec = await _my_sector(str(user["id"]), d.isoformat())
+    if not sec:
+        return out
+    ids = [str(x) for x in [sec.get("leader_id")] + list(sec.get("member_ids") or []) if x]
+    ids = list(dict.fromkeys(ids))
+    names = {str(u["_id"]): u.get("name") async for u in db.users.find(
+        {"_id": {"$in": [ObjectId(i) for i in ids if ObjectId.is_valid(i)]}}, {"name": 1})}
+    week = week_ending_of(d)
+    today_idx = d.weekday()
+    signed: dict = {}
+    async for b in db.bells_entries.find({"office_id": user.get("office_id"), "week_ending": week, "user_id": {"$in": ids}},
+                                         {"_id": 0, "user_id": 1, "days": 1}):
+        day = (b.get("days") or [{}] * 7)[today_idx] if len(b.get("days") or []) > today_idx else {}
+        signed[str(b["user_id"])] = {"gold": day.get("over30") or 0, "silver": day.get("under30") or 0,
+                                     "the_round": day.get("memberships") or 0, "status": day.get("status")}
+    setups = {sd["user_id"]: sd async for sd in db.sector_days.find(
+        {"user_id": {"$in": ids}, "date": d.isoformat()}, {"_id": 0, "user_id": 1, "setup": 1, "breakdown": 1})}
+    shadows = {str(m) for h in sec.get("hops") or [] for m in (h.get("shadow_ids") or [])}
+    people = []
+    for i in ids:
+        su = (setups.get(i) or {}).get("setup") or {}
+        sg = signed.get(i) or {}
+        people.append({"name": names.get(i) or "?", "leader": i == str(sec.get("leader_id")), "shadow": i in shadows,
+                       "goal": su.get("goal"), "focus": su.get("focus"), "kpi": (f"{su.get('kpi_target')} {su.get('kpi_metric')}"
+                                                                                  if su.get("kpi_metric") else None),
+                       "sign_ups_so_far": (sg.get("gold") or 0) + (sg.get("silver") or 0) if sg else None,
+                       "gold": sg.get("gold"), "the_round": sg.get("the_round")})
+    hops = [[names.get(str(m)) or "?" for m in h.get("member_ids") or []] for h in sec.get("hops") or []]
+    total = sum(p["sign_ups_so_far"] or 0 for p in people)
+    out["sector"] = {"postcode": sec.get("postcode"), "leader": names.get(str(sec.get("leader_id"))),
+                     "i_lead_it": str(sec.get("leader_id")) == str(user["id"]), "goal": sec.get("goal"),
+                     "sign_ups_so_far": total,
+                     "still_needed": max(0, int(sec["goal"]) - total) if isinstance(sec.get("goal"), (int, float)) else None,
+                     "hops": hops, "people": people,
+                     "note": "Sign-ups so far are what's on Bells for today; the field may be ahead of what's been typed in."}
+    return out
+
+
 def _fit(ctx: dict) -> str:
     """JSON, trimmed to the cap: the team block shrinks first, then sectors."""
     text = json.dumps(ctx, ensure_ascii=False, default=str)
@@ -183,9 +236,15 @@ async def build_context(user: dict) -> dict:
     notes = await live_notes(allowed)
     coaching_notes = [{"name": names[i], "notes": n} for i, n in notes.items() if i in names]
 
+    try:
+        live = await today_in_field(user)
+    except Exception:
+        live = None
+
     from core.brand import role_label
     return {
         "today": today.isoformat(), "weekday": today.strftime("%A"),
+        "right_now": live,
         "next_field_day": next_field_day(today).isoformat(),
         "me": {"name": user.get("name"), "role": role_label(user.get("role")),
                "sees": "the whole office" if whole else ("my team" if team_ids else "only myself")},
