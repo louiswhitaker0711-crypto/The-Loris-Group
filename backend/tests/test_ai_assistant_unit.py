@@ -398,3 +398,4 @@ def test_coaching_fits_the_persons_stage():
     from core.sales_coaching import BIG_COACH
     assert "COACH THEM FOR THEIR STAGE" in BIG_COACH and "never suggest demonstrating" in BIG_COACH
     assert "each on their own doors" in BIG_COACH
+    assert "show them an example once or twice" in BIG_COACH and "a retrain" in BIG_COACH
