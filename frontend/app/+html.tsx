@@ -29,7 +29,7 @@ export default function Root({ children }: PropsWithChildren) {
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="TheLorisHub" />
-        <link rel="apple-touch-icon" href="/icons/apple-touch-180.png" />
+        <link rel="apple-touch-icon" href="/icons/apple-touch-180.png?v=2" />
         {/*
           Disable body scrolling on web to make ScrollView components work correctly.
           If you want to enable scrolling, remove `ScrollViewStyleReset` and
