@@ -41,14 +41,6 @@ const better = (key: string, now?: number | null, before?: number | null) =>
   now == null || before == null || now === before ? 0 : (key === 'fail_rate' ? (now < before ? 1 : -1) : (now > before ? 1 : -1));
 
 const ukDate = (iso: string) => { const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}`; };
-// Each quality week lines up with the 4th week 8 weeks before it: those
-// customers' 4th delivery report comes in with that week's quality report.
-const addDays = (iso: string, n: number) => {
-  const [y, m, d] = iso.split('-').map(Number);
-  const t = new Date(Date.UTC(y, m - 1, d + n));
-  return `${t.getUTCFullYear()}-${String(t.getUTCMonth() + 1).padStart(2, '0')}-${String(t.getUTCDate()).padStart(2, '0')}`;
-};
-const FOURTH_WEEK_LAG = 56;
 const shortWeek = (iso: string) => {
   const [y, m, d] = iso.split('-').map(Number);
   return `WE ${d} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][m - 1]} ${y}`;
@@ -221,11 +213,9 @@ export default function QualityScreen() {
           ) : (() => {
             // Two rows in columns: each quality week, with the 4th week 8
             // weeks before it underneath (the Owner, 4 Nov 2026).
-            const qList: string[] = (d.quality_weeks || []).map((w: any) => String(w.week_ending));
-            const fList: string[] = (d.fourth_weeks || []).map((w: any) => String(w.week_ending));
-            const qw = new Set<string>(qList);
-            const fw = new Set<string>(fList);
-            const cols = Array.from(new Set<string>(qList.concat(fList.map((f) => addDays(f, FOURTH_WEEK_LAG))))).sort().reverse();
+            // The server pairs them: the 4th week that came in the same PDF,
+            // else 8 weeks before (the Owner, 10 Nov 2026).
+            const pairs: { quality: string | null; fourth: string | null }[] = d.pairs || [];
             const pre = d.view === 'week' ? '' : 'To ';
             const on = (k: string, w: string) => d.kind === k && d.week_ending === w;
             return (
@@ -235,17 +225,14 @@ export default function QualityScreen() {
                   <Text style={s.pairLabel}>4th weeks</Text>
                 </View>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.weeks}>
-                  {cols.map((q) => {
-                    const f = addDays(q, -FOURTH_WEEK_LAG);
-                    return (
-                      <View key={q} style={s.pairCol}>
-                        {qw.has(q) ? chip(`q-${q}`, `${pre}${shortWeek(q)}`, on('quality', q), () => { setKind('quality'); setWeek(q); setOpen(null); })
-                          : <View style={[s.chip, s.chipEmpty]}><Text style={[s.chipText, { color: c.textMuted }]}>{shortWeek(q)}</Text></View>}
-                        {fw.has(f) ? chip(`f-${f}`, `${pre}${shortWeek(f)}`, on('fourth', f), () => { setKind('fourth'); setWeek(f); setOpen(null); })
-                          : <View style={[s.chip, s.chipEmpty]}><Text style={[s.chipText, { color: c.textMuted }]}>–</Text></View>}
-                      </View>
-                    );
-                  })}
+                  {pairs.map(({ quality: q, fourth: f }) => (
+                    <View key={`${q || ''}-${f || ''}`} style={s.pairCol}>
+                      {q ? chip(`q-${q}`, `${pre}${shortWeek(q)}`, on('quality', q), () => { setKind('quality'); setWeek(q); setOpen(null); })
+                        : <View style={[s.chip, s.chipEmpty]}><Text style={[s.chipText, { color: c.textMuted }]}>–</Text></View>}
+                      {f ? chip(`f-${f}`, `${pre}${shortWeek(f)}`, on('fourth', f), () => { setKind('fourth'); setWeek(f); setOpen(null); })
+                        : <View style={[s.chip, s.chipEmpty]}><Text style={[s.chipText, { color: c.textMuted }]}>–</Text></View>}
+                    </View>
+                  ))}
                 </ScrollView>
               </View>
             );

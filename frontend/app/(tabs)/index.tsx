@@ -553,7 +553,6 @@ export default function HomeScreen() {
   // sector" already sit on Home at those times. No Notes either: notes are
   // written in the Planner (the Owner, 29 Oct 2026).
   const PLANNER = A('Planner', 'Plans and notes', 'calendar-number-outline', '/weekly-planner', 'green');
-  const LIBRARY = A('Library', 'Scripts and the playbook', 'library-outline', '/library', 'yellow');
   const COD = A('COD', 'This week\u2019s focus', 'trending-up-outline', '/(tabs)/progress', 'accent');
   const BELLS_A = A('Bells', 'The weekly board', 'notifications-outline', BELLS, 'yellow');
   const TOMORROW = A('Tomorrow\u2019s plan', 'Set it up tonight', 'calendar-number-outline', '/weekly-planner', 'accent');
@@ -564,9 +563,10 @@ export default function HomeScreen() {
   // Coaches and Admins: Pitch · Planner · Bells · Quality (the Owner, 10 Nov
   // 2026: Quality had no way in except a card the week a report landed; COD
   // is on the side menu).
-  const QUALITY = A('Quality', 'Upload and see quality', 'shield-checkmark-outline', '/quality', 'accent');
+  const QUALITY = A('Quality', isTrainee ? 'Your quality' : 'Upload and see quality', 'shield-checkmark-outline', '/quality', 'accent');
   const coachFour = [PITCH, PLANNER, BELLS_A, QUALITY];
-  const baFour = [PITCH, COD, PLANNER, LIBRARY];
+  // BAs: Pitch · Planner · COD · Quality (the Owner, 10 Nov 2026; Library is on the side menu).
+  const baFour = [PITCH, PLANNER, COD, QUALITY];
   const coachActions: Record<HomeSlot, QuickAction[]> = { morning: coachFour, prime: coachFour, setup: coachFour, field: coachFour, evening: coachFour, sunday: coachFour };
   const baActions: Record<HomeSlot, QuickAction[]> = { morning: baFour, prime: baFour, setup: baFour, field: baFour, evening: baFour, sunday: baFour };
   const quickActions: QuickAction[] = (isTrainee ? baActions : coachActions)[slot];

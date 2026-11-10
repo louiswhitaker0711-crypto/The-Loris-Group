@@ -307,6 +307,11 @@ async def import_quality(request: Request):
         if fw_week and fw_week == (fw_from or fw_week):
             got, _ = await _save_week(admin, office_id, users, fw_week, fw.get("rows"), fw.get("total"))
             fourth_saved = fw_week if got else None
+            if fourth_saved:
+                # The quality week shows the 4th week that came in its PDF
+                # alongside it (the Owner, 10 Nov 2026).
+                await db.quality_weeks.update_one({"office_id": office_id, "week_ending": week},
+                                                  {"$set": {"fourth_week_paired": fw_week}})
     try:
         await relink_saved(office_id, users)
     except Exception as ex:  # linking older weeks must never stop a save
@@ -378,8 +383,15 @@ async def get_quality(request: Request, view: str = "week", week: Optional[str] 
     view = view if view in {v for v, _ in VIEWS} else "week"
     kind = "fourth" if kind == "fourth" else "quality"
     q_weeks, f_weeks = [], []
-    async for d in db.quality_weeks.find({"office_id": office_id}, {"week_ending": 1, "total": 1, "bas.metrics": 1}
+    paired: dict[str, str] = {}
+    stamps: dict[str, str] = {}
+    async for d in db.quality_weeks.find({"office_id": office_id},
+                                         {"week_ending": 1, "total": 1, "bas.metrics": 1, "fourth_week_paired": 1, "imported_at": 1}
                                          ).sort("week_ending", -1).limit(156):
+        if d.get("fourth_week_paired"):
+            paired[d["week_ending"]] = d["fourth_week_paired"]
+        if d.get("imported_at"):
+            stamps[d["week_ending"]] = str(d["imported_at"])
         keys = set((d.get("total") or {}).keys())
         for b in d.get("bas") or []:
             keys |= set((b.get("metrics") or {}).keys())
@@ -388,6 +400,7 @@ async def get_quality(request: Request, view: str = "week", week: Optional[str] 
         if "fourth_week" in keys:
             f_weeks.append(d["week_ending"])
     weeks = f_weeks if kind == "fourth" else q_weeks
+    pairs = _pair_weeks(q_weeks, f_weeks, paired, stamps)
 
     def keep(m: dict | None) -> dict:
         """Only this kind's numbers: 4th week, or everything else."""
@@ -398,6 +411,7 @@ async def get_quality(request: Request, view: str = "week", week: Optional[str] 
             "weeks": [{"week_ending": w, "label": week_label(w)} for w in weeks],
             "quality_weeks": [{"week_ending": w, "label": week_label(w)} for w in q_weeks],
             "fourth_weeks": [{"week_ending": w, "label": week_label(w)} for w in f_weeks],
+            "pairs": pairs,
             "months": [{"month": m, "label": month_label(m)} for m in sorted({w[:7] for w in weeks}, reverse=True)],
             "views": [{"key": k, "label": label} for k, label in VIEWS], "view": view,
             "measures": [{"key": k, "label": label, "target": (TARGETS.get(k) or {}).get("text")} for k, label in measures]}
@@ -558,6 +572,45 @@ async def get_quality(request: Request, view: str = "week", week: Optional[str] 
             # older screens read these two
             "total": box["metrics"] if box and box["kind"] == "office" else None,
             "total_history": box.get("history") if box and box["kind"] == "office" else None}
+
+
+def _pair_weeks(q_weeks: list[str], f_weeks: list[str], paired: dict, stamps: dict) -> list[dict]:
+    """Each quality week with the 4th week shown under it (the Owner, 10 Nov
+    2026): the 4th week that came in the same PDF (`fourth_week_paired`, or,
+    for uploads from before that was saved, a 4th week saved within a minute
+    of it); otherwise the week 8 weeks before, if that one isn't already
+    paired. 4th weeks left over get a column of their own. Newest first."""
+    from datetime import date, datetime as _dt, timedelta as _td
+    fset = set(f_weeks)
+
+    def when(w):
+        try:
+            return _dt.fromisoformat(stamps[w].replace("Z", "+00:00"))
+        except (KeyError, ValueError):
+            return None
+
+    link: dict[str, str] = {q: f for q, f in paired.items() if q in q_weeks and f in fset}
+    for q in q_weeks:
+        if q in link or not when(q):
+            continue
+        near = [f for f in f_weeks if f != q and f not in link.values() and when(f)
+                and abs((when(f) - when(q)).total_seconds()) < 60]
+        if len(near) == 1:
+            link[q] = near[0]
+    used = set(link.values())
+    for q in q_weeks:
+        if q not in link:
+            f = (date.fromisoformat(q) - _td(days=56)).isoformat()
+            if f in fset and f not in used:
+                link[q] = f
+                used.add(f)
+    cols = [{"quality": q, "fourth": link.get(q)} for q in q_weeks]
+    cols += [{"quality": None, "fourth": f, "_at": (date.fromisoformat(f) + _td(days=56)).isoformat()}
+             for f in f_weeks if f not in used]
+    cols.sort(key=lambda c: c.get("quality") or c["_at"], reverse=True)
+    for c in cols:
+        c.pop("_at", None)
+    return cols
 
 
 def _sum_reasons(weeks: list[list]) -> list[dict]:
