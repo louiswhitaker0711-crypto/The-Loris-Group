@@ -648,7 +648,9 @@ function BulletinPreview({ img, onClose }: { img: CapturedImage & { title: strin
     try { window.open('https://web.whatsapp.com/', '_blank', 'noopener'); } catch { /* ignore */ }
   };
   const share = async () => {
-    try { await nav.share({ files: [img.file], title: img.title, text: img.title }); } catch { /* cancelled */ }
+    // The picture only: with a caption as well, the Mac's share menu sends
+    // the caption and drops the picture (the Owner, 10 Nov 2026).
+    try { await nav.share({ files: [img.file] }); } catch { /* cancelled */ }
   };
   const download = () => {
     const a = document.createElement('a');

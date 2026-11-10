@@ -104,7 +104,8 @@ function isMobileLike(): boolean {
   } catch { return false; }
 }
 function shouldExportImage(): boolean {
-  return isStandalonePwa() || isMobileLike();
+  // A laptop prints for real even when the Hub is installed as an app.
+  return (isStandalonePwa() || isMobileLike()) && !isDesktopWeb();
 }
 
 export type CapturedImage = { dataUrl: string; file: File; blob: Blob; filename: string };
@@ -112,7 +113,14 @@ export type CapturedImage = { dataUrl: string; file: File; blob: Blob; filename:
 /** True on a laptop/desktop browser (not the installed app, not a phone):
  *  there the bulletin opens a preview with its own share buttons. */
 export function isDesktopWeb(): boolean {
-  return Platform.OS === 'web' && typeof window !== 'undefined' && !shouldExportImage();
+  // By the device, not by how the Hub was opened: the Hub installed as an
+  // app on a Mac is still a laptop (the Owner, 10 Nov 2026: the Mac's share
+  // menu dropped the picture and sent only the caption). Phones, and iPads
+  // (which call themselves a Mac but have a touch screen), aren't.
+  if (Platform.OS !== 'web' || typeof navigator === 'undefined') return false;
+  if (/iphone|ipad|ipod|android|mobile/i.test(navigator.userAgent || '')) return false;
+  if ((navigator as any).maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent || '')) return false;
+  return /Macintosh|Windows|Linux|CrOS/i.test(navigator.userAgent || '');
 }
 
 /** The document as a PNG picture, without sharing or downloading it. */
