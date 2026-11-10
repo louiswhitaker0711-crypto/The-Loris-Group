@@ -645,7 +645,18 @@ function BulletinPreview({ img, onClose }: { img: CapturedImage & { title: strin
     } catch {
       toast.error('Couldn’t copy the picture here. Use Download, then drag it into WhatsApp.');
     }
-    try { window.open('https://web.whatsapp.com/', '_blank', 'noopener'); } catch { /* ignore */ }
+    // The WhatsApp app on the laptop (the Owner, 10 Nov 2026); WhatsApp Web
+    // only if the app doesn't open (nothing takes the focus away).
+    let left = false;
+    const away = () => { left = true; };
+    window.addEventListener('blur', away);
+    document.addEventListener('visibilitychange', away);
+    try { window.location.href = 'whatsapp://send'; } catch { /* ignore */ }
+    setTimeout(() => {
+      window.removeEventListener('blur', away);
+      document.removeEventListener('visibilitychange', away);
+      if (!left) { try { window.open('https://web.whatsapp.com/', '_blank', 'noopener'); } catch { /* ignore */ } }
+    }, 2500);
   };
   const share = async () => {
     // The picture only: with a caption as well, the Mac's share menu sends
