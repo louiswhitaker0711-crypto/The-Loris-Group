@@ -26,6 +26,7 @@ import { useParallaxScroll } from '../src/components/ui/Parallax';
 import { usePullToRefresh } from '../src/components/ui/PullRefresh';
 import { BrandLoader } from '../src/components/ui/BrandLoader';
 import OfficeToggle from '../src/components/ui/OfficeToggle';
+import ScorecardCard from '../src/components/review/ScorecardCard';
 import { useActiveOffice } from '../src/office/ActiveOfficeContext';
 import { useAuth } from '../src/auth/AuthContext';
 import { apiService, OfficeReviewLeader, OfficeReviewPerson, OfficeWeeklyReview } from '../src/api/client';
@@ -148,6 +149,9 @@ export default function WeeklyReviewScreen() {
           </View>
         ) : !d ? null : (
           <>
+            {/* Your best people: the scorecard and a short AI paragraph (the Owner, 10 Nov 2026). */}
+            <ScorecardCard week={d.review_week_ending} />
+
             {/* ── 1 · Last week, as an office ───────────────────────────── */}
             <SectionHead n={1} icon="stats-chart" title="Last week, as an office" colors={colors} s={s} />
             <ScrollReveal scrollY={scrollY}>
