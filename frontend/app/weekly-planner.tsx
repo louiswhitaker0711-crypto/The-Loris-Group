@@ -72,8 +72,7 @@ const EIGHT_STEPS = [
 // meetings, self-review, focus).
 const WIZARD_STEPS: { title: string; hint: string }[] = [
   { title: 'Review last week', hint: 'The numbers are pulled in for you — add your wins and what you learned.' },
-  { title: "This week's goals", hint: 'Team & personal sign-up targets, P/A and scoring — they sync straight to Bells.' },
-  { title: 'Crew schedules & goals', hint: "Their days come in from Field IQ. Give everyone a goal and fix any day that's wrong." },
+  { title: 'Goals & crew', hint: "Your sign-up targets, P/A and scoring, then everyone's days and goals. They sync straight to Bells." },
   { title: 'Meetings & recruitment', hint: 'Plan the meetings, calls, education and recruitment goals for the week.' },
   { title: 'Self review', hint: '8 Steps, your own development, and who you are developing.' },
   { title: 'Focus & finish', hint: "Set this week's focuses and the bigger picture — then share the plan." },
@@ -376,7 +375,7 @@ export default function WeeklyPlannerScreen() {
     return planTarget.dayIndex;
   });
   // Step-by-step "Plan the week" wizard — null = classic list view,
-  // 0..5 = the active step. Same data & autosave, just guided.
+  // 0..4 = the active step. Same data & autosave, just guided.
   const [wizard, setWizard] = useState<number | null>(null);
 
   const q = useQuery({
@@ -849,15 +848,28 @@ export default function WeeklyPlannerScreen() {
   // one step's worth in wizard mode) + per-step completion for the nudges.
   const wizStep = (i: number) => wizard === null || wizard === i;
   const crewList = (statsQ.data?.crew || []) as any[];
+  // Goals and crew are one step (the Owner, 8 Nov 2026).
   const stepDone: boolean[] = [
     r.wins.length > 0,
-    goalTeam.trim() !== '' && goalPersonal.trim() !== '',
-    crewList.length > 0 && crewList.every((m) => m.goal != null),
+    goalTeam.trim() !== '' && goalPersonal.trim() !== ''
+      && crewList.every((m) => m.goal != null),
     r.team_management.meetings.trim() !== '',
     Object.values(r.eight_steps.scores || {}).some((v) => (v || 0) > 0),
     r.focus_next_week.length > 0,
   ];
   const wizDoneCount = stepDone.filter(Boolean).length;
+  const WIZ_N = WIZARD_STEPS.length;
+  const WIZ_LAST = WIZ_N - 1;
+  // Days worked this week, everyone's own and the crew's, from the schedules
+  // (the Owner, 8 Nov 2026): a day counts unless it's Scheduled off, In
+  // office, No show or a shadow day. An unfilled day counts as in.
+  const OFF_FIELD = new Set(['ab', 'pc', 'ns', 'sd']);
+  const daysOf = (m: any) => (m.day_statuses || []).filter((d: string) => !OFF_FIELD.has(d)).length;
+  const daysWorked = crewList.reduce((n, m) => n + daysOf(m), 0);
+  const myId = String(targetUserId || user?.id || '');
+  const myDays = crewList.filter((m) => String(m.user_id) === myId).reduce((n, m) => n + daysOf(m), 0);
+  const paNum = parseFloat(String(r.next_goals.piece_avg || '').replace(',', '.'));
+  const paTotal = Number.isFinite(paNum) && paNum > 0 && daysWorked > 0 ? Math.round(paNum * daysWorked) : null;
 
   return (
     <View style={{ flex: 1 }}>
@@ -963,14 +975,14 @@ export default function WeeklyPlannerScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.wizCtaTitle}>
                     {wizDoneCount === 0 ? 'Plan your week — step by step'
-                      : wizDoneCount >= 6 ? 'Week fully planned 💪'
-                      : `Continue planning — ${wizDoneCount}/6 steps done`}
+                      : wizDoneCount >= WIZ_N ? 'Week fully planned 💪'
+                      : `Continue planning — ${wizDoneCount}/${WIZ_N} steps done`}
                   </Text>
                   <Text style={styles.wizCtaSub}>
-                    {wizDoneCount >= 6 ? 'Revisit any step or share the plan' : 'Goals · crew schedules & absences · meetings · focus'}
+                    {wizDoneCount >= WIZ_N ? 'Revisit any step or share the plan' : 'Goals & crew · meetings · focus'}
                   </Text>
                 </View>
-                <View style={styles.wizCtaProgress}><Text style={styles.wizCtaProgressText}>{wizDoneCount}/6</Text></View>
+                <View style={styles.wizCtaProgress}><Text style={styles.wizCtaProgressText}>{wizDoneCount}/{WIZ_N}</Text></View>
               </PressableScale>
               </Breathe>
             )}
@@ -978,7 +990,7 @@ export default function WeeklyPlannerScreen() {
               <>
                 <View style={styles.wizHeader}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.wizStepNum}>STEP {wizard + 1} OF 6</Text>
+                    <Text style={styles.wizStepNum}>STEP {wizard + 1} OF {WIZ_N}</Text>
                     <Text style={styles.wizTitle}>{WIZARD_STEPS[wizard].title}</Text>
                     <Text style={styles.wizHint}>{WIZARD_STEPS[wizard].hint}</Text>
                   </View>
@@ -1115,6 +1127,24 @@ export default function WeeklyPlannerScreen() {
                 <SmallField label="Scoring" value={r.next_goals.scoring} editable={canEdit} flex={1}
                   onChange={(v) => setReview({ next_goals: { ...r.next_goals, scoring: v } })} placeholder="Target scoring %" />
               </View>
+              {/* Days worked from the schedules, and what the P/A comes to
+                  (the Owner, 8 Nov 2026): tap the line to fill the sign-up goal. */}
+              {crewList.length > 0 && (
+                <Text style={styles.crewHint} testID="planner-days-worked">
+                  {`Days worked this week: ${daysWorked}${myDays ? ` (${myDays} yours)` : ''}`}
+                </Text>
+              )}
+              {paTotal != null && (
+                <TouchableOpacity disabled={!canEdit} onPress={() => onGoalChange('team', String(paTotal))}
+                  style={styles.paLine} activeOpacity={0.7} testID="planner-pa-total"
+                  accessibilityRole="button" accessibilityLabel={`Use ${paTotal} as the ${planForAdmin ? 'office' : 'team'} sign-up goal`}>
+                  <Ionicons name="calculator-outline" size={14} color={colors.primary} />
+                  <Text style={styles.paLineText}>
+                    {`${r.next_goals.piece_avg} P/A would be ${paTotal} ${planForAdmin ? 'office' : 'team'} total`}
+                    {goalTeam.trim() === String(paTotal) ? ' ✓' : canEdit ? ' · tap to use' : ''}
+                  </Text>
+                </TouchableOpacity>
+              )}
               <Text style={styles.crewHint}>
                 {planForAdmin
                   ? 'Sign-up goals sync with your Bells row — office sign-ups also sets the office goal'
@@ -1128,11 +1158,6 @@ export default function WeeklyPlannerScreen() {
               </View>
             </Card>
 
-            
-              </>
-            )}
-            {wizStep(2) && (
-              <>
             {/* 👥 Crew — tap a person to set their schedule + weekly goal
                 (written to their bells row for the week being planned).
                 LOCKED for leaders after Monday 10:30 AM of that week —
@@ -1213,7 +1238,7 @@ export default function WeeklyPlannerScreen() {
             
               </>
             )}
-            {wizStep(3) && (
+            {wizStep(2) && (
               <>
             {/* 🤝 Team coaching */}
             <Card icon="calendar-outline" title="Team Coaching">
@@ -1255,7 +1280,7 @@ export default function WeeklyPlannerScreen() {
             
               </>
             )}
-            {wizStep(4) && (
+            {wizStep(3) && (
               <>
             {/* 🧩 8 Steps */}
             <Card icon="extension-puzzle-outline" title="8 Steps Review (Personal)">
@@ -1321,7 +1346,7 @@ export default function WeeklyPlannerScreen() {
             
               </>
             )}
-            {wizStep(5) && (
+            {wizStep(4) && (
               <>
             {/* 🎯 Goals — this week's focuses + the bigger picture */}
             <Card icon="golf-outline" title="Goals">
@@ -1354,14 +1379,14 @@ export default function WeeklyPlannerScreen() {
                 <PressableScale
                   style={styles.wizNext}
                   onPress={() => {
-                    if (wizard < 5) setWizard(wizard + 1);
-                    else { setWizard(null); toast.success(wizDoneCount >= 6 ? 'Week fully planned 💪' : 'Plan saved — finish the open steps any time'); }
+                    if (wizard < WIZ_LAST) setWizard(wizard + 1);
+                    else { setWizard(null); toast.success(wizDoneCount >= WIZ_N ? 'Week fully planned 💪' : 'Plan saved — finish the open steps any time'); }
                   }}
                 >
                   <Text style={styles.wizNextText}>
-                    {wizard < 5 ? (stepDone[wizard] ? 'Next step' : 'Skip for now') : 'Finish'}
+                    {wizard < WIZ_LAST ? (stepDone[wizard] ? 'Next step' : 'Skip for now') : 'Finish'}
                   </Text>
-                  <Ionicons name={wizard < 5 ? 'arrow-forward' : 'checkmark'} size={16} color={colors.onPrimary} />
+                  <Ionicons name={wizard < WIZ_LAST ? 'arrow-forward' : 'checkmark'} size={16} color={colors.onPrimary} />
                 </PressableScale>
               </View>
             )}
@@ -2024,6 +2049,8 @@ const createStyles = (colors: any) => StyleSheet.create({
   memberName: { fontFamily: fonts.bodySemibold, fontSize: 13, fontWeight: '700', color: colors.text },
   memberMeta: { fontFamily: fonts.mono, fontSize: 10, fontWeight: '700', color: colors.textMuted, marginTop: 1 },
   crewHint: { fontFamily: fonts.body, fontSize: 11, color: colors.textMuted, fontStyle: 'italic', marginBottom: 6 },
+  paLine: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingVertical: 7, paddingHorizontal: 10, borderRadius: 10, borderWidth: 1, borderColor: colors.border, marginBottom: 8 },
+  paLineText: { fontFamily: fonts.bodySemibold, fontSize: 12.5, color: colors.primary },
   dayDots: { flexDirection: 'row', gap: 2 },
   dayDot: { width: 17, height: 17, borderRadius: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border },
   dayDotOn: { backgroundColor: colors.primary, borderColor: colors.primary },
