@@ -561,7 +561,11 @@ export default function HomeScreen() {
   // The same four all day (the Owner, 29 Oct 2026): the Pitch tile replaces
   // the thin pitch bar. BAs get Library in place of Bells.
   const PITCH = A('Pitch', 'Read it before the next door', 'mic-outline', '/pitch', 'primary');
-  const coachFour = [PITCH, BELLS_A, COD, PLANNER];
+  // Coaches and Admins: Pitch · Planner · Bells · Quality (the Owner, 10 Nov
+  // 2026: Quality had no way in except a card the week a report landed; COD
+  // is on the side menu).
+  const QUALITY = A('Quality', 'Upload and see quality', 'shield-checkmark-outline', '/quality', 'accent');
+  const coachFour = [PITCH, PLANNER, BELLS_A, QUALITY];
   const baFour = [PITCH, COD, PLANNER, LIBRARY];
   const coachActions: Record<HomeSlot, QuickAction[]> = { morning: coachFour, prime: coachFour, setup: coachFour, field: coachFour, evening: coachFour, sunday: coachFour };
   const baActions: Record<HomeSlot, QuickAction[]> = { morning: baFour, prime: baFour, setup: baFour, field: baFour, evening: baFour, sunday: baFour };

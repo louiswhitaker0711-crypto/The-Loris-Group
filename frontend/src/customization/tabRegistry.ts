@@ -39,8 +39,8 @@ export type TabItem = {
 // own item still exists, in one of these:
 //   Performance Hub → Bells (Bells | Spider); the BAs list → tap a name on Bells;
 //   Coaching library + Manual + Campaign Knowledge → Library; Coaching's
-//   The Cycle and My Progress → COD; Quality → a Home card when the week's
-//   report lands; Earnings + breakeven → Profile; Territory → Admin › Office
+//   The Cycle and My Progress → COD; Quality → a Home quick action for Coaches and
+//   Admins (and a card when the week's report lands); Earnings + breakeven → Profile; Territory → Admin › Office
 //   tools; Schedule opens from Profile (everyone knows the timetable).
 export const TAB_REGISTRY: TabItem[] = [
   {
