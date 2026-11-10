@@ -459,16 +459,14 @@ def test_fails_and_sign_ups_worked_out_exactly_from_the_fail_rate():
     assert (team["fails"], team["sales"], team["fail_rate"]) == (1, 11, 9.09)
 
 
-def test_quality_weeks_pair_with_the_4th_week_from_the_same_pdf():
-    """WE 1 Nov's PDF carried the 4th week for WE 9 Aug: that sits under it,
-    and the 8-week rule only fills the rest (the Owner, 10 Nov 2026)."""
+def test_quality_weeks_pair_with_the_4th_week_8_weeks_before():
+    """Always 8 weeks, whatever 4th week came in the same PDF (the Owner, 10 Nov 2026)."""
     from routes.quality import _pair_weeks
     q = ["2026-11-01", "2026-10-25", "2026-10-04"]
     f = ["2026-08-30", "2026-08-09", "2026-07-26"]
     stamps = {"2026-11-01": "2026-11-10T15:08:44.6+00:00", "2026-08-09": "2026-11-10T15:08:44.7+00:00"}
     cols = _pair_weeks(q, f, {}, stamps)
-    assert cols[0] == {"quality": "2026-11-01", "fourth": "2026-08-09"}
-    assert {"quality": "2026-10-25", "fourth": "2026-08-30"} in cols       # 8 weeks before
-    assert {"quality": "2026-10-04", "fourth": None} in cols               # 9 Aug is taken
+    assert cols[0] == {"quality": "2026-11-01", "fourth": None}            # WE 6 Sep isn't in yet
+    assert {"quality": "2026-10-25", "fourth": "2026-08-30"} in cols
+    assert {"quality": "2026-10-04", "fourth": "2026-08-09"} in cols
     assert {"quality": None, "fourth": "2026-07-26"} in cols               # left over: its own column
-    assert _pair_weeks(q, f, {"2026-10-25": "2026-07-26"}, {})[1] == {"quality": "2026-10-25", "fourth": "2026-07-26"}

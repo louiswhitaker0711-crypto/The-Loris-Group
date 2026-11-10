@@ -307,11 +307,6 @@ async def import_quality(request: Request):
         if fw_week and fw_week == (fw_from or fw_week):
             got, _ = await _save_week(admin, office_id, users, fw_week, fw.get("rows"), fw.get("total"))
             fourth_saved = fw_week if got else None
-            if fourth_saved:
-                # The quality week shows the 4th week that came in its PDF
-                # alongside it (the Owner, 10 Nov 2026).
-                await db.quality_weeks.update_one({"office_id": office_id, "week_ending": week},
-                                                  {"$set": {"fourth_week_paired": fw_week}})
     try:
         await relink_saved(office_id, users)
     except Exception as ex:  # linking older weeks must never stop a save
@@ -574,29 +569,14 @@ async def get_quality(request: Request, view: str = "week", week: Optional[str] 
             "total_history": box.get("history") if box and box["kind"] == "office" else None}
 
 
-def _pair_weeks(q_weeks: list[str], f_weeks: list[str], paired: dict, stamps: dict) -> list[dict]:
-    """Each quality week with the 4th week shown under it (the Owner, 10 Nov
-    2026): the 4th week that came in the same PDF (`fourth_week_paired`, or,
-    for uploads from before that was saved, a 4th week saved within a minute
-    of it); otherwise the week 8 weeks before, if that one isn't already
-    paired. 4th weeks left over get a column of their own. Newest first."""
-    from datetime import date, datetime as _dt, timedelta as _td
+def _pair_weeks(q_weeks: list[str], f_weeks: list[str], paired: dict | None = None, stamps: dict | None = None) -> list[dict]:
+    """Each quality week with the 4th week 8 weeks before it under it, always
+    (the Owner, 10 Nov 2026: a PDF's 4th Delivery tab is often left on an
+    old week, so what came in the same PDF says nothing about the pairing).
+    4th weeks left over get a column of their own. Newest first."""
+    from datetime import date, timedelta as _td
     fset = set(f_weeks)
-
-    def when(w):
-        try:
-            return _dt.fromisoformat(stamps[w].replace("Z", "+00:00"))
-        except (KeyError, ValueError):
-            return None
-
-    link: dict[str, str] = {q: f for q, f in paired.items() if q in q_weeks and f in fset}
-    for q in q_weeks:
-        if q in link or not when(q):
-            continue
-        near = [f for f in f_weeks if f != q and f not in link.values() and when(f)
-                and abs((when(f) - when(q)).total_seconds()) < 60]
-        if len(near) == 1:
-            link[q] = near[0]
+    link: dict[str, str] = {}
     used = set(link.values())
     for q in q_weeks:
         if q not in link:
