@@ -91,6 +91,7 @@ from routes.viewers import router as viewers_router
 from routes.team_history import router as team_history_router
 from routes.cod_focus import router as cod_focus_router
 from routes.ai_assistant import router as ai_assistant_router
+from routes.scorecard import router as scorecard_router
 from routes.coaching_notes import router as coaching_notes_router
 from routes.meetups import router as meetups_router
 
@@ -206,6 +207,7 @@ api_router.include_router(viewers_router)
 api_router.include_router(team_history_router)
 api_router.include_router(cod_focus_router)
 api_router.include_router(ai_assistant_router)
+api_router.include_router(scorecard_router)
 api_router.include_router(coaching_notes_router)
 api_router.include_router(meetups_router)
 

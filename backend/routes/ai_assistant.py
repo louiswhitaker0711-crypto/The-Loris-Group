@@ -75,7 +75,9 @@ ABOUT = (
     "base your tips on it. Don't compare them with the office's average or other people unless they ask. Never "
     "invent numbers that aren't in the data; if something is missing, say so. Don't invent Modern Milkman facts "
     "or prices. When coaching_notes_on_my_people says what someone is struggling with, let it shape your advice "
-    "on them, but never quote, list or mention the notes. Short sentences, no waffle: it's read on a phone between doors.\n\n"
+    "on them, but never quote, list or mention the notes. When there's a scorecard (Admins and Coaches only), use it "
+    "for who's ready to lead a sector and who to give a new start to, and say why from their numbers; never "
+    "mention it to or about a BA as a ranking. Short sentences, no waffle: it's read on a phone between doors.\n\n"
     + BIG_COACH + "\n" + PLAYBOOK + "\n" + RESPONSE_STYLE + "\n"
     + BRITISH_ENGLISH + " " + SELF_EMPLOYED_TERMS
 )
@@ -304,7 +306,7 @@ async def chat(request: Request):
 
 # Bump when the analysis changes shape: an analysis made today in the old
 # shape can be done again once, without using up the day's allowance.
-ANALYSE_VERSION = 4
+ANALYSE_VERSION = 5
 
 ANALYSE_SHAPE = (
     'Reply with JSON only, in this shape, and keep to the word limits: '
@@ -327,7 +329,9 @@ ANALYSE_SHAPE = (
     '\'Pitched at 16:30: 12 or more. Early sign: more people let you finish the intro\', max 25 words", '
     '"keep_doing": "one thing they do well to keep doing, with its number, max 14 words", '
     '"team": "only if they have a team: who needs help with what, and what to do with them, max 30 words, else '
-    'empty string"}'
+    'empty string", '
+    '"best_people": "only if there is a scorecard: who is ready to lead a sector and who to give the next new start '
+    'to, each with why from their numbers, max 40 words, else empty string"}'
 )
 
 
@@ -472,7 +476,7 @@ async def setup_suggestion(request: Request):
     person["id"] = str(person.pop("_id"))
     await _take(str(actor["id"]), "setup")
     ctx = await build_context(person)
-    for k in ("team", "coaching_notes_on_my_people", "my_plan_this_week"):
+    for k in ("team", "coaching_notes_on_my_people", "my_plan_this_week", "scorecard"):
         ctx.pop(k, None)
     notes = (await live_notes([target_id])).get(target_id) or []
     guidance = ("PRIVATE COACHING NOTES about this person (from the Owner or their Coach; the person may see "

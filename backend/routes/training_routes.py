@@ -359,6 +359,8 @@ async def update_assessment(assessment_id: str, update: DailyAssessmentUpdate, r
     merged["checklist_grade_score"] = grade_score
     if update.completed:
         merged["assessment_date"] = datetime.now(timezone.utc).isoformat()
+        # Who graded the day: counts as coaching on the scorecard (10 Nov 2026).
+        merged["graded_by_id"] = str(user["id"])
     # MongoDB's immutable primary key may be present on the fetched document;
     # never include it in a $set payload.
     merged.pop("_id", None)

@@ -37,6 +37,7 @@ type Analysis = {
     result?: string; track?: string; keep_doing?: string;
     tomorrow?: Tomorrow; this_week?: { weekly_goal?: number; why?: string };
     team?: string;
+    best_people?: string;
   };
 };
 
@@ -343,6 +344,7 @@ export default function AiScreen() {
 
                 {!!a.keep_doing && <Text style={[s.hint, { textAlign: 'center' }]}>Keep doing: {a.keep_doing}</Text>}
                 {!!a.team && <View style={s.card}><Text style={s.label}>Your team</Text><Text style={s.body}>{a.team}</Text></View>}
+                {!!a.best_people && <View style={s.card} testID="ai-best-people"><Text style={s.label}>Your best people</Text><Text style={s.body}>{a.best_people}</Text></View>}
                 <Text style={[s.small, { textAlign: 'center' }]}>One analysis a day. Got a question about it? Tap Ask.</Text>
               </>
             )}

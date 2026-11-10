@@ -355,8 +355,17 @@ async def build_context(user: dict) -> dict:
     coaching_notes = [{"name": names[i], "notes": n} for i, n in notes.items() if i in names]
 
 
+    # The scorecard (the Owner, 10 Nov 2026): Admins and Coaches only.
+    card = None
+    if user.get("role") in ("admin", "leader") and team_ids:
+        try:
+            from core.scorecard import scorecard, slim
+            card = slim(await scorecard(office_id, ids, today))
+        except Exception:
+            card = None
+
     from core.brand import role_label
-    return {
+    out = {
         "today": today.isoformat(), "weekday": today.strftime("%A"),
         "right_now": live,
         "next_field_day": next_field_day(today).isoformat(),
@@ -373,6 +382,9 @@ async def build_context(user: dict) -> dict:
         "coaching_notes_on_my_people": coaching_notes,
         "quality_latest": quality,
     }
+    if card:
+        out["scorecard"] = card
+    return out
 
 
 async def context_text(user: dict) -> str:
