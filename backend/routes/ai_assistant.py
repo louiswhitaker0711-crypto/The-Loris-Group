@@ -198,6 +198,60 @@ async def new_chat(request: Request):
     return {"ok": True}
 
 
+# ── Past chats (the Owner, 5 Nov 2026) ───────────────────────────────────────
+# Each person sees their own past chats, nobody else's: every query is by the
+# signed-in person's id, never one passed in. "Carry on" makes a past chat the
+# current one again.
+
+def _chat_title(conv: dict) -> str:
+    first = next((m.get("text") or "" for m in conv.get("messages") or [] if m.get("role") == "user"), "")
+    first = " ".join(str(first).split())
+    return (first[:77] + "…") if len(first) > 78 else (first or "Chat")
+
+
+@router.get("/ai/chats")
+async def past_chats(request: Request):
+    user = await get_current_user(request)
+    uid = str(user["id"])
+    rows = await db.ai_conversations.find(
+        {"user_id": uid, "messages.0": {"$exists": True}}, {"_id": 0},
+    ).sort([("updated_at", -1), ("created_at", -1)]).to_list(60)
+    today = today_uk().isoformat()
+    return {"chats": [{
+        "id": c["id"], "date": c.get("date"), "title": _chat_title(c),
+        "messages": len(c.get("messages") or []),
+        "updated_at": c.get("updated_at") or c.get("created_at"),
+        "current": c.get("date") == today and not c.get("closed"),
+    } for c in rows]}
+
+
+async def _own_chat(user: dict, chat_id: str) -> dict:
+    conv = await db.ai_conversations.find_one({"id": chat_id, "user_id": str(user["id"])}, {"_id": 0})
+    if not conv:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    return conv
+
+
+@router.get("/ai/chats/{chat_id}")
+async def past_chat(chat_id: str, request: Request):
+    user = await get_current_user(request)
+    return {"conversation": await _own_chat(user, chat_id)}
+
+
+@router.post("/ai/chats/{chat_id}/open")
+async def reopen_chat(chat_id: str, request: Request):
+    user = await get_current_user(request)
+    conv = await _own_chat(user, chat_id)
+    uid = str(user["id"])
+    await db.ai_conversations.update_many({"user_id": uid, "closed": {"$ne": True}, "id": {"$ne": chat_id}},
+                                          {"$set": {"closed": True}})
+    await db.ai_conversations.update_one({"id": chat_id, "user_id": uid},
+                                         {"$set": {"closed": False, "date": today_uk().isoformat(),
+                                                   "updated_at": _now()}})
+    conv.update({"closed": False, "date": today_uk().isoformat()})
+    return {"conversation": conv}
+
+
 @router.post("/ai/chat")
 async def chat(request: Request):
     user = await get_current_user(request)

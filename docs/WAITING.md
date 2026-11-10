@@ -7,10 +7,10 @@ Agreed changes that aren't built yet. Add a line when something is agreed; remov
 
 ## Needs a decision
 
-- Final quiz (Microsoft Form) fixes to suggest to the Owner: AOV target reads £12+ (the Owner's figure is £13+); a fail option reads "under £4" (rule is under £5); "going away for three weeks" best answer B makes the start date over 8 days (a fail). Also whether to keep the Form as a link or rebuild it in the app.
 
 ## Recently shipped
 
+- 10 Nov: Past chats on the AI screen (Analyse me · Ask · Past chats): each person's own chats only, newest first; open one to read it, "Carry on this chat" makes it the current chat again (`GET /ai/chats`, `GET /ai/chats/{id}`, `POST /ai/chats/{id}/open`). Final quiz: the Owner fixes the Microsoft Form themselves (fail is under £5, AOV target £13+; the "going away for three weeks" question left as it is); Day 2's AOV line now just says £13+. OwnerIQ / Field IQ: dropped for good (10 Nov); email stays off, the Admin password reset covers it.
 - 10 Nov: Weekly Planner: goals and crew are one "Goals & crew" step (5 steps); a days-worked total from the schedules (Scheduled off, In office, No show and shadow days don't count; their own days shown too); under P/A a live "x P/A would be y office total" line (P/A × days worked) that fills Office/Team sign-ups when tapped (`app/weekly-planner.tsx`).
 - 10 Nov: Person page: an Admin taps Started to set or clear a start date, or mark "Not a new start" (closes the new-start record, keeps graded days; the AI treats them as established); "Back to new start" reopens it (`PUT /people/{id}/start`).
 - 5 Nov: AI coach is a bar at the top of Home; the analysis is short, against what good looks like (never the office average), with the biggest gap and 3 tips on the doors from the Hub's coaching content. Private coaching notes on the person page (Admins + their Coach; never the person): their own AI uses them quietly, a Coach's AI openly; "Suggest today's focus" in the set-up form and on Coaching today (`routes/coaching_notes.py`, `POST /ai/setup-suggestion`).
