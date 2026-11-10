@@ -627,15 +627,14 @@ const styles = (c: any) => StyleSheet.create({
 
 
 // The bulletin on a laptop (the Owner, 10 Nov 2026): a preview, then Copy &
-// open WhatsApp (paste with ⌘V into the chat), Share… (the Mac's share menu,
-// when the browser has one), Download picture, or Print / PDF.
+// open WhatsApp (paste with ⌘V into the chat), Download picture, or Print /
+// PDF. No Share…: WhatsApp on a Mac isn't in the Mac's share menu.
 function BulletinPreview({ img, onClose }: { img: CapturedImage & { title: string; html: string }; onClose: () => void }) {
   const c = useColors();
   const s = useMemo(() => previewStyles(c), [c]);
   const [ratio, setRatio] = useState(0.5);
   useEffect(() => { Image.getSize(img.dataUrl, (w, h) => { if (w && h) setRatio(w / h); }, () => {}); }, [img.dataUrl]);
   const nav: any = typeof navigator !== 'undefined' ? navigator : {};
-  const canShare = !!(nav.canShare && nav.share && (() => { try { return nav.canShare({ files: [img.file] }); } catch { return false; } })());
   const canCopy = !!(nav.clipboard?.write && typeof (globalThis as any).ClipboardItem !== 'undefined');
   const copyAndOpen = async () => {
     try {
@@ -657,11 +656,6 @@ function BulletinPreview({ img, onClose }: { img: CapturedImage & { title: strin
       document.removeEventListener('visibilitychange', away);
       if (!left) { try { window.open('https://web.whatsapp.com/', '_blank', 'noopener'); } catch { /* ignore */ } }
     }, 2500);
-  };
-  const share = async () => {
-    // The picture only: with a caption as well, the Mac's share menu sends
-    // the caption and drops the picture (the Owner, 10 Nov 2026).
-    try { await nav.share({ files: [img.file] }); } catch { /* cancelled */ }
   };
   const download = () => {
     const a = document.createElement('a');
@@ -694,7 +688,6 @@ function BulletinPreview({ img, onClose }: { img: CapturedImage & { title: strin
           </ScrollView>
           <View style={s.row}>
             {canCopy && btn('Copy & open WhatsApp', 'logo-whatsapp', copyAndOpen, true, 'bulletin-whatsapp')}
-            {canShare && btn('Share…', 'share-outline', share, false, 'bulletin-share')}
             {btn('Download picture', 'download-outline', download, false, 'bulletin-download')}
             {btn('Print / PDF', 'print-outline', print, false, 'bulletin-print')}
           </View>
