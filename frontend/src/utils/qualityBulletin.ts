@@ -90,7 +90,10 @@ export function buildQualityBulletinHtml(d: any): string {
       <div style="font-size:10pt;color:${P.muted};">${esc(fmtQuality(st.key, val(st.row.metrics, st.key)))}${st.key === 'sales' ? ' sales, 0 fails' : ` · ${val(st.row.metrics, 'sales')} sales`}</div>
     </div>`).join('');
 
-  const cols = ['sales', 'aov', 'drops', 'fail_rate'].filter((k) => measures.some((m) => m.key === k));
+  // The Round % sits with the others (the Owner, 10 Nov 2026); a column
+  // only shows when the week has it.
+  const cols = ['sales', 'aov', 'drops', 'the_round', 'fail_rate'].filter((k) => measures.some((m) => m.key === k)
+    && (val(office, k) != null || everyone.some((r) => val(r.metrics, k) != null)));
   const label = (k: string) => measures.find((m) => m.key === k)?.label || k;
   const cell = (m: Metrics, k: string, bold = false) => {
     const lk = k === 'sales' ? RAG.none : look(m?.[k]);
