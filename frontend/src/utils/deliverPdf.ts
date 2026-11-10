@@ -107,7 +107,20 @@ function shouldExportImage(): boolean {
   return isStandalonePwa() || isMobileLike();
 }
 
-async function shareHtmlAsImage(html: string, opts: { filename: string; dialogTitle: string; width?: number; height?: number; sizeToContent?: boolean; imageAsPdf?: boolean }): Promise<void> {
+export type CapturedImage = { dataUrl: string; file: File; blob: Blob; filename: string };
+
+/** True on a laptop/desktop browser (not the installed app, not a phone):
+ *  there the bulletin opens a preview with its own share buttons. */
+export function isDesktopWeb(): boolean {
+  return Platform.OS === 'web' && typeof window !== 'undefined' && !shouldExportImage();
+}
+
+/** The document as a PNG picture, without sharing or downloading it. */
+export async function captureHtmlImage(html: string, opts: { filename: string; width?: number; height?: number; sizeToContent?: boolean }): Promise<CapturedImage> {
+  return (await shareHtmlAsImage(html, { ...opts, dialogTitle: '', captureOnly: true })) as CapturedImage;
+}
+
+async function shareHtmlAsImage(html: string, opts: { filename: string; dialogTitle: string; width?: number; height?: number; sizeToContent?: boolean; imageAsPdf?: boolean; captureOnly?: boolean }): Promise<CapturedImage | void> {
   // The PNG is normally a full PAGE, not a content-sized strip: callers with
   // a custom page (612×1008 bulletins) get exactly that; letters get A4
   // portrait. Printing the image full-bleed then reproduces the intended
@@ -213,6 +226,7 @@ ${scopedCss}
     } else {
       const blob = await (await fetch(dataUrl)).blob();
       file = new File([blob], downloadName, { type: 'image/png' });
+      if (opts.captureOnly) return { dataUrl, file, blob, filename: downloadName };
     }
 
     // Share sheet when the browser supports sharing files (iOS/Android);

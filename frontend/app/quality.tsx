@@ -8,7 +8,7 @@
 //     running average), with week by week underneath.
 // (backend routes/quality.py)
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Platform, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Platform, TextInput, Modal, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -22,7 +22,7 @@ import { formatMoney } from '../src/utils/appTime';
 import { useTabBarClearance } from '../src/customization/CustomTabBar';
 import { APP_SHORT_NAME } from '../src/theme/brand';
 import { buildQualityBulletinHtml } from '../src/utils/qualityBulletin';
-import { exportPdfFromHtml, openBlankPrintWindow } from '../src/utils/deliverPdf';
+import { exportPdfFromHtml, openBlankPrintWindow, captureHtmlImage, isDesktopWeb, CapturedImage } from '../src/utils/deliverPdf';
 
 const MINI_TEAM = `Mini ${APP_SHORT_NAME}`;
 
@@ -63,6 +63,10 @@ export default function QualityScreen() {
   const [month, setMonth] = useState<string | undefined>(undefined);
   const [open, setOpen] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
+  // On a laptop: the bulletin as a picture in a preview, with share buttons
+  // (the Owner, 10 Nov 2026). Phones and the installed app go straight to
+  // the share sheet, as before.
+  const [preview, setPreview] = useState<(CapturedImage & { title: string; html: string }) | null>(null);
   const canBulletin = user?.role === 'admin' || user?.role === 'leader';
   const q = useQuery({
     queryKey: ['quality', kind, view, week || '', month || ''],
@@ -119,6 +123,18 @@ export default function QualityScreen() {
   // The Quality Bulletin: this view as a poster for the team's WhatsApp.
   const shareBulletin = async () => {
     if (!d) return;
+    const title = `${d.label} ${d.kind === 'fourth' ? '4th Week' : 'Quality'} Report`;
+    if (isDesktopWeb()) {
+      setSharing(true);
+      try {
+        const html = buildQualityBulletinHtml(d);
+        const img = await captureHtmlImage(html, { filename: `quality-bulletin-${d.week_ending}.pdf`, width: 612, sizeToContent: true });
+        setPreview({ ...img, title, html });
+      } catch (e: any) {
+        showAlert('Could not make the bulletin', e?.message || 'Try again.');
+      } finally { setSharing(false); }
+      return;
+    }
     const win = openBlankPrintWindow(); // before any await (iOS pop-up blocker)
     setSharing(true);
     try {
@@ -182,6 +198,7 @@ export default function QualityScreen() {
 
   return (
     <ScrollView style={s.page} contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + clearance + 40 }]}>
+      {preview && <BulletinPreview img={preview} onClose={() => setPreview(null)} />}
       {isAdmin && <Upload onSaved={(w) => { setKind('quality'); setView('week'); setWeek(w); }} />}
 
       {q.isLoading ? <ActivityIndicator color={c.primary} style={{ marginTop: 30 }} /> : !d?.week_ending ? (
@@ -606,4 +623,83 @@ const styles = (c: any) => StyleSheet.create({
   choiceText: { fontFamily: fonts.body, fontSize: 14, color: c.text },
   notifyRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 6 },
   actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, paddingTop: 4 },
+});
+
+
+// The bulletin on a laptop (the Owner, 10 Nov 2026): a preview, then Copy &
+// open WhatsApp (paste with ⌘V into the chat), Share… (the Mac's share menu,
+// when the browser has one), Download picture, or Print / PDF.
+function BulletinPreview({ img, onClose }: { img: CapturedImage & { title: string; html: string }; onClose: () => void }) {
+  const c = useColors();
+  const s = useMemo(() => previewStyles(c), [c]);
+  const [ratio, setRatio] = useState(0.5);
+  useEffect(() => { Image.getSize(img.dataUrl, (w, h) => { if (w && h) setRatio(w / h); }, () => {}); }, [img.dataUrl]);
+  const nav: any = typeof navigator !== 'undefined' ? navigator : {};
+  const canShare = !!(nav.canShare && nav.share && (() => { try { return nav.canShare({ files: [img.file] }); } catch { return false; } })());
+  const canCopy = !!(nav.clipboard?.write && typeof (globalThis as any).ClipboardItem !== 'undefined');
+  const copyAndOpen = async () => {
+    try {
+      const Item = (globalThis as any).ClipboardItem;
+      await nav.clipboard.write([new Item({ 'image/png': img.blob })]);
+      toast.success('Copied. Pick the chat in WhatsApp and press ⌘V (Ctrl+V on Windows).');
+    } catch {
+      toast.error('Couldn’t copy the picture here. Use Download, then drag it into WhatsApp.');
+    }
+    try { window.open('https://web.whatsapp.com/', '_blank', 'noopener'); } catch { /* ignore */ }
+  };
+  const share = async () => {
+    try { await nav.share({ files: [img.file], title: img.title, text: img.title }); } catch { /* cancelled */ }
+  };
+  const download = () => {
+    const a = document.createElement('a');
+    a.href = img.dataUrl; a.download = img.filename; a.rel = 'noopener';
+    document.body.appendChild(a); a.click(); a.remove();
+  };
+  const print = async () => {
+    onClose();
+    try { await exportPdfFromHtml(img.html, { filename: img.filename.replace(/\.png$/i, '.pdf'), dialogTitle: img.title, width: 612, sizeToContent: true }); }
+    catch (e: any) { showAlert('Could not print the bulletin', e?.message || 'Try again.'); }
+  };
+  const btn = (label: string, icon: any, onPress: () => void, primary = false, testID?: string) => (
+    <Pressable onPress={onPress} style={[s.btn, primary && s.btnPrimary]} accessibilityRole="button" testID={testID}>
+      <Ionicons name={icon} size={16} color={primary ? c.onPrimary : c.primary} />
+      <Text style={[s.btnText, primary && { color: c.onPrimary }]}>{label}</Text>
+    </Pressable>
+  );
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+      <View style={s.backdrop}>
+        <View style={s.sheet}>
+          <View style={s.head}>
+            <Text style={s.title}>{img.title}</Text>
+            <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" testID="bulletin-preview-close">
+              <Ionicons name="close" size={22} color={c.textMuted} />
+            </Pressable>
+          </View>
+          <ScrollView style={s.scroll} contentContainerStyle={{ alignItems: 'center' }}>
+            <Image source={{ uri: img.dataUrl }} style={[s.img, { aspectRatio: ratio }]} resizeMode="contain" />
+          </ScrollView>
+          <View style={s.row}>
+            {canCopy && btn('Copy & open WhatsApp', 'logo-whatsapp', copyAndOpen, true, 'bulletin-whatsapp')}
+            {canShare && btn('Share…', 'share-outline', share, false, 'bulletin-share')}
+            {btn('Download picture', 'download-outline', download, false, 'bulletin-download')}
+            {btn('Print / PDF', 'print-outline', print, false, 'bulletin-print')}
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const previewStyles = (c: any) => StyleSheet.create({
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center', padding: 16 },
+  sheet: { width: '100%', maxWidth: 560, maxHeight: '92%', backgroundColor: c.surface || c.background, borderRadius: 16, padding: 16, gap: 12 },
+  head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  title: { fontFamily: fonts.bodySemibold, fontSize: 16, color: c.text, flex: 1 },
+  scroll: { flexGrow: 0, maxHeight: 560, borderRadius: 10, borderWidth: 1, borderColor: c.border, backgroundColor: c.background },
+  img: { width: 500, maxWidth: '100%' },
+  row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  btn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 999, borderWidth: 1, borderColor: c.border, backgroundColor: c.background },
+  btnPrimary: { backgroundColor: c.primary, borderColor: c.primary },
+  btnText: { fontFamily: fonts.bodySemibold, fontSize: 13, color: c.primary },
 });
