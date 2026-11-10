@@ -399,3 +399,31 @@ def test_coaching_fits_the_persons_stage():
     assert "COACH THEM FOR THEIR STAGE" in BIG_COACH and "never suggest demonstrating" in BIG_COACH
     assert "each on their own doors" in BIG_COACH
     assert "show them an example once or twice" in BIG_COACH and "a retrain" in BIG_COACH
+
+
+def test_past_chats_are_your_own_and_can_be_carried_on(db, monkeypatch):
+    """The Owner, 5 Nov 2026: each person sees only their own past chats."""
+    me, other = _ba(), _ba()
+    today = ai.today_uk().isoformat()
+    _run(db.ai_conversations.insert_many([
+        {"id": "c-old", "user_id": me["id"], "date": "2026-11-01", "closed": True, "created_at": "2026-11-01T10:00",
+         "updated_at": "2026-11-01T10:05",
+         "messages": [{"role": "user", "text": "How do I close more?"}, {"role": "assistant", "text": "…"}]},
+        {"id": "c-now", "user_id": me["id"], "date": today, "created_at": f"{today}T09:00", "updated_at": f"{today}T09:01",
+         "messages": [{"role": "user", "text": "Why are my pitches low?"}, {"role": "assistant", "text": "…"}]},
+        {"id": "c-empty", "user_id": me["id"], "date": "2026-11-02", "closed": True, "messages": []},
+        {"id": "c-theirs", "user_id": other["id"], "date": today, "messages": [{"role": "user", "text": "Mine"}]},
+    ]))
+    _login(monkeypatch, me)
+    out = _run(ai.past_chats(_Req()))["chats"]
+    assert [c["id"] for c in out] == ["c-now", "c-old"]
+    assert out[0]["current"] is True and out[1]["title"] == "How do I close more?"
+    with pytest.raises(HTTPException) as e:
+        _run(ai.past_chat("c-theirs", _Req()))
+    assert e.value.status_code == 404
+    assert _run(ai.past_chat("c-old", _Req()))["conversation"]["id"] == "c-old"
+    _run(ai.reopen_chat("c-old", _Req()))
+    assert _run(ai._todays_chat(me["id"]))["id"] == "c-old"
+    assert _run(db.ai_conversations.find_one({"id": "c-now"}))["closed"] is True
+    with pytest.raises(HTTPException):
+        _run(ai.reopen_chat("c-theirs", _Req()))

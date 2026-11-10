@@ -285,7 +285,7 @@ export default function Day2Page() {
       <Section id="s12" n={14} title="Sales quality" sub="What good looks like, and keeping every sign-up">
         <Teach>
           <Panel label="The five quality numbers" hi>
-            <Points items={[['£13+', 'average order value (the quality standard is £12+; we aim higher)'], ['2.5+', 'drop days a week'], ['Fails under 10%', ''], ['75%+', 'taking The Round'], ['75%+', 'still ordering in their 4th week']]} />
+            <Points items={[['£13+', 'average order value'], ['2.5+', 'drop days a week'], ['Fails under 10%', ''], ['75%+', 'taking The Round'], ['75%+', 'still ordering in their 4th week']]} />
           </Panel>
           <Panel label="A fail pays nothing">
             <Points items={['Cancelled before the first delivery', 'First delivery more than 8 days away', 'A repeat order under £5 (the delivery fee doesn’t count)', 'No repeat weekly items']} />

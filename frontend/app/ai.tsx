@@ -3,6 +3,7 @@
  *   - Analyse me: once a day, a full look at your breakdowns, results, trends
  *     and plans against the office (and your team's, if you have one).
  *   - Ask the AI: a chat that knows what you can see in the app.
+ *   - Past chats: your own earlier chats, nobody else's (the Owner, 5 Nov 2026).
  * Nothing changes until you tap "Use this" (POST /ai/apply), which fills it
  * in as you, with the same permissions as the rest of the app.
  */
@@ -20,7 +21,8 @@ import { APP_LOCALE, APP_TZ } from '../src/utils/appTime';
 import type { AiStatus } from '../src/components/home/AiCoachCard';
 import AiText from '../src/components/ai/AiText';
 
-type Part = 'analyse' | 'chat';
+type Part = 'analyse' | 'chat' | 'past';
+type PastChat = { id: string; date?: string; title: string; messages: number; current?: boolean };
 type Msg = { role: 'user' | 'assistant'; text: string };
 type Tomorrow = { focus?: string; kpi_metric?: string; kpi_target?: number; goal?: number };
 type Analysis = {
@@ -59,7 +61,7 @@ export default function AiScreen() {
   const tabClear = useTabBarClearance();
   const kb = useKeyboardInset();
   const params = useLocalSearchParams<{ part?: string }>();
-  const startPart: Part = params.part === 'chat' ? 'chat' : 'analyse';
+  const startPart: Part = params.part === 'chat' ? 'chat' : params.part === 'past' ? 'past' : 'analyse';
   const [part, setPart] = useState<Part>(startPart);
   const scroll = useRef<ScrollView>(null);
 
@@ -157,6 +159,38 @@ export default function AiScreen() {
     } catch { /* nothing to close */ }
     setMsgs([]);
     qc.setQueryData(['ai', 'chat'], null);
+    qc.invalidateQueries({ queryKey: ['ai', 'chats'] });
+  };
+
+  // ── Past chats ──
+  const pastQ = useQuery({
+    queryKey: ['ai', 'chats'],
+    queryFn: async () => ((await api.get('/ai/chats')).data?.chats || []) as PastChat[],
+    enabled: part === 'past',
+    retry: false,
+  });
+  const [openId, setOpenId] = useState<string>('');
+  const openQ = useQuery({
+    queryKey: ['ai', 'chats', openId],
+    queryFn: async () => (await api.get(`/ai/chats/${openId}`)).data?.conversation ?? null,
+    enabled: !!openId,
+    retry: false,
+  });
+  const [reopening, setReopening] = useState(false);
+  const carryOn = async (id: string) => {
+    setReopening(true);
+    try {
+      const conv = (await api.post(`/ai/chats/${id}/open`)).data?.conversation ?? null;
+      qc.setQueryData(['ai', 'chat'], conv);
+      qc.invalidateQueries({ queryKey: ['ai', 'chats'] });
+      setOpenId('');
+      setPart('chat');
+      setTimeout(() => scroll.current?.scrollToEnd({ animated: false }), 80);
+    } catch (e) {
+      toast.error('Couldn’t open it', errText(e, 'Try again in a moment.'));
+    } finally {
+      setReopening(false);
+    }
   };
 
   if (status.isLoading) return <View style={[s.page, s.center]}><ActivityIndicator color={c.primary} /></View>;
@@ -177,8 +211,8 @@ export default function AiScreen() {
     <ScrollView ref={scroll} style={s.page} contentContainerStyle={[s.content, { paddingBottom: 32 + tabClear + kb }]} keyboardShouldPersistTaps="handled">
       <View style={s.shell}>
         <View style={s.tabs}>
-          {([['analyse', 'Analyse me'], ['chat', 'Ask']] as [Part, string][]).map(([k, label]) => (
-            <Pressable key={k} onPress={() => setPart(k)} style={[s.tab, part === k && s.tabOn]} accessibilityRole="tab"
+          {([['analyse', 'Analyse me'], ['chat', 'Ask'], ['past', 'Past chats']] as [Part, string][]).map(([k, label]) => (
+            <Pressable key={k} onPress={() => { setPart(k); if (k === 'past') setOpenId(''); }} style={[s.tab, part === k && s.tabOn]} accessibilityRole="tab"
               accessibilityState={{ selected: part === k }} testID={`ai-tab-${k}`}>
               <Text style={[s.tabText, part === k && s.tabTextOn]}>{label}</Text>
             </Pressable>
@@ -345,6 +379,61 @@ export default function AiScreen() {
             </View>
           </>
         )}
+
+        {part === 'past' && !openId && (
+          <>
+            {pastQ.isLoading ? (
+              <ActivityIndicator color={c.primary} style={{ marginTop: 20 }} />
+            ) : !(pastQ.data || []).length ? (
+              <View style={s.card}>
+                <Text style={s.h2}>No past chats yet</Text>
+                <Text style={s.hint}>Your chats with the AI are kept here. Only you can see them.</Text>
+              </View>
+            ) : (
+              <>
+                <Text style={s.small}>Only you can see your chats.</Text>
+                {(pastQ.data || []).map((p) => (
+                  <Pressable key={p.id} onPress={() => setOpenId(p.id)} style={s.pastRow} accessibilityRole="button" testID={`ai-past-${p.id}`}>
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Text style={s.pastTitle} numberOfLines={2}>{p.title}</Text>
+                      <Text style={s.small}>{dayLabel(p.date)} · {Math.ceil(p.messages / 2)} {Math.ceil(p.messages / 2) === 1 ? 'question' : 'questions'}{p.current ? ' · current chat' : ''}</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={c.textMuted} />
+                  </Pressable>
+                ))}
+              </>
+            )}
+          </>
+        )}
+
+        {part === 'past' && !!openId && (
+          <>
+            <Pressable onPress={() => setOpenId('')} style={s.backRow} accessibilityRole="button">
+              <Ionicons name="chevron-back" size={18} color={c.primary} />
+              <Text style={s.link}>Past chats</Text>
+            </Pressable>
+            {openQ.isLoading ? (
+              <ActivityIndicator color={c.primary} style={{ marginTop: 20 }} />
+            ) : openQ.data ? (
+              <>
+                <Text style={s.small}>{dayLabel(openQ.data.date)}</Text>
+                {((openQ.data.messages || []) as Msg[]).map((m, i) => (
+                  <View key={i} style={[s.bubble, m.role === 'user' ? s.mine : s.theirs]}>
+                    {m.role === 'user'
+                      ? <Text style={[s.body, { color: c.onPrimary }]} selectable>{m.text}</Text>
+                      : <AiText text={m.text} />}
+                  </View>
+                ))}
+                <Pressable onPress={() => carryOn(openId)} disabled={reopening} style={[s.primary, reopening && { opacity: 0.6 }]}
+                  accessibilityRole="button" testID="ai-past-carry-on">
+                  <Text style={s.primaryText}>{reopening ? 'Opening…' : 'Carry on this chat'}</Text>
+                </Pressable>
+              </>
+            ) : (
+              <Text style={s.hint}>That chat couldn’t be found.</Text>
+            )}
+          </>
+        )}
       </View>
     </ScrollView>
   );
@@ -400,4 +489,7 @@ const styles = (c: any) => StyleSheet.create({
   composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
   send: { width: 44, height: 44, borderRadius: 22, backgroundColor: c.primary, alignItems: 'center', justifyContent: 'center' },
   chatFoot: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  pastRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: c.background, borderWidth: 1, borderColor: c.border, borderRadius: 14, padding: 14 },
+  pastTitle: { fontFamily: fonts.bodySemibold, fontSize: 15, lineHeight: 21, color: c.text },
+  backRow: { flexDirection: 'row', alignItems: 'center', gap: 2, alignSelf: 'flex-start' },
 });
