@@ -1517,6 +1517,8 @@ export const apiService = {
   getFieldIqWeek: () => api.get('/owneriq/performance/week'),
   // One person's whole picture (admin: their office; Coach: their own team).
   getPersonBreakdown: (userId: string) => api.get(`/people/${userId}/breakdown`),
+  setPersonStart: (userId: string, body: { start_date: string | null; new_start?: boolean }) =>
+    api.put<{ user_id: string; start_date: string | null; new_start: boolean }>(`/people/${userId}/start`, body),
   // The Timeline: sign-ups hour by hour, per-BA productivity, an average day
   // and best/average/low week patterns, for the office, chosen teams or one person.
   getFieldInsights: (p: { from?: string; to?: string; teams?: string[]; userId?: string }) =>

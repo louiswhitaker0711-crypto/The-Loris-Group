@@ -221,6 +221,10 @@ async def development_of(uid: str) -> dict:
     field_days = await db.sector_days.count_documents({"user_id": uid, "breakdown": {"$ne": None}})
     out["days_in_field_with_a_breakdown"] = field_days
     own_total = assisted_total = 0
+    # Marked "Not a new start" by an Admin (the Owner, 10 Nov 2026): treated
+    # as established; their graded days stay on record but aren't coached to.
+    if hire and hire.get("closed_out_reason") == "not_new_start":
+        hire = None
     if hire:
         rows = await db.daily_assessments.find({"new_hire_id": hire["id"], "completed": True}, {"_id": 0}).to_list(20)
         rows.sort(key=lambda a: int(a.get("day_number") or 0))

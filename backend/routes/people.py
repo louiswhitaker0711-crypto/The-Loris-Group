@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 from bson import ObjectId
 from fastapi import APIRouter, HTTPException, Request
 
-from auth import can_use_badges, get_subtree_ids, require_admin_or_leader, sees_whole_office
+from auth import can_use_badges, get_subtree_ids, require_admin, require_admin_or_leader, sees_whole_office
 from core.app_time import APP_TZ
 from core.grading_time import ready_to_grade, last_graded_at
 from core.module_seed import LADDER_COMPLETED_AT
@@ -232,7 +232,8 @@ async def person_breakdown_for(viewer: dict, user_id: str) -> dict:
     legacy = person.get("legacy_vertex_hub") or {}
     stage = stage_label(person.get("owneriq_stage")) or stage_label(legacy.get("stage"))
     cod = await _cod(person, uid)
-    start_date = (cod.get("new_start") or {}).get("start_date") or legacy.get("start_date")
+    start_date = ((cod.get("new_start") or {}).get("start_date") or person.get("start_date")
+                  or legacy.get("start_date"))
     who = {
         "id": uid,
         "name": person.get("name") or "",
@@ -289,6 +290,9 @@ async def person_breakdown_for(viewer: dict, user_id: str) -> dict:
         "limited": False,
         "can_badge": can_badge,
         "can_open_cod": can_open_cod,
+        # An Admin can fix someone's start date, or mark that they aren't a
+        # new start (the Owner, 10 Nov 2026).
+        "can_edit_start": viewer.get("role") == "admin",
         "person": {
             **who,
             "email": person.get("email"),
@@ -312,3 +316,79 @@ async def person_breakdown_for(viewer: dict, user_id: str) -> dict:
         "badges": await _badges(person, uid) if can_badge else [],
         "synced_at": (state or {}).get("synced_at"),
     }
+
+
+# ── Start date / not a new start (the Owner, 10 Nov 2026) ──────────────────
+# Someone added to the Hub after they'd already been here months got a
+# new-start record dated the day they were added, so the app treated them as
+# Day 1. An Admin fixes it on the person page: set the real date, or mark
+# them "Not a new start". That closes their new-start record (no more
+# new-start tracking, Coaching today, grading queue or first-days colours on
+# Bells) and keeps every graded day as history. "Back to new start" undoes it.
+NOT_NEW_START = "not_new_start"
+
+
+async def _hire_of(person: dict) -> dict | None:
+    uid = str(person["_id"])
+    hire = None
+    if person.get("new_hire_id"):
+        hire = await db.new_hires.find_one({"id": person["new_hire_id"]}, {"_id": 0})
+    if not hire:
+        hire = await db.new_hires.find_one({"trainee_user_id": uid}, {"_id": 0})
+    return hire
+
+
+def _iso_or_none(raw) -> str | None:
+    if raw in (None, ""):
+        return None
+    try:
+        return datetime.strptime(str(raw)[:10], "%Y-%m-%d").date().isoformat()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Start date should look like 2026-06-30")
+
+
+@router.put("/people/{user_id}/start")
+async def set_start(user_id: str, request: Request):
+    """Body: {"start_date": "YYYY-MM-DD" | null, "new_start": true | false}.
+    new_start false closes their new-start record; true reopens one this
+    closed. start_date null clears the date."""
+    admin = await require_admin(request)
+    person, _ = await _load_person(admin, user_id)
+    body = await request.json()
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Nothing to save")
+    start = _iso_or_none(body.get("start_date"))
+    if start and start > datetime.now(APP_TZ).date().isoformat():
+        raise HTTPException(status_code=400, detail="Start date can't be in the future")
+    new_start = body.get("new_start")
+    if new_start is True and not start:
+        raise HTTPException(status_code=400, detail="A new start needs a start date")
+    uid = str(person["_id"])
+    hire = await _hire_of(person)
+
+    user_set = {"start_date": start} if start else {}
+    user_unset = {} if start else {"start_date": ""}
+    await db.users.update_one({"_id": person["_id"]},
+                              {k: v for k, v in (("$set", user_set), ("$unset", user_unset)) if v})
+    if hire:
+        hire_set: dict = {}
+        hire_unset: dict = {}
+        if start:
+            hire_set["start_date"] = start
+        else:
+            hire_unset["start_date"] = ""
+        if new_start is False and hire.get("active", True) is not False:
+            hire_set.update({"active": False, "current_status": "Completed",
+                             "final_outcome": hire.get("final_outcome") or "Established",
+                             "closed_out_reason": NOT_NEW_START,
+                             "closed_out_at": datetime.now(APP_TZ).isoformat()})
+        elif new_start is True and hire.get("closed_out_reason") == NOT_NEW_START:
+            hire_set.update({"active": True, "current_status": "In Progress"})
+            hire_unset.update({"closed_out_reason": "", "closed_out_at": ""})
+            if hire.get("final_outcome") == "Established":
+                hire_unset["final_outcome"] = ""
+        await db.new_hires.update_one({"id": hire["id"]},
+                                      {k: v for k, v in (("$set", hire_set), ("$unset", hire_unset)) if v})
+        hire = await db.new_hires.find_one({"id": hire["id"]}, {"_id": 0})
+    active = bool(hire) and hire.get("active", True) is not False
+    return {"user_id": uid, "start_date": start, "new_start": active}

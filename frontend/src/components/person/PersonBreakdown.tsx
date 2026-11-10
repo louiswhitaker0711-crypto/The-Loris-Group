@@ -30,6 +30,7 @@ import { DAY_SHORT, dowOf, rangeLabel } from '../../utils/calendarDates';
 import { PersonBadgeFlow } from '../badges/BadgeStudio';
 import { openBadgeMaker, usesExternalBadgeMaker } from '../../utils/openBadgeMaker';
 import FieldInsights from '../insights/FieldInsights';
+import DateField from '../ui/DateField';
 
 const P = {
   canvas: '#07121e',
@@ -101,6 +102,7 @@ export function PersonBreakdown({ id }: { id: string }) {
   const [daysOpen, setDaysOpen] = useState(false);
   const [badgeOpen, setBadgeOpen] = useState(false);
   const [weekAt, setWeekAt] = useState(0);   // 0 = this week, 1 = last week…
+  const [startOpen, setStartOpen] = useState(false);
   const q = useQuery({
     enabled: !!id,
     queryKey: ['person-breakdown', id],
@@ -201,7 +203,12 @@ export function PersonBreakdown({ id }: { id: string }) {
             {(p.role !== 'trainee' || p.team.total > 0) && (
               <Fact label="Team" value={p.team.total ? `${p.team.direct} direct · ${p.team.total} in all` : 'Nobody under them yet'} muted={!p.team.total} />
             )}
-            <Fact label="Started" value={ukDate(p.start_date) || 'Not recorded'} muted={!p.start_date} last={limited} />
+            <Fact label="Started" value={ukDate(p.start_date) || 'Not recorded'} muted={!p.start_date} last={limited && !startOpen}
+              onPress={d.can_edit_start ? () => setStartOpen((o) => !o) : undefined} />
+            {d.can_edit_start && startOpen && (
+              <StartEditor personId={p.id} startDate={p.start_date || ''} isNewStart={!!ns?.active}
+                hasRecord={!!ns} onDone={() => setStartOpen(false)} />
+            )}
             {!limited && (
               <>
             <Fact label="Badge number" value={p.badge_numbers.length ? p.badge_numbers.join(', ') : 'Not added yet'} muted={!p.badge_numbers.length} />
@@ -585,6 +592,70 @@ function Chip({ text, tone, icon }: { text: string; tone?: 'lime' | 'amber' | 'r
   );
 }
 
+/** Admin: fix someone's start date, or mark them "Not a new start" (the Owner,
+ *  10 Nov 2026). Closing the new-start record keeps every graded day. */
+function StartEditor({ personId, startDate, isNewStart, hasRecord, onDone }: {
+  personId: string; startDate: string; isNewStart: boolean; hasRecord: boolean; onDone: () => void;
+}) {
+  const qc = useQueryClient();
+  const [date, setDate] = useState(startDate ? String(startDate).slice(0, 10) : '');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const save = async (body: { start_date: string | null; new_start?: boolean }) => {
+    setBusy(true); setErr('');
+    try {
+      await apiService.setPersonStart(personId, body);
+      await qc.invalidateQueries({ queryKey: ['person-breakdown', personId] });
+      onDone();
+    } catch (e: any) {
+      const detail = e?.response?.data?.detail;
+      setErr(typeof detail === 'string' ? detail : "Couldn't save. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <View style={s.startBox} testID="person-start-editor">
+      <DateField label="Start date" value={date} onChange={setDate} placeholder="No date" testID="person-start-date" />
+      <View style={s.startRow}>
+        <Pressable disabled={busy || !date} onPress={() => save({ start_date: date })}
+          style={[s.btnGhost, { flex: 1 }, (busy || !date) && { opacity: 0.5 }]} accessibilityRole="button">
+          <Text style={s.btnGhostText}>Save date</Text>
+        </Pressable>
+        {!!date && (
+          <Pressable disabled={busy} onPress={() => { setDate(''); }} style={[s.btnGhost, { flex: 1 }]} accessibilityRole="button">
+            <Text style={s.btnGhostText}>Clear date</Text>
+          </Pressable>
+        )}
+      </View>
+      {hasRecord && (isNewStart ? (
+        <>
+          <Pressable disabled={busy} onPress={() => save({ start_date: date || null, new_start: false })}
+            style={[s.btn, busy && { opacity: 0.5 }]} accessibilityRole="button" testID="person-not-new-start">
+            <Ionicons name="checkmark-circle-outline" size={16} color={P.onLime} />
+            <Text style={s.btnText}>Not a new start</Text>
+          </Pressable>
+          <Text style={s.startHint}>Stops the new-start tracking. Their graded days stay on record.</Text>
+        </>
+      ) : (
+        <>
+          <Pressable disabled={busy || !date} onPress={() => save({ start_date: date, new_start: true })}
+            style={[s.btnGhost, (busy || !date) && { opacity: 0.5 }]} accessibilityRole="button">
+            <Text style={s.btnGhostText}>Back to new start</Text>
+          </Pressable>
+          <Text style={s.startHint}>Not a new start. To put them back, set their start date first.</Text>
+        </>
+      ))}
+      {!hasRecord && !date && !!startDate && (
+        <Pressable disabled={busy} onPress={() => save({ start_date: null })} style={s.btnGhost} accessibilityRole="button">
+          <Text style={s.btnGhostText}>Save with no date</Text>
+        </Pressable>
+      )}
+      {!!err && <Text style={[s.startHint, { color: P.redText }]}>{err}</Text>}
+    </View>
+  );
+}
+
 function Fact({ label, value, muted, last, onPress }: { label: string; value: string; muted?: boolean; last?: boolean; onPress?: () => void }) {
   const body = (
     <View style={[s.fact, last && { borderBottomWidth: 0 }]}>
@@ -639,6 +710,9 @@ const s = StyleSheet.create({
   btnGhost: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 42, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, borderColor: P.line, backgroundColor: P.raised },
   btnGhostText: { fontFamily: fonts.bodySemibold, fontSize: 13, color: P.text },
 
+  startBox: { gap: 10, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: P.lineSoft },
+  startRow: { flexDirection: 'row', gap: 8 },
+  startHint: { fontFamily: fonts.body, fontSize: 12, color: P.muted },
   fact: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 40, borderBottomWidth: 1, borderBottomColor: P.lineSoft },
   factLabel: { width: 104, fontFamily: fonts.body, fontSize: 12.5, color: P.muted },
   factValue: { flex: 1, fontFamily: fonts.bodySemibold, fontSize: 13.5, color: P.text, textAlign: 'right' },
