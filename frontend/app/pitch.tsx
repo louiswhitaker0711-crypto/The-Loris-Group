@@ -19,7 +19,7 @@ import { useColors, fonts } from '../src/theme/ThemeContext';
 import { api } from '../src/api/client';
 import { useTabBarClearance } from '../src/customization/CustomTabBar';
 import { APP_LOCALE, APP_TZ } from '../src/utils/appTime';
-import { ALL_PITCH, PITCH_QUIZ, PitchLine, withWords } from '../src/academy/pitch';
+import { ALL_PITCH, PITCH_QUIZ, PitchLine, withWords, lineId } from '../src/academy/pitch';
 
 type Tab = 'read' | 'say' | 'learn' | 'check';
 type State = { counts: Record<string, number>; ladder: Record<string, boolean>; quiz: Record<string, number>; shown: Record<string, boolean> };
@@ -74,19 +74,19 @@ export default function PitchScreen() {
   const [saveErr, setSaveErr] = useState('');
   const startEdit = () => {
     const d: Record<string, string> = {};
-    all.forEach((b) => b.lines.forEach((l, i) => { d[`L${b.n}-${i}`] = l.say; if (l.q) d[`L${b.n}-${i}q`] = l.q; }));
+    all.forEach((b) => b.lines.forEach((l, i) => { d[lineId(b.n, i)] = l.say; if (l.q) d[`${lineId(b.n, i)}q`] = l.q; }));
     setDraft(d); setSaveErr(''); setEditing(true);
   };
   const original = () => {
     const d: Record<string, string> = {};
-    ALL_PITCH.forEach((b) => b.lines.forEach((l, i) => { d[`L${b.n}-${i}`] = l.say; if (l.q) d[`L${b.n}-${i}q`] = l.q; }));
+    ALL_PITCH.forEach((b) => b.lines.forEach((l, i) => { d[lineId(b.n, i)] = l.say; if (l.q) d[`${lineId(b.n, i)}q`] = l.q; }));
     setDraft(d);
   };
   const saveWords = async () => {
     // Only lines that differ from the original are kept; a blank line goes back to the original.
     const out: Record<string, string> = {};
     ALL_PITCH.forEach((b) => b.lines.forEach((l, i) => {
-      const k = `L${b.n}-${i}`;
+      const k = lineId(b.n, i);
       const v = (draft[k] || '').trim();
       if (v && v !== l.say) out[k] = v;
       if (l.q) { const vq = (draft[`${k}q`] || '').trim(); if (vq && vq !== l.q) out[`${k}q`] = vq; }
@@ -158,7 +158,7 @@ export default function PitchScreen() {
             <Text style={s.blockT}>{b.t}</Text>
             <Text style={s.job}>{b.job}</Text>
           </View>
-          {b.lines.map((l, i) => <Line key={i} l={l} id={`L${b.n}-${i}`} learn={learn} />)}
+          {b.lines.map((l, i) => <Line key={i} l={l} id={lineId(b.n, i)} learn={learn} />)}
         </View>
       ))}
     </>
@@ -207,7 +207,7 @@ export default function PitchScreen() {
                       <View key={b.n} style={{ gap: 6 }}>
                         <Text style={[s.kicker, { color: stepColour(b.c) }]}>{b.n} · {b.t}</Text>
                         {b.lines.map((l, i) => {
-                          const k = `L${b.n}-${i}`;
+                          const k = lineId(b.n, i);
                           return (
                             <View key={k} style={{ gap: 4 }}>
                               <TextInput value={draft[k] ?? ''} onChangeText={(v) => setDraft((d) => ({ ...d, [k]: v }))} multiline placeholder={l.say}
@@ -307,7 +307,7 @@ export default function PitchScreen() {
               <Text style={s.muted}>Each line is hidden down to its first letters. Say it out loud, then tap the line to check.</Text>
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 <Pressable onPress={() => update((p) => ({ ...p, shown: {} }))} style={s.btn}><Text style={s.btnT}>Hide all</Text></Pressable>
-                <Pressable onPress={() => update((p) => ({ ...p, shown: Object.fromEntries(shownSteps.flatMap((b) => b.lines.map((_, i) => [`L${b.n}-${i}`, true]))) }))} style={s.btn}><Text style={s.btnT}>Show all</Text></Pressable>
+                <Pressable onPress={() => update((p) => ({ ...p, shown: Object.fromEntries(shownSteps.flatMap((b) => b.lines.map((_, i) => [lineId(b.n, i), true]))) }))} style={s.btn}><Text style={s.btnT}>Show all</Text></Pressable>
               </View>
               <Steps learn from={M.from} to={M.to} />
             </>
