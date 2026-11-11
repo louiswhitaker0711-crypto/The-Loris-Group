@@ -1313,6 +1313,7 @@ export const apiService = {
   importQuality: (body: { week_ending: string; rows: any[]; total: any; notify?: boolean; fourth_week_from?: string; fourth_week?: any; fail_reasons?: { reason: string; count: number }[] }) => api.post('/quality/import', body),
   getCoachSuggestions: () => api.get<{ through: string; suggestions: any[] }>('/coach/suggestions'),
   listViewers: () => api.get<{ viewers: any[] }>('/admin/viewers'),
+  broadcast: (body: { title: string; body: string; audience: 'office' | 'leaders' | 'trainees' }) => api.post<{ sent: number }>('/notifications/broadcast', body),
   exitedTeams: () => api.get<{ exited: { id: string; name: string; left_on: string; team: string[] }[]; people: { id: string; name: string }[] }>('/admin/exited-teams'),
   setPastTeam: (userId: string, memberIds: string[]) => api.put(`/admin/users/${userId}/past-team`, { member_ids: memberIds }),
   addViewer: (body: { name: string; email: string; password: string }) => api.post('/admin/viewers', body),
