@@ -93,3 +93,8 @@ def test_practice_tabs_are_for_new_starts_and_the_owner():
     loop = asyncio.new_event_loop()
     assert loop.run_until_complete(pitch._practice({"role": "admin"}))
     assert not loop.run_until_complete(pitch._practice({"role": "leader"}))
+
+
+def test_rewritten_door_pitch_keys_are_kept():
+    out = pitch.clean_words({"words": {"L1-0v2": "Hiya", "L2-2v2q": "Perfect.", "L1-0x": "nope"}})
+    assert out == {"L1-0v2": "Hiya", "L2-2v2q": "Perfect."}

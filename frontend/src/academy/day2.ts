@@ -76,15 +76,15 @@ export const DAY2_QUIZZES: Quiz[] = [
   },
   {
     id: 'qc', title: 'Quiz 3 · The pitch: presentation, short story and close', qs: [
-      { p: '“We’ve got so popular we’re sending another van round.” Which two G.I.F.T.S. is that?', o: ['Greed and Indifference', 'The Jones Theory and Sense of urgency', 'Fear of loss and Greed', 'Indifference and Sense of urgency'], a: 1,
-        w: 'Everyone else has it (The Jones Theory), and another van means now (Sense of urgency).' },
+      { p: '“So many of them have started using us, we’re just filling the last few spaces on the route.” Which two G.I.F.T.S. is that?', o: ['Greed and Indifference', 'The Jones Theory and Sense of urgency', 'Fear of loss and Greed', 'Indifference and Sense of urgency'], a: 1,
+        w: 'Everyone else has it (The Jones Theory), and the last few spaces means now (Sense of urgency).' },
       { p: 'A man says his wife does the shopping and she’s at work. You…', o: ['Sign him up: he can tell her later', 'Ask for her phone number', 'Sign up with her card details', 'Don’t sign him up: leave a good impression and come back when she’s in'], a: 3,
         w: 'Only sign up the person who does the shopping: the decision maker.' },
       { p: 'What’s the biggest reason customers sign up?', o: ['The 20% discount', 'Fresher milk', 'Cutting plastic and helping the planet', 'Not having to go to the shop'], a: 2,
         w: 'Reducing plastic. Passion is transferred: if you care about it, they will.' },
       { p: 'How much more are independent farmers paid by The Modern Milkman than by a supermarket?', o: ['Up to 4 times more', 'Twice as much', 'The same', '10% more'], a: 0,
         w: 'Up to 4 times more.' },
-      { p: '“I’m guessing you’d rather do that.” What kind of close is it?', o: ['A question close', 'An assumptive close', 'A discount close', 'A trial close'], a: 1,
+      { p: '“I’m assuming… you’d be happy with that as well?” What kind of close is it?', o: ['A question close', 'An assumptive close', 'A discount close', 'A trial close'], a: 1,
         w: 'Assumptive: it plays back everything they’ve agreed with. Then stop talking and let them answer.' },
     ],
   },

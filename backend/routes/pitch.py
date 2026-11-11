@@ -36,7 +36,7 @@ router = APIRouter()
 
 UNLOCK_HOUR = 18
 COUNTERS = ("read", "mirror", "record")
-WORD_KEY = re.compile(r"^L[1-9]-[0-9]{1,2}q?$")
+WORD_KEY = re.compile(r"^L[1-9]-[0-9]{1,2}(v2)?q?$")
 MAX_WORDS = 60
 MAX_LINE = 400
 

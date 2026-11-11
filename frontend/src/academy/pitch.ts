@@ -38,7 +38,7 @@ export const PITCH_QUIZ: PitchQ[] = [
     {p:'Why ask “Is it yourself that does the shopping?”',o:['To fill the silence','To qualify them as the person who shops: an A-customer','To find out their name'],a:1,w:'It qualifies them. You want the person who does the shopping.'},
     {p:'What are the three reasons in the Short story?',o:['Price, speed, choice','Independent farms, glass bottles (less plastic), the app and doorstep delivery','Discounts, vans, neighbours'],a:1,w:'Supporting independent farmers, reducing plastic, and modern convenience.'},
     {p:'Why mention the 250 products on the app?',o:['To open up a bigger order','Because milk isn’t enough to sign up','To fill time'],a:0,w:'A bigger order means a better order value and customers who stay longer.'},
-    {p:'“I’m guessing you’d rather do that.” What kind of close is this?',o:['A question close','An assumptive close','A discount close'],a:1,w:'Assumptive: it plays back what they’ve agreed to, so yes is the natural answer.'},
+    {p:'“I’m assuming… you’d be happy with that as well?” What kind of close is this?',o:['A question close','An assumptive close','A discount close'],a:1,w:'Assumptive: it plays back what they’ve agreed to, so yes is the natural answer.'},
     {p:'What comes straight after they say yes?',o:['Walk to the next door','The Rehash: payments, managing orders, cut-off and delivery times, bottles out','Another discount'],a:1,w:'The Rehash. It makes sure they know everything, which keeps them as a customer.'}
   ];
 
@@ -69,11 +69,18 @@ export const REHASH_PITCH: PitchStep = {n:6,t:'Rehash pitch',job:'Remove every r
 /** Everything on the pitch screen: the door pitch, then the sign-up and rehash pitches. */
 export const ALL_PITCH: PitchStep[] = [...PITCH, SIGNUP_PITCH, REHASH_PITCH];
 
+/** A line's id for saved wording and progress. The door pitch (steps 1–4) was
+ * rewritten on 11 Nov 2026, so its ids carry "v2": wording edits saved against
+ * the old lines no longer land on the wrong new lines. */
+export function lineId(n: number, i: number): string {
+  return n <= 4 ? `L${n}-${i}v2` : `L${n}-${i}`;
+}
+
 /** The office's own wording (GET /pitch → words) over the original lines. */
 export function withWords(steps: PitchStep[], words: Record<string, string> | null | undefined): PitchStep[] {
   const w = words || {};
   return steps.map((b) => ({
     ...b,
-    lines: b.lines.map((l, i) => ({ ...l, say: w[`L${b.n}-${i}`] || l.say, q: l.q ? (w[`L${b.n}-${i}q`] || l.q) : l.q })),
+    lines: b.lines.map((l, i) => ({ ...l, say: w[lineId(b.n, i)] || l.say, q: l.q ? (w[`${lineId(b.n, i)}q`] || l.q) : l.q })),
   }));
 }
