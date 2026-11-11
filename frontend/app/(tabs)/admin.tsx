@@ -26,6 +26,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { DepthCard } from '../../src/components/ui/DepthCard';
 import ViewersCard from '../../src/components/admin/ViewersCard';
 import PastTeamsCard from '../../src/components/admin/PastTeamsCard';
+import AnnouncementCard from '../../src/components/admin/AnnouncementCard';
 import { SectionHead } from '../../src/components/ui/SectionHead';
 import { SlidingSegments, type SegmentItem } from '../../src/components/ui/SlidingSegments';
 import { GlowButton } from '../../src/components/ui/GlowButton';
@@ -503,6 +504,8 @@ export default function AdminScreen() {
     >
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: tabBarClearance + 20 + kbInset }]} keyboardShouldPersistTaps="handled" onScroll={onScroll} scrollEventThrottle={16}>
         <View style={styles.shell}>
+        {/* Send announcement (the Owner, 11 Nov 2026): a push + Inbox row to the office. */}
+        {tab === 'users' && <AnnouncementCard />}
         {/* The Owner: read-only viewers (e.g. their own coach). */}
         {isSuperAdmin && tab === 'users' && <ViewersCard />}
         {tab === 'users' && <PastTeamsCard />}
