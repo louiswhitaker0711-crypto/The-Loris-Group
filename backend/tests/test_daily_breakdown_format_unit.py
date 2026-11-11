@@ -30,3 +30,15 @@ def test_prompt_asks_for_goals_positives_and_no_schedule():
     assert "goal_today" in prompt and "POSITIVES" in prompt
     assert "Tomorrow*" not in prompt
     assert "–" not in TONE_EXAMPLES and "—" not in TONE_EXAMPLES
+
+
+def test_office_numbers_add_up_the_breakdowns():
+    from routes.daily_breakdown import office_day_numbers
+    got = office_day_numbers([{"doors": 120, "spoken": 70, "pitched": 25, "closed": 15},
+                              {"doors": 100, "spoken": 60}, {}, None])
+    assert got == {"breakdowns_in": 2, "doors": 220, "spoken": 130, "pitched": 25, "closed": 15}
+
+
+def test_prompt_asks_for_office_bits():
+    prompt = build_daily_breakdown_prompt({}, "")
+    assert "OFFICE BITS" in prompt and "office_today" in prompt

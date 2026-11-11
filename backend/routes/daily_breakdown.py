@@ -19,6 +19,7 @@ from auth import get_current_user, get_subtree_ids
 from database import db
 from core.rate_limit import take_ai_quota
 from core.app_time import APP_TZ
+from core.week_bands import WEEK_BANDS, week_band
 from core.llm_keys import anthropic_api_key
 from prompts.daily_breakdown_prompt import (
     SYSTEM_MESSAGE as DAILY_BREAKDOWN_SYSTEM_MESSAGE,
@@ -60,6 +61,24 @@ def display_names(full_names: list) -> dict:
             out[n] = f"{parts[0]} {parts[-1][0].upper()}"
         else:
             out[n] = parts[0]
+    return out
+
+
+def _band_label(n: int) -> str:
+    key = week_band(n)
+    return next(label for _f, k, label in WEEK_BANDS if k == key)
+
+
+def office_day_numbers(breakdowns: list) -> dict:
+    """Today's office numbers on the doors, added up from everyone's
+    breakdown (KPIs come from the breakdowns, the Owner, 11 Nov 2026)."""
+    out = {"breakdowns_in": 0, "doors": 0, "spoken": 0, "pitched": 0, "closed": 0}
+    for bd in breakdowns:
+        if not bd or not any(bd.get(k) for k in ("doors", "spoken", "pitched", "closed")):
+            continue
+        out["breakdowns_in"] += 1
+        for k in ("doors", "spoken", "pitched", "closed"):
+            out[k] += int(bd.get(k) or 0)
     return out
 
 
@@ -325,6 +344,7 @@ async def daily_breakdown(request: Request):
             "today_numbers": numbers,
             "week_so_far": week.get("sales", r["sales"]),
             "week_days_with_signups": week.get("days", 1),
+            "week_traffic_light": _band_label(week.get("sales", r["sales"])),
         })
     # Order: highest sales today first (so top performer leads), with deltas as tiebreak
     rep_deltas.sort(key=lambda x: (x["today"], x["delta"]), reverse=True)
@@ -371,6 +391,33 @@ async def daily_breakdown(request: Request):
     )
     custom_instructions = (settings_doc or {}).get("custom_instructions") or ""
 
+    # General office bits for the WhatsApp (the Owner, 11 Nov 2026): today's
+    # numbers on the doors, the week day by day, and the week so far against
+    # last week to the same day.
+    day_q: dict = {"date": target_iso, "office_id": office_id}
+    if user_id_filter is not None:
+        day_q["user_id"] = {"$in": [str(u) for u in user_id_filter]}
+    office_bds = [sd.get("breakdown") async for sd in db.sector_days.find(day_q, {"_id": 0, "breakdown": 1})]
+    by_day, last_by_day = [], []
+    for i in range(day_idx + 1):
+        this_i = today if i == day_idx else await _aggregate_office_totals(office_id, week_ending, i, user_id_filter)
+        last_i = last_week_same_day if i == day_idx else await _aggregate_office_totals(office_id, last_week_ending, i, user_id_filter)
+        by_day.append({"day": ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")[i], "sign_ups": this_i["sales"]})
+        last_by_day.append(last_i["sales"])
+    best = max(by_day, key=lambda d: d["sign_ups"]) if by_day else None
+    office_today = {
+        "people_who_rang_a_bell": len([r for r in rep_deltas if r["today"] > 0]),
+        "gold_sign_ups": today["over30"],
+        "took_the_round": today["memberships"],
+        "on_the_doors": office_day_numbers(office_bds),
+        "law_of_averages_per_person": {"doors": 120, "spoken": 70, "pitched": 25, "closed": 15, "sign_ups": 4},
+        "week_by_day": by_day,
+        "best_day_this_week": best["day"] if best and best["sign_ups"] else None,
+        "today_is_best_day_this_week": bool(best and best["sign_ups"] and today["sales"] >= best["sign_ups"]),
+        "last_week_to_this_day": sum(last_by_day),
+        "week_traffic_light": _band_label(week_to_date["sales"]),
+    }
+
     summary_context = {
         "office": office_name,
         "date": pretty_date,
@@ -390,6 +437,7 @@ async def daily_breakdown(request: Request):
         "last_week_total": last_week["sales"],
         "last_week_same_day": last_week_same_day["sales"],
         "rep_callouts": callout_reps,
+        "office_today": office_today,
         "goal_remaining": goal_remaining,
         "days_left_in_week": days_left,
     }
