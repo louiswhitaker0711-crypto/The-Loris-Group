@@ -1217,8 +1217,10 @@ def averages_from(days: list[dict]) -> dict:
 async def my_averages(uid: str, today: Date) -> dict:
     since = (today - timedelta(days=AVERAGE_DAYS)).isoformat()
     by_day: dict = {}
-    async for r in db.owneriq_kpis.find({"cg1_user_id": uid, "date": {"$gte": since, "$lt": today.isoformat()},
-                                        "test_mode": {"$ne": True}, "cg1_matched_by": {"$ne": "name"}}):
+    from core.kpi_rules import breakdown_wins   # a day with a breakdown is counted from it, once
+    kpi = await db.owneriq_kpis.find({"cg1_user_id": uid, "date": {"$gte": since, "$lt": today.isoformat()},
+                                      "test_mode": {"$ne": True}, "cg1_matched_by": {"$ne": "name"}}).to_list(2000)
+    for r in breakdown_wins(kpi):
         cur = by_day.setdefault(str(r["date"])[:10], {"doors": 0, "spoken": 0, "pitched": 0, "closed": 0, "sales": 0})
         cur["doors"] += int(r.get("doors_knocked") or 0)
         cur["spoken"] += int(r.get("spoken_to") or 0)

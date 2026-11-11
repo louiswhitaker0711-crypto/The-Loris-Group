@@ -1,7 +1,8 @@
 /**
- * Field KPIs — mirrors the client's OwnerIQ / DataByte field numbers inside
- * CG1 (doors, spoken-to, pitches, sales, points), synced hourly from
- * OwnerIQ (every office) + a manual Force-refresh.
+ * Field KPIs — everyone's field numbers (doors, spoken to, pitched, closed,
+ * sign-ups) from their breakdowns (the Owner, 11 Nov 2026: OwnerIQ is gone).
+ * One row per person: a day with a breakdown is counted once, from it; old
+ * synced numbers only fill days before the breakdowns (core/kpi_rules.py).
  *
  * Controls: preset date chips + custom range + office bubbles (All + each
  * OwnerIQ company, super-admins only). Scope is role-driven by the backend:
@@ -23,12 +24,11 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Stack } from 'expo-router';
 import { useTabBarClearance } from '../src/customization/CustomTabBar';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { api } from '../src/api/client';
 import { useColors, fonts } from '../src/theme/ThemeContext';
 import { useAuth } from '../src/auth/AuthContext';
 import DateField from '../src/components/ui/DateField';
-import { toast } from '../src/utils/toast';
 import { haptics } from '../src/utils/haptics';
 import { useKeyboardInset, dismissKeyboardIfOpen } from '../src/hooks/useKeyboardInset';
 import { usePullToRefresh } from '../src/components/ui/PullRefresh';
@@ -123,7 +123,6 @@ export default function FieldKpisScreen() {
   const wide = useWindowDimensions().width >= 1100;
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { user } = useAuth();
-  const qc = useQueryClient();
 
   const role = user?.role;
   const isAdmin = role === 'admin';
@@ -208,33 +207,6 @@ export default function FieldKpisScreen() {
     },
   });
 
-  const statusQ = useQuery({
-    queryKey: ['owneriq-status'],
-    queryFn: async () => (await api.get('/owneriq/status')).data,
-    refetchInterval: 60_000,
-  });
-
-  const syncM = useMutation({
-    // Admin-only on the server, at most 14 days per run (SYNC_MAX_DAYS): pull
-    // the last 14 days of the range; older days come from the scheduled sync.
-    mutationFn: async () => {
-      if (!isAdmin) return null;
-      const syncFrom = from > addDaysISO(to, -13) ? from : addDaysISO(to, -13);
-      return (await api.post('/owneriq/sync', { from_date: syncFrom, to_date: to })).data;
-    },
-    onSuccess: () => {
-      // Silent — the fresh numbers appearing is feedback enough.
-      qc.invalidateQueries({ queryKey: ['owneriq-summary'] });
-      qc.invalidateQueries({ queryKey: ['owneriq-status'] });
-    },
-    onError: (e: any) => {
-      qc.invalidateQueries({ queryKey: ['owneriq-summary'] });
-      // 429 = a sync ran moments ago; the refetch is all that's needed.
-      if (e?.response?.status === 429) return;
-      toast.error('Sync failed', e?.response?.data?.detail || undefined);
-    },
-  });
-
   // Tap the eye to include/exclude a rep from the average. (0-data reps are
   // always excluded automatically and can't be toggled.)
   const toggleExclude = useCallback((key: string) => {
@@ -246,9 +218,8 @@ export default function FieldKpisScreen() {
     });
   }, []);
 
-  // Pull-to-refresh = a live sync from OwnerIQ for admins (others just
-  // refetch), then the summary refetches via the mutation's invalidation.
-  const onRefresh = useCallback(() => { syncM.mutate(); }, [syncM]);
+  // Pull-to-refresh just reloads the numbers (they come from the breakdowns).
+  const onRefresh = useCallback(() => { summaryQ.refetch(); }, [summaryQ]);
 
   // Web pull-to-refresh (react-native-web's RefreshControl is a no-op).
   const { pullIndicator } = usePullToRefresh(onRefresh);
@@ -295,9 +266,6 @@ export default function FieldKpisScreen() {
   // Bells' count leads, but only for the whole view (not a picked few).
   const coverage = repFilter.size === 0 ? data?.coverage : null;
 
-  const lastSync = statusQ.data?.synced_at
-    ? new Date(statusQ.data.synced_at).toLocaleString(APP_LOCALE, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
-    : null;
 
   return (
     <View style={{ flex: 1 }}>
@@ -309,7 +277,7 @@ export default function FieldKpisScreen() {
         contentContainerStyle={{ paddingBottom: 32 + tabBarClearance }}
         refreshControl={
           <RefreshControl
-            refreshing={syncM.isPending || summaryQ.isFetching}
+            refreshing={summaryQ.isFetching}
             onRefresh={onRefresh}
             tintColor={colors.primary}
             title="Syncing live from Field IQ…"
@@ -399,14 +367,6 @@ export default function FieldKpisScreen() {
             </TouchableOpacity>
           )}
           <View style={{ flex: 1 }} />
-          {lastSync ? <Text style={styles.syncText}>Synced {lastSync}</Text> : null}
-          {/* Pull-to-refresh works on native, but react-native-web's ScrollView
-              doesn't fire the pull gesture, so this button does it everywhere. */}
-          <TouchableOpacity onPress={onRefresh} disabled={syncM.isPending} activeOpacity={0.6} style={styles.filterBtn}
-            accessibilityLabel="Sync live from Field IQ">
-            {syncM.isPending ? <ActivityIndicator size="small" color={colors.textMuted} /> : <Ionicons name="sync-outline" size={13} color={colors.text} />}
-            <Text style={styles.filterBtnTxt}>{syncM.isPending ? 'Syncing…' : 'Sync now'}</Text>
-          </TouchableOpacity>
         </View>
 
         <View>

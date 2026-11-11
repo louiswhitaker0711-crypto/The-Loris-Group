@@ -426,8 +426,11 @@ RATIO_METRICS = ["doors_knocked", "spoken_to", "pitches_commenced", "pitches_clo
 
 
 def _rep_key(row: dict) -> str:
-    """Canonical per-rep grouping key: badge number first (CG1's canonical id)."""
-    return row.get("badge_number") or row.get("owneriq_user_id") or (row.get("rep_name") or "?")
+    """Canonical per-rep grouping key: the person (core/kpi_rules.person_key),
+    so someone's breakdown rows and any old synced rows (with a badge on them)
+    land in one row, not two (the Owner, 11 Nov 2026)."""
+    from core.kpi_rules import person_key
+    return person_key(row)
 
 
 def _is_zero_day(row: dict) -> bool:
@@ -461,23 +464,28 @@ def aggregate_rows(rows: list[dict], exclude_keys: set[str] | None = None, inclu
                 "active_days": 0,
                 "totals": {m: 0 for m in METRICS},
             }
-        # keep the most recent name/link we see
-        if row.get("rep_name"):
+        # The breakdown's name/link is the app's own; fill gaps from the rest.
+        if row.get("rep_name") and (row.get("source") == "breakdown" or not r["rep_name"]):
             r["rep_name"] = row["rep_name"]
         if row.get("cg1_user_id"):
             r["cg1_user_id"] = row["cg1_user_id"]
+        if row.get("badge_number") and not r["badge_number"]:
+            r["badge_number"] = row["badge_number"]
         for m in METRICS:
             r["totals"][m] += (row.get(m) or 0)
         if not _is_zero_day(row):
-            r["active_days"] += 1
+            # Days, not rows: one day is one day however many rows it has.
+            r.setdefault("_days", set()).add(str(row.get("date") or "")[:10])
+            r["active_days"] = len(r["_days"])
 
     rep_list = []
     for r in reps.values():
+        r.pop("_days", None)
         zero = not any(r["totals"][m] for m in ("doors_knocked", "spoken_to", "pitches_commenced", "pitches_closed", "sales"))
         days = r["active_days"] or (0 if zero else 1)
         r["zero"] = zero
         r["avg_per_day"] = {m: (round(r["totals"][m] / days, 2) if days else 0) for m in METRICS}
-        r["excluded"] = (r["key"] in exclude_keys) or (zero and not include_zero)
+        r["excluded"] = (str(r["key"]).upper() in exclude_keys) or (zero and not include_zero)
         rep_list.append(r)
     rep_list.sort(key=lambda r: r["totals"]["points"], reverse=True)
 

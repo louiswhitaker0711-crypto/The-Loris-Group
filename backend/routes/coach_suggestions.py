@@ -44,8 +44,10 @@ async def coach_suggestions(request: Request):
     from core.kpi_rules import day_counts   # days under 10 doors or 2/2/2/2 don't count
     field: dict = {}
     since = (through - timedelta(days=21)).isoformat()
-    async for r in db.owneriq_kpis.find({"cg1_user_id": {"$in": ids}, "date": {"$gte": since, "$lte": through.isoformat()},
-                                        "test_mode": {"$ne": True}, "cg1_matched_by": {"$ne": "name"}}):
+    from core.kpi_rules import breakdown_wins   # a day with a breakdown is counted from it, once
+    kpi = await db.owneriq_kpis.find({"cg1_user_id": {"$in": ids}, "date": {"$gte": since, "$lte": through.isoformat()},
+                                      "test_mode": {"$ne": True}, "cg1_matched_by": {"$ne": "name"}}).to_list(20000)
+    for r in breakdown_wins(kpi):
         uid = str(r["cg1_user_id"])
         try:
             d = datetime.fromisoformat(str(r["date"])[:10]).date()

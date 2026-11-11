@@ -278,7 +278,8 @@ async def person_breakdown_for(viewer: dict, user_id: str) -> dict:
 
     pin = await office_pin(person.get("office_id"), db)
     recent_from = (today - timedelta(days=LOA_DAYS - 1)).isoformat()
-    daily = await _kpi_rows({"cg1_user_id": uid}, recent_from, today.isoformat())
+    from core.kpi_rules import breakdown_wins
+    daily = breakdown_wins(await _kpi_rows({"cg1_user_id": uid}, recent_from, today.isoformat()))
     state = await db.owneriq_sync_state.find_one({"_id": "performance"}, {"_id": 0, "synced_at": 1})
 
     can_badge = can_use_badges(viewer)

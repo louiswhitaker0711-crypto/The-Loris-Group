@@ -24,14 +24,36 @@ def day_counts(doors, spoken, pitched, closed) -> bool:
     return True
 
 
-def _person(row: dict) -> str:
-    return str(row.get("cg1_user_id") or row.get("badge_number") or row.get("owneriq_user_id")
-               or row.get("rep_name") or "?")
+def person_key(row: dict) -> str:
+    """Who a KPI row belongs to, so one person is always one person: their app
+    account first (the breakdowns and any synced row linked to them), then the
+    account an old synced row's name pointed at (display grouping only, never
+    access), then the badge / OwnerIQ id / name. Lower-cased so a badge typed
+    either way is the same person."""
+    return str(row.get("cg1_user_id") or row.get("cg1_suggested_user_id") or row.get("badge_number")
+               or row.get("owneriq_user_id") or " ".join((row.get("rep_name") or "?").split())).lower()
+
+
+_person = person_key
+
+
+def breakdown_wins(rows: list[dict]) -> list[dict]:
+    """The breakdowns are the KPIs (the Owner, 11 Nov 2026: OwnerIQ is gone).
+    When a person has a breakdown for a day, any old synced row for that same
+    day is dropped, so the day is counted once, from the breakdown. Old synced
+    rows stay only for days with no breakdown (history from before the switch)."""
+    rows = list(rows)
+    have_bd = {(person_key(r), str(r.get("date") or "")[:10]) for r in rows if r.get("source") == "breakdown"}
+    if not have_bd:
+        return rows
+    return [r for r in rows if r.get("source") == "breakdown"
+            or (person_key(r), str(r.get("date") or "")[:10]) not in have_bd]
 
 
 def counted_rows(rows: list[dict]) -> list[dict]:
     """Raw KPI rows (owneriq_kpis fields) for the days that count. A person can
     have more than one row for a day, so the day is judged on its totals."""
+    rows = breakdown_wins(rows)
     days: dict[tuple, list] = {}
     for r in rows:
         k = (_person(r), str(r.get("date") or "")[:10])
