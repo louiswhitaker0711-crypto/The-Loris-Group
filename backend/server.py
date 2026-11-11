@@ -1100,7 +1100,7 @@ async def _startup_work():
             except Exception as ex:
                 logger.error(f"COD meeting quiz nudge failed: {ex}")
 
-        # A COD item picked for today's Coaches Meeting → the BAs in today
+        # A COD item picked for today's Leaders Meeting → the BAs in today
         # get a nudge at 10:58 to do its quiz and test.
         scheduler.add_job(_cod_meeting_quiz, "cron", day_of_week="mon-sat", hour=10, minute=58,
                           id="cod_meeting_quiz", replace_existing=True)

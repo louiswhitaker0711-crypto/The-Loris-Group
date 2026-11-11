@@ -1,5 +1,5 @@
 /**
- * "From the COD" on a meeting box in the weekly plan (Coaches Meeting,
+ * "From the COD" on a meeting box in the weekly plan (Leaders Meeting,
  * Morning Meeting · Topic). Picking an item links it to that day's box
  * (tap the chip to open the item) and puts its name in the box. A Coaches
  * Meeting pick also nudges that team's BAs who are in that day to do the

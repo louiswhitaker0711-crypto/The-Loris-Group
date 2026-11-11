@@ -1,6 +1,6 @@
 """Notes folder (the Owner, 29 Oct 2026).
 
-Everything people write in their planner's note boxes (Coaches Meeting,
+Everything people write in their planner's note boxes (Leaders Meeting,
 Morning Meeting news/topic/customer service/Bells, Extra Notes) files itself
 into a folder, under a heading: a COD topic, or one of the pitch headings
 (Introduction, Presentation, Short story, Close, Sign-up process, Rehash,
@@ -68,7 +68,7 @@ STAGE_ORDER = [1, 2, 3, 5, 4, 6]
 
 # The planner's note boxes that file into the folder, with their labels.
 NOTE_BOXES = {
-    "leaders_meeting": "Coaches Meeting", "morning_news": "Morning Meeting · News",
+    "leaders_meeting": "Leaders Meeting", "morning_news": "Morning Meeting · News",
     "morning_topic": "Morning Meeting · Topic", "morning_cs": "Morning Meeting · Customer Service",
     "morning_bells": "Morning Meeting · Bells",
 }

@@ -70,7 +70,7 @@ DAY_FIELDS = [
 ]
 
 # A COD item picked for a meeting box (its module id). The box text keeps the
-# item's name; this links it. A Coaches Meeting pick also sends the BAs in that
+# item's name; this links it. A Leaders Meeting pick also sends the BAs in that
 # day a 10:58 nudge to do that item's quiz (cod_meeting_quiz_tick).
 COD_PICK_FIELDS = ["leaders_meeting_cod", "morning_topic_cod"]
 
@@ -1624,7 +1624,7 @@ async def set_my_planner_goals(request: Request):
 # Personal only: it changes how the sheet and the day pages are laid out for
 # that person, never the office timetable.
 SHEET_DEFAULT_ROWS = [
-    {"key": "leaders_meeting", "label": "Coaches", "time": "10:00", "on_sheet": True, "on_day": True},
+    {"key": "leaders_meeting", "label": "Leaders", "time": "10:00", "on_sheet": True, "on_day": True},
     {"key": "stage1", "label": "Stage 1", "time": "10:30", "on_sheet": True, "on_day": True},
     {"key": "stage2", "label": "Stage 2", "time": "10:30", "on_sheet": True, "on_day": True},
     {"key": "primetime", "label": "Primetime", "time": "11:00", "on_sheet": False, "on_day": True},
@@ -1660,7 +1660,8 @@ def normalize_sheet_layout(raw) -> list:
         on_sheet, on_day = r.get("on_sheet"), r.get("on_day")
         out.append({
             "key": key,
-            "label": _s(r.get("label"), 40) or _SHEET_DEFAULT_BY_KEY[key]["label"],
+            # "Coaches" was the old default name for the Leaders Meeting row (renamed 11 Nov 2026).
+            "label": (lambda lab: _SHEET_DEFAULT_BY_KEY[key]["label"] if (not lab or (key == "leaders_meeting" and lab == "Coaches")) else lab)(_s(r.get("label"), 40)),
             "time": time if _TIME_RE.match(time) else "",
             "on_sheet": _SHEET_DEFAULT_BY_KEY[key]["on_sheet"] if on_sheet is None else bool(on_sheet),
             "on_day": True if on_day is None else bool(on_day),
@@ -2230,10 +2231,10 @@ async def bells_readout(request: Request, week: str, day: int):
     return out
 
 
-# ── Coaches Meeting COD pick → 10:58 quiz nudge to the BAs in that day ─────
+# ── Leaders Meeting COD pick → 10:58 quiz nudge to the BAs in that day ─────
 async def cod_meeting_quiz_tick() -> int:
     """Mon–Sat 10:58 (app time). For every weekly plan with a COD item picked
-    for TODAY's Coaches Meeting, each BA on that planner's team who is in today
+    for TODAY's Leaders Meeting, each BA on that planner's team who is in today
     (not Not scheduled on Bells) gets one push to do that item's quiz and test.
     Once per BA per item per day, however many plans name it."""
     from core.push import send_push_to_user

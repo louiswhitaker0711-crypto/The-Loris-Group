@@ -94,7 +94,7 @@ const PLAN_FIELDS: { key: string; label: string; icon: any }[] = [
 const LEADER_ONLY_KEYS = ['crew_plan', 'stage1', 'stage2', 'sales_impact', 'product_coaching', 'appointments'];
 // "Notes" — what they write down as the day happens
 const NOTE_FIELDS: { key: string; label: string; icon: any }[] = [
-  { key: 'leaders_meeting', label: 'Coaches Meeting', icon: 'star-outline' },
+  { key: 'leaders_meeting', label: 'Leaders Meeting', icon: 'star-outline' },
   { key: 'morning_news', label: 'Morning Meeting · News', icon: 'newspaper-outline' },
   { key: 'morning_topic', label: 'Morning Meeting · Topic', icon: 'bulb-outline' },
   { key: 'morning_cs', label: 'Morning Meeting · Customer Service', icon: 'heart-outline' },

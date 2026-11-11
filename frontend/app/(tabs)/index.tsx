@@ -1512,7 +1512,7 @@ export default function HomeScreen() {
     </>
   );
   // Mornings (until 11:00, the Owner 26 Oct 2026): plan sectors, Primetime and
-  // today's Coaches Meeting / COD pick come first.
+  // today's Leaders Meeting / COD pick come first.
   const coachMorning = (
     <>
       {pSectorPrompt}

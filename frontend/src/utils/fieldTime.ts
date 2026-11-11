@@ -37,7 +37,7 @@ export function fieldStarted(at: Date = new Date()): boolean {
 
 /** Morning planning (the Owner, 26 Oct 2026): until 11:00 Monday to Friday,
  * and until the field (10:00) on a Saturday. Home leads with plan sectors,
- * Primetime and today's Coaches Meeting / COD pick then. */
+ * Primetime and today's Leaders Meeting / COD pick then. */
 export function inMorningPlanning(at: Date = new Date()): boolean {
   const { day, mins } = ukNow(at);
   if (day === 0) return false;

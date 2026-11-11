@@ -1,6 +1,6 @@
 // Today's meetings from your weekly plan, on Home when they're needed
 // (the Owner, 26 Oct 2026):
-//   • mornings (until 11:00): the Coaches Meeting and the Morning Meeting
+//   • mornings (until 11:00): the Leaders Meeting and the Morning Meeting
 //     topic, each with its COD pick — plan or change them in one tap;
 //   • the morning meeting (11:45–12:30): every Morning Meeting box, and for an
 //     Admin the Bells read-out.
@@ -14,7 +14,7 @@ import { apiService } from '../../../api/client';
 import { useAuth } from '../../../auth/AuthContext';
 import { planDayNow } from '../../../utils/fieldTime';
 
-const PLAN_BOXES: Array<[string, string]> = [['leaders_meeting', 'Coaches Meeting'], ['morning_topic', 'Morning Meeting · Topic']];
+const PLAN_BOXES: Array<[string, string]> = [['leaders_meeting', 'Leaders Meeting'], ['morning_topic', 'Morning Meeting · Topic']];
 const MEETING_BOXES: Array<[string, string]> = [
   ['morning_news', 'News'], ['morning_topic', 'Topic'], ['morning_cs', 'Customer Service'], ['morning_bells', 'Bells'],
 ];

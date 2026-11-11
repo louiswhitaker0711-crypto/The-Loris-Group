@@ -375,6 +375,14 @@ async def run_content_fixes(db) -> dict:
     except Exception as e:
         logger.warning(f"content_fixes: Academy Day 2 (v2) checklist update failed: {e}")
     try:
+        # "Coaches Meeting" renamed "Leaders Meeting" (the Owner, 11 Nov 2026):
+        # notes already filed take the new name too (idempotent).
+        r1 = await db.folder_notes.update_many({"source_label": "Coaches Meeting"}, {"$set": {"source_label": "Leaders Meeting"}})
+        r2 = await db.folder_notes.update_many({"title": "Coaches Meeting"}, {"$set": {"title": "Leaders Meeting"}})
+        result["leaders_meeting_renamed"] = r1.modified_count + r2.modified_count
+    except Exception as e:
+        logger.warning(f"content_fixes: Leaders Meeting rename failed: {e}")
+    try:
         from core.field_ladder import migrate as _field_ladder
         result["field_ladder"] = await _field_ladder(db)
     except Exception as e:

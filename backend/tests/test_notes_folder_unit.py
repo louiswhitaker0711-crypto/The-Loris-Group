@@ -32,7 +32,7 @@ def test_planner_entries_default_to_the_meeting_cod_pick_or_other():
                   "morning_cs": "Smile on the doorstep"}}
     out = nf.planner_entries("u1", "2026-11-01", days, "Extra bits", {})
     by = {e["source_label"]: e for e in out}
-    assert by["Coaches Meeting"]["head"] == "cod:m1" and by["Coaches Meeting"]["date"] == "2026-10-27"
+    assert by["Leaders Meeting"]["head"] == "cod:m1" and by["Leaders Meeting"]["date"] == "2026-10-27"
     assert by["Morning Meeting · Customer Service"]["head"] == "pitch:other"
     assert by["Extra notes"]["date"] == "2026-10-26"
     assert len(out) == 3
