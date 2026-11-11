@@ -30,38 +30,20 @@ HOUSE_GOALS = (
 # ─────────────────────────────────────────────────────────────────────────────
 TONE_EXAMPLES = """\
 EXAMPLE A:
-Great work today, everyone.
+Monday smashed 💪 11 sign-ups today, up from 6 this time last week.
 
-🔔 Owen – 6
-Consistency like this comes from discipline. Keeps showing up when it matters.
+🔔 *Owen: 5* 🔥
+Goal of 4 and beat it. 80 spoken to and 4 of the 5 were quality sign-ups, setting the pace.
 
-🛎️ Kai – 4
-Growth mindset—asking for help and applying it.
+🛎️ *Tess: 3* 🌟
+Hit her goal of 3 with 2 taking The Round. Her closes are landing.
 
-Shoutout to everyone who pushed late. That's where legends are made.
+🎓 *Maya: 1* 🙂
+First sign-up on the board on her second field day. Foundation laid.
 
-Momentum is building. Leaders are stepping up, and the standard is rising. Stay locked in and finish the week the right way.
+Shoutout to everyone who kept knocking late. That's where the standard gets set 🫡
 
-High standards.
-High intensity.
-Tomorrow is a new day.
-
-📈 Hit the weekly target
-📈 Fails under 10%
-📈 75%+ in The Round and reaching their 4th week
-
-Who's ready to elevate and close strong? 🫡
-
-EXAMPLE B:
-Well done everyone – smashing it today! 🙌
-
-🔔 Owen – 6 🔥 — Still hasn't missed; when challenged he'll always come out on top.
-🛎️ Tess – 5 🌟 — Out here proving it's possible and not shy to ask for help.
-🛎️ Theo – 3 💥 — Bouncing back, proving he's got this.
-🛎️ Nina – 3 💫 — Pushing late and ringing that bell.
-🎓 Maya – 1 🙂 — First sign-up earned and a late-night finish to prove herself.
-
-Great work today 🙌 Bells are ringing 🛎️, leaders are leading 👨‍✈️, and the PACE is setting ‼️. Let's keep it rolling and finish this week strong ⚡🔥
+We're on 11 for the week with 39 to go and 5 days left. Stay locked in ⚡
 
 High standards
 High intensity
@@ -71,7 +53,28 @@ Tomorrow is a new day 🌱
 📈 Fails under 10%
 📈 75%+ in The Round and reaching their 4th week
 
-Who's stepping up to finish the week with a BANG?! 💥
+Who's stepping up to make tomorrow the biggest day of the week?! 💥
+
+EXAMPLE B:
+Wednesday done 💪 14 sign-ups today, up from 5 this time last week.
+
+🔔 *Liam F: 4* 🔥
+Up from 0 last Wednesday and 1 above his goal. All 4 were quality sign-ups.
+
+🛎️ *Liam B: 2* 💫
+Hit his goal of 2 and spoke to 72 people. Volume is there, the closes will follow.
+
+Coaches are stepping up and the pace is rising 📈 We're on 22 for the week with 28 to go and 4 days left.
+
+High standards
+High intensity
+Tomorrow is a new day 🌱
+
+📈 Hit the weekly target
+📈 Fails under 10%
+📈 75%+ in The Round and reaching their 4th week
+
+Who's ready to finish the week the right way? 🫡
 """
 
 SYSTEM_MESSAGE = (
@@ -91,8 +94,8 @@ def build_daily_breakdown_prompt(
     Args:
         summary_context: Dict with today's office data, week-to-date, last-week,
             rep_callouts, weekly_goal, etc. The handler already shaped this.
-        tomorrow_block_text: Pre-formatted "📅 *Tomorrow — …*" block. The LLM is
-            instructed to drop this in verbatim (no rewriting times/titles).
+        tomorrow_block_text: No longer used: the Owner took tomorrow's schedule
+            off the end of the message (11 Nov 2026). Kept for callers.
         custom_instructions: Free-form admin-authored overrides per office
             (tone, what to include, what to avoid, etc.). Injected at the top
             of the rules block so it can override the defaults below.
@@ -121,56 +124,62 @@ def build_daily_breakdown_prompt(
         f"{TONE_EXAMPLES}"
         "═══════════════════════════════════\n\n"
         "STRUCTURE — follow this order strictly:\n"
-        "1) ONE punchy opener line that names the day (e.g. 'Monday smashed 💪' "
-        "or 'Great work today, everyone.')\n"
-        "2) A blank line, then a per-BA callout block. Use:\n"
-        "     🔔 = top performer of the day (most sign-ups)\n"
-        "     🛎️ = anyone else who rang a bell today\n"
-        "     🎓 = new BAs (use this if role == 'trainee')\n"
-        "     🏃 = late grinder / volume hitter\n"
-        "   Format: '🛎️ <Name> – <sign-ups> <vibe-emoji> — <one short line tied to their numbers>'\n"
-        "   Pull the personalised line from the data: big delta vs same-day-"
-        "last-week → 'bouncing back / setting the pace'; high share of Gold "
-        "sign-ups (`over30` in the data = a repeat weekly order of £10 or "
-        "more) → 'quality sign-ups'; mostly Silver sign-ups (`under30` = an "
-        "order of £5.00 to £9.99) → 'volume grinder / late-night legend'; new BA "
-        "with first sign-up → 'getting on the board'. `memberships` is how many "
-        "of their sign-ups took The Round (the membership): worth a mention "
-        "when most of them did, but it is never a sign-up of its own.\n"
+        "1) ONE punchy opener line that names the day and today's total against "
+        "the same day last week (e.g. 'Wednesday done 💪 14 sign-ups today, up "
+        "from 5 this time last week.').\n"
+        "2) A blank line, then one callout per person, a blank line between each. "
+        "Each callout is TWO lines:\n"
+        "     line 1: '<emoji> *<name>: <sign-ups>* <vibe emoji>'\n"
+        "     line 2: one or two short sentences: their goal and their positives.\n"
+        "   Emojis: 🔔 = top performer(s) of the day (most sign-ups), 🛎️ = anyone "
+        "else who rang a bell, 🎓 = new BAs (role == 'trainee').\n"
+        "   Use the name EXACTLY as given in `rep_callouts` (first name, or first "
+        "name and initial when two people share a first name). Never add a surname.\n"
+        "   GOAL: when `goal_today` is set, say how they did against it (beat it, "
+        "hit it, or how close they got, kept encouraging). If it isn't set, leave "
+        "goals out for that person.\n"
+        "   POSITIVES: write them yourself from their data; pick the one or two "
+        "strongest: beating last week's same day (`delta`), quality sign-ups "
+        "(`today_over30` = Gold, an order of £10+), sign-ups taking The Round "
+        "(`today_memberships`, never a sign-up of its own), strong numbers on "
+        "the doors (`today_numbers`: doors, spoken, pitched, closed against "
+        "the day's Law of Averages of 120 doors, 70 spoken to, 25 pitched, 15 "
+        "closed, 4+ sign-ups), or their week so far (`week_so_far`, "
+        "`week_days_with_signups`). New BA with a first sign-up → getting on "
+        "the board. Positives only: no criticism in a callout.\n"
         "   Skip anyone with 0 sign-ups today.\n"
         "3) ONE shoutout line to anyone who pushed late or grinded.\n"
-        "4) A short 2-3 line momentum paragraph (coaches stepping up, standards "
-        "rising, finish the week strong).\n"
+        "4) A short 1-2 line week update: where the week stands (`week_to_date`, "
+        "`goal_remaining`, `days_left_in_week`) and any other good bit of info "
+        "from the data (e.g. how many quality sign-ups or how many took The "
+        "Round today, beating last week's total so far).\n"
         "5) The mantra block (each on its own line):\n"
         f"{HOUSE_MANTRA}\n"
         "6) The goal block (each on its own line):\n"
         f"{HOUSE_GOALS}\n"
         "7) ONE rallying close line ending in a question (e.g. \"Who's stepping "
-        "up to finish the week with a BANG?! 💥\").\n"
-        "8) A blank line, then INSERT THE TOMORROW'S SCHEDULE BLOCK BELOW "
-        "VERBATIM — do NOT rewrite the times or titles, copy-paste it exactly.\n\n"
+        "up to make tomorrow the biggest day of the week?! 💥\"). Nothing after it: "
+        "no schedule.\n\n"
         "RULES:\n"
+        "• NO DASHES. Never use – or — anywhere in the message. Use a colon "
+        "after a name, and full stops or commas in sentences.\n"
         "• Plain text + emojis only. NO markdown headers (no #, no **). Single "
         "asterisks *like this* are OK for WhatsApp bold.\n"
-        "• ⚠️ ONLY use BA names that appear in the `rep_callouts` array of "
+        "• ⚠️ ONLY use names that appear in the `rep_callouts` array of "
         "TODAY'S DATA below. NEVER use names from the EXAMPLE messages above "
-        "(Owen / Tess / Kai / Theo / Nina / Maya) unless they are actually "
-        "present in "
+        "(Owen / Tess / Maya / Liam F / Liam B) unless they are actually present in "
         "rep_callouts.\n"
-        "• If `rep_callouts` is empty (nobody rang a bell today), SKIP the "
-        "per-BA callout block entirely (steps 2-3) and write a short "
-        "transition line like 'A grinder of a day — heads down, no bells, but "
-        "the work compounds.' Then continue with the momentum paragraph + "
-        "mantra + goals + close + tomorrow's schedule as normal.\n"
-        "• Numbers must match the data exactly — do not invent sign-up counts.\n"
-        "• Keep total length tight — under ~30 lines. Scannable.\n"
+        "• If `rep_callouts` is empty (nobody rang a bell today), SKIP steps 2-3 "
+        "and write a short line like 'A grinder of a day. Heads down, no bells, "
+        "but the work compounds.' Then carry on from step 4.\n"
+        "• Numbers must match the data exactly. Do not invent sign-ups, goals or "
+        "door numbers; leave out anything the data doesn't have.\n"
+        "• Keep it tight and scannable.\n"
         "• Don't be cringey. No 'champions' / 'rockstars' / 'crushed it'. Match "
         "the reference tone.\n"
-        "• Return ONLY the message text — no preamble, no JSON, no quotes "
+        "• Return ONLY the message text: no preamble, no JSON, no quotes "
         "around the output.\n"
         f"• {BRITISH_ENGLISH}\n"
         f"• {SELF_EMPLOYED_TERMS}\n\n"
-        f"═════════ TODAY'S DATA ═════════\n{summary_context}\n\n"
-        f"═════════ TOMORROW'S SCHEDULE BLOCK (insert verbatim at the end) "
-        f"═════════\n{tomorrow_block_text}\n"
+        f"═════════ TODAY'S DATA ═════════\n{summary_context}\n"
     )

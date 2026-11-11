@@ -45,6 +45,31 @@ def _day_index_for(d: datetime) -> int:
     return d.weekday()
 
 
+def display_names(full_names: list) -> dict:
+    """Full name -> what the breakdown calls them: the first name, or the
+    first name and surname initial when two people share a first name
+    (the Owner, 11 Nov 2026)."""
+    people = {n.strip() for n in full_names if (n or "").strip()}
+    by_first: dict = {}
+    for n in people:
+        by_first.setdefault(n.split()[0].lower(), set()).add(n)
+    out = {}
+    for n in people:
+        parts = n.split()
+        if len(by_first[parts[0].lower()]) > 1 and len(parts) > 1:
+            out[n] = f"{parts[0]} {parts[-1][0].upper()}"
+        else:
+            out[n] = parts[0]
+    return out
+
+
+def no_dashes(text: str) -> str:
+    """Take out the spaced dashes the model likes ("Liam – 4 — up 3"); the
+    Owner finds them hard to read (11 Nov 2026). Ranges like 12–14 stay."""
+    text = re.sub(r"[ \t]+[–—][ \t]+", ", ", text)
+    return re.sub(r"[–—]", ", ", re.sub(r"(?<=\d)[–—](?=\d)", "\x00", text)).replace("\x00", "–")
+
+
 def _clock(hhmm: str) -> str:
     """'9:5' -> '09:05', '14:30' -> '14:30' — UK 24-hour clock (best-effort,
     returns input on parse fail)."""
@@ -165,6 +190,7 @@ async def _aggregate_office_totals(
             rep_mem += m
         if rep_sales > 0:
             by_rep[r.get("user_id") or r.get("user_name")] = {
+                "user_id": r.get("user_id"),
                 "name": r.get("user_name"),
                 "role": r.get("role"),
                 "sales": rep_sales,
@@ -258,20 +284,47 @@ async def daily_breakdown(request: Request):
     # Tomorrow's recurring office schedule (meetings & blocks)
     tomorrow = await _tomorrow_schedule(office_id, target_dt)
 
+    # What each person set out to do today and did on the doors: their goal
+    # from the set-up (or breakdown) and their numbers from the breakdown, so
+    # the AI can write goals and positives from them (the Owner, 11 Nov 2026).
+    today_ids = [str(r["user_id"]) for r in today["top_reps"] if r.get("user_id")]
+    days_by_id: dict = {}
+    if today_ids:
+        async for sd in db.sector_days.find({"date": target_iso, "user_id": {"$in": today_ids}},
+                                            {"_id": 0, "user_id": 1, "setup": 1, "breakdown": 1}):
+            days_by_id[str(sd.get("user_id"))] = sd
+    week_by_id = {str(r.get("user_id")): r for r in week_to_date["top_reps"] if r.get("user_id")}
+
+    # First names only; a surname initial when two current people share one.
+    roster: list = []
+    async for u in db.users.find({"office_id": office_id, "is_active": {"$ne": False}, "is_demo": {"$ne": True}},
+                                 {"_id": 0, "name": 1}):
+        roster.append(u.get("name") or "")
+    shown = display_names(roster + [r.get("name") or "" for r in today["top_reps"]])
+
     # Build improvement deltas per rep — match by name
     last_by_name = {r["name"]: r for r in last_week_same_day["top_reps"]}
     rep_deltas = []
     for r in today["top_reps"]:
         prev = last_by_name.get(r["name"], {})
         delta = r["sales"] - prev.get("sales", 0)
+        sd = days_by_id.get(str(r.get("user_id")), {})
+        setup, bd = sd.get("setup") or {}, sd.get("breakdown") or {}
+        goal = setup.get("goal") if setup.get("goal") is not None else bd.get("goal")
+        numbers = {k: bd.get(k) for k in ("doors", "spoken", "pitched", "closed") if bd.get(k) is not None}
+        week = week_by_id.get(str(r.get("user_id")), {})
         rep_deltas.append({
-            "name": r["name"],
+            "name": shown.get(r["name"], r["name"]),
             "role": r.get("role") or "rep",
             "today": r["sales"],
+            "goal_today": goal,
             "same_day_last_week": prev.get("sales", 0),
             "delta": delta,
             "today_over30": r["over30"],
             "today_memberships": r["memberships"],
+            "today_numbers": numbers,
+            "week_so_far": week.get("sales", r["sales"]),
+            "week_days_with_signups": week.get("days", 1),
         })
     # Order: highest sales today first (so top performer leads), with deltas as tiebreak
     rep_deltas.sort(key=lambda x: (x["today"], x["delta"]), reverse=True)
@@ -369,6 +422,7 @@ async def daily_breakdown(request: Request):
     if text.startswith("```"):
         text = re.sub(r"^```(?:[a-zA-Z]+)?\s*", "", text)
         text = re.sub(r"\s*```\s*$", "", text)
+    text = no_dashes(text)
 
     return {
         "text": text,
