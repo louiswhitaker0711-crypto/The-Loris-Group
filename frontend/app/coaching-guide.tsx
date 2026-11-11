@@ -162,7 +162,9 @@ export default function CoachingGuideScreen() {
             <Text style={s.kicker}>BA Academy · in the office</Text>
             <View style={s.box}>
               <View style={s.line}>
-                <Text style={s.text}>{`${who} is in product coaching with you today, not in the field. Their workbook shows how far through Day ${p.day_number} they are, their quiz scores and any questions for you.`}</Text>
+                <Text style={s.text}>{p.day_over
+                  ? `${who}’s Day ${p.day_number} product coaching has been done but not graded yet. Grade it now: their workbook shows how far through Day ${p.day_number} they got, their quiz scores and any questions for you.`
+                  : `${who} is in product coaching with you today, not in the field. Their workbook shows how far through Day ${p.day_number} they are, their quiz scores and any questions for you.`}</Text>
               </View>
             </View>
             {!!p.trainee_user_id && (
@@ -183,7 +185,7 @@ export default function CoachingGuideScreen() {
           </>
         )}
 
-        <Text style={s.kicker}>{academy ? 'After product coaching' : 'After the field'}</Text>
+        <Text style={s.kicker}>{academy ? (p.day_over && !p.done ? 'Not graded yet' : 'After product coaching') : 'After the field'}</Text>
         {p.can_grade && !!p.assessment_id ? (
           <Pressable onPress={() => router.push(`/assessment/${p.assessment_id}` as never)} disabled={!canGradeNow && !p.done}
             style={[s.grade, (canGradeNow || p.done) ? s.gradeOn : null]} accessibilityRole="button">

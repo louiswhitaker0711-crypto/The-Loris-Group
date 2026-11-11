@@ -158,7 +158,7 @@ async def assessment_reminder_tick(dry_run: bool = False, force: bool = False) -
 
     hires = await db.new_hires.find(
         {"active": True, "trainee_user_id": {"$in": list(worked.keys())}},
-        {"_id": 0, "id": 1, "name": 1, "leader": 1, "current_day": 1, "trainee_user_id": 1, "office_id": 1},
+        {"_id": 0, "id": 1, "name": 1, "leader": 1, "current_day": 1, "trainee_user_id": 1, "office_id": 1, "start_date": 1},
     ).to_list(500)
     if not hires:
         return {"sent": 0, "candidates": 0, "reason": "no active new starters with bells"}
@@ -188,7 +188,7 @@ async def assessment_reminder_tick(dry_run: bool = False, force: bool = False) -
         current_day = int(h.get("current_day") or 1)
         last = last_graded_at(graded_rows.get(h["id"], []))
         pend = sorted(n for n in pending_by_hire.get(h["id"], [])
-                      if ready_to_grade(n, current_day, last_graded=last))
+                      if ready_to_grade(n, current_day, last_graded=last, start_date=h.get("start_date")))
         if not pend:
             continue
         leader_id = await _resolve_leader_id(h["trainee_user_id"], h.get("leader") or "")

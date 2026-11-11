@@ -319,7 +319,7 @@ async def leader_today(request: Request, office: str | None = None):
         last = last_graded_at(by_hire.get(h["id"], []))
         pending = sorted(
             (a for a in by_hire.get(h["id"], [])
-             if not a.get("completed") and ready_to_grade(a.get("day_number"), current_day, last_graded=last)),
+             if not a.get("completed") and ready_to_grade(a.get("day_number"), current_day, last_graded=last, start_date=h.get("start_date"))),
             key=lambda a: int(a.get("day_number") or 99),
         )
         if not pending:
@@ -447,7 +447,7 @@ async def _new_starts(hires: list[dict], by_hire: dict[str, list]) -> list[dict]
         rows = by_hire.get(h["id"], [])
         current_day = int(h.get("current_day") or 1)
         last = last_graded_at(rows)
-        pending = sorted((a for a in rows if not a.get("completed") and ready_to_grade(a.get("day_number"), current_day, last_graded=last)),
+        pending = sorted((a for a in rows if not a.get("completed") and ready_to_grade(a.get("day_number"), current_day, last_graded=last, start_date=h.get("start_date"))),
                          key=lambda a: int(a.get("day_number") or 99))
         uid = h.get("trainee_user_id")
         cod = {}

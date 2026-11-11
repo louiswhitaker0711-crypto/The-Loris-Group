@@ -26,7 +26,9 @@ export type CoachItem = { id: string; topic: string; category: string; confidenc
   what_good_looks_like?: string | null; expected_outcome?: string | null;
   status?: 'new' | 'keep'; changed_from?: string | null; ahead?: boolean };
 export type CoachPerson = { hire_id: string; name: string; day_number: number; day_label: string; objective: string;
-  assessment_id: string | null; done: boolean; can_grade: boolean; checklist: CoachItem[];
+  assessment_id: string | null; done: boolean; can_grade: boolean;
+  /** An Academy day from an earlier date that wasn't graded: grade it now. */
+  day_over?: boolean; checklist: CoachItem[];
   behind?: { topic: string; grade: string; expected?: string | null; day?: number }[];
   /** From field day 2 (Day 4): their breakeven, or null when not worked out yet. */
   trainee_user_id?: string; breakeven_due?: boolean; breakeven?: number | null };
@@ -69,7 +71,8 @@ export function academyGradeOpen(): boolean {
   return mins >= 17 * 60 + 30;
 }
 /** Can this person's day be graded now? */
-export function gradeOpen(p: { day_number: number }): boolean {
+export function gradeOpen(p: { day_number: number; day_over?: boolean }): boolean {
+  if (p.day_over) return true;
   return isAcademyDay(p) ? academyGradeOpen() : dayStep() === 3;
 }
 
