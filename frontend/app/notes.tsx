@@ -11,6 +11,7 @@ import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, ActivityIndic
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Stack, router } from 'expo-router';
+import { showAlert } from '../src/utils/showAlert';
 import { useColors, fonts } from '../src/theme/ThemeContext';
 import { api } from '../src/api/client';
 import { useTabBarClearance } from '../src/customization/CustomTabBar';
@@ -194,8 +195,21 @@ function NoteEditor({ note, head, restored, onClose }: { note?: Note; head: stri
     setState('saving');
     const run = (async () => {
       try {
-        if (idRef.current) await api.put(`/notes/${idRef.current}`, { title: t, body: b, head: hh });
-        else {
+        let saved = false;
+        if (idRef.current) {
+          try {
+            await api.put(`/notes/${idRef.current}`, { title: t, body: b, head: hh });
+            saved = true;
+          } catch (err: any) {
+            // The note it was editing has gone (emptied or removed in the
+            // planner): keep what's typed as a new note instead of getting
+            // stuck (11 Nov 2026: Done wouldn't close and no new note opened).
+            if (err?.response?.status !== 404) throw err;
+            idRef.current = undefined;
+          }
+        }
+        if (!saved) {
+          if (!(b.trim() || t.trim())) { lastSaved.current = sig; return; }
           const r = await api.post('/notes', { title: t, body: b, head: hh });
           idRef.current = r.data?.note_id || undefined;
         }
@@ -239,12 +253,25 @@ function NoteEditor({ note, head, restored, onClose }: { note?: Note; head: stri
       toast.error('Couldn\u2019t save yet', typeof e?.response?.data?.detail === 'string' ? e.response.data.detail : 'Your note is kept on this phone and will save when you\u2019re back online.');
     } finally { setBusy(false); }
   };
+  // Throw this away: closes without saving and clears the phone's copy, so a
+  // note that can't save never blocks writing another.
+  const discard = () => {
+    const go = () => { if (timer.current) clearTimeout(timer.current); clearBackup('note:open'); onClose(); };
+    const unsaved = JSON.stringify([title, body, h]) !== lastSaved.current;
+    if (!unsaved) { go(); return; }
+    showAlert('Discard this note?', 'What you’ve typed since it last saved will be lost.', [
+      { text: 'Keep writing', style: 'cancel' },
+      { text: 'Discard', style: 'destructive', onPress: go },
+    ]);
+  };
   const statusText = state === 'saving' ? 'Saving\u2026' : state === 'saved' ? 'Saved' : state === 'error' ? 'Not saved yet \u2014 kept on this phone' : '';
   return (
     <Modal visible animationType="slide" onRequestClose={save}>
       <View style={[s.edRoot, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 8 }]}>
         <View style={s.edHead}>
-          <View style={{ width: 60 }} />
+          <Pressable onPress={discard} hitSlop={8} accessibilityRole="button" testID="note-discard" style={{ width: 60 }}>
+            <Text style={[s.back, { color: c.textMuted }]}>{state === 'error' ? 'Discard' : 'Cancel'}</Text>
+          </Pressable>
           <View style={{ alignItems: 'center' }}>
             <Text style={s.edTitle}>{note ? 'Edit note' : 'New note'}</Text>
             {!!statusText && <Text style={s.small}>{statusText}</Text>}
