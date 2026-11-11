@@ -298,8 +298,6 @@ async def daily_breakdown(request: Request):
     today = await _aggregate_office_totals(office_id, week_ending, day_idx, user_id_filter)
     week_to_date = await _aggregate_office_totals(office_id, week_ending, None, user_id_filter)
     last_week = await _aggregate_office_totals(office_id, last_week_ending, None, user_id_filter)
-    # Same-day-of-week last week (Mon→Mon, etc.) for fair improvement comparison
-    last_week_same_day = await _aggregate_office_totals(office_id, last_week_ending, day_idx, user_id_filter)
     # Tomorrow's recurring office schedule (meetings & blocks)
     tomorrow = await _tomorrow_schedule(office_id, target_dt)
 
@@ -321,12 +319,8 @@ async def daily_breakdown(request: Request):
         roster.append(u.get("name") or "")
     shown = display_names(roster + [r.get("name") or "" for r in today["top_reps"]])
 
-    # Build improvement deltas per rep — match by name
-    last_by_name = {r["name"]: r for r in last_week_same_day["top_reps"]}
     rep_deltas = []
     for r in today["top_reps"]:
-        prev = last_by_name.get(r["name"], {})
-        delta = r["sales"] - prev.get("sales", 0)
         sd = days_by_id.get(str(r.get("user_id")), {})
         setup, bd = sd.get("setup") or {}, sd.get("breakdown") or {}
         goal = setup.get("goal") if setup.get("goal") is not None else bd.get("goal")
@@ -337,8 +331,6 @@ async def daily_breakdown(request: Request):
             "role": r.get("role") or "rep",
             "today": r["sales"],
             "goal_today": goal,
-            "same_day_last_week": prev.get("sales", 0),
-            "delta": delta,
             "today_over30": r["over30"],
             "today_memberships": r["memberships"],
             "today_numbers": numbers,
@@ -347,7 +339,7 @@ async def daily_breakdown(request: Request):
             "week_traffic_light": _band_label(week.get("sales", r["sales"])),
         })
     # Order: highest sales today first (so top performer leads), with deltas as tiebreak
-    rep_deltas.sort(key=lambda x: (x["today"], x["delta"]), reverse=True)
+    rep_deltas.sort(key=lambda x: (x["today"], x["week_so_far"]), reverse=True)
 
     # Compose context for the LLM
     weekday_name = target_dt.strftime("%A")
@@ -398,12 +390,10 @@ async def daily_breakdown(request: Request):
     if user_id_filter is not None:
         day_q["user_id"] = {"$in": [str(u) for u in user_id_filter]}
     office_bds = [sd.get("breakdown") async for sd in db.sector_days.find(day_q, {"_id": 0, "breakdown": 1})]
-    by_day, last_by_day = [], []
+    by_day = []
     for i in range(day_idx + 1):
         this_i = today if i == day_idx else await _aggregate_office_totals(office_id, week_ending, i, user_id_filter)
-        last_i = last_week_same_day if i == day_idx else await _aggregate_office_totals(office_id, last_week_ending, i, user_id_filter)
         by_day.append({"day": ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")[i], "sign_ups": this_i["sales"]})
-        last_by_day.append(last_i["sales"])
     best = max(by_day, key=lambda d: d["sign_ups"]) if by_day else None
     office_today = {
         "people_who_rang_a_bell": len([r for r in rep_deltas if r["today"] > 0]),
@@ -414,7 +404,6 @@ async def daily_breakdown(request: Request):
         "week_by_day": by_day,
         "best_day_this_week": best["day"] if best and best["sign_ups"] else None,
         "today_is_best_day_this_week": bool(best and best["sign_ups"] and today["sales"] >= best["sign_ups"]),
-        "last_week_to_this_day": sum(last_by_day),
         "week_traffic_light": _band_label(week_to_date["sales"]),
     }
 
@@ -435,7 +424,6 @@ async def daily_breakdown(request: Request):
             "memberships": week_to_date["memberships"],
         },
         "last_week_total": last_week["sales"],
-        "last_week_same_day": last_week_same_day["sales"],
         "rep_callouts": callout_reps,
         "office_today": office_today,
         "goal_remaining": goal_remaining,

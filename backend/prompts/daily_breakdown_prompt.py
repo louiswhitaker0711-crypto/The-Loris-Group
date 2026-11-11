@@ -30,7 +30,7 @@ HOUSE_GOALS = (
 # ─────────────────────────────────────────────────────────────────────────────
 TONE_EXAMPLES = """\
 EXAMPLE A:
-Monday smashed 💪 11 sign-ups today, up from 6 this time last week.
+Monday smashed 💪 11 sign-ups today.
 
 🔔 *Owen: 5* 🔥
 Goal of 4 and beat it. 80 spoken to and 4 of the 5 were quality sign-ups, setting the pace.
@@ -56,10 +56,10 @@ Tomorrow is a new day 🌱
 Who's stepping up to make tomorrow the biggest day of the week?! 💥
 
 EXAMPLE B:
-Wednesday done 💪 14 sign-ups today, up from 5 this time last week.
+Wednesday done 💪 14 sign-ups today, our best day of the week so far.
 
 🔔 *Liam F: 4* 🔥
-Up from 0 last Wednesday and 1 above his goal. All 4 were quality sign-ups.
+1 above his goal and all 4 were quality sign-ups. Setting the pace.
 
 🛎️ *Liam B: 2* 💫
 Hit his goal of 2 and spoke to 72 people. Volume is there, the closes will follow.
@@ -124,9 +124,9 @@ def build_daily_breakdown_prompt(
         f"{TONE_EXAMPLES}"
         "═══════════════════════════════════\n\n"
         "STRUCTURE — follow this order strictly:\n"
-        "1) ONE punchy opener line that names the day and today's total against "
-        "the same day last week (e.g. 'Wednesday done 💪 14 sign-ups today, up "
-        "from 5 this time last week.').\n"
+        "1) ONE punchy opener line that names the day and today's total (e.g. "
+        "'Wednesday done 💪 14 sign-ups today.'). Never compare with the same day "
+        "last week, here or anywhere in the message.\n"
         "2) A blank line, then one callout per person, a blank line between each. "
         "Each callout is TWO lines:\n"
         "     line 1: '<emoji> *<name>: <sign-ups>* <vibe emoji>'\n"
@@ -141,7 +141,7 @@ def build_daily_breakdown_prompt(
         "   POSITIVES: write them yourself from their data, and make them GOOD: "
         "specific, backed by a real number, and different for each person (never "
         "the same line twice in one message). Pick the one or two strongest: "
-        "beating last week's same day (`delta`); quality sign-ups (`today_over30` "
+        "quality sign-ups (`today_over30` "
         "= Gold, an order of £10+); sign-ups taking The Round (`today_memberships`, "
         "never a sign-up of its own); strong numbers on the doors "
         "(`today_numbers` against the Law of Averages in "
@@ -149,7 +149,7 @@ def build_daily_breakdown_prompt(
         "the 70', or a strong close rate like '4 from 9 closed'); their week so "
         "far (`week_so_far`, `week_traffic_light`, e.g. 'already Green for the "
         "week'); consistency (`week_days_with_signups`). Say what it shows about "
-        "them (setting the pace, the closes are landing, bouncing back). New BA "
+        "them (setting the pace, the closes are landing, consistent all week). New BA "
         "with a first sign-up → getting on the board. Positives only: no "
         "criticism in a callout.\n"
         "   Skip anyone with 0 sign-ups today.\n"
@@ -161,8 +161,7 @@ def build_daily_breakdown_prompt(
         "best of: how many people rang a bell; how many Gold sign-ups and how many "
         "took The Round today; the office's doors / spoken to / pitched / closed "
         "today (`on_the_doors`, only when `breakdowns_in` > 0); today being the "
-        "best day of the week so far; the week so far against last week to the "
-        "same day (`last_week_to_this_day`). Only good news or a rallying point: "
+        "best day of the week so far. Only good news or a rallying point: "
         "if a figure is behind, frame it as what's still there to take.\n"
         "5) The mantra block (each on its own line):\n"
         f"{HOUSE_MANTRA}\n"
