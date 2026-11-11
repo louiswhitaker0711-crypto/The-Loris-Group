@@ -1,7 +1,7 @@
 /**
  * Recently removed notes (route: /notes-removed) — the Owner, 3 Nov 2026,
  * after a BA lost her notes. Anything a planner save took out (a deleted
- * note, a cleared box, text that got shorter) is kept for 8 weeks; "Put it
+ * note, a cleared box, text that got shorter) is kept for 30 days; "Put it
  * back" returns it to the same day and box, adding under anything there now.
  * Your own, or (the Owner, from Admin → Recover notes) anyone in the office.
  * (GET /notes/removed, POST /notes/removed/restore)
@@ -73,7 +73,7 @@ export default function NotesRemoved() {
       <ScrollView contentContainerStyle={[s.content, { paddingBottom: 32 + tabClear }]}>
         <View style={s.shell}>
           <Text style={s.small}>
-            Notes taken out of {name ? `${name}’s` : 'your'} planner in the last 8 weeks. Putting one back adds it to the same day and box, under anything there now.
+            Notes taken out of {name ? `${name}’s` : 'your'} planner or deleted in Notes in the last 30 days, then they’re gone. Putting one back adds it to the same day and box, under anything there now.
           </Text>
           {q.isLoading ? <ActivityIndicator color={c.primary} style={{ marginTop: 24 }} />
             : q.isError ? <Text style={s.small}>Couldn’t load these. Pull down or try again.</Text>

@@ -22,7 +22,7 @@ import FolderTag from '../src/components/notes/FolderTag';
 import { readBackup, writeBackup, clearBackup, onLeave } from '../src/utils/draftBackup';
 
 type Note = { id: string; head: string; head_label: string; title: string; body: string; date: string;
-  source_label: string; shared: boolean; author_name: string; mine: boolean; photos?: string[] };
+  source_label: string; shared: boolean; author_name: string; mine: boolean; photos?: string[]; can_delete?: boolean };
 type View_ = { kind: 'root' } | { kind: 'stage'; stage: number } | { kind: 'head'; head: string; label: string; sub?: string };
 
 const fmt = (iso: string) => {
@@ -90,9 +90,28 @@ export default function NotesScreen() {
                   <Text style={s.small}>{d.latest_from_owner.head_label}</Text>
                 </Pressable>
               )}
+              {/* The Leaders meeting for everyone; Ownership for the Owner only (the Owner, 11 Nov 2026). */}
+              {[['meeting', 'Meetings'], ['owner', 'Ownership · just you']].map(([g, label]) => {
+                const rows = (d?.pitch || []).filter((p: any) => p.group === g);
+                if (!rows.length) return null;
+                return (
+                  <React.Fragment key={g}>
+                    <Text style={s.kicker}>{label}</Text>
+                    <View style={s.list}>
+                      {rows.map((p: any, i: number) => (
+                        <Pressable key={p.head} onPress={() => setView({ kind: 'head', head: p.head, label: p.label })} style={[s.row, i > 0 && s.rowLine]} accessibilityRole="button">
+                          <Text style={s.rowT}>{p.label}</Text>
+                          <Count n={p.count} owner={p.from_owner} />
+                          <Ionicons name="chevron-forward" size={15} color={c.textMuted} />
+                        </Pressable>
+                      ))}
+                    </View>
+                  </React.Fragment>
+                );
+              })}
               <Text style={s.kicker}>The pitch and sign-up</Text>
               <View style={s.list}>
-                {(d?.pitch || []).map((p: any, i: number) => (
+                {(d?.pitch || []).filter((p: any) => !p.group || p.group === 'sales').map((p: any, i: number) => (
                   <Pressable key={p.head} onPress={() => setView({ kind: 'head', head: p.head, label: p.label })} style={[s.row, i > 0 && s.rowLine]} accessibilityRole="button">
                     <Text style={s.rowT}>{p.label}</Text>
                     <Count n={p.count} owner={p.from_owner} />
@@ -264,6 +283,31 @@ function NoteEditor({ note, head, restored, onClose }: { note?: Note; head: stri
       { text: 'Discard', style: 'destructive', onPress: go },
     ]);
   };
+  // Delete (the Owner, 11 Nov 2026): out of the planner too, and kept in
+  // Recently removed for 30 days in case it was a mistake.
+  const canDelete = !!note?.can_delete;
+  const remove = () => {
+    showAlert('Delete this note?', 'It comes out of your planner too. You can put it back from Recently removed for 30 days, then it’s gone.', [
+      { text: 'Keep it', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: async () => {
+        if (timer.current) clearTimeout(timer.current);
+        setBusy(true);
+        try {
+          if (inFlight.current) await inFlight.current;
+          await api.delete(`/notes/${idRef.current || note!.id}`);
+          clearBackup('note:open');
+          qc.invalidateQueries({ queryKey: ['notes-folder'] });
+          qc.invalidateQueries({ queryKey: ['notes-list'] });
+          qc.invalidateQueries({ queryKey: ['weekly-planner'] });
+          toast.success('Note deleted', 'It’s in Recently removed for 30 days.');
+          onClose();
+        } catch (e: any) {
+          if (e?.response?.status === 404) { clearBackup('note:open'); onClose(); return; }
+          toast.error('Couldn’t delete it', typeof e?.response?.data?.detail === 'string' ? e.response.data.detail : 'Try again in a moment.');
+        } finally { setBusy(false); }
+      } },
+    ]);
+  };
   const statusText = state === 'saving' ? 'Saving\u2026' : state === 'saved' ? 'Saved' : state === 'error' ? 'Not saved yet \u2014 kept on this phone' : '';
   return (
     <Modal visible animationType="slide" onRequestClose={save}>
@@ -286,6 +330,12 @@ function NoteEditor({ note, head, restored, onClose }: { note?: Note; head: stri
             onChange={(v) => { setH(v.head); setTitle(v.title); }} />}
           <TextInput value={body} onChangeText={setBody} placeholder="Write the note…" placeholderTextColor={c.textMuted}
             style={[s.edInput, { minHeight: 260 }]} multiline textAlignVertical="top" autoFocus={!note} />
+          {canDelete && (
+            <Pressable onPress={remove} disabled={busy} style={s.delBtn} accessibilityRole="button" testID="note-delete">
+              <Ionicons name="trash-outline" size={16} color={c.red || '#c0392b'} />
+              <Text style={[s.delT, { color: c.red || '#c0392b' }]}>Delete note</Text>
+            </Pressable>
+          )}
           {!note && <Text style={s.small}>{h.startsWith('meetup:') ? 'It also goes in your meet-up planner.' : 'It also goes in today\u2019s Notes box in your planner.'}</Text>}
         </ScrollView>
       </View>
@@ -337,6 +387,8 @@ const styles = (c: any) => StyleSheet.create({
   edHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: c.border },
   edTitle: { fontFamily: fonts.bodyBold, fontSize: 16, color: c.text },
   edInput: { borderWidth: 1, borderColor: c.border, borderRadius: 12, padding: 12, fontFamily: fonts.body, fontSize: 16, color: c.text, backgroundColor: c.background },
+  delBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingVertical: 10, marginTop: 8 },
+  delT: { fontFamily: fonts.bodySemibold, fontSize: 14.5 },
   write: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 46, borderRadius: 12, backgroundColor: c.primary },
   writeT: { fontFamily: fonts.bodySemibold, fontSize: 15, color: c.onPrimary },
   search: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: c.background, borderWidth: 1, borderColor: c.border, borderRadius: 12, paddingHorizontal: 12, minHeight: 44 },

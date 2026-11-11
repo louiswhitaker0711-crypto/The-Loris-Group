@@ -14,7 +14,7 @@ import { api } from '../../api/client';
 
 export type FolderMeta = { head: string; title: string; share: boolean };
 type Folder = {
-  pitch: { head: string; label: string }[];
+  pitch: { head: string; label: string; group?: string }[];
   cod: { stage: number; name: string; sections: { category: string; topics: { head: string; topic: string }[] }[] }[];
 };
 
@@ -96,13 +96,17 @@ export default function FolderTag({ value, defaultHead, defaultTitle, isAdmin, o
               ) : level === 'root' ? (
                 // Step 1 (the Owner, 29 Oct 2026): Sales, each stage, or Other.
                 <>
-                  <Row more text="Sales" sub={head.startsWith('pitch:') && head !== 'pitch:other' ? headLabel(folder.data, head) : undefined}
+                  <Row more text="Sales" sub={head.startsWith('pitch:') && !['pitch:other', 'pitch:leaders', 'pitch:ownership'].includes(head) ? headLabel(folder.data, head) : undefined}
                     onPress={() => setLevel('sales')} s={s} c={c} />
                   {stages.map((st) => {
                     const picked = st.sections.some((sec) => sec.topics.some((t) => t.head === head));
                     return <Row key={st.stage} more text={stageTitle(st)} sub={picked ? headLabel(folder.data, head).split(' · ').slice(1).join(' · ') : undefined}
                       onPress={() => setLevel(`stage:${st.stage}`)} s={s} c={c} />;
                   })}
+                  {/* Leaders meeting (everyone) and Ownership (the Owner only: the server only sends it to them). */}
+                  {(folder.data?.pitch || []).filter((p) => p.group === 'meeting' || p.group === 'owner').map((p) => (
+                    <Row key={p.head} on={head === p.head} text={p.label} onPress={() => set({ head: p.head })} s={s} c={c} />
+                  ))}
                   <Row on={head === 'pitch:other' || !head} text="Other" onPress={() => set({ head: 'pitch:other' })} s={s} c={c} />
                 </>
               ) : (
@@ -112,7 +116,7 @@ export default function FolderTag({ value, defaultHead, defaultTitle, isAdmin, o
                     <Text style={s.backText}>{level === 'sales' ? 'Sales' : stageTitle(stages.find((x) => `stage:${x.stage}` === level))}</Text>
                   </Pressable>
                   {level === 'sales'
-                    ? (folder.data?.pitch || []).filter((p) => p.head !== 'pitch:other').map((p) => (
+                    ? (folder.data?.pitch || []).filter((p) => p.head !== 'pitch:other' && (!p.group || p.group === 'sales')).map((p) => (
                       <Row key={p.head} on={head === p.head} text={p.label} onPress={() => set({ head: p.head })} s={s} c={c} />
                     ))
                     : (stages.find((x) => `stage:${x.stage}` === level)?.sections || []).map((sec) => (

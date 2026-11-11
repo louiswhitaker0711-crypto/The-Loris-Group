@@ -57,3 +57,24 @@ def test_sync_files_edits_and_removes_and_only_the_owner_shares():
                          {"2:morning_topic": {"head": "pitch:close", "title": "Ask, then stop", "share": True}}))
     shared = _run(db.folder_notes.find_one({"user_id": "o"}))
     assert shared["shared"] is True and shared["head_label"] == "Close"
+
+
+def test_leaders_meeting_box_files_under_leaders_meeting():
+    out = nf.planner_entries("u1", "2026-11-15", {"2": {"leaders_meeting": "Pace at the doors"}}, "", {})
+    assert out[0]["head"] == "pitch:leaders"
+
+
+def test_ownership_is_the_owners_alone_and_never_shared():
+    db = AsyncMongoMockClient()["notes_owner_test"]
+    nf.db = db
+    ba = {"id": "u1", "office_id": "o1", "role": "trainee", "name": "Sam B"}
+    owner = {"id": "o", "office_id": "o1", "role": "admin", "name": "Owner"}
+    _run(nf.sync_planner(ba, "2026-11-15", {"1": {"morning_topic": "Mine"}}, "",
+                         {"1:morning_topic": {"head": "pitch:ownership", "title": "x", "share": False}}))
+    assert _run(db.folder_notes.find_one({"user_id": "u1"}))["head"] == "pitch:other"
+    _run(nf.sync_planner(owner, "2026-11-15", {"1": {"morning_topic": "Profit plan"}}, "",
+                         {"1:morning_topic": {"head": "pitch:ownership", "title": "P&L", "share": True}}))
+    n = _run(db.folder_notes.find_one({"user_id": "o"}))
+    assert n["head"] == "pitch:ownership" and n["shared"] is False
+    assert nf.allowed_head(ba, "pitch:ownership") == "pitch:other"
+    assert nf.allowed_head(owner, "pitch:ownership") == "pitch:ownership"

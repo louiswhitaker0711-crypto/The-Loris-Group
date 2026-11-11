@@ -46,8 +46,22 @@ PITCH_HEADS = [
     ("intro", "Introduction"), ("presentation", "Presentation"), ("short_story", "Short story"),
     ("close", "Close"), ("signup", "Sign-up process"), ("rehash", "Rehash"),
     ("sales_tip", "Sales tips"), ("other", "Other"),
+    # Not pitch headings, but filed the same way (the Owner, 11 Nov 2026):
+    # the Leaders meeting for everyone, and Ownership for the Owner alone.
+    ("leaders", "Leaders meeting"), ("ownership", "Ownership"),
 ]
 PITCH_LABEL = dict(PITCH_HEADS)
+HEAD_GROUP = {"leaders": "meeting", "ownership": "owner"}
+OWNERSHIP = "pitch:ownership"   # the Owner's own: never shown to or shared with anyone else
+
+
+def is_owner(user: dict) -> bool:
+    return (user.get("role") or "").lower() == "admin" and not user.get("is_viewer")
+
+
+def allowed_head(user: dict, head: str) -> str:
+    """Ownership is the Owner's alone: anyone else's note under it files to Other."""
+    return "pitch:other" if head == OWNERSHIP and not is_owner(user) else head
 STAGE_NAMES = {1: "Stage 1 · Foundation", 2: "Stage 2 · Self Management", 3: "Stage 3 · Leader",
                5: "Stage SL · Sector Leader", 4: "Stage 4 · Team Builder", 6: "Stage 5"}
 STAGE_ORDER = [1, 2, 3, 5, 4, 6]
@@ -132,7 +146,9 @@ def clean_slot_notes(raw) -> dict:
 def default_head(day: dict, box: str) -> str:
     """No heading picked: the meeting's COD pick if it has one, else Other."""
     cod = (day or {}).get(f"{box}_cod") or ""
-    return f"cod:{cod}" if cod else "pitch:other"
+    if cod:
+        return f"cod:{cod}"
+    return "pitch:leaders" if box == "leaders_meeting" else "pitch:other"
 
 
 def day_date(week_ending: str, day_index: int) -> str:
@@ -190,7 +206,7 @@ async def sync_planner(user: dict, week_ending: str, days: dict, extra: str, fol
     now = datetime.now(timezone.utc).isoformat()
     keep = []
     for e in entries:
-        head, stage, category = e["head"], None, ""
+        head, stage, category = allowed_head(user, e["head"]), None, ""
         if head.startswith("cod:"):
             m = cods.get(head[4:])
             if not m:
@@ -205,7 +221,7 @@ async def sync_planner(user: dict, week_ending: str, days: dict, extra: str, fol
                       "head": head, "head_label": label or "Other", "stage": stage, "category": category,
                       "title": e["title"], "body": e["body"], "photos": e.get("photos") or [],
                       "date": e["date"], "source_label": e["source_label"],
-                      "shared": bool(e["share"] and can_share), "updated_at": now},
+                      "shared": bool(e["share"] and can_share and head != OWNERSHIP), "updated_at": now},
              "$setOnInsert": {"id": str(uuid.uuid4()), "created_at": now}},
             upsert=True)
     gone = await db.folder_notes.delete_many({"ref": {"$regex": f"^planner:{re.escape(uid)}:{re.escape(week_ending)}:",
@@ -214,15 +230,18 @@ async def sync_planner(user: dict, week_ending: str, days: dict, extra: str, fol
 
 
 def _visible(user: dict) -> dict:
-    """Your own notes, and the notes posted to everyone in your office."""
+    """Your own notes, and the notes posted to everyone in your office
+    (never anyone's Ownership notes)."""
     return {"$or": [{"user_id": str(user["id"])},
-                    {"shared": True, "office_id": user.get("office_id")}]}
+                    {"shared": True, "office_id": user.get("office_id"), "head": {"$ne": OWNERSHIP}}]}
 
 
 def _out(n: dict, me: str) -> dict:
     return {k: n.get(k) for k in ("id", "head", "head_label", "stage", "category", "title", "body", "date",
-                                  "source_label", "shared", "author_name")} | {"mine": n.get("user_id") == me,
-                                                                               "photos": n.get("photos") or []}
+                                  "source_label", "shared", "author_name")} | {
+        "mine": n.get("user_id") == me, "photos": n.get("photos") or [],
+        # Meet-up notes are deleted in the meet-up itself.
+        "can_delete": n.get("user_id") == me and not str(n.get("ref") or "").startswith("meetup:")}
 
 
 @router.get("/notes/folder")
@@ -242,7 +261,8 @@ async def notes_folder(request: Request):
                 latest = {"id": n.get("id"), "title": n.get("title"), "date": n.get("date"),
                           "head": h, "head_label": n.get("head_label")}
     pitch = [{"head": f"pitch:{k}", "label": lab, "count": counts.get(f"pitch:{k}", 0),
-              "from_owner": owner_counts.get(f"pitch:{k}", 0)} for k, lab in PITCH_HEADS]
+              "from_owner": owner_counts.get(f"pitch:{k}", 0), "group": HEAD_GROUP.get(k, "sales")}
+             for k, lab in PITCH_HEADS if f"pitch:{k}" != OWNERSHIP or is_owner(user)]
     stages: dict = {}
     async for m in db.training_modules.find(
             {"office_id": user.get("office_id"), "stage": {"$in": STAGE_ORDER}, "retired": {"$ne": True}},
@@ -290,6 +310,8 @@ async def list_notes(request: Request, head: Optional[str] = None, q: Optional[s
         from routes.meetups import MEETUP_HEAD
         if not (_HEAD.match(head) or MEETUP_HEAD.match(head)):
             raise HTTPException(status_code=400, detail="Unknown heading")
+        if head == OWNERSHIP and not is_owner(user):
+            raise HTTPException(status_code=403, detail="Ownership notes are the Owner\u2019s")
         query = {"$and": [query, {"head": head}]}
     words = " ".join(str(q or "").split())[:80]
     if words:
@@ -371,6 +393,7 @@ async def edit_note(note_id: str, request: Request):
         raise HTTPException(status_code=404, detail="Note not found")
     raw = await request.json()
     e = _clean_edit(raw if isinstance(raw, dict) else {})
+    e["head"] = allowed_head(user, e["head"]) if e["head"] else ""
     if str(note.get("ref") or "").startswith("meetup:"):
         from routes.meetups import edit_from_notes
         if not await edit_from_notes(user, note, e["title"], e["body"]):
@@ -418,6 +441,50 @@ async def edit_note(note_id: str, request: Request):
     return {"ok": True}
 
 
+@router.delete("/notes/{note_id}")
+async def delete_note(note_id: str, request: Request):
+    """Delete one of your notes (the Owner, 11 Nov 2026). It comes out of the
+    planner box it came from, and the week as it was goes into history, so
+    it sits in Recently removed for 30 days before it's gone."""
+    user = await get_current_user(request)
+    if user.get("is_viewer"):
+        raise HTTPException(status_code=403, detail="Read-only account")
+    me = str(user["id"])
+    note = await db.folder_notes.find_one({"id": note_id})
+    if not note or note.get("user_id") != me:
+        raise HTTPException(status_code=404, detail="Note not found")
+    if str(note.get("ref") or "").startswith("meetup:"):
+        raise HTTPException(status_code=400, detail="Delete meet-up notes in the meet-up itself")
+    r = _parse_ref(note.get("ref"))
+    planner = await db.weekly_planners.find_one({"user_id": me, "week_ending": r["week"]}) if r and r["uid"] == me else None
+    if not planner:
+        await db.folder_notes.delete_one({"id": note_id})
+        return {"ok": True}
+    folder = dict(planner.get("folder") or {})
+    if r["kind"] == "box":
+        days = dict(planner.get("days") or {})
+        day = dict(days.get(r["day"]) or {})
+        day[r["box"]] = ""
+        days[r["day"]] = day
+        folder.pop(f"{r['day']}:{r['box']}", None)
+        upd = {"days": days, "folder": folder}
+    elif r["kind"] == "extra":
+        folder.pop(f"x:{EXTRA}", None)
+        upd = {"notes": "", "folder": folder}
+    else:
+        slot_notes = {k: [n for n in v if not (k.startswith(f"{r['day']}:") and n.get("id") == r["note_id"])]
+                      for k, v in (planner.get("slot_notes") or {}).items()}
+        upd = {"slot_notes": clean_slot_notes(slot_notes)}
+    upd["updated_at"] = datetime.now(timezone.utc).isoformat()
+    from core.notes_safety import snapshot
+    await snapshot(planner, {**planner, **upd}, reason="notes-delete")
+    await db.weekly_planners.update_one({"_id": planner["_id"]}, {"$set": upd})
+    planner.update(upd)
+    await _refile(user, planner)
+    await db.folder_notes.delete_one({"id": note_id})
+    return {"ok": True}
+
+
 @router.post("/notes")
 async def add_note(request: Request):
     """A new note filed under a heading, from Notes: it goes in today's big
@@ -429,6 +496,7 @@ async def add_note(request: Request):
     raw = await request.json()
     raw = raw if isinstance(raw, dict) else {}
     e = _clean_edit(raw)
+    e["head"] = allowed_head(user, e["head"]) if e["head"] else ""
     if not (e["body"].strip() or e["title"]):
         raise HTTPException(status_code=400, detail="Write something first")
     from routes.meetups import MEETUP_HEAD, add_from_notes

@@ -705,7 +705,7 @@ export default function WeeklyPlannerScreen() {
       {notesChip(dayIdx, f.key, f.label)}
       {canEdit && NOTE_FIELDS.some((n) => n.key === f.key) && (
         <FolderTag value={draft?.folder?.[`${dayIdx}:${f.key}`]}
-          defaultHead={draft?.days[String(dayIdx)]?.[`${f.key}_cod`] ? `cod:${draft?.days[String(dayIdx)]?.[`${f.key}_cod`]}` : 'pitch:other'}
+          defaultHead={draft?.days[String(dayIdx)]?.[`${f.key}_cod`] ? `cod:${draft?.days[String(dayIdx)]?.[`${f.key}_cod`]}` : f.key === 'leaders_meeting' ? 'pitch:leaders' : 'pitch:other'}
           defaultTitle={f.label} isAdmin={isAdmin}
           onChange={(v) => update((cur) => ({ ...cur, folder: { ...(cur.folder || {}), [`${dayIdx}:${f.key}`]: v } }))} />
       )}
@@ -1511,7 +1511,7 @@ export default function WeeklyPlannerScreen() {
                     {/* Files itself into the Notes folder (the Owner, 29 Oct 2026). */}
                     {canEdit && (
                       <FolderTag value={draft.folder?.[`${tab}:${f.key}`]}
-                        defaultHead={draft.days[String(tab)]?.[`${f.key}_cod`] ? `cod:${draft.days[String(tab)]?.[`${f.key}_cod`]}` : 'pitch:other'}
+                        defaultHead={draft.days[String(tab)]?.[`${f.key}_cod`] ? `cod:${draft.days[String(tab)]?.[`${f.key}_cod`]}` : f.key === 'leaders_meeting' ? 'pitch:leaders' : 'pitch:other'}
                         defaultTitle={f.label} isAdmin={isAdmin}
                         onChange={(v) => update((cur) => ({ ...cur, folder: { ...(cur.folder || {}), [`${tab}:${f.key}`]: v } }))} />
                     )}

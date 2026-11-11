@@ -21,6 +21,7 @@ from database import db
 
 KEEP_PER_WEEK = 80          # snapshots kept per person per week
 EVERY = timedelta(minutes=5)  # a plain save snapshots at most this often
+KEEP_FOR = timedelta(days=30)  # Recently removed keeps a note this long, then it's gone (the Owner, 11 Nov 2026)
 TEXT_FIELDS_SKIP = ("_cod",)  # COD picks aren't note text
 
 
@@ -99,14 +100,21 @@ async def snapshot(existing: dict, after: dict | None = None, reason: str = "sav
 
 async def removed_notes(user_id: str, weeks_back: int = 8) -> list[dict]:
     """Note text that was in a past version of a planner week but isn't now.
-    Newest first; the latest version of each removed item only."""
+    Newest first; the latest version of each removed item only. History older
+    than 30 days is cleared out, so a removed note is gone after that."""
+    cutoff = (_now() - KEEP_FOR).isoformat()
+    try:
+        await db.planner_history.delete_many({"user_id": user_id, "at": {"$lt": cutoff}})
+    except Exception as ex:  # noqa: BLE001
+        print(f"[notes-safety] purge failed: {ex}")
     since = (_now() - timedelta(weeks=weeks_back)).date().isoformat()
     current: dict = {}
     async for p in db.weekly_planners.find({"user_id": user_id, "week_ending": {"$gte": since}}, {"_id": 0}):
         current[p["week_ending"]] = _texts(p)
     seen: set = set()
     out: list = []
-    async for h in db.planner_history.find({"user_id": user_id, "week_ending": {"$gte": since}}, {"_id": 0}).sort("at", -1):
+    async for h in db.planner_history.find({"user_id": user_id, "week_ending": {"$gte": since}, "at": {"$gte": cutoff}},
+                                           {"_id": 0}).sort("at", -1):
         week = h["week_ending"]
         now_t = current.get(week, {})
         for key, old in _texts(h).items():
