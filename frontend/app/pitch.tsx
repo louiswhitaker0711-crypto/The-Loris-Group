@@ -41,13 +41,16 @@ const LADDER = [
   { id: 'l1', t: 'Read it through with the notes on why and how' },
   { id: 'l3', t: 'Done all 30: out loud, in the mirror, recorded and listened back' },
   { id: 'l4', t: 'Said it to someone at home, smiling, as if they opened the door' },
-  { id: 'l2', t: 'Said every line from the first letters only' },
+  { id: 'l2', t: 'Said every line from just the first words' },
   { id: 'l5', t: 'Scored 6 out of 6 on Check' },
 ];
-const hint = (s: string) => s.replace(/[’']/g, "'").split(/\s+/).map((w) => {
-  const m = w.match(/^([^A-Za-z]*)([A-Za-z])/);
-  return m ? `${m[1]}${m[2]}…` : w;
-}).join(' ');
+/** Learn tab prompt (the Owner, 11 Nov 2026): the first two words of the line,
+ * then "…", so it reads as a cue rather than a puzzle of first letters. */
+const hint = (s: string) => {
+  const words = s.trim().split(/\s+/);
+  if (words.length <= 2) return words.join(' ');
+  return `${words.slice(0, 2).join(' ').replace(/[,.!?;:]+$/, '')}…`;
+};
 
 export default function PitchScreen() {
   const c = useColors();
@@ -304,7 +307,7 @@ export default function PitchScreen() {
 
           {tab === 'learn' && !locked('learn') && (
             <>
-              <Text style={s.muted}>Each line is hidden down to its first letters. Say it out loud, then tap the line to check.</Text>
+              <Text style={s.muted}>Each line is hidden down to its first couple of words. Say it out loud, then tap the line to check.</Text>
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 <Pressable onPress={() => update((p) => ({ ...p, shown: {} }))} style={s.btn}><Text style={s.btnT}>Hide all</Text></Pressable>
                 <Pressable onPress={() => update((p) => ({ ...p, shown: Object.fromEntries(shownSteps.flatMap((b) => b.lines.map((_, i) => [lineId(b.n, i), true]))) }))} style={s.btn}><Text style={s.btnT}>Show all</Text></Pressable>
