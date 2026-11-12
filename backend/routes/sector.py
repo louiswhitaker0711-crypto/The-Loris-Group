@@ -1238,7 +1238,7 @@ async def my_averages(uid: str, today: Date) -> dict:
     kpi = await db.owneriq_kpis.find({"cg1_user_id": uid, "date": {"$gte": since, "$lt": today.isoformat()},
                                       "test_mode": {"$ne": True}, "cg1_matched_by": {"$ne": "name"}}).to_list(2000)
     from core.bells_signups import bells_wins   # sign-ups from Bells (the Owner, 12 Nov 2026)
-    kpi = await bells_wins(kpi)
+    kpi = await bells_wins(kpi, db)
     for r in breakdown_wins(kpi):
         cur = by_day.setdefault(str(r["date"])[:10], {"doors": 0, "spoken": 0, "pitched": 0, "closed": 0, "sales": 0})
         cur["doors"] += int(r.get("doors_knocked") or 0)

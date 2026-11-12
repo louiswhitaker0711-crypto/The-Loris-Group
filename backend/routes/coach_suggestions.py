@@ -48,7 +48,7 @@ async def coach_suggestions(request: Request):
     kpi = await db.owneriq_kpis.find({"cg1_user_id": {"$in": ids}, "date": {"$gte": since, "$lte": through.isoformat()},
                                       "test_mode": {"$ne": True}, "cg1_matched_by": {"$ne": "name"}}).to_list(20000)
     from core.bells_signups import bells_wins   # sign-ups from Bells (the Owner, 12 Nov 2026)
-    kpi = await bells_wins(kpi)
+    kpi = await bells_wins(kpi, db)
     for r in breakdown_wins(kpi):
         uid = str(r["cg1_user_id"])
         try:

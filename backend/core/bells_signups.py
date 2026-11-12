@@ -37,10 +37,12 @@ def bells_total(entry: dict, iso: str):
     return int(day.get("under30") or 0) + int(day.get("over30") or 0)
 
 
-async def bells_wins(rows: list[dict]) -> list[dict]:
+async def bells_wins(rows: list[dict], handle=None) -> list[dict]:
     """Set each KPI row's `sales` from Bells (see module docstring). A person
     with several rows on one day gets the Bells total once: on their breakdown
-    row if they have one, else their first row, the rest 0."""
+    row if they have one, else their first row, the rest 0. `handle`: the
+    caller's own database handle (the same `db`), so tests that swap it in a
+    route module swap it here too."""
     rows = list(rows or [])
     keys = {(str(r.get("cg1_user_id")), str(r.get("date") or "")[:10]) for r in rows
             if r.get("cg1_user_id") and len(str(r.get("date") or "")) >= 10}
@@ -49,7 +51,7 @@ async def bells_wins(rows: list[dict]) -> list[dict]:
     uids = list({k[0] for k in keys})
     weeks = list({_week_ending(k[1]) for k in keys})
     entries: dict[tuple, dict] = {}
-    async for e in db.bells_entries.find({"user_id": {"$in": uids}, "week_ending": {"$in": weeks}},
+    async for e in (handle if handle is not None else db).bells_entries.find({"user_id": {"$in": uids}, "week_ending": {"$in": weeks}},
                                          {"_id": 0, "user_id": 1, "week_ending": 1, "days": 1, "breakdown_days": 1}):
         entries[(str(e["user_id"]), e["week_ending"])] = e
     totals: dict[tuple, int] = {}

@@ -118,7 +118,7 @@ async def field_summary(user_ids: list[str], iso_from: str, iso_to: str) -> dict
         {"_id": 0},
     ).to_list(length=20000)
     from core.bells_signups import bells_wins   # sign-ups from Bells (the Owner, 12 Nov 2026)
-    rows = await bells_wins(rows)
+    rows = await bells_wins(rows, db)
     agg = aggregate_rows(rows, include_zero=False)
     return {
         "totals": agg["group_totals"],

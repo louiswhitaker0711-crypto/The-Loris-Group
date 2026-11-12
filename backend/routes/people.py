@@ -126,7 +126,7 @@ async def _cod(person: dict, uid: str) -> dict:
 
 async def _kpi_rows(q: dict, from_date: str, to_date: str) -> list[dict]:
     from core.bells_signups import bells_wins   # sign-ups from Bells (the Owner, 12 Nov 2026)
-    return await bells_wins(await db.owneriq_kpis.find({**q, "date": {"$gte": from_date, "$lte": to_date}, **ID_LINKED}, {"_id": 0}).to_list(20000))
+    return await bells_wins(await db.owneriq_kpis.find({**q, "date": {"$gte": from_date, "$lte": to_date}, **ID_LINKED}, {"_id": 0}).to_list(20000), db)
 
 
 async def _loa(person: dict, uid: str, from_date: str, to_date: str, pin: str | None) -> dict:

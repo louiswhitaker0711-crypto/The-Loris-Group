@@ -66,7 +66,7 @@ async def _scoped_rows(caller: dict, from_date: str, to_date: str, own_office: b
     """_scoped_rows_raw with each day's sign-ups taken from Bells when Bells
     has them (core/bells_signups.py, the Owner 12 Nov 2026)."""
     from core.bells_signups import bells_wins
-    return await bells_wins(await _scoped_rows_raw(caller, from_date, to_date, own_office))
+    return await bells_wins(await _scoped_rows_raw(caller, from_date, to_date, own_office), db)
 
 
 async def _scoped_rows_raw(caller: dict, from_date: str, to_date: str, own_office: bool = False) -> list[dict]:
