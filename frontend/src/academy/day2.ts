@@ -76,8 +76,8 @@ export const DAY2_QUIZZES: Quiz[] = [
   },
   {
     id: 'qc', title: 'Quiz 3 · The pitch: presentation, short story and close', qs: [
-      { p: '“So many of them have started using us, we’re just filling the last few spaces on the route.” Which two G.I.F.T.S. is that?', o: ['Greed and Indifference', 'The Jones Theory and Sense of urgency', 'Fear of loss and Greed', 'Indifference and Sense of urgency'], a: 1,
-        w: 'Everyone else has it (The Jones Theory), and the last few spaces means now (Sense of urgency).' },
+      { p: '“So many of them have started using us, we’re just filling some more spaces on the route.” Which two G.I.F.T.S. is that?', o: ['Greed and Indifference', 'The Jones Theory and Sense of urgency', 'Fear of loss and Greed', 'Indifference and Sense of urgency'], a: 1,
+        w: 'Everyone else has it (The Jones Theory), and the spaces filling up means now (Sense of urgency).' },
       { p: 'A man says his wife does the shopping and she’s at work. You…', o: ['Sign him up: he can tell her later', 'Ask for her phone number', 'Sign up with her card details', 'Don’t sign him up: leave a good impression and come back when she’s in'], a: 3,
         w: 'Only sign up the person who does the shopping: the decision maker.' },
       { p: 'What’s the biggest reason customers sign up?', o: ['The 20% discount', 'Fresher milk', 'Cutting plastic and helping the planet', 'Not having to go to the shop'], a: 2,
