@@ -330,6 +330,8 @@ async def _day_kpis(a: dict) -> Optional[dict]:
         day = datetime.now(APP_TZ).date()
     iso = day.isoformat()
     rows = await db.owneriq_kpis.find({"cg1_user_id": uid, "date": iso}, {"_id": 0}).to_list(10)
+    from core.bells_signups import bells_wins   # sign-ups from Bells (the Owner, 12 Nov 2026)
+    rows = await bells_wins(rows)
     if not rows:
         return None
     row = next((r for r in rows if r.get("source") == "breakdown"), rows[0])

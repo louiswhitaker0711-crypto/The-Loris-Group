@@ -1094,7 +1094,8 @@ export const apiService = {
   getResetBoard: () => api.get('/field-reset/board'),
   getTeamFieldResets: (date?: string) => api.get('/field-reset/team', { params: date ? { date } : {} }),
   // Sector set-up and breakdown
-  getSectorDay: (date: string) => api.get('/sector/day', { params: { date } }),
+  // who: an Admin opens anyone in the office on their own (the Owner, 12 Nov 2026).
+  getSectorDay: (date: string, who?: string | null) => api.get('/sector/day', { params: who ? { date, who } : { date } }),
   saveSectorDay: (userId: string, date: string, body: { setup?: any; breakdown?: any }) =>
     api.put(`/sector/day/${userId}`, body, { params: { date } }),
   // Breakdown: the sector leader or a Coach marks today's COD item as seen in

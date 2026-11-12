@@ -64,20 +64,23 @@ export default function SectorScreen() {
   const s = useMemo(() => styles(c), [c]);
   const insets = useSafeAreaInsets();
   const kb = useKeyboardInset();
-  const params = useLocalSearchParams<{ mode?: string; start?: string; date?: string }>();
+  const params = useLocalSearchParams<{ mode?: string; start?: string; date?: string; who?: string }>();
   const [mode, setMode] = useState<Mode>(params.mode === 'breakdown' ? 'breakdown' : 'setup');
   const today = todayISO();
   // Opened from a sector on the Sector tab: that day.
   const [date, setDate] = useState(params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date) ? params.date : today);
   const [open, setOpen] = useState<string | null>(null);
-  const q = useQuery({ queryKey: ['sector-day', date], queryFn: () => apiService.getSectorDay(date).then((r) => r.data) });
+  // An Admin can open anyone's set-up or breakdown on its own (the Owner, 12 Nov 2026).
+  const [who, setWho] = useState<string | null>(params.who || null);
+  const q = useQuery({ queryKey: ['sector-day', date, who], queryFn: () => apiService.getSectorDay(date, who).then((r) => r.data) });
+  const single = !!q.data?.single;
   const people: Person[] = q.data?.people || [];
   const opts = q.data?.options;
   const satNoBreakdown = mode === 'breakdown' && isSaturday(date);
-  const text: string = satNoBreakdown ? '' : q.data?.whatsapp?.[mode] || '';
+  const text: string = satNoBreakdown || single ? '' : q.data?.whatsapp?.[mode] || '';
   const hasText = text.split('\n').length > 1;
   // A BA only sees themselves: open their card straight away.
-  useEffect(() => { if (people.length === 1 && open === null) setOpen(people[0].user_id); }, [people.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (people.length === 1 && (open === null || single)) setOpen(people[0].user_id); }, [people.length, people[0]?.user_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const notify = async () => {
     try {
@@ -104,20 +107,24 @@ export default function SectorScreen() {
           <Ionicons name="chevron-forward" size={16} color={c.text} />
         </Pressable>
       </View>
+      {!!q.data?.office_people && (
+        <AnyonePicker people={q.data.office_people} who={who} onPick={(id) => { setWho(id); setOpen(null); }} s={s} c={c} />
+      )}
+
       <Text style={s.muted}>
         {mode === 'setup'
           ? 'Goal, KPI, focus and a positive for each person. Yesterday’s "Change" shows as a suggestion for the focus.'
           : 'Type in doors / spoken / pitched / closed (sign-ups fill in from Bells), then what they’re proud of and what they’ll change. These numbers feed the KPIs and Bells.'}
       </Text>
 
-      {!!q.data?.sector?.planned_by && mode === 'setup' && (
+      {!single && !!q.data?.sector?.planned_by && mode === 'setup' && (
         <View style={s.card}>
           <Text style={s.h}>🧭 Planned this morning</Text>
           <Text style={s.muted}>{q.data.sector.planned_by.split(' ')[0]} planned your sector{q.data.sector.postcode ? ` in ${q.data.sector.postcode}` : ''}. You can set the sector goal; ask the sector planner to change the postcode or who's in it.</Text>
         </View>
       )}
 
-      {(!!q.data?.can_manage || params.start === '1') && !q.data?.sector?.planned_by && (
+      {!single && (!!q.data?.can_manage || params.start === '1') && !q.data?.sector?.planned_by && (
         <SectorPicker key={date + String(q.data?.sector?.member_ids?.length || 0)} date={date}
           current={q.data?.sector?.member_ids || null}
           startOpen={params.start === '1' || (!q.isLoading && !q.data?.sector && mode === 'setup')}
@@ -153,9 +160,9 @@ export default function SectorScreen() {
               onToggle={() => setOpen(open === p.user_id ? null : p.user_id)} onSaved={() => q.refetch()} s={s} c={c} />
       ))}
 
-      {mode === 'breakdown' && !satNoBreakdown && !!q.data?.sector && <BreakdownPrimetime date={date} />}
+      {!single && mode === 'breakdown' && !satNoBreakdown && !!q.data?.sector && <BreakdownPrimetime date={date} />}
 
-      {mode === 'breakdown' && !satNoBreakdown && !!q.data?.sector && (
+      {!single && mode === 'breakdown' && !satNoBreakdown && !!q.data?.sector && (
         <PostBreakdown date={date} postedAt={q.data.sector.breakdown_posted_at || null}
           missing={people.filter((p) => !p.breakdown).map((p) => p.user_name.split(' ')[0])}
           onPosted={() => q.refetch()} s={s} c={c} />
@@ -184,6 +191,49 @@ export default function SectorScreen() {
         </View>
       )}
     </ScrollView>
+  );
+}
+
+/** Admin only: open anyone in the office on their own, to fill in a breakdown
+ *  they forgot or fix one, whatever sector they were in (the Owner, 12 Nov 2026). */
+function AnyonePicker({ people, who, onPick, s, c }: {
+  people: Array<{ user_id: string; user_name: string }>; who: string | null; onPick: (id: string | null) => void; s: any; c: any }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const picked = people.find((p) => p.user_id === who);
+  const shown = people.filter((p) => p.user_name.toLowerCase().includes(search.trim().toLowerCase()));
+  return (
+    <View style={[s.card, { gap: 6 }]}>
+      <Pressable onPress={() => setOpen(!open)} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }} accessibilityRole="button" testID="sector-anyone">
+        <Ionicons name="person-circle-outline" size={18} color={c.primary} />
+        <Text style={[s.ghostText, { flex: 1, color: c.text }]} numberOfLines={1}>
+          {picked ? `Admin · ${picked.user_name}` : 'Admin · open anyone’s set-up or breakdown'}
+        </Text>
+        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={c.textMuted} />
+      </Pressable>
+      {!!picked && !open && (
+        <Pressable onPress={() => onPick(null)} style={{ paddingVertical: 4 }} accessibilityRole="button">
+          <Text style={[s.muted, { color: c.primary }]}>Back to my sector</Text>
+        </Pressable>
+      )}
+      {open && (
+        <View style={{ gap: 4 }}>
+          <TextInput value={search} onChangeText={setSearch} placeholder="Search names" placeholderTextColor={c.textMuted} style={s.input} />
+          {!!picked && (
+            <Pressable onPress={() => { onPick(null); setOpen(false); }} style={{ paddingVertical: 6 }} accessibilityRole="button">
+              <Text style={[s.muted, { color: c.primary }]}>Back to my sector</Text>
+            </Pressable>
+          )}
+          {shown.map((p) => (
+            <Pressable key={p.user_id} onPress={() => { onPick(p.user_id); setOpen(false); setSearch(''); }}
+              style={{ paddingVertical: 6, flexDirection: 'row', gap: 8, alignItems: 'center' }} accessibilityRole="button">
+              <Ionicons name={p.user_id === who ? 'radio-button-on' : 'radio-button-off'} size={16} color={p.user_id === who ? c.primary : c.textMuted} />
+              <Text style={[s.ghostText, { flex: 1, color: c.text }]}>{p.user_name}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -614,7 +664,12 @@ function BreakdownCard({ p, date, opts, canMarkCod, open, onToggle, onSaved, s, 
   const cur: Partial<Breakdown> = p.breakdown || {};
   const pre = p.prefill || {};
   type K = 'doors' | 'spoken' | 'pitched' | 'closed' | 'hit' | 'silver' | 'gold' | 'round';
-  const init = (k: K) => (cur[k] != null ? String(cur[k]) : pre[k] != null ? String(pre[k]) : '');
+  // Sign-ups: Bells wins when it has them (the Owner, 12 Nov 2026), so a day
+  // fixed on Bells shows here too.
+  const fromBells = pre.silver != null || pre.gold != null;
+  const SIGNUP_KEYS: K[] = ['hit', 'silver', 'gold', 'round'];
+  const init = (k: K) => (fromBells && SIGNUP_KEYS.includes(k) && pre[k] != null ? String(pre[k])
+    : cur[k] != null ? String(cur[k]) : pre[k] != null ? String(pre[k]) : '');
   const fresh = () => ({ doors: init('doors'), spoken: init('spoken'), pitched: init('pitched'), closed: init('closed'), hit: init('hit'),
     silver: init('silver'), gold: init('gold'), round: init('round') });
   const [vals, setVals] = useState(fresh);

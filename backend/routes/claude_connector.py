@@ -351,6 +351,8 @@ async def tool_get_field_numbers(owner: dict, args: dict) -> dict:
     rows = await db.owneriq_kpis.find(
         {"cg1_user_id": {"$in": list(everyone)}, "date": {"$gte": start.isoformat(), "$lte": end.isoformat()},
          "test_mode": {"$ne": True}, **ID_LINKED}, {"_id": 0}).to_list(50000)
+    from core.bells_signups import bells_wins   # sign-ups from Bells (the Owner, 12 Nov 2026)
+    rows = await bells_wins(rows)
     by_person: dict[str, list] = {}
     for r in rows:
         if str(r["cg1_user_id"]) not in people:
