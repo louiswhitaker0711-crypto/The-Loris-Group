@@ -129,7 +129,7 @@ function PersonCard({ p, s, c }: { p: CoachPerson; s: any; c: any }) {
       <View style={s.head}>
         <View style={s.badge}><Text style={s.badgeText}>{who.charAt(0).toUpperCase()}</Text></View>
         <View style={{ flex: 1 }}>
-          <Text style={s.kicker}>Your coaching day</Text>
+          <Text style={s.kicker}>{p.day_over && !p.done ? 'Not graded yet · grade it now' : 'Your coaching day'}</Text>
           <Text style={s.title}>{who} · {p.day_label}</Text>
         </View>
       </View>
@@ -150,7 +150,7 @@ function PersonCard({ p, s, c }: { p: CoachPerson; s: any; c: any }) {
           {behind > 5 && <Text style={s.behindItem}>{`+ ${behind - 5} more on the guide`}</Text>}
         </View>
       )}
-      <Text style={s.section}>{fresh.length ? `What to teach today · ${taughtNew} of ${fresh.length}` : 'What to teach today'}</Text>
+      <Text style={s.section}>{p.day_over ? (fresh.length ? `What was taught · ${taughtNew} of ${fresh.length}` : 'What was taught') : fresh.length ? `What to teach today · ${taughtNew} of ${fresh.length}` : 'What to teach today'}</Text>
       {fresh.length ? fresh.map((it) => {
         const aim = aimOf(it.confidence_expected, c);
         return (
