@@ -427,9 +427,13 @@ async def _prefill(user_ids: list[str], iso: str) -> dict:
 
 
 @router.get("/sector/day")
-async def sector_day(request: Request, date: Optional[str] = None):
+async def sector_day(request: Request, date: Optional[str] = None, who: Optional[str] = None):
+    """`who`: an Admin opens anyone in the office on their own, to fill in or
+    fix their set-up or breakdown whatever sector they were in (the Owner,
+    12 Nov 2026)."""
     user = await get_current_user(request)
     iso = _clean_date(date)
+    is_admin = (user.get("role") or "").lower() == "admin" or bool(user.get("is_super_admin"))
     # Someone marked No Show or Not scheduled on Bells today isn't in a sector.
     try:
         from routes.sector_plan import drop_no_shows
@@ -437,9 +441,17 @@ async def sector_day(request: Request, date: Optional[str] = None):
     except Exception as ex:
         logger.warning("sector day: no-show tidy failed: %s", ex)
     prev = (Date.fromisoformat(iso) - timedelta(days=1 if Date.fromisoformat(iso).weekday() != 0 else 2)).isoformat()
-    people = await _people(user, iso)
-    sector = await _my_sector(str(user["id"]), iso)
-    i_lead = bool(sector) and sector.get("leader_id") == str(user["id"])
+    single = None
+    if who and is_admin:
+        t = await db.users.find_one({"_id": ObjectId(who)}, {"office_id": 1}) if ObjectId.is_valid(who) else None
+        if not t or (t.get("office_id") != user.get("office_id") and not user.get("is_super_admin")):
+            raise HTTPException(status_code=404, detail="Person not found")
+        single = who
+    people = await _users_by_ids([single]) if single else await _people(user, iso)
+    # Someone opened on their own: their sector that day (for hops and the
+    # shadow day), but nothing sector-wide to manage from here.
+    sector = await _my_sector(single or str(user["id"]), iso)
+    i_lead = not single and bool(sector) and sector.get("leader_id") == str(user["id"])
     role = (user.get("role") or "").lower()
     ids = [p["user_id"] for p in people]
     docs = {d["user_id"]: d async for d in db.sector_days.find({"date": iso, "user_id": {"$in": ids}}, {"_id": 0})}
@@ -503,7 +515,12 @@ async def sector_day(request: Request, date: Optional[str] = None):
         # Managing a sector (who's in it, the goal, the postcode) is the leader's,
         # or a Coach/Admin starting a new one. A member can do the breakdown but
         # never re-pick the set-up — that stays as the leader made it.
-        "can_manage": i_lead or (role in ("leader", "admin") and sector is None),
+        "can_manage": not single and (i_lead or (role in ("leader", "admin") and sector is None)),
+        # An Admin can open anyone in the office (`who`), to fill in a breakdown
+        # someone forgot or fix one.
+        "single": single,
+        "office_people": ([{"user_id": p["user_id"], "user_name": p["user_name"]} for p in await _people(user)]
+                          if is_admin else None),
         "leads": i_lead,
         # Marking a COD item as seen in the field: the sector leader or a Coach.
         "can_mark_cod": i_lead or role in ("leader", "admin"),
@@ -1220,6 +1237,8 @@ async def my_averages(uid: str, today: Date) -> dict:
     from core.kpi_rules import breakdown_wins   # a day with a breakdown is counted from it, once
     kpi = await db.owneriq_kpis.find({"cg1_user_id": uid, "date": {"$gte": since, "$lt": today.isoformat()},
                                       "test_mode": {"$ne": True}, "cg1_matched_by": {"$ne": "name"}}).to_list(2000)
+    from core.bells_signups import bells_wins   # sign-ups from Bells (the Owner, 12 Nov 2026)
+    kpi = await bells_wins(kpi, db)
     for r in breakdown_wins(kpi):
         cur = by_day.setdefault(str(r["date"])[:10], {"doors": 0, "spoken": 0, "pitched": 0, "closed": 0, "sales": 0})
         cur["doors"] += int(r.get("doors_knocked") or 0)
