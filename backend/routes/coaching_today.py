@@ -11,7 +11,7 @@ Admin gets every new start on those days: the Owner runs the Academy.
 
     GET /api/coaching/today
       → {"date", "people": [{hire_id, name, day_number, day_label,
-           objective, assessment_id, done, can_grade, trainee_user_id,
+           objective, assessment_id, done, day_over, can_grade, trainee_user_id,
            breakeven_due (Day 4 on), breakeven (null until worked out),
            behind: [{topic, grade, expected, day}],
            checklist items also carry status (new|keep), changed_from, ahead,
@@ -31,7 +31,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from auth import get_current_user, can_access_hire
 from core.app_time import APP_TZ
-from core.grading_time import latest_field_start
+from core.grading_time import latest_field_start, academy_day_over
 from core.coaching_guide import classify, flags
 from database import db
 
@@ -150,7 +150,7 @@ async def coaching_today(request: Request):
             return {"date": iso, "people": []}
     else:
         ids = people_with(sec, str(user["id"]))
-    proj = {"_id": 0, "id": 1, "name": 1, "current_day": 1, "office_id": 1, "trainee_user_id": 1}
+    proj = {"_id": 0, "id": 1, "name": 1, "current_day": 1, "office_id": 1, "trainee_user_id": 1, "start_date": 1}
     hires = await db.new_hires.find(
         {"active": True, "office_id": user.get("office_id"), "trainee_user_id": {"$in": ids}}, proj,
     ).to_list(50) if ids else []
@@ -208,6 +208,9 @@ async def coaching_today(request: Request):
             "objective": await _objective(day),
             "assessment_id": (a or {}).get("id"),
             "done": bool((a or {}).get("completed")),
+            # An Academy day that ran on an earlier date and wasn't graded:
+            # grade it now, no waiting for 17:30 (the Owner, 11 Nov 2026).
+            "day_over": academy_day_over(day, h.get("start_date")),
             "can_grade": await can_access_hire(user, h["id"]),
             "checklist": items,
             "behind": behind,

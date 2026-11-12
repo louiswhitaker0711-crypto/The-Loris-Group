@@ -67,3 +67,23 @@ def test_an_academy_day_is_ready_once_product_coaching_is_done():
     assert ready_to_grade(1, 1, mon_1600)
     assert ready_to_grade(2, 2, mon_1600)
     assert not ready_to_grade(3, 3, mon_1600)      # a field day still waits for the field
+
+
+def test_an_academy_day_from_yesterday_can_be_graded_straight_away():
+    # Started Monday 9 Nov; Day 2 was Tuesday and wasn't graded (the Owner, 11 Nov 2026).
+    wed_1330 = datetime(2026, 11, 11, 13, 30, tzinfo=APP_TZ)
+    assert ready_to_grade(2, 2, wed_1330, start_date="2026-11-09")
+    # Tuesday itself still waits for product coaching to finish.
+    tue_1200 = datetime(2026, 11, 10, 12, 0, tzinfo=APP_TZ)
+    assert not ready_to_grade(2, 2, tue_1200, start_date="2026-11-09")
+    # Without a start date nothing changes.
+    assert not ready_to_grade(2, 2, wed_1330)
+
+
+def test_academy_day_over():
+    from core.grading_time import academy_day_over, academy_date
+    wed = datetime(2026, 11, 11, 9, 0, tzinfo=APP_TZ)
+    assert academy_date(2, "2026-11-09").isoformat() == "2026-11-10"
+    assert academy_day_over(2, "2026-11-09", wed)
+    assert not academy_day_over(3, "2026-11-09", wed)   # field days unchanged
+    assert not academy_day_over(2, None, wed)

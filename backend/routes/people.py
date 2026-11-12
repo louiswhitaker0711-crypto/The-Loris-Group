@@ -108,7 +108,7 @@ async def _cod(person: dict, uid: str) -> dict:
         rows.sort(key=lambda a: int(a.get("day_number") or 99))
         current_day = int(hire.get("current_day") or 1)
         last = last_graded_at(rows)
-        pending = [a for a in rows if not a.get("completed") and ready_to_grade(a.get("day_number"), current_day, last_graded=last)]
+        pending = [a for a in rows if not a.get("completed") and ready_to_grade(a.get("day_number"), current_day, last_graded=last, start_date=hire.get("start_date"))]
         out["new_start"] = {
             "hire_id": hire["id"],
             "active": hire.get("active", True) is not False,

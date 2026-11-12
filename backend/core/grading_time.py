@@ -13,7 +13,7 @@ nothing nags on Sunday morning (the Owner, 25 Oct 2026).
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Iterable, Optional
 
 from core.app_time import APP_TZ
@@ -62,12 +62,44 @@ def _parse(when) -> Optional[datetime]:
     return dt if dt.tzinfo else dt.replace(tzinfo=APP_TZ)
 
 
+def academy_date(day_number, start_date) -> Optional[date]:
+    """The date a BA Academy day ran: Day 1 on the start date (the Monday),
+    Day 2 the next working day. None for a field day or no start date."""
+    try:
+        d = int(day_number or 99)
+        start = date.fromisoformat(str(start_date or "")[:10])
+    except (TypeError, ValueError):
+        return None
+    if d > ACADEMY_DAYS:
+        return None
+    on = start
+    for _ in range(d - 1):
+        on += timedelta(days=1)
+        if on.weekday() == 6:
+            on += timedelta(days=1)
+    return on
+
+
+def academy_day_over(day_number, start_date, now: Optional[datetime] = None) -> bool:
+    """True when this is a BA Academy day that ran on an earlier date, so it can
+    be graded straight away (the Owner, 11 Nov 2026: Day 2 was yesterday, not
+    graded, and the app was making them wait until 17:30 today)."""
+    on = academy_date(day_number, start_date)
+    if not on:
+        return False
+    now = (now or datetime.now(APP_TZ)).astimezone(APP_TZ)
+    return on < now.date()
+
+
 def ready_to_grade(day_number, current_day, now: Optional[datetime] = None,
-                   last_graded: Optional[str] = None) -> bool:
+                   last_graded: Optional[str] = None, start_date=None) -> bool:
     """True when this day should show as waiting to be graded. `last_graded`
-    is when their latest day was graded (last_graded_at)."""
+    is when their latest day was graded (last_graded_at); `start_date` lets a
+    BA Academy day from an earlier date count as waiting straight away."""
     d, cur = int(day_number or 99), int(current_day or 1)
     if d < cur:
+        return True
+    if d == cur and academy_day_over(d, start_date, now):
         return True
     if d != cur or not todays_day_ready(now, academy=d <= ACADEMY_DAYS):
         return False
