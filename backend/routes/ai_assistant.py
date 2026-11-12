@@ -29,6 +29,7 @@ from pymongo.errors import DuplicateKeyError
 
 from auth import get_current_user
 from core.ai_context import context_text, next_field_day, today_uk
+from core.analyse_trend import trend_for
 from core.brand import APP_NAME, BRITISH_ENGLISH, SELF_EMPLOYED_TERMS
 from core.sales_coaching import BIG_COACH, PLAYBOOK, RESPONSE_STYLE
 from core.llm_guard import acquire_llm_slot
@@ -306,7 +307,7 @@ async def chat(request: Request):
 
 # Bump when the analysis changes shape: an analysis made today in the old
 # shape can be done again once, without using up the day's allowance.
-ANALYSE_VERSION = 5
+ANALYSE_VERSION = 6
 
 ANALYSE_SHAPE = (
     'Reply with JSON only, in this shape, and keep to the word limits: '
@@ -327,7 +328,11 @@ ANALYSE_SHAPE = (
     '"this_week": {"weekly_goal": a realistic stretch number of sign-ups for this week, "why": "max 12 words"}, '
     '"track": "how they will know it is working: the number to check at sector break and the early signs, e.g. '
     '\'Pitched at 16:30: 12 or more. Early sign: more people let you finish the intro\', max 25 words", '
-    '"keep_doing": "one thing they do well to keep doing, with its number, max 14 words", '
+    '"keep_doing": ["1 or 2 things they do well, each with its number or from their breakdowns, max 14 words '
+    'each"], '
+    '"stop_doing": ["1 or 2 things to stop, each tied to a number or their breakdowns (e.g. a step they keep '
+    'losing people at), max 14 words each"], '
+    '"start_doing": ["1 or 2 things to start, each an action on the doors tied to their gap, max 14 words each"], '
     '"team": "only if they have a team: who needs help with what, and what to do with them, max 30 words, else '
     'empty string", '
     '"best_people": "only if there is a scorecard: who is ready to lead a sector and who to give the next new start '
@@ -409,13 +414,23 @@ async def analyse(request: Request):
     await _take(uid, "analyse")
     material = await coaching_material(user)
     numbers = await numbers_vs_good(user)
+    try:
+        trend = await trend_for(user)
+    except Exception:
+        logger.exception("analyse trend failed")
+        trend = {}
     prompt = (await private_guidance(user)
               + f"What this person can see in the app (JSON):\n{await context_text(user)}\n\n"
               + (f"Coaching material from the Hub that matches their recent gaps:\n{material}\n\n" if material else "")
               + (f"Their last {numbers['days']} days in the field against what good looks like (worked out by the "
                  f"app, use these exact figures):\n{json.dumps(numbers, ensure_ascii=False)}\n\n" if numbers else "")
-              + "Analyse their data (each step against what good looks like, their trend, patterns in their "
-                "breakdowns), then turn it into advice to help them get better. "
+              + (f"Their trend, worked out by the app (use these exact figures):\n"
+                 f"{json.dumps(trend, ensure_ascii=False)}\n\n" if trend else "")
+              + "Analyse their data (each step against what good looks like, their trend, yesterday, the week so "
+                "far, patterns in their breakdowns and whether they followed through), then turn it into advice "
+                "to help them get better. Make it about THEM, never generic: every line must use one of their own "
+                "numbers, a date, or their own breakdown words, and must not be advice that would fit anyone. "
+                "Leave out anything the data doesn't show rather than guessing. "
                 f"{ANALYSE_SHAPE}")
     try:
         text = await _ask(user, ABOUT, prompt)
@@ -427,7 +442,7 @@ async def analyse(request: Request):
         await _give_back(uid, "analyse")
         raise HTTPException(status_code=502, detail="The AI's answer came back garbled. Try again.")
     doc = {"id": str(uuid.uuid4()), "user_id": uid, "date": day, "result": result, "v": ANALYSE_VERSION,
-           "numbers": numbers,
+           "numbers": numbers, "trend": trend,
            "next_field_day": next_field_day().isoformat(), "created_at": _now()}
     try:
         await db.ai_analyses.insert_one(dict(doc))

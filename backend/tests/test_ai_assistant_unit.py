@@ -90,6 +90,10 @@ def test_analyse_once_a_day_and_never_calls_the_model_twice(db, monkeypatch):
     async def no_numbers(_u):
         return None
     monkeypatch.setattr(ai, "numbers_vs_good", no_numbers)
+
+    async def no_trend(_u):
+        return {}
+    monkeypatch.setattr(ai, "trend_for", no_trend)
     first = _run(ai.analyse(_Req()))["analysis"]
     assert first["result"]["headline"] == "Good week"
     again = _run(ai.analyse(_Req()))["analysis"]

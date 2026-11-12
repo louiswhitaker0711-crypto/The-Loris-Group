@@ -24,17 +24,22 @@ import AiText from '../src/components/ai/AiText';
 type Part = 'analyse' | 'chat' | 'past';
 type PastChat = { id: string; date?: string; title: string; messages: number; current?: boolean };
 type Msg = { role: 'user' | 'assistant'; text: string };
+type TrendDay = { date: string; doors?: number | null; spoken?: number | null; pitched?: number | null;
+  closed?: number | null; hit?: number | null; goal?: number | null };
 type Tomorrow = { focus?: string; kpi_metric?: string; kpi_target?: number; goal?: number };
 type Analysis = {
   id: string; date: string; next_field_day?: string;
   numbers?: { days: number; per_day: { label: string; you: number; good: number }[];
     steps: { label: string; you: number | null; good: number }[] } | null;
+  trend?: { recent_days?: TrendDay[] } | null;
   result: {
     headline?: string;
     target?: { now?: string; next?: string; week?: string };
     change?: { what?: string; now?: string; need?: string; why?: string };
     how?: { step?: string; why?: string }[];
-    result?: string; track?: string; keep_doing?: string;
+    result?: string; track?: string;
+    last_day?: string; better?: string; slipping?: string; week?: string; follow_through?: string;
+    keep_doing?: string | string[]; stop_doing?: string[]; start_doing?: string[];
     tomorrow?: Tomorrow; this_week?: { weekly_goal?: number; why?: string };
     team?: string;
     best_people?: string;
@@ -42,6 +47,14 @@ type Analysis = {
 };
 
 const KPI_WORDS: Record<string, string> = { doors: 'doors', spoken: 'spoken to', pitched: 'pitched', closes: 'closes', callbacks: 'call backs' };
+
+const asList = (v?: string | string[]) => (Array.isArray(v) ? v : v ? [v] : []).filter((x) => !!x && !!String(x).trim());
+
+function shortDay(iso: string): string {
+  const d = new Date(`${iso}T12:00:00Z`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString(APP_LOCALE, { weekday: 'short', day: 'numeric', timeZone: APP_TZ });
+}
 
 function dayLabel(iso?: string): string {
   if (!iso) return '';
@@ -225,7 +238,7 @@ export default function AiScreen() {
             {!a ? (
               <View style={s.card}>
                 <Text style={s.h2}>Your analysis for today</Text>
-                <Text style={s.hint}>Where you are, where you want to be, the one thing to change, how to do it on the doors, and what it’ll do for you. One a day: best after your breakdown or before you plan tomorrow.</Text>
+                <Text style={s.hint}>How yesterday and your week are going, where you are, where you want to be, the one thing to change, how to do it on the doors, and what it’ll do for you. One a day: best after your breakdown or before you plan tomorrow.</Text>
                 <Pressable onPress={analyse} disabled={analysing || !left.analyse} style={[s.primary, (analysing || !left.analyse) && { opacity: 0.6 }]}
                   accessibilityRole="button" testID="ai-analyse">
                   {analysing ? <ActivityIndicator color={c.onPrimary} /> : <Text style={s.primaryText}>Analyse me</Text>}
@@ -235,6 +248,39 @@ export default function AiScreen() {
             ) : (
               <>
                 {!!a.headline && <View style={s.hero}><Text style={s.heroText}>{a.headline}</Text></View>}
+
+                {/* How it's going: yesterday, the trend, the week, and whether breakdowns were followed through (the Owner, 12 Nov 2026). */}
+                {(!!a.last_day || !!a.better || !!a.slipping || !!a.week || !!a.follow_through || !!analysisQ.data?.trend?.recent_days?.length) && (
+                  <View style={s.card} testID="ai-trend">
+                    <Text style={s.label}>How it’s going</Text>
+                    {!!a.last_day && <Text style={s.body}><Text style={s.bold}>Last day: </Text>{a.last_day}</Text>}
+                    {!!a.better && (
+                      <View style={s.trackRow}><Ionicons name="trending-up" size={16} color={c.green} />
+                        <Text style={[s.body, { flex: 1 }]}><Text style={s.bold}>Going better: </Text>{a.better}</Text></View>
+                    )}
+                    {!!a.slipping && (
+                      <View style={s.trackRow}><Ionicons name="trending-down" size={16} color={c.red} />
+                        <Text style={[s.body, { flex: 1 }]}><Text style={s.bold}>Needs to change: </Text>{a.slipping}</Text></View>
+                    )}
+                    {!!a.week && <Text style={s.body}><Text style={s.bold}>This week: </Text>{a.week}</Text>}
+                    {!!a.follow_through && <Text style={s.body}><Text style={s.bold}>Your breakdowns: </Text>{a.follow_through}</Text>}
+                    {!!analysisQ.data?.trend?.recent_days?.length && (
+                      <View style={{ marginTop: 6 }}>
+                        <View style={s.numHead}>
+                          <Text style={[s.trendCell, s.trendDay, s.small]} />
+                          {['Doors', 'Spoke', 'Pitch', 'Close', 'Signed'].map((h) => <Text key={h} style={[s.trendCell, s.small]}>{h}</Text>)}
+                        </View>
+                        {analysisQ.data!.trend!.recent_days!.map((d) => (
+                          <View key={d.date} style={s.numRow}>
+                            <Text style={[s.trendCell, s.trendDay, s.small]}>{shortDay(d.date)}</Text>
+                            {[d.doors, d.spoken, d.pitched, d.closed].map((v, i) => <Text key={i} style={[s.trendCell, s.body]}>{v ?? '–'}</Text>)}
+                            <Text style={[s.trendCell, s.body, s.bold]}>{d.hit ?? '–'}{d.goal != null ? <Text style={s.small}>/{d.goal}</Text> : null}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                )}
 
                 {/* 1 · Where you are: the app's own figures against what good looks like. */}
                 {!!analysisQ.data?.numbers && (() => {
@@ -342,7 +388,22 @@ export default function AiScreen() {
                   </View>
                 )}
 
-                {!!a.keep_doing && <Text style={[s.hint, { textAlign: 'center' }]}>Keep doing: {a.keep_doing}</Text>}
+                {/* Keep, stop, start (the Owner, 12 Nov 2026). */}
+                {(asList(a.keep_doing).length > 0 || asList(a.stop_doing).length > 0 || asList(a.start_doing).length > 0) && (
+                  <View style={s.card} testID="ai-kss">
+                    {([['Keep doing', a.keep_doing, 'checkmark-circle', c.green], ['Stop doing', a.stop_doing, 'close-circle', c.red],
+                      ['Start doing', a.start_doing, 'add-circle', c.primary]] as [string, string | string[] | undefined, any, string][])
+                      .filter(([, v]) => asList(v).length > 0).map(([title, v, icon, colour]) => (
+                        <View key={title} style={{ gap: 4 }}>
+                          <Text style={s.label}>{title}</Text>
+                          {asList(v).map((line, i) => (
+                            <View key={i} style={s.trackRow}><Ionicons name={icon} size={16} color={colour} />
+                              <Text style={[s.body, { flex: 1 }]}>{line}</Text></View>
+                          ))}
+                        </View>
+                      ))}
+                  </View>
+                )}
                 {!!a.team && <View style={s.card}><Text style={s.label}>Your team</Text><Text style={s.body}>{a.team}</Text></View>}
                 {!!a.best_people && <View style={s.card} testID="ai-best-people"><Text style={s.label}>Your best people</Text><Text style={s.body}>{a.best_people}</Text></View>}
                 <Text style={[s.small, { textAlign: 'center' }]}>One analysis a day. Got a question about it? Tap Ask.</Text>
@@ -462,6 +523,8 @@ const styles = (c: any) => StyleSheet.create({
   numHead: { flexDirection: 'row', alignItems: 'center', paddingTop: 4 },
   numRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 5, borderTopWidth: 1, borderTopColor: c.border },
   numCell: { width: 56, textAlign: 'right' },
+  trendCell: { flex: 1, textAlign: 'right', minWidth: 0 },
+  trendDay: { flex: 1.4, textAlign: 'left' },
   numName: { flex: 1, width: undefined, textAlign: 'left' },
   numVal: { fontFamily: fonts.bodyBold, fontSize: 15 },
   stepNo: { color: c.primary },
