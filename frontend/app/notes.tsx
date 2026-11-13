@@ -20,9 +20,10 @@ import { useDeviceInsets } from '../src/nav/AppShell';
 import { toast } from '../src/utils/toast';
 import FolderTag from '../src/components/notes/FolderTag';
 import { readBackup, writeBackup, clearBackup, onLeave } from '../src/utils/draftBackup';
+import { pickNotePhoto } from '../src/utils/pickImage';
 
 type Note = { id: string; head: string; head_label: string; title: string; body: string; date: string;
-  source_label: string; shared: boolean; author_name: string; mine: boolean; photos?: string[]; can_delete?: boolean };
+  source_label: string; shared: boolean; author_name: string; mine: boolean; photos?: string[]; can_delete?: boolean; can_photo?: boolean };
 type View_ = { kind: 'root' } | { kind: 'stage'; stage: number } | { kind: 'head'; head: string; label: string; sub?: string };
 
 const fmt = (iso: string) => {
@@ -182,7 +183,7 @@ export default function NotesScreen() {
   );
 }
 
-type NoteDraft = { note?: Note; head: string; id?: string; title: string; body: string; h: string };
+type NoteDraft = { note?: Note; head: string; id?: string; title: string; body: string; h: string; photos?: string[] };
 
 // Saves as you type (the Owner, 3 Nov 2026: a BA lost her notes). A new note
 // is created on the first words and kept up to date after that; the phone
@@ -196,28 +197,44 @@ function NoteEditor({ note, head, restored, onClose }: { note?: Note; head: stri
   const [title, setTitle] = useState(restored?.title ?? note?.title ?? '');
   const [body, setBody] = useState(restored?.body ?? note?.body ?? '');
   const [h, setH] = useState(restored?.h ?? note?.head ?? head ?? '');
+  // Photos (the Owner, 13 Nov 2026): take one or pick one, up to 4, on a new
+  // note or one that sits in the planner as its own note.
+  const [photos, setPhotos] = useState<string[]>(restored?.photos ?? note?.photos ?? []);
+  const [adding, setAdding] = useState(false);
+  const canPhoto = !h.startsWith('meetup:') && (!note || !!note.can_photo || !!restored?.id);
+  const addPhoto = async () => {
+    if (photos.length >= 4 || adding) return;
+    setAdding(true);
+    try {
+      const url = await pickNotePhoto();
+      if (url) setPhotos((ps) => [...ps, url].slice(0, 4));
+    } catch (e: any) {
+      toast.error('Couldn\u2019t add the photo', typeof e?.response?.data?.detail === 'string' ? e.response.data.detail : 'Try again.');
+    } finally { setAdding(false); }
+  };
   const [busy, setBusy] = useState(false);
   const [state, setState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const idRef = useRef<string | undefined>(restored?.id ?? note?.id);
-  const lastSaved = useRef(JSON.stringify([note?.title || '', note?.body || '', note?.head || head || '']));
+  const lastSaved = useRef(JSON.stringify([note?.title || '', note?.body || '', note?.head || head || '', note?.photos || []]));
   const timer = useRef<any>(null);
   const inFlight = useRef<Promise<void> | null>(null);
-  const latest = useRef({ title, body, h });
-  latest.current = { title, body, h };
+  const latest = useRef({ title, body, h, photos });
+  latest.current = { title, body, h, photos };
 
   const push = async (): Promise<void> => {
     if (inFlight.current) { await inFlight.current; }
-    const { title: t, body: b, h: hh } = latest.current;
-    const sig = JSON.stringify([t, b, hh]);
+    const { title: t, body: b, h: hh, photos: ph } = latest.current;
+    const sig = JSON.stringify([t, b, hh, ph]);
     if (sig === lastSaved.current) return;
-    if (!idRef.current && !(b.trim() || t.trim())) return;
+    if (!idRef.current && !(b.trim() || t.trim() || ph.length)) return;
+    const pics = canPhoto ? { photos: ph } : {};
     setState('saving');
     const run = (async () => {
       try {
         let saved = false;
         if (idRef.current) {
           try {
-            await api.put(`/notes/${idRef.current}`, { title: t, body: b, head: hh });
+            await api.put(`/notes/${idRef.current}`, { title: t, body: b, head: hh, ...pics });
             saved = true;
           } catch (err: any) {
             // The note it was editing has gone (emptied or removed in the
@@ -228,13 +245,13 @@ function NoteEditor({ note, head, restored, onClose }: { note?: Note; head: stri
           }
         }
         if (!saved) {
-          if (!(b.trim() || t.trim())) { lastSaved.current = sig; return; }
-          const r = await api.post('/notes', { title: t, body: b, head: hh });
+          if (!(b.trim() || t.trim() || ph.length)) { lastSaved.current = sig; return; }
+          const r = await api.post('/notes', { title: t, body: b, head: hh, ...pics });
           idRef.current = r.data?.note_id || undefined;
         }
         lastSaved.current = sig;
         setState('saved');
-        if (sig === JSON.stringify([latest.current.title, latest.current.body, latest.current.h])) clearBackup('note:open');
+        if (sig === JSON.stringify([latest.current.title, latest.current.body, latest.current.h, latest.current.photos])) clearBackup('note:open');
         qc.invalidateQueries({ queryKey: ['notes-folder'] });
         qc.invalidateQueries({ queryKey: ['notes-list'] });
         qc.invalidateQueries({ queryKey: ['weekly-planner'] });
@@ -249,12 +266,12 @@ function NoteEditor({ note, head, restored, onClose }: { note?: Note; head: stri
 
   // Every change: keep a copy on the phone, then save a moment later.
   useEffect(() => {
-    const sig = JSON.stringify([title, body, h]);
+    const sig = JSON.stringify([title, body, h, photos]);
     if (sig === lastSaved.current) return;
-    writeBackup<NoteDraft>('note:open', { note, head, id: idRef.current, title, body, h });
+    writeBackup<NoteDraft>('note:open', { note, head, id: idRef.current, title, body, h, photos });
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => { push().catch(() => {}); }, 900);
-  }, [title, body, h]);
+  }, [title, body, h, photos]);
   useEffect(() => onLeave(() => { if (timer.current) clearTimeout(timer.current); push().catch(() => {}); }), []);
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
@@ -276,7 +293,7 @@ function NoteEditor({ note, head, restored, onClose }: { note?: Note; head: stri
   // note that can't save never blocks writing another.
   const discard = () => {
     const go = () => { if (timer.current) clearTimeout(timer.current); clearBackup('note:open'); onClose(); };
-    const unsaved = JSON.stringify([title, body, h]) !== lastSaved.current;
+    const unsaved = JSON.stringify([title, body, h, photos]) !== lastSaved.current;
     if (!unsaved) { go(); return; }
     showAlert('Discard this note?', 'What you’ve typed since it last saved will be lost.', [
       { text: 'Keep writing', style: 'cancel' },
@@ -330,6 +347,28 @@ function NoteEditor({ note, head, restored, onClose }: { note?: Note; head: stri
             onChange={(v) => { setH(v.head); setTitle(v.title); }} />}
           <TextInput value={body} onChangeText={setBody} placeholder="Write the note…" placeholderTextColor={c.textMuted}
             style={[s.edInput, { minHeight: 260 }]} multiline textAlignVertical="top" autoFocus={!note} />
+          {canPhoto && (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {photos.map((p, i) => (
+                <View key={p + i}>
+                  <Image source={{ uri: p }} style={{ width: 84, height: 84, borderRadius: 12 }} />
+                  <Pressable onPress={() => setPhotos((ps) => ps.filter((_, j) => j !== i))} hitSlop={8} accessibilityRole="button" accessibilityLabel="Remove photo"
+                    style={{ position: 'absolute', top: -6, right: -6, backgroundColor: c.surface, borderRadius: 12 }}>
+                    <Ionicons name="close-circle" size={22} color={c.textMuted} />
+                  </Pressable>
+                </View>
+              ))}
+              {photos.length < 4 && (
+                <Pressable onPress={addPhoto} disabled={adding} accessibilityRole="button" accessibilityLabel="Add a photo" testID="note-add-photo"
+                  style={{ width: 84, height: 84, borderRadius: 12, borderWidth: 1, borderStyle: 'dashed', borderColor: c.border, alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+                  {adding ? <ActivityIndicator color={c.primary} /> : <>
+                    <Ionicons name="camera-outline" size={22} color={c.primary} />
+                    <Text style={[s.small, { color: c.primary }]}>Photo</Text>
+                  </>}
+                </Pressable>
+              )}
+            </View>
+          )}
           {canDelete && (
             <Pressable onPress={remove} disabled={busy} style={s.delBtn} accessibilityRole="button" testID="note-delete">
               <Ionicons name="trash-outline" size={16} color={c.red || '#c0392b'} />

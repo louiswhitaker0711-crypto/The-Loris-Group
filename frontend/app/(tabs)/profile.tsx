@@ -8,6 +8,7 @@ import { useTabBarClearance } from '../../src/customization/CustomTabBar';
 import { useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
+import { pickImage as pickPhoto } from '../../src/utils/pickImage';
 import { promptText } from '../../src/utils/promptText';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { colors } from '../../src/theme/colors';
@@ -1389,13 +1390,7 @@ function TeamNameSection() {
   // Team logo: shows next to the team's name for everyone (Bells, Spider, teams).
   const [logoBusy, setLogoBusy] = React.useState(false);
   const pickLogo = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      showAlert('Permission needed', 'Please allow access to your photo library.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.8 });
-    const asset = result.canceled ? null : result.assets?.[0];
+    const asset = await pickPhoto({ title: 'Team logo', square: true, quality: 0.8 });
     if (!asset) return;
     setLogoBusy(true);
     try {

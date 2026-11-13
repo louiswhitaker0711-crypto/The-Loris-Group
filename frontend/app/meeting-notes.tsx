@@ -8,7 +8,7 @@ import { View, Text, StyleSheet, ScrollView, TextInput, Pressable, ActivityIndic
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
-import * as ImagePicker from 'expo-image-picker';
+import { pickImage } from '../src/utils/pickImage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors, fonts } from '../src/theme/ThemeContext';
 import { apiService } from '../src/api/client';
@@ -86,11 +86,11 @@ export default function MeetingNotesScreen() {
   };
 
   const onScan = async () => {
-    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.85 });
-    if (res.canceled || !res.assets?.[0]?.uri) return;
+    const a = await pickImage({ title: 'Read notes from a photo' });
+    if (!a?.uri) return;
     setBusy('scan');
     try {
-      const r = await apiService.scanWeeklyNotes({ uri: res.assets[0].uri, name: 'notes.jpg', type: 'image/jpeg' });
+      const r = await apiService.scanWeeklyNotes({ uri: a.uri, name: 'notes.jpg', type: 'image/jpeg' });
       const text = (r.data?.text || '').trim();
       if (!text) { showAlert('Nothing found', "The photo didn't contain readable text. Try a closer, better-lit shot."); return; }
       const next = notes ? `${notes}\n${text}` : text;

@@ -9,10 +9,8 @@
 import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, Image, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
-import * as ImageManipulator from 'expo-image-manipulator';
+import { pickNotePhoto } from '../../utils/pickImage';
 import { useColors, fonts } from '../../theme/ThemeContext';
-import { api } from '../../api/client';
 import { toast } from '../../utils/toast';
 import FolderTag from '../notes/FolderTag';
 
@@ -21,17 +19,7 @@ export type SlotNote = { id: string; title: string; head: string; body: string; 
 const newId = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-6);
 export const blankNote = (label: string, head = ''): SlotNote => ({ id: newId(), title: '', head, body: '', photos: [], label });
 
-async function pickAndUpload(): Promise<string | null> {
-  const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.9 });
-  if (res.canceled || !res.assets?.[0]?.uri) return null;
-  const a = res.assets[0];
-  const wide = (a.width || 0) >= (a.height || 0);
-  const resize = Math.max(a.width || 0, a.height || 0) > 1600 ? [{ resize: wide ? { width: 1600 } : { height: 1600 } }] : [];
-  const out = await ImageManipulator.manipulateAsync(a.uri, resize as any, { compress: 0.75, format: ImageManipulator.SaveFormat.JPEG, base64: true });
-  if (!out.base64) return null;
-  const { data } = await api.post('/notes/photo', { image: `data:image/jpeg;base64,${out.base64}` }, { timeout: 60_000 });
-  return data?.url || null;
-}
+const pickAndUpload = pickNotePhoto;
 
 function NoteCard({ note, label, defaultHead, isAdmin, canEdit, onChange, onRemove, s, c }: {
   note: SlotNote; label: string; defaultHead: string; isAdmin: boolean; canEdit: boolean;

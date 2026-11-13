@@ -11,7 +11,7 @@ import { useIsLandscape } from '../../src/hooks/useIsLandscape';
 import { useTabBarClearance } from '../../src/customization/CustomTabBar';
 import { useKeyboardInset } from '../../src/hooks/useKeyboardInset';
 import * as Clipboard from 'expo-clipboard';
-import * as ImagePicker from 'expo-image-picker';
+import { pickImage } from '../../src/utils/pickImage';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { useColors, useTheme, lightColors, fonts, GRADIENT } from '../../src/theme/ThemeContext';
 import { apiService } from '../../src/api/client';
@@ -146,13 +146,7 @@ export default function AdminScreen() {
     }
   };
   const setTeamLogoFor = async (u: any) => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      showAlert('Permission needed', 'Please allow access to your photo library.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.8 });
-    const asset = result.canceled ? null : result.assets?.[0];
+    const asset = await pickImage({ title: 'Team logo', square: true, quality: 0.8 });
     if (!asset) return;
     try {
       const out = await ImageManipulator.manipulateAsync(asset.uri, [{ resize: { width: 400 } }],

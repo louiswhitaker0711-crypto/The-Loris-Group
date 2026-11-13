@@ -64,3 +64,10 @@ def test_removed_note_is_listed_and_put_back(monkeypatch):
         assert left == set()
 
     asyncio.run(run())
+
+
+def test_notes_edit_carries_photos():
+    from routes.notes_folder import _clean_edit
+    ok = "data:image/jpeg;base64,AAAA"
+    assert _clean_edit({"body": "x"})["photos"] is None
+    assert _clean_edit({"body": "x", "photos": [ok, "javascript:bad"] + [ok] * 5})["photos"] == [ok] * 4
