@@ -53,9 +53,11 @@ const goalCell = (label: string, value: string) => `
 
 // v2 goals (structured KPIs + Rocks). Legacy planners use the 6-cell grid.
 // Goals as in the app: KPIs above Rocks, each by 1 month / 3 months.
+const WHY_PDF: Record<string, string> = { people: 'People', lifestyle: 'Lifestyle', choices: 'Choices', time: 'Time', project: 'Project' };
 const TERM_PDF: Record<string, string> = { short: '1 month', medium: '3 months', long: '6 months' };
 const goalsV2Html = (goals: any): string => {
   const area = (x: any) => (x.area === 'personal' ? 'Personal' : 'Business');
+  const whys: any[] = (goals.whys || []).filter((w: any) => w && w.text);
   const vision = String(goals.vision || '').trim();
   const mids: any[] = (goals.mids || []).filter((m: any) => m && m.name);
   if (!mids.length && vision) mids.push({ name: vision });
@@ -85,6 +87,11 @@ const goalsV2Html = (goals: any): string => {
       <h3>Mid term · 6–12 months</h3>
       <table class="data"><thead><tr><th>Goal</th><th>Business / Personal</th></tr></thead><tbody>
         ${mids.map((m: any) => `<tr><td>${m.done ? '✓ ' : ''}${escapeHtml(m.name)}</td><td>${area(m)}</td></tr>${m.how ? `<tr><td colspan="2"><span class="muted">How:</span> ${nl2br(m.how)}</td></tr>` : ''}`).join('')}
+      </tbody></table>` : ''}
+      ${whys.length ? `
+      <h3>Long term · my why</h3>
+      <table class="data"><tbody>
+        ${whys.map((w: any) => `<tr><td style="width:110px">${escapeHtml(WHY_PDF[w.tag] || 'People')}</td><td>${nl2br(w.text)}</td></tr>`).join('')}
       </tbody></table>` : ''}
     </section>`;
 };

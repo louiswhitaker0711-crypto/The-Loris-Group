@@ -26,7 +26,9 @@ export type Area = 'business' | 'personal';
 export interface Kpi { id: string; name: string; target: string; horizon: Horizon; area?: Area; reward: string; how?: string; smart_ok: boolean }
 export interface Rock { id: string; name: string; horizon: Horizon; area?: Area; reward: string; how?: string; done: boolean }
 export interface Mid { id: string; name: string; area?: Area; how?: string; done: boolean }
-export interface GoalsV2 { version: number; kpis: Kpi[]; rocks: Rock[]; mids: Mid[]; vision: string }
+export type WhyTag = 'people' | 'lifestyle' | 'choices' | 'time' | 'project';
+export interface Why { id: string; text: string; tag: WhyTag }
+export interface GoalsV2 { version: number; kpis: Kpi[]; rocks: Rock[]; mids: Mid[]; whys?: Why[]; vision: string }
 
 // A planner's goals are v2 (structured) once they carry a version / kpis key.
 // Legacy planners (six free-text strings) are handled by the old grid.
@@ -64,7 +66,17 @@ function AreaToggle({ s, colors, value, onChange }: any) {
 }
 
 const genId = () => `g-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-const emptyGoals = (): GoalsV2 => ({ version: 2, kpis: [], rocks: [], mids: [], vision: '' });
+const emptyGoals = (): GoalsV2 => ({ version: 2, kpis: [], rocks: [], mids: [], whys: [], vision: '' });
+// Long term is their why (the Owner, 13 Nov 2026).
+const WHY_TAGS: { key: WhyTag; label: string }[] = [
+  { key: 'people', label: 'People' },
+  { key: 'lifestyle', label: 'Lifestyle' },
+  { key: 'choices', label: 'Choices' },
+  { key: 'time', label: 'Time' },
+  { key: 'project', label: 'Project' },
+];
+// Goals just added open straight away; everything else starts as one line.
+const freshIds = new Set<string>();
 
 // KPI count → recommended Rock count (4 KPIs → 3 rocks, 5+ → 2). 7 total.
 const recommendedRocks = (kpiCount: number) => (kpiCount >= 5 ? 2 : 3);
@@ -85,7 +97,7 @@ export function GoalBuilder({ goals: goalsIn, canEdit, onChange }: Props) {
       // A 6-month vision written before mid term existed shows as a mid-term goal.
       const v = String(goalsIn?.vision || '').trim();
       const mids: Mid[] = goalsIn?.mids?.length ? goalsIn.mids : (v ? [{ id: 'vision', name: v, area: 'business', how: '', done: false }] : []);
-      return { version: 2, kpis: goalsIn?.kpis || [], rocks: goalsIn?.rocks || [], mids, vision: '' };
+      return { version: 2, kpis: goalsIn?.kpis || [], rocks: goalsIn?.rocks || [], mids, whys: goalsIn?.whys || [], vision: '' };
     },
     [goalsIn]
   );
@@ -126,7 +138,8 @@ export function GoalBuilder({ goals: goalsIn, canEdit, onChange }: Props) {
     if (!nm) return;
     if (goals.kpis.some((k) => k.name.toLowerCase() === nm.toLowerCase() && k.horizon === horizon)) return;
     haptics.light();
-    setKpis([...goals.kpis, { id: genId(), name: nm, target: '', horizon, area: 'business', reward: '', smart_ok: false }]);
+    const id = genId(); freshIds.add(id);
+    setKpis([...goals.kpis, { id, name: nm, target: '', horizon, area: 'business', reward: '', smart_ok: false }]);
   };
   const updateKpi = (id: string, patch: Partial<Kpi>) =>
     setKpis(goals.kpis.map((k) => (k.id === id ? { ...k, ...patch } : k)));
@@ -137,7 +150,8 @@ export function GoalBuilder({ goals: goalsIn, canEdit, onChange }: Props) {
     if (!nm) return;
     if (goals.rocks.some((r) => r.name.toLowerCase() === nm.toLowerCase() && r.horizon === horizon)) return;
     haptics.light();
-    setRocks([...goals.rocks, { id: genId(), name: nm, horizon, area: 'business', reward: '', done: false }]);
+    const id = genId(); freshIds.add(id);
+    setRocks([...goals.rocks, { id, name: nm, horizon, area: 'business', reward: '', done: false }]);
   };
   const updateRock = (id: string, patch: Partial<Rock>) =>
     setRocks(goals.rocks.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -148,10 +162,30 @@ export function GoalBuilder({ goals: goalsIn, canEdit, onChange }: Props) {
     const nm = name.trim();
     if (!nm || goals.mids.some((m) => m.name.toLowerCase() === nm.toLowerCase())) return;
     haptics.light();
-    setMids([...goals.mids, { id: genId(), name: nm, area: 'business', how: '', done: false }]);
+    const id = genId(); freshIds.add(id);
+    setMids([...goals.mids, { id, name: nm, area: 'business', how: '', done: false }]);
   };
   const updateMid = (id: string, patch: Partial<Mid>) => setMids(goals.mids.map((m) => (m.id === id ? { ...m, ...patch } : m)));
   const removeMid = (id: string) => { haptics.light(); setMids(goals.mids.filter((m) => m.id !== id)); };
+
+  const whys = goals.whys || [];
+  const setWhys = (w: Why[]) => commit({ whys: w });
+  const addWhy = (text: string, tag: WhyTag) => {
+    const t = text.trim();
+    if (!t) return;
+    haptics.light();
+    setWhys([...whys, { id: genId(), text: t, tag }]);
+  };
+  const updateWhy = (id: string, patch: Partial<Why>) => setWhys(whys.map((w) => (w.id === id ? { ...w, ...patch } : w)));
+  const removeWhy = (id: string) => { haptics.light(); setWhys(whys.filter((w) => w.id !== id)); };
+
+  // Short, Mid and Long term on tabs: one at a time, not one long list.
+  const [tab, setTab] = useState<'short' | 'mid' | 'long'>('short');
+  const TABS = [
+    { key: 'short' as const, label: 'Short term', sub: '1–3 months', n: goals.kpis.length + goals.rocks.length },
+    { key: 'mid' as const, label: 'Mid term', sub: '6–12 months', n: goals.mids.length },
+    { key: 'long' as const, label: 'Long term', sub: 'Your why', n: whys.length },
+  ];
 
   // 1 month and 3 months always; 6 months only for goals set that way before.
   const terms = (list: { horizon: Horizon }[]): Horizon[] =>
@@ -174,8 +208,21 @@ export function GoalBuilder({ goals: goalsIn, canEdit, onChange }: Props) {
         </View>
       )}
 
-      {/* Short term: 1-3 months */}
-      <Text style={s.termHeading}>SHORT TERM <Text style={s.termHeadingSub}>· 1–3 months</Text></Text>
+      {/* Short / Mid / Long term tabs */}
+      <View style={s.tabRow}>
+        {TABS.map((t) => {
+          const on = tab === t.key;
+          return (
+            <TouchableOpacity key={t.key} style={[s.tab, on && { backgroundColor: colors.primary, borderColor: colors.primary }]}
+              onPress={() => { haptics.tap(); setTab(t.key); }} activeOpacity={0.75}>
+              <Text style={[s.tabLabel, on && { color: colors.onPrimary }]}>{t.label}{t.n ? ` · ${t.n}` : ''}</Text>
+              <Text style={[s.tabSub, on && { color: colors.onPrimary, opacity: 0.85 }]}>{t.sub}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {tab === 'short' && (<>
 
       {/* KPIs */}
       <View style={[s.goalBoxCard, { borderColor: colors.primary }]}>
@@ -223,8 +270,10 @@ export function GoalBuilder({ goals: goalsIn, canEdit, onChange }: Props) {
         ))}
       </View>
 
+      </>)}
+
       {/* Mid term: 6-12 months (replaced the 6-month vision) */}
-      <Text style={s.termHeading}>MID TERM <Text style={s.termHeadingSub}>· 6–12 months</Text></Text>
+      {tab === 'mid' && (
       <View style={[s.goalBoxCard, { borderColor: colors.textSecondary }]}>
         <Text style={[s.hint, { marginBottom: 4 }]}>Where you want to be: a stage, a level, or something personal.</Text>
         {goals.mids.map((m) => (
@@ -237,6 +286,21 @@ export function GoalBuilder({ goals: goalsIn, canEdit, onChange }: Props) {
             placeholder="Add a mid-term goal…" onAdd={addMid} />
         )}
       </View>
+      )}
+
+      {/* Long term: their why */}
+      {tab === 'long' && (
+        <View style={[s.goalBoxCard, { borderColor: colors.yellow || colors.primary }]}>
+          <Text style={[s.hint, { marginBottom: 6 }]}>Your why: the reason behind every goal. People, lifestyle, choices, time or a project.</Text>
+          {whys.map((w) => (
+            <WhyRow key={w.id} s={s} colors={colors} w={w} canEdit={canEdit}
+              onUpdate={(p: Partial<Why>) => updateWhy(w.id, p)} onRemove={() => removeWhy(w.id)} />
+          ))}
+          {!whys.length && !canEdit && <Text style={s.hint}>—</Text>}
+          {canEdit && <AddWhy s={s} colors={colors} onAdd={addWhy} />}
+        </View>
+      )}
+
     </View>
   );
 }
@@ -264,20 +328,38 @@ function TermBlock({ s, colors, label, canEdit, menu, loading, chosen, placehold
   );
 }
 
-function KpiRow({ s, colors, k, canEdit, onUpdate, onRemove }: any) {
+// One goal as a single line (tick, name, tag, chevron); tap to open the rest.
+function GoalCard({ s, colors, id, canEdit, left, title, meta, done, onRemove, children }: any) {
+  const [open, setOpen] = useState(() => freshIds.has(id));
   return (
     <View style={s.goalRow}>
       <View style={s.goalRowHead}>
-        <TouchableOpacity disabled={!canEdit} onPress={() => onUpdate({ smart_ok: !k.smart_ok })} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-          <Ionicons name={k.smart_ok ? 'checkbox' : 'square-outline'} size={18} color={k.smart_ok ? colors.green : colors.textMuted} />
+        <View style={s.goalRowLeft}>{left}</View>
+        <TouchableOpacity style={s.goalRowMain} onPress={() => { haptics.tap(); setOpen(!open); }} activeOpacity={0.7}>
+          <Text style={[s.goalRowTitle, done && { textDecorationLine: 'line-through', color: colors.textMuted }]} numberOfLines={open ? undefined : 1}>{title}</Text>
+          {!!meta && <Text style={s.goalRowMeta} numberOfLines={1}>{meta}</Text>}
+          <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={15} color={colors.textMuted} />
         </TouchableOpacity>
-        <Text style={[s.goalName, { flex: 1 }]}>{k.name}</Text>
         {canEdit && (
-          <TouchableOpacity onPress={onRemove} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <TouchableOpacity onPress={onRemove} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ marginLeft: 8 }}>
             <Ionicons name="close-circle" size={18} color={colors.textMuted} />
           </TouchableOpacity>
         )}
       </View>
+      {open && <View style={{ marginTop: 8 }}>{children}</View>}
+    </View>
+  );
+}
+
+function KpiRow({ s, colors, k, canEdit, onUpdate, onRemove }: any) {
+  const left = (
+    <TouchableOpacity disabled={!canEdit} onPress={() => onUpdate({ smart_ok: !k.smart_ok })} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+      <Ionicons name={k.smart_ok ? 'checkbox' : 'square-outline'} size={18} color={k.smart_ok ? colors.green : colors.textMuted} />
+    </TouchableOpacity>
+  );
+  return (
+    <GoalCard s={s} colors={colors} id={k.id} canEdit={canEdit} left={left} onRemove={onRemove}
+      title={k.target ? `${k.name} → ${k.target}` : k.name} meta={areaLabel(k.area)}>
       <View style={s.fieldRow}>
         <Text style={s.fieldLabel}>Target</Text>
         <TextInput
@@ -290,9 +372,7 @@ function KpiRow({ s, colors, k, canEdit, onUpdate, onRemove }: any) {
         />
         {canEdit && <HorizonToggle s={s} colors={colors} value={k.horizon} onChange={(h: Horizon) => onUpdate({ horizon: h })} />}
       </View>
-      {canEdit
-        ? <AreaToggle s={s} colors={colors} value={k.area} onChange={(a: Area) => onUpdate({ area: a })} />
-        : <Text style={s.sumSub}>{areaLabel(k.area)}</Text>}
+      {canEdit && <AreaToggle s={s} colors={colors} value={k.area} onChange={(a: Area) => onUpdate({ area: a })} />}
       {(canEdit || !!k.reward) && (
         <TextInput
           style={s.rewardInput}
@@ -304,7 +384,7 @@ function KpiRow({ s, colors, k, canEdit, onUpdate, onRemove }: any) {
       )}
       <HowBox s={s} colors={colors} value={k.how} canEdit={canEdit} onChange={(v: string) => onUpdate({ how: v })} />
       {canEdit && <Text style={[s.hint, { marginTop: 4, fontSize: 11 }]}>Tick the box once it's SMART.</Text>}
-    </View>
+    </GoalCard>
   );
 }
 
@@ -352,58 +432,45 @@ function TermBlockAdd({ s, colors, menu, chosen, placeholder, onAdd }: any) {
   );
 }
 
+function DoneTick({ colors, done, canEdit, onToggle }: any) {
+  return (
+    <TouchableOpacity disabled={!canEdit} onPress={onToggle} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+      <Ionicons name={done ? 'checkmark-circle' : 'ellipse-outline'} size={19} color={done ? colors.green : colors.textMuted} />
+    </TouchableOpacity>
+  );
+}
+
 function MidRow({ s, colors, m, canEdit, onUpdate, onRemove }: any) {
   return (
-    <View style={s.goalRow}>
-      <View style={s.goalRowHead}>
-        <TouchableOpacity disabled={!canEdit} onPress={() => onUpdate({ done: !m.done })} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-          <Ionicons name={m.done ? 'checkmark-circle' : 'ellipse-outline'} size={19} color={m.done ? colors.green : colors.textMuted} />
-        </TouchableOpacity>
-        {canEdit ? (
-          <TextInput
-            style={[s.goalName, { flex: 1, padding: 0 }]}
-            value={m.name}
-            onChangeText={(v) => onUpdate({ name: v })}
-            multiline
-            scrollEnabled={false}
-          />
-        ) : (
-          <Text style={[s.goalName, { flex: 1 }, m.done && { textDecorationLine: 'line-through', color: colors.textMuted }]}>{m.name}</Text>
-        )}
-        {canEdit && (
-          <TouchableOpacity onPress={onRemove} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="close-circle" size={18} color={colors.textMuted} />
-          </TouchableOpacity>
-        )}
-      </View>
-      {canEdit
-        ? <AreaToggle s={s} colors={colors} value={m.area} onChange={(a: Area) => onUpdate({ area: a })} />
-        : <Text style={s.sumSub}>{areaLabel(m.area)}</Text>}
+    <GoalCard s={s} colors={colors} id={m.id} canEdit={canEdit} done={m.done} onRemove={onRemove}
+      left={<DoneTick colors={colors} done={m.done} canEdit={canEdit} onToggle={() => onUpdate({ done: !m.done })} />}
+      title={m.name} meta={areaLabel(m.area)}>
+      {canEdit && (
+        <TextInput
+          style={[s.rewardInput, { marginTop: 0, marginBottom: 8 }]}
+          value={m.name}
+          onChangeText={(v) => onUpdate({ name: v })}
+          placeholder="The goal"
+          placeholderTextColor={colors.textMuted}
+        />
+      )}
+      {canEdit && <AreaToggle s={s} colors={colors} value={m.area} onChange={(a: Area) => onUpdate({ area: a })} />}
       <HowBox s={s} colors={colors} value={m.how} canEdit={canEdit} onChange={(v: string) => onUpdate({ how: v })} />
-    </View>
+    </GoalCard>
   );
 }
 
 function RockRow({ s, colors, r, canEdit, onUpdate, onRemove }: any) {
   return (
-    <View style={s.goalRow}>
-      <View style={s.goalRowHead}>
-        <TouchableOpacity disabled={!canEdit} onPress={() => onUpdate({ done: !r.done })} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-          <Ionicons name={r.done ? 'checkmark-circle' : 'ellipse-outline'} size={19} color={r.done ? colors.green : colors.textMuted} />
-        </TouchableOpacity>
-        <Text style={[s.goalName, { flex: 1 }, r.done && { textDecorationLine: 'line-through', color: colors.textMuted }]}>{r.name}</Text>
-        {canEdit && (
-          <TouchableOpacity onPress={onRemove} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="close-circle" size={18} color={colors.textMuted} />
-          </TouchableOpacity>
-        )}
-      </View>
-      {canEdit ? (
+    <GoalCard s={s} colors={colors} id={r.id} canEdit={canEdit} done={r.done} onRemove={onRemove}
+      left={<DoneTick colors={colors} done={r.done} canEdit={canEdit} onToggle={() => onUpdate({ done: !r.done })} />}
+      title={r.name} meta={areaLabel(r.area)}>
+      {canEdit && (
         <View style={[s.fieldRow, { flexWrap: 'wrap' }]}>
           <HorizonToggle s={s} colors={colors} value={r.horizon} onChange={(h: Horizon) => onUpdate({ horizon: h })} />
           <AreaToggle s={s} colors={colors} value={r.area} onChange={(a: Area) => onUpdate({ area: a })} />
         </View>
-      ) : <Text style={s.sumSub}>{areaLabel(r.area)}</Text>}
+      )}
       {(canEdit || !!r.reward) && (
         <TextInput
           style={s.rewardInput}
@@ -414,6 +481,55 @@ function RockRow({ s, colors, r, canEdit, onUpdate, onRemove }: any) {
         />
       )}
       <HowBox s={s} colors={colors} value={r.how} canEdit={canEdit} onChange={(v: string) => onUpdate({ how: v })} />
+    </GoalCard>
+  );
+}
+
+const whyLabel = (t?: WhyTag) => WHY_TAGS.find((x) => x.key === t)?.label || 'People';
+
+function WhyTags({ s, colors, value, onChange }: any) {
+  return (
+    <View style={[s.horizonRow, { flexWrap: 'wrap' }]}>
+      {WHY_TAGS.map((t) => {
+        const sel = value === t.key;
+        return (
+          <TouchableOpacity key={t.key}
+            style={[s.horizonPill, sel && { backgroundColor: colors.primary, borderColor: colors.primary }]}
+            onPress={() => { haptics.light(); onChange(t.key); }}>
+            <Text style={[s.horizonText, sel && { color: colors.onPrimary }]}>{t.label}</Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
+function WhyRow({ s, colors, w, canEdit, onUpdate, onRemove }: any) {
+  return (
+    <GoalCard s={s} colors={colors} id={w.id} canEdit={canEdit} onRemove={onRemove}
+      left={<Ionicons name="heart-outline" size={17} color={colors.primary} />}
+      title={w.text} meta={whyLabel(w.tag)}>
+      {canEdit ? (
+        <>
+          <WhyTags s={s} colors={colors} value={w.tag} onChange={(t: WhyTag) => onUpdate({ tag: t })} />
+          <TextInput
+            style={[s.rewardInput, { minHeight: 56, textAlignVertical: 'top' }]}
+            multiline scrollEnabled={false}
+            value={w.text}
+            onChangeText={(v) => onUpdate({ text: v })}
+          />
+        </>
+      ) : <Text style={s.body}>{w.text}</Text>}
+    </GoalCard>
+  );
+}
+
+function AddWhy({ s, colors, onAdd }: any) {
+  const [tag, setTag] = useState<WhyTag>('people');
+  return (
+    <View style={{ marginTop: 6, gap: 6 }}>
+      <WhyTags s={s} colors={colors} value={tag} onChange={setTag} />
+      <AddOwn s={s} colors={colors} placeholder={`Add a why (${whyLabel(tag)})…`} onAdd={(t: string) => onAdd(t, tag)} />
     </View>
   );
 }
@@ -601,7 +717,15 @@ const createS = (colors: any) => StyleSheet.create({
   smartDesc: { fontSize: 12, color: colors.textSecondary, marginTop: 1, lineHeight: 16 },
   counter: { fontSize: 12, fontWeight: '800', marginBottom: 10 },
   goalRow: { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, marginBottom: 8 },
-  goalRowHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  goalRowHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  goalRowLeft: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center', marginRight: 8 },
+  goalRowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 24 },
+  goalRowTitle: { flex: 1, fontSize: 14, fontWeight: '800', color: colors.text, lineHeight: 20 },
+  goalRowMeta: { fontSize: 11, fontWeight: '700', color: colors.textMuted },
+  tabRow: { flexDirection: 'row', gap: 6, marginBottom: 12 },
+  tab: { flex: 1, paddingVertical: 8, paddingHorizontal: 6, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, alignItems: 'center' },
+  tabLabel: { fontSize: 12.5, fontWeight: '900', color: colors.text },
+  tabSub: { fontSize: 10.5, fontWeight: '600', color: colors.textMuted, marginTop: 1 },
   goalName: { fontSize: 14, fontWeight: '800', color: colors.text, flex: 1, marginRight: 8 },
   fieldRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   fieldLabel: { fontSize: 11, fontWeight: '700', color: colors.textMuted, textTransform: 'uppercase' },

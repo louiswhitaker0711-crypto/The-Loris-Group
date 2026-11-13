@@ -90,3 +90,9 @@ def test_mid_term_replaces_the_six_month_vision():
     assert g["vision"] == "" and g["mids"][0]["name"] == "Be Stage 3" and g["mids"][0]["area"] == "business"
     g = mp._normalize_goals({"version": 2, "mids": [{"name": "Buy a car", "area": "personal", "how": "Save £50 a week"}]})
     assert g["mids"][0]["area"] == "personal" and g["mids"][0]["how"] == "Save £50 a week"
+
+
+def test_long_term_whys_are_tagged():
+    g = mp._normalize_goals({"version": 2, "whys": [{"text": "My kids", "tag": "people"},
+                                                   {"text": "Own home", "tag": "nonsense"}, {"text": " "}]})
+    assert [(w["text"], w["tag"]) for w in g["whys"]] == [("My kids", "people"), ("Own home", "people")]
