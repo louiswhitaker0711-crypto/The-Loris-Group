@@ -78,7 +78,7 @@ LEGACY_GOAL_KEYS = (
 
 def _default_goals() -> dict:
     """Fresh empty v2 goals block (own list instances — never share refs)."""
-    return {"version": GOAL_VERSION, "kpis": [], "rocks": [], "vision": ""}
+    return {"version": GOAL_VERSION, "kpis": [], "rocks": [], "mids": [], "vision": ""}
 
 
 def _norm_horizon(v) -> str:
@@ -128,9 +128,24 @@ def _normalize_goals(raw) -> dict:
             "done": bool(r.get("done")),
         }
 
+    def _mid(r: dict) -> dict:
+        return {
+            "id": (r.get("id") or str(uuid.uuid4())),
+            "name": (str(r.get("name") or "")).strip(),
+            "area": _norm_area(r.get("area")),
+            "how": _how(r.get("how")),
+            "done": bool(r.get("done")),
+        }
+
     kpis = [_kpi(r) for r in (raw.get("kpis") or []) if isinstance(r, dict)][:_MAX_GOAL_ROWS]
     rocks = [_rock(r) for r in (raw.get("rocks") or []) if isinstance(r, dict)][:_MAX_GOAL_ROWS]
-    return {"version": GOAL_VERSION, "kpis": kpis, "rocks": rocks, "vision": (str(raw.get("vision") or "")).strip()}
+    mids = [_mid(r) for r in (raw.get("mids") or []) if isinstance(r, dict) and str(r.get("name") or "").strip()][:_MAX_GOAL_ROWS]
+    # Mid term (6-12 months) replaces the 6-month vision (the Owner, 13 Nov
+    # 2026): a vision already written becomes their first mid-term goal.
+    vision = (str(raw.get("vision") or "")).strip()
+    if vision and not mids:
+        mids = [_mid({"name": vision})]
+    return {"version": GOAL_VERSION, "kpis": kpis, "rocks": rocks, "mids": mids, "vision": ""}
 
 
 # ── Goal Builder menu (KPI presets + Rock suggestions) ──────────────────────
@@ -483,6 +498,9 @@ def _strip_for_role(doc: dict, target_role: str) -> dict:
     """Fill in the parts older planners don't have yet. Everyone has both Gap
     Analysis wheels (the Owner, 13 Nov 2026), so nothing is stripped now."""
     doc["gap_analysis"] = _normalize_gap(doc.get("gap_analysis"))
+    g = doc.get("goals") or {}
+    if (g.get("kpis") is not None) or g.get("version"):
+        doc["goals"] = _normalize_goals(g)
     doc["focus"] = _normalize_focus(doc.get("focus"))
     doc["kpi_goals"] = _normalize_kpi_goals(doc.get("kpi_goals"))
     return doc
@@ -909,7 +927,7 @@ async def start_new_month(month: str, request: Request):
         prev_goals = prev.get("goals") or {}
         if (prev_goals.get("kpis") is not None) or bool(prev_goals.get("version")):
             carried = _normalize_goals(prev_goals)
-            for r in carried.get("rocks", []):
+            for r in carried.get("rocks", []):  # mid-term goals keep their tick: they run 6-12 months
                 r["done"] = False
             seed["goals"] = carried
         else:

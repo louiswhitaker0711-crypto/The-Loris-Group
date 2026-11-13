@@ -83,3 +83,10 @@ def test_new_starts_due_and_growth(db):
     assert [r["name"] for r in rows] == ["Example One"]
     assert rows[0]["sign_ups_first_3"] == 3 and rows[0]["completed_6"] and rows[0]["attended"]
     assert shadows == 1
+
+
+def test_mid_term_replaces_the_six_month_vision():
+    g = mp._normalize_goals({"version": 2, "kpis": [], "rocks": [], "vision": "Be Stage 3"})
+    assert g["vision"] == "" and g["mids"][0]["name"] == "Be Stage 3" and g["mids"][0]["area"] == "business"
+    g = mp._normalize_goals({"version": 2, "mids": [{"name": "Buy a car", "area": "personal", "how": "Save £50 a week"}]})
+    assert g["mids"][0]["area"] == "personal" and g["mids"][0]["how"] == "Save £50 a week"
