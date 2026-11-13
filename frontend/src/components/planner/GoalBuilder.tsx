@@ -3,9 +3,11 @@
  * (the Owner, 13 Nov 2026). The intro (why goals matter, KPIs vs Rocks, SMART)
  * folds open at the top, open the first time. Below it the KPIs box sits above
  * the Rocks box, each split into 1 month and 3 months; every goal is Business
- * or Personal. The 6-month vision is the long term, at the bottom.
+ * or Personal: that's the short term (1-3 months). Below it, Mid term (6-12
+ * months): goals like 'Be Stage 3', Business or Personal, with a How (it
+ * replaced the 6-month vision).
  *
- * Data lives in `goals` (v2 shape): { version, kpis[], rocks[], vision }, and
+ * Data lives in `goals` (v2 shape): { version, kpis[], rocks[], mids[], vision }, and
  * every edit flows up through `onChange` into the planner draft (autosaves).
  * When `canEdit` is false (locked / someone else's planner) it's read-only.
  */
@@ -23,7 +25,8 @@ export type Horizon = 'short' | 'medium' | 'long';
 export type Area = 'business' | 'personal';
 export interface Kpi { id: string; name: string; target: string; horizon: Horizon; area?: Area; reward: string; how?: string; smart_ok: boolean }
 export interface Rock { id: string; name: string; horizon: Horizon; area?: Area; reward: string; how?: string; done: boolean }
-export interface GoalsV2 { version: number; kpis: Kpi[]; rocks: Rock[]; vision: string }
+export interface Mid { id: string; name: string; area?: Area; how?: string; done: boolean }
+export interface GoalsV2 { version: number; kpis: Kpi[]; rocks: Rock[]; mids: Mid[]; vision: string }
 
 // A planner's goals are v2 (structured) once they carry a version / kpis key.
 // Legacy planners (six free-text strings) are handled by the old grid.
@@ -61,7 +64,7 @@ function AreaToggle({ s, colors, value, onChange }: any) {
 }
 
 const genId = () => `g-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-const emptyGoals = (): GoalsV2 => ({ version: 2, kpis: [], rocks: [], vision: '' });
+const emptyGoals = (): GoalsV2 => ({ version: 2, kpis: [], rocks: [], mids: [], vision: '' });
 
 // KPI count → recommended Rock count (4 KPIs → 3 rocks, 5+ → 2). 7 total.
 const recommendedRocks = (kpiCount: number) => (kpiCount >= 5 ? 2 : 3);
@@ -78,10 +81,15 @@ export function GoalBuilder({ goals: goalsIn, canEdit, onChange }: Props) {
   const s = useMemo(() => createS(colors), [colors]);
 
   const goals: GoalsV2 = useMemo(
-    () => ({ version: 2, kpis: goalsIn?.kpis || [], rocks: goalsIn?.rocks || [], vision: goalsIn?.vision || '' }),
+    () => {
+      // A 6-month vision written before mid term existed shows as a mid-term goal.
+      const v = String(goalsIn?.vision || '').trim();
+      const mids: Mid[] = goalsIn?.mids?.length ? goalsIn.mids : (v ? [{ id: 'vision', name: v, area: 'business', how: '', done: false }] : []);
+      return { version: 2, kpis: goalsIn?.kpis || [], rocks: goalsIn?.rocks || [], mids, vision: '' };
+    },
     [goalsIn]
   );
-  const hasContent = goals.kpis.length > 0 || goals.rocks.length > 0 || !!goals.vision.trim();
+  const hasContent = goals.kpis.length > 0 || goals.rocks.length > 0 || goals.mids.length > 0;
 
   const menuQ = useQuery({
     queryKey: ['planner-goal-menu'],
@@ -92,7 +100,7 @@ export function GoalBuilder({ goals: goalsIn, canEdit, onChange }: Props) {
   const rockMenu: string[] = menuQ.data?.rock_suggestions || [];
 
   // One page (the Owner, 13 Nov 2026): the intro, then the KPIs box above the
-  // Rocks box, each split into 1 month and 3 months, then the 6-month vision.
+  // Rocks box, each split into 1 month and 3 months (short term), then mid term.
   // The intro starts open until they've seen it once.
   const [introOpen, setIntroOpen] = useState(false);
   useEffect(() => {
@@ -135,6 +143,16 @@ export function GoalBuilder({ goals: goalsIn, canEdit, onChange }: Props) {
     setRocks(goals.rocks.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   const removeRock = (id: string) => { haptics.light(); setRocks(goals.rocks.filter((r) => r.id !== id)); };
 
+  const setMids = (mids: Mid[]) => commit({ mids, vision: '' });
+  const addMid = (name: string) => {
+    const nm = name.trim();
+    if (!nm || goals.mids.some((m) => m.name.toLowerCase() === nm.toLowerCase())) return;
+    haptics.light();
+    setMids([...goals.mids, { id: genId(), name: nm, area: 'business', how: '', done: false }]);
+  };
+  const updateMid = (id: string, patch: Partial<Mid>) => setMids(goals.mids.map((m) => (m.id === id ? { ...m, ...patch } : m)));
+  const removeMid = (id: string) => { haptics.light(); setMids(goals.mids.filter((m) => m.id !== id)); };
+
   // 1 month and 3 months always; 6 months only for goals set that way before.
   const terms = (list: { horizon: Horizon }[]): Horizon[] =>
     ['short', 'medium', ...(list.some((x) => x.horizon === 'long') ? ['long' as Horizon] : [])] as Horizon[];
@@ -155,6 +173,9 @@ export function GoalBuilder({ goals: goalsIn, canEdit, onChange }: Props) {
           <StepSmart s={s} colors={colors} />
         </View>
       )}
+
+      {/* Short term: 1-3 months */}
+      <Text style={s.termHeading}>SHORT TERM <Text style={s.termHeadingSub}>· 1–3 months</Text></Text>
 
       {/* KPIs */}
       <View style={[s.goalBoxCard, { borderColor: colors.primary }]}>
@@ -202,16 +223,20 @@ export function GoalBuilder({ goals: goalsIn, canEdit, onChange }: Props) {
         ))}
       </View>
 
-      {/* Long term */}
-      <Text style={[s.pickLabel, { marginTop: 4 }]}>6-month vision</Text>
-      <TextInput
-        style={[s.visionInput, !canEdit && { opacity: 0.6 }]}
-        multiline
-        editable={canEdit}
-        placeholder="Where do you want to be in 6 months?" placeholderTextColor={colors.textMuted}
-        value={goals.vision}
-        onChangeText={(v) => commit({ vision: v })}
-      />
+      {/* Mid term: 6-12 months (replaced the 6-month vision) */}
+      <Text style={s.termHeading}>MID TERM <Text style={s.termHeadingSub}>· 6–12 months</Text></Text>
+      <View style={[s.goalBoxCard, { borderColor: colors.textSecondary }]}>
+        <Text style={[s.hint, { marginBottom: 4 }]}>Where you want to be: a stage, a level, or something personal.</Text>
+        {goals.mids.map((m) => (
+          <MidRow key={m.id} s={s} colors={colors} m={m} canEdit={canEdit}
+            onUpdate={(p: Partial<Mid>) => updateMid(m.id, p)} onRemove={() => removeMid(m.id)} />
+        ))}
+        {!goals.mids.length && !canEdit && <Text style={s.hint}>—</Text>}
+        {canEdit && (
+          <TermBlockAdd s={s} colors={colors} menu={MID_SUGGESTIONS} chosen={goals.mids.map((m) => m.name)}
+            placeholder="Add a mid-term goal…" onAdd={addMid} />
+        )}
+      </View>
     </View>
   );
 }
@@ -299,6 +324,62 @@ function HowBox({ s, colors, value, canEdit, onChange }: any) {
         value={value || ''}
         onChangeText={onChange}
       />
+    </View>
+  );
+}
+
+const MID_SUGGESTIONS = [
+  'Be Stage 2 (Self Management)',
+  'Be Stage 3 (Leader)',
+  'Be Stage SL (Sector Leader)',
+  'Be a Team Builder',
+  'Average 15+ sign-ups a week',
+  'Average 20+ sign-ups a week',
+  'Have my own team',
+  'Run my own sector every day',
+];
+
+function TermBlockAdd({ s, colors, menu, chosen, placeholder, onAdd }: any) {
+  const [showSugg, setShowSugg] = useState(false);
+  return (
+    <View style={{ marginTop: 6 }}>
+      <AddOwn s={s} colors={colors} placeholder={placeholder} onAdd={onAdd} />
+      <TouchableOpacity onPress={() => { haptics.tap(); setShowSugg(!showSugg); }} style={{ marginTop: 6 }}>
+        <Text style={[s.skipText, { color: colors.primary }]}>{showSugg ? 'Hide suggestions' : 'Suggestions'}</Text>
+      </TouchableOpacity>
+      {showSugg && <PickerChips s={s} colors={colors} menu={menu} chosen={chosen} loading={false} onPick={onAdd} />}
+    </View>
+  );
+}
+
+function MidRow({ s, colors, m, canEdit, onUpdate, onRemove }: any) {
+  return (
+    <View style={s.goalRow}>
+      <View style={s.goalRowHead}>
+        <TouchableOpacity disabled={!canEdit} onPress={() => onUpdate({ done: !m.done })} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+          <Ionicons name={m.done ? 'checkmark-circle' : 'ellipse-outline'} size={19} color={m.done ? colors.green : colors.textMuted} />
+        </TouchableOpacity>
+        {canEdit ? (
+          <TextInput
+            style={[s.goalName, { flex: 1, padding: 0 }]}
+            value={m.name}
+            onChangeText={(v) => onUpdate({ name: v })}
+            multiline
+            scrollEnabled={false}
+          />
+        ) : (
+          <Text style={[s.goalName, { flex: 1 }, m.done && { textDecorationLine: 'line-through', color: colors.textMuted }]}>{m.name}</Text>
+        )}
+        {canEdit && (
+          <TouchableOpacity onPress={onRemove} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+          </TouchableOpacity>
+        )}
+      </View>
+      {canEdit
+        ? <AreaToggle s={s} colors={colors} value={m.area} onChange={(a: Area) => onUpdate({ area: a })} />
+        : <Text style={s.sumSub}>{areaLabel(m.area)}</Text>}
+      <HowBox s={s} colors={colors} value={m.how} canEdit={canEdit} onChange={(v: string) => onUpdate({ how: v })} />
     </View>
   );
 }
@@ -491,6 +572,8 @@ function HorizonToggle({ s, colors, value, onChange }: any) {
 }
 
 const createS = (colors: any) => StyleSheet.create({
+  termHeading: { fontSize: 13, fontWeight: '900', letterSpacing: 0.8, color: colors.text, marginBottom: 8, marginTop: 4 },
+  termHeadingSub: { fontWeight: '600', color: colors.textMuted, letterSpacing: 0 },
   introHead: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, marginBottom: 12 },
   introHeadText: { flex: 1, fontSize: 13.5, fontWeight: '800', color: colors.text },
   goalBoxCard: { borderWidth: 1.5, borderRadius: 14, padding: 12, marginBottom: 14, backgroundColor: colors.surface },

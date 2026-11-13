@@ -56,6 +56,9 @@ const goalCell = (label: string, value: string) => `
 const TERM_PDF: Record<string, string> = { short: '1 month', medium: '3 months', long: '6 months' };
 const goalsV2Html = (goals: any): string => {
   const area = (x: any) => (x.area === 'personal' ? 'Personal' : 'Business');
+  const vision = String(goals.vision || '').trim();
+  const mids: any[] = (goals.mids || []).filter((m: any) => m && m.name);
+  if (!mids.length && vision) mids.push({ name: vision });
   const howRow = (x: any) => (x.how ? `<tr><td colspan="4"><span class="muted">How:</span> ${nl2br(x.how)}</td></tr>` : '');
   const block = (title: string, list: any[], row: (x: any) => string, head: string) => {
     const terms = ['short', 'medium', ...(list.some((x) => x.horizon === 'long') ? ['long'] : [])];
@@ -75,9 +78,14 @@ const goalsV2Html = (goals: any): string => {
   return `
     <section>
       <h2>Goals</h2>
+      <h3>Short term · 1–3 months</h3>
       ${kpis}
       ${rocks}
-      ${goals.vision ? `<p class="meta" style="margin-top:8px"><strong>6-month vision:</strong> ${escapeHtml(goals.vision)}</p>` : ''}
+      ${mids.length ? `
+      <h3>Mid term · 6–12 months</h3>
+      <table class="data"><thead><tr><th>Goal</th><th>Business / Personal</th></tr></thead><tbody>
+        ${mids.map((m: any) => `<tr><td>${m.done ? '✓ ' : ''}${escapeHtml(m.name)}</td><td>${area(m)}</td></tr>${m.how ? `<tr><td colspan="2"><span class="muted">How:</span> ${nl2br(m.how)}</td></tr>` : ''}`).join('')}
+      </tbody></table>` : ''}
     </section>`;
 };
 

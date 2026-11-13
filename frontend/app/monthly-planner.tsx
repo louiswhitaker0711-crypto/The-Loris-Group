@@ -446,7 +446,7 @@ export default function MonthlyPlannerScreen() {
             <Section
               icon="flag"
               title="Goals"
-              subtitle="KPIs and Rocks · 1 month, 3 months and your 6-month vision"
+              subtitle="Short term (1–3 months): KPIs and Rocks · Mid term (6–12 months)"
             >
               {isV2Goals(draft.goals) ? (
                 <GoalBuilder
