@@ -21,8 +21,8 @@ import { haptics } from '../../utils/haptics';
 // ── Types ───────────────────────────────────────────────────────────────
 export type Horizon = 'short' | 'medium' | 'long';
 export type Area = 'business' | 'personal';
-export interface Kpi { id: string; name: string; target: string; horizon: Horizon; area?: Area; reward: string; smart_ok: boolean }
-export interface Rock { id: string; name: string; horizon: Horizon; area?: Area; reward: string; done: boolean }
+export interface Kpi { id: string; name: string; target: string; horizon: Horizon; area?: Area; reward: string; how?: string; smart_ok: boolean }
+export interface Rock { id: string; name: string; horizon: Horizon; area?: Area; reward: string; how?: string; done: boolean }
 export interface GoalsV2 { version: number; kpis: Kpi[]; rocks: Rock[]; vision: string }
 
 // A planner's goals are v2 (structured) once they carry a version / kpis key.
@@ -277,7 +277,28 @@ function KpiRow({ s, colors, k, canEdit, onUpdate, onRemove }: any) {
           onChangeText={(v) => onUpdate({ reward: v })}
         />
       )}
+      <HowBox s={s} colors={colors} value={k.how} canEdit={canEdit} onChange={(v: string) => onUpdate({ how: v })} />
       {canEdit && <Text style={[s.hint, { marginTop: 4, fontSize: 11 }]}>Tick the box once it's SMART.</Text>}
+    </View>
+  );
+}
+
+// How they'll do it (the Owner, 13 Nov 2026): free text on every goal.
+function HowBox({ s, colors, value, canEdit, onChange }: any) {
+  if (!canEdit && !value) return null;
+  return (
+    <View style={{ marginTop: 8 }}>
+      <Text style={[s.fieldLabel, { marginBottom: 4 }]}>How will I do it?</Text>
+      <TextInput
+        style={[s.rewardInput, { marginTop: 0, minHeight: 56, textAlignVertical: 'top' }, !canEdit && { opacity: 0.7 }]}
+        multiline
+        scrollEnabled={false}
+        editable={canEdit}
+        placeholder="What you'll do, with who and by when…"
+        placeholderTextColor={colors.textMuted}
+        value={value || ''}
+        onChangeText={onChange}
+      />
     </View>
   );
 }
@@ -311,6 +332,7 @@ function RockRow({ s, colors, r, canEdit, onUpdate, onRemove }: any) {
           onChangeText={(v) => onUpdate({ reward: v })}
         />
       )}
+      <HowBox s={s} colors={colors} value={r.how} canEdit={canEdit} onChange={(v: string) => onUpdate({ how: v })} />
     </View>
   );
 }
