@@ -52,49 +52,41 @@ const goalCell = (label: string, value: string) => `
 `;
 
 // v2 goals (structured KPIs + Rocks). Legacy planners use the 6-cell grid.
-const HORIZON_PDF: Record<string, string> = { short: '1 mo', medium: '3 mo', long: '6 mo' };
 
+// The booklet's six boxes (the Owner, 13 Nov 2026).
 const goalsV2Html = (goals: any): string => {
-  const kpiBody = (goals.kpis || []).filter((k: any) => k && k.name).map((k: any) => `
-    <tr>
-      <td>${escapeHtml(k.name)}</td>
-      <td class="r">${k.target ? escapeHtml(String(k.target)) : '—'}</td>
-      <td>${k.area === 'personal' ? 'Personal' : 'Business'} · ${HORIZON_PDF[k.horizon] || '1 mo'}</td>
-      <td>${k.reward ? escapeHtml(k.reward) : '—'}</td>
-    </tr>`).join('');
-  const rockBody = (goals.rocks || []).filter((r: any) => r && r.name).map((r: any) => `
-    <tr>
-      <td class="ck">${r.done ? '✓' : '·'}</td>
-      <td>${escapeHtml(r.name)}</td>
-      <td>${r.area === 'personal' ? 'Personal' : 'Business'} · ${HORIZON_PDF[r.horizon] || '1 mo'}</td>
-      <td>${r.reward ? escapeHtml(r.reward) : '—'}</td>
-    </tr>`).join('');
-  const kpiTable = kpiBody ? `
-    <div class="subsection">
-      <h3>KPIs — the numbers</h3>
-      <table class="data">
-        <thead><tr><th>KPI</th><th class="r">Target</th><th>By</th><th>Reward</th></tr></thead>
-        <tbody>${kpiBody}</tbody>
-      </table>
-    </div>` : '';
-  const rockTable = rockBody ? `
-    <div class="subsection">
-      <h3>Rocks — did I / didn't I</h3>
-      <table class="data">
-        <thead><tr><th class="ck">Done</th><th>Rock</th><th>By</th><th>Reward</th></tr></thead>
-        <tbody>${rockBody}</tbody>
-      </table>
-    </div>` : '';
-  const visionHtml = goals.vision
-    ? `<div class="subsection"><h3>6-Month Vision</h3><div class="goal-value">${nl2br(goals.vision)}</div></div>`
-    : '';
-  const inner = kpiTable + rockTable + visionHtml;
+  const items = (h: string, a: string) => [
+    ...(goals.kpis || []).filter((k: any) => k && k.name && (k.horizon || 'short') === h && (k.area || 'business') === a)
+      .map((k: any) => `${escapeHtml(k.name)}${k.target ? ` → ${escapeHtml(String(k.target))}` : ''}`),
+    ...(goals.rocks || []).filter((r: any) => r && r.name && (r.horizon || 'short') === h && (r.area || 'business') === a)
+      .map((r: any) => `${r.done ? '✓ ' : ''}${escapeHtml(r.name)}`),
+  ];
+  const cell = (label: string, h: string, a: string) => {
+    const list = items(h, a);
+    return goalCellHtml(label, list.length ? list.map((x) => `• ${x}`).join('<br/>') : '');
+  };
   return `
     <section>
       <h2>Goals</h2>
-      ${inner || '<div class="goal-value"><span class="muted">No goals set.</span></div>'}
+      <div class="goal-grid">
+        ${cell('Short Term · Business', 'short', 'business')}
+        ${cell('Short Term · Personal', 'short', 'personal')}
+        ${cell('Medium Term · Business', 'medium', 'business')}
+        ${cell('Medium Term · Personal', 'medium', 'personal')}
+        ${cell('Long Term · Business', 'long', 'business')}
+        ${cell('Long Term · Personal', 'long', 'personal')}
+      </div>
+      ${goals.vision ? `<p class="meta" style="margin-top:8px">6-month vision: ${escapeHtml(goals.vision)}</p>` : ''}
     </section>`;
 };
+
+const goalCellHtml = (label: string, html: string): string => `
+  <div class="goal-cell">
+    <div class="goal-label">${escapeHtml(label)}</div>
+    <div class="goal-value">${html || '<span class="muted">—</span>'}</div>
+  </div>
+`;
+
 
 const planningTable = (title: string, rows: any[]) => {
   const body = (rows || []).filter((r) => r && (r.topic || r.who || r.when))

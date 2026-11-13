@@ -446,7 +446,7 @@ export default function MonthlyPlannerScreen() {
             <Section
               icon="flag"
               title="Goals"
-              subtitle={isV2Goals(draft.goals) ? 'KPIs & Rocks · SMART goals with rewards' : 'Short / Medium / Long term · Business + Personal'}
+              subtitle="Short, medium and long term · Business and Personal"
             >
               {isV2Goals(draft.goals) ? (
                 <GoalBuilder

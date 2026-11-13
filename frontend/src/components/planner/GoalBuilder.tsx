@@ -12,7 +12,7 @@
  * When `canEdit` is false (locked / someone else's planner) this renders a
  * read-only summary only.
  */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useRef, useEffect, useMemo, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -99,7 +99,7 @@ export function GoalBuilder({ goals: goalsIn, canEdit, onChange }: Props) {
 
   // Mode: show the compact summary by default when goals already exist; open
   // the wizard for a fresh planner or when the user taps Edit.
-  const [editing, setEditing] = useState(!hasContent && canEdit);
+  const [editing, setEditing] = useState(false); // the six boxes first, always
   const [step, setStep] = useState(FIRST_BUILD_STEP);
 
   // Decide the opening step once the tutorial flag resolves. Returning users
@@ -152,6 +152,11 @@ export function GoalBuilder({ goals: goalsIn, canEdit, onChange }: Props) {
         canEdit={canEdit}
         onEdit={() => { setEditing(true); setStep(FIRST_BUILD_STEP); }}
         onToggleDone={canEdit ? (id: string, done: boolean) => updateRock(id, { done }) : undefined}
+        onAdd={(name: string, horizon: Horizon, area: Area) => {
+          haptics.light();
+          setRocks([...goals.rocks, { id: genId(), name, horizon, area, reward: '', done: false }]);
+        }}
+        onRemove={(it: any) => (it.kind === 'kpi' ? removeKpi(it.id) : removeRock(it.id))}
         s={s}
         colors={colors}
       />
@@ -529,59 +534,93 @@ function StepReview({ s, colors, goals, onToggleSmart, onVision }: any) {
   );
 }
 
-// ── Compact summary (default view once goals exist / read-only) ────────────
-function GoalSummary({ goals, canEdit, onEdit, onToggleDone, s, colors }: any) {
-  const total = goals.kpis.length + goals.rocks.length;
-  if (total === 0 && !goals.vision) {
-    return (
-      <View style={s.emptySummary}>
-        <Text style={s.hint}>No goals set for this month yet.</Text>
-        {canEdit && (
-          <TouchableOpacity style={s.editBtn} onPress={onEdit}>
-            <Ionicons name="flag" size={14} color={colors.onPrimary} />
-            <Text style={s.editBtnText}>Set your goals</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    );
-  }
+// ── The booklet's Goals page: Short / Medium / Long term × Business / Personal
+// (the Owner, 13 Nov 2026). The default view for everyone; type a goal straight
+// into a box, or use the step-by-step builder for KPIs with targets.
+const TERM_ROWS: { key: Horizon; label: string }[] = [
+  { key: 'short', label: 'Short term' },
+  { key: 'medium', label: 'Medium term' },
+  { key: 'long', label: 'Long term' },
+];
+
+function GoalBox({ s, colors, items, canEdit, onAdd, onRemove, onToggleDone }: any) {
+  const [val, setVal] = useState('');
+  const latest = useRef('');
+  // Enter and tapping away both save it; the ref stops it saving twice.
+  const add = () => { const v = latest.current.trim(); latest.current = ''; setVal(''); if (v) onAdd(v); };
+  return (
+    <View style={{ flex: 1, minHeight: 96, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, padding: 8, gap: 4 }}>
+      {items.map((it: any) => (
+        <View key={it.id} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6 }}>
+          {it.kind === 'rock' && onToggleDone ? (
+            <TouchableOpacity onPress={() => onToggleDone(it.id, !it.done)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+              <Ionicons name={it.done ? 'checkmark-circle' : 'ellipse-outline'} size={17} color={it.done ? colors.green : colors.textMuted} />
+            </TouchableOpacity>
+          ) : (
+            <Ionicons name={it.kind === 'kpi' ? 'stats-chart' : 'ellipse-outline'} size={14} color={it.kind === 'kpi' ? colors.primary : colors.textMuted} style={{ marginTop: 2 }} />
+          )}
+          <Text style={[s.sumName, { flex: 1, fontSize: 13 }, it.done && { textDecorationLine: 'line-through', color: colors.textMuted }]}>
+            {it.name}{it.target ? <Text style={s.reviewMeta}>  → {it.target}</Text> : null}
+          </Text>
+          {canEdit && (
+            <TouchableOpacity onPress={() => onRemove(it)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+              <Ionicons name="close" size={14} color={colors.textMuted} />
+            </TouchableOpacity>
+          )}
+        </View>
+      ))}
+      {canEdit ? (
+        <TextInput
+          value={val}
+          onChangeText={(v) => { latest.current = v; setVal(v); }}
+          onSubmitEditing={add}
+          onBlur={add}
+          returnKeyType="done"
+          blurOnSubmit
+          placeholder={items.length ? 'Add another…' : 'Write a goal…'}
+          placeholderTextColor={colors.textMuted}
+          style={{ fontSize: 13, color: colors.text, paddingVertical: 4 }}
+        />
+      ) : (!items.length ? <Text style={[s.hint, { fontSize: 12 }]}>—</Text> : null)}
+    </View>
+  );
+}
+
+function GoalSummary({ goals, canEdit, onEdit, onToggleDone, onAdd, onRemove, s, colors }: any) {
+  const inBox = (h: Horizon, a: Area) => [
+    ...goals.kpis.filter((k: Kpi) => (k.horizon || 'short') === h && (k.area || 'business') === a).map((k: Kpi) => ({ ...k, kind: 'kpi' })),
+    ...goals.rocks.filter((r: Rock) => (r.horizon || 'short') === h && (r.area || 'business') === a).map((r: Rock) => ({ ...r, kind: 'rock' })),
+  ];
   return (
     <View>
-      {(['business', 'personal'] as Area[]).map((area) => {
-        const any = goals.kpis.some((k: Kpi) => (k.area || 'business') === area) || goals.rocks.some((r: Rock) => (r.area || 'business') === area);
-        if (!any) return null;
-        return (
-          <View key={area}>
-            <Text style={[s.sumSub, { marginTop: 6, marginBottom: 2, fontWeight: '800' }]}>{areaLabel(area).toUpperCase()}</Text>
-      {goals.kpis.filter((k: Kpi) => (k.area || 'business') === area).map((k: Kpi) => (
-        <View key={k.id} style={s.sumRow}>
-          <View style={[s.sumTag, { backgroundColor: `${colors.primary}18` }]}><Text style={[s.sumTagText, { color: colors.primary }]}>KPI</Text></View>
-          <View style={{ flex: 1 }}>
-            <Text style={s.sumName}>{k.name}{k.target ? <Text style={s.reviewMeta}>  → {k.target}</Text> : null}</Text>
-            <Text style={s.sumSub}>{horizonLabel(k.horizon)}{k.reward ? ` · 🎁 ${k.reward}` : ''}</Text>
+      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 6 }}>
+        {(['business', 'personal'] as Area[]).map((a) => (
+          <View key={a} style={{ flex: 1, backgroundColor: colors.primary, borderRadius: 8, paddingVertical: 6, alignItems: 'center' }}>
+            <Text style={{ color: colors.onPrimary, fontSize: 11.5, fontWeight: '900', letterSpacing: 0.6 }}>{areaLabel(a).toUpperCase()}</Text>
+          </View>
+        ))}
+      </View>
+      {TERM_ROWS.map((row) => (
+        <View key={row.key} style={{ marginBottom: 10 }}>
+          <Text style={[s.sumSub, { fontWeight: '900', color: colors.text, marginBottom: 4 }]}>
+            {row.label.toUpperCase()} <Text style={{ fontWeight: '600', color: colors.textMuted }}>· {horizonLabel(row.key)}</Text>
+          </Text>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {(['business', 'personal'] as Area[]).map((a) => (
+              <GoalBox
+                key={a}
+                s={s}
+                colors={colors}
+                items={inBox(row.key, a)}
+                canEdit={canEdit}
+                onAdd={(name: string) => onAdd(name, row.key, a)}
+                onRemove={onRemove}
+                onToggleDone={onToggleDone}
+              />
+            ))}
           </View>
         </View>
       ))}
-      {goals.rocks.filter((r: Rock) => (r.area || 'business') === area).map((r: Rock) => (
-        <TouchableOpacity
-          key={r.id}
-          style={s.sumRow}
-          activeOpacity={onToggleDone ? 0.6 : 1}
-          onPress={onToggleDone ? () => onToggleDone(r.id, !r.done) : undefined}
-        >
-          <View style={[s.sumTag, { backgroundColor: `${colors.green}22` }]}><Text style={[s.sumTagText, { color: colors.green }]}>ROCK</Text></View>
-          <View style={{ flex: 1 }}>
-            <Text style={[s.sumName, r.done && { textDecorationLine: 'line-through', color: colors.textMuted }]}>{r.name}</Text>
-            <Text style={s.sumSub}>{horizonLabel(r.horizon)}{r.reward ? ` · 🎁 ${r.reward}` : ''}</Text>
-          </View>
-          {onToggleDone && (
-            <Ionicons name={r.done ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={r.done ? colors.green : colors.textMuted} />
-          )}
-        </TouchableOpacity>
-      ))}
-          </View>
-        );
-      })}
       {!!goals.vision && (
         <View style={s.visionSum}>
           <Text style={s.sumSub}>6-MONTH VISION</Text>
@@ -590,8 +629,8 @@ function GoalSummary({ goals, canEdit, onEdit, onToggleDone, s, colors }: any) {
       )}
       {canEdit && (
         <TouchableOpacity style={s.editBtn} onPress={onEdit}>
-          <Ionicons name="create-outline" size={14} color={colors.onPrimary} />
-          <Text style={s.editBtnText}>Edit goals</Text>
+          <Ionicons name="options-outline" size={14} color={colors.onPrimary} />
+          <Text style={s.editBtnText}>KPIs with targets & rewards</Text>
         </TouchableOpacity>
       )}
     </View>
