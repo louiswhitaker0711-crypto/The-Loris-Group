@@ -6,13 +6,18 @@
  *   /monthly-planner                      → my latest month
  *   /monthly-planner?user_id=...&month=...→ admin/leader viewing somebody else's
  *
- * Sections:
- *   • Goals (Short/Medium/Long × Business/Personal)
- *   • Monthly Planning (Sales Impacts, Development, Recruitment, Networking)
+ * Sections, in the booklet's order (the Owner, 13 Nov 2026):
+ *   • Monthly Sign Up Focus (target + the 1–100 boxes, ticked from Bells)
+ *   • Goals (KPIs & Rocks, each Short/Medium/Long and Business/Personal)
+ *   • Monthly Planning (Sign Up Impacts, Development – COD, Recruitment,
+ *     Travelling and Networking Calls)
  *   • What am I learning & who from
- *   • Budget calculator (NEEDS / WANTS, sale value → total sales required)
- *   • SWOT (manual entry — fresh each month, never auto-filled)
- *   • Gap Analysis radar (leader/admin only — hidden for trainees)
+ *   • Budget (needs / wants → sign-ups needed, feeds breakeven)
+ *   • SWOT (done quarterly: carries over within the quarter)
+ *   • Gap Analysis and Leader Gap Analysis radars (everyone)
+ *   • Recruitment & PR Focus (tap boxes 1–30)
+ *   • Recruitment, Sign Ups & Growth (four KPIs with Hit worked out, and
+ *     New Starts Due worked out from the new starts)
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { showAlert } from '../src/utils/showAlert';
@@ -105,14 +110,26 @@ export default function MonthlyPlannerScreen() {
 
   // Traits list (radar labels)
   const traitsQ = useQuery({
-    queryKey: ['monthly-traits'],
-    queryFn: () => apiService.monthlyPlannerTraits().then((r) => r.data?.traits || []),
+    queryKey: ['monthly-traits-2'],
+    queryFn: () => apiService.monthlyPlannerTraits().then((r) => ({
+      leader: (r.data?.leader_traits || r.data?.traits || []) as string[],
+      field: (r.data?.field_traits || []) as string[],
+    })),
     staleTime: 1000 * 60 * 60,
   });
+  const leaderTraits = traitsQ.data?.leader || [];
+  const fieldTraits = traitsQ.data?.field || [];
 
   const q = useQuery({
     queryKey: ['monthly-planner', userId || 'me', month],
     queryFn: () => apiService.getMonthlyPlanner(month, userId).then((r) => r.data),
+  });
+
+  // Sign-ups, shadowers, new starts and Hit, worked out by the server.
+  const growthQ = useQuery({
+    queryKey: ['monthly-planner-growth', userId || 'me', month],
+    queryFn: () => apiService.monthlyPlannerGrowth(month, userId).then((r) => r.data),
+    refetchOnWindowFocus: true,
   });
 
   const myMonthsQ = useQuery({
@@ -148,6 +165,7 @@ export default function MonthlyPlannerScreen() {
     onSuccess: () => {
       setSavingState('saved');
       queryClient.invalidateQueries({ queryKey: ['monthly-planner-list', userId || 'me'] });
+      queryClient.invalidateQueries({ queryKey: ['monthly-planner-growth', userId || 'me', month] });
       setTimeout(() => setSavingState((s) => (s === 'saved' ? 'idle' : s)), 1500);
     },
     onError: () => setSavingState('error'),
@@ -171,7 +189,7 @@ export default function MonthlyPlannerScreen() {
         debounceRef.current = setTimeout(() => saveMut.mutate({
           goals: next.goals, swot: next.swot, monthly_planning: next.monthly_planning,
           learning: next.learning, budget: next.budget, gap_analysis: next.gap_analysis,
-          targets: next.targets,
+          targets: next.targets, focus: next.focus, kpi_goals: next.kpi_goals,
         }), 1100);
       }
       return next;
@@ -191,7 +209,7 @@ export default function MonthlyPlannerScreen() {
   const isOwner = !userId || userId === user?.id;
   const canEdit = !!q.data?.can_edit;
   const targetRole = q.data?.target_role || user?.role || 'trainee';
-  const showGap = targetRole !== 'trainee';
+  const showGap = true; // both wheels are for everyone (the Owner, 13 Nov 2026)
 
   // ── Print / Export PDF ──────────────────────────────────────────────────
   const [printing, setPrinting] = useState(false);
@@ -204,8 +222,10 @@ export default function MonthlyPlannerScreen() {
         ownerName: userId ? (myMonthsQ.data?.user?.name || 'Planner') : (user?.name || 'My Planner'),
         month,
         draft,
-        traits: (traitsQ.data || []) as string[],
+        traits: leaderTraits,
+        fieldTraits,
         showGap,
+        growth: growthQ.data,
       });
     } catch (e: any) {
       toast.error('Print failed', e?.message || 'Try again');
@@ -234,12 +254,14 @@ export default function MonthlyPlannerScreen() {
     const swot = draft?.swot || {};
     const swotFilled = SWOT_FIELDS.filter((f) => (swot[f.key] || '').toString().trim().length > 0).length;
     const scores = draft?.gap_analysis?.scores || {};
-    const gapTraits = (traitsQ.data || []) as string[];
-    const gapFilled = gapTraits.filter((t) => Number(scores[t] || 0) > 0).length;
+    const fieldScores = draft?.gap_analysis?.field_scores || {};
+    const gapTraits = leaderTraits;
+    const gapFilled = gapTraits.filter((t) => Number(scores[t] || 0) > 0).length
+      + fieldTraits.filter((t) => Number(fieldScores[t] || 0) > 0).length;
     return {
       goals: { value: goalsFilled, target: goalsTarget },
       swot: { value: swotFilled, target: SWOT_FIELDS.length },
-      gap: { value: gapFilled, target: gapTraits.length || 16 },
+      gap: { value: gapFilled, target: (gapTraits.length + fieldTraits.length) || 32 },
     };
   }, [draft, traitsQ.data]);
 
@@ -377,7 +399,7 @@ export default function MonthlyPlannerScreen() {
             <Ionicons name="sparkles-outline" size={22} color={colors.primary} />
             <Text style={s.startTitle}>Start {prettyMonth(month)}</Text>
             <Text style={s.startText}>
-              We'll auto-fill your GAP scores, budget rows, and goals from your previous month so you can just edit deltas. Your SWOT stays fresh — fill it in for THIS month.
+              We'll fill in your Gap Analysis scores, budget, goals and KPI goals from last month so you only change what's different. Your SWOT carries over until the quarter ends, then starts fresh.
               {(myMonthsQ.data?.items || []).length > 0 ? ' Earlier months will become read-only.' : ''}
             </Text>
             <Breathe>
@@ -401,13 +423,22 @@ export default function MonthlyPlannerScreen() {
         {(q.data?.exists || isOwner) && (
           <>
             {/* Targets */}
-            <Section icon="trending-up" title="Targets" subtitle="Monthly Sales Focus & personal best · auto-tracks against your bells">
+            <Section icon="trending-up" title="Monthly Sign Up Focus" subtitle="Every sign-up on Bells ticks off a box">
               <MonthlyTargetsBlock
                 month={month}
                 canEdit={canEdit}
                 targets={draft.targets || {}}
                 onChange={(t) => update((c) => ({ ...c, targets: t }))}
               />
+              <TickGrid
+                count={100}
+                ticked={Array.from({ length: Math.min(100, Number(growthQ.data?.sign_ups || 0)) }, (_, i) => i + 1)}
+                canEdit={false}
+                onChange={() => {}}
+              />
+              {Number(growthQ.data?.sign_ups || 0) > 100 && (
+                <Text style={[s.smallLabel, { marginTop: 6 }]}>{growthQ.data?.sign_ups} sign-ups this month: past the 100 boxes!</Text>
+              )}
             </Section>
 
             {/* Goals — guided KPI/Rock builder (v2) or the legacy free-text grid */}
@@ -449,11 +480,11 @@ export default function MonthlyPlannerScreen() {
             <ScrollReveal scrollY={scrollY}>
             <Section icon="calendar" title="Monthly Planning">
               {/* Sales Impacts */}
-              <Text style={s.subSect}>Sales Impacts <Text style={s.subSectMuted}>(Who · When · What)</Text></Text>
+              <Text style={s.subSect}>Sign Up Impacts <Text style={s.subSectMuted}>(Who · When · What)</Text></Text>
               <View style={{ flexDirection: 'row', gap: 10 }}>
                 {(['coach_others', 'still_to_master'] as const).map((k) => (
                   <View key={k} style={{ flex: 1 }}>
-                    <Text style={s.smallLabel}>{k === 'coach_others' ? 'Coach others' : 'Still to master'}</Text>
+                    <Text style={s.smallLabel}>{k === 'coach_others' ? 'Coach others' : 'Still need to master'}</Text>
                     <TextInput
                       multiline
                       scrollEnabled={false}
@@ -475,7 +506,7 @@ export default function MonthlyPlannerScreen() {
               {(['development', 'recruitment', 'networking'] as const).map((tk) => (
                 <PlanningTable
                   key={tk}
-                  title={tk === 'development' ? 'Development – COD' : tk === 'recruitment' ? 'Recruitment' : 'Networking – Travelling & Conference Calls'}
+                  title={tk === 'development' ? 'Development – COD' : tk === 'recruitment' ? 'Recruitment' : 'Travelling and Networking Calls'}
                   rows={draft.monthly_planning?.[tk] || []}
                   canEdit={canEdit}
                   onChange={(rows) => update((c) => ({
@@ -572,7 +603,7 @@ export default function MonthlyPlannerScreen() {
             <Section
               icon="bookmark"
               title="SWOT Analysis"
-              subtitle="Reflect on this month — your personal strengths, weaknesses, opportunities, threats"
+              subtitle="Complete quarterly: it carries over each month until the quarter ends. Strengths and weaknesses are you (personality and skills); opportunities and threats are outside influences"
             >
               <View style={s.swotGrid}>
                 {SWOT_FIELDS.map((f) => (
@@ -592,21 +623,58 @@ export default function MonthlyPlannerScreen() {
             </Section>
             </ScrollReveal>
 
-            {/* GAP Analysis */}
-            {showGap && (
-              <Section
-                icon="podium"
-                title="Coach Gap Analysis"
-                subtitle="Score 1–5 honestly — tap a low score for AI tips"
-              >
-                <GapAnalysisRadar
-                  traits={traitsQ.data || []}
-                  scores={draft.gap_analysis?.scores || {}}
-                  canEdit={canEdit}
-                  onChange={(scores) => update((c) => ({ ...c, gap_analysis: { ...(c.gap_analysis || {}), scores } }))}
-                />
-              </Section>
-            )}
+            {/* Gap Analysis: both of the booklet's wheels, for everyone */}
+            <Section
+              icon="podium"
+              title="Gap Analysis"
+              subtitle="Mark yourself 1–5 on each topic. Be honest or you just cheat yourself!"
+            >
+              <GapAnalysisRadar
+                traits={fieldTraits}
+                scores={draft.gap_analysis?.field_scores || {}}
+                canEdit={canEdit}
+                onChange={(field_scores) => update((c) => ({ ...c, gap_analysis: { ...(c.gap_analysis || {}), field_scores } }))}
+              />
+            </Section>
+            <Section
+              icon="ribbon"
+              title="Leader Gap Analysis"
+              subtitle="Mark yourself 1–5 on each topic. Be honest or you just cheat yourself!"
+            >
+              <GapAnalysisRadar
+                traits={leaderTraits}
+                scores={draft.gap_analysis?.scores || {}}
+                canEdit={canEdit}
+                onChange={(scores) => update((c) => ({ ...c, gap_analysis: { ...(c.gap_analysis || {}), scores } }))}
+              />
+            </Section>
+
+            {/* Recruitment & PR Focus: tap a box to tick it */}
+            <Section icon="people" title="Recruitment & PR Focus" subtitle="Tap a box to tick it off">
+              {(['recruitment', 'pr'] as const).map((k) => (
+                <View key={k} style={{ marginBottom: 12 }}>
+                  <Text style={s.subSect}>{k === 'recruitment' ? 'Monthly Recruitment Focus' : 'Monthly PR Focus'}</Text>
+                  <TickGrid
+                    count={30}
+                    ticked={draft.focus?.[k] || []}
+                    canEdit={canEdit}
+                    onChange={(ticks) => update((c) => ({ ...c, focus: { ...(c.focus || {}), [k]: ticks } }))}
+                  />
+                </View>
+              ))}
+            </Section>
+
+            {/* Recruitment, Sign Ups & Growth */}
+            <Section icon="stats-chart" title="Recruitment, Sign Ups & Growth" subtitle="Set the monthly goals: the app works out the numbers and Hit">
+              <GrowthKpis
+                rows={growthQ.data?.kpis || []}
+                goals={draft.kpi_goals || {}}
+                canEdit={canEdit}
+                onChange={(kpi_goals) => update((c) => ({ ...c, kpi_goals }))}
+              />
+              <Text style={[s.subSect, { marginTop: 14 }]}>New Starts Due</Text>
+              <NewStartsDue rows={growthQ.data?.new_starts || []} />
+            </Section>
 
             {/* Months list */}
             {(myMonthsQ.data?.items || []).length > 1 && (
@@ -841,6 +909,128 @@ function BudgetSection({ budget, canEdit, onChange }: { budget: any; canEdit: bo
         <Text style={[s.summaryLabel, { marginTop: 6 }]}>Monthly bills are turned into a week (× 12 ÷ 52). Saving this updates your breakeven a week on Bells and your weekly plan.</Text>
       </View>
     </Section>
+  );
+}
+
+// ── Tick boxes (Monthly Sign Up Focus 1–100, Recruitment / PR Focus 1–30) ──
+function TickGrid({ count, ticked, canEdit, onChange }: { count: number; ticked: number[]; canEdit: boolean; onChange: (t: number[]) => void }) {
+  const colors = useColors();
+  const set = new Set(ticked || []);
+  return (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 8 }}>
+      {Array.from({ length: count }, (_, i) => i + 1).map((n) => {
+        const on = set.has(n);
+        return (
+          <TouchableOpacity
+            key={n}
+            disabled={!canEdit}
+            activeOpacity={0.6}
+            onPress={() => {
+              haptics.light();
+              const next = new Set(set);
+              if (on) next.delete(n); else next.add(n);
+              onChange(Array.from(next).sort((a, b) => a - b));
+            }}
+            accessibilityLabel={`Box ${n}${on ? ', ticked' : ''}`}
+            style={{
+              width: '9%', aspectRatio: 1, borderRadius: 7, borderWidth: 1,
+              borderColor: on ? colors.primary : colors.border,
+              backgroundColor: on ? colors.primary : colors.surface,
+              alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            {on
+              ? <Ionicons name="checkmark" size={14} color={colors.onPrimary} />
+              : <Text style={{ fontSize: 10, fontWeight: '700', color: colors.textMuted }}>{n}</Text>}
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
+// ── Recruitment, Sign Ups & Growth: monthly goal, the number so far, Hit ──
+const GROWTH_LABELS: Record<string, string> = {
+  shadowers: 'Number of shadowers taken',
+  sign_ups: 'Total number of sign-ups',
+  new_starts: 'Number of new starts attended',
+  prs: 'Number of PRs attended',
+};
+function GrowthKpis({ rows, goals, canEdit, onChange }: { rows: any[]; goals: Record<string, number>; canEdit: boolean; onChange: (g: Record<string, number>) => void }) {
+  const colors = useColors();
+  const byKey: Record<string, any> = Object.fromEntries((rows || []).map((r: any) => [r.key, r]));
+  return (
+    <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 12, overflow: 'hidden' }}>
+      <View style={{ flexDirection: 'row', backgroundColor: colors.primary, paddingVertical: 8, paddingHorizontal: 10 }}>
+        <Text style={{ flex: 1, color: colors.onPrimary, fontSize: 11, fontWeight: '800' }}>KPI</Text>
+        <Text style={{ width: 62, color: colors.onPrimary, fontSize: 11, fontWeight: '800', textAlign: 'center' }}>GOAL</Text>
+        <Text style={{ width: 44, color: colors.onPrimary, fontSize: 11, fontWeight: '800', textAlign: 'center' }}>SO FAR</Text>
+        <Text style={{ width: 44, color: colors.onPrimary, fontSize: 11, fontWeight: '800', textAlign: 'center' }}>HIT</Text>
+      </View>
+      {Object.keys(GROWTH_LABELS).map((k, i) => {
+        const r = byKey[k] || {};
+        const goal = Number(goals?.[k] || 0);
+        const actual = Number(r.actual || 0);
+        // Hit: yes once the goal's reached; no once the month's over short of it.
+        const hit = goal > 0 && actual >= goal ? true : (r.hit === false ? false : null);
+        return (
+          <View key={k} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 10, backgroundColor: i % 2 ? colors.background : colors.surface }}>
+            <Text style={{ flex: 1, fontSize: 12.5, fontWeight: '600', color: colors.text }}>{GROWTH_LABELS[k]}</Text>
+            <TextInput
+              editable={canEdit}
+              keyboardType="numeric"
+              value={goal ? String(goal) : ''}
+              placeholder="–"
+              placeholderTextColor={colors.textMuted}
+              onChangeText={(v) => onChange({ ...(goals || {}), [k]: parseInt(v.replace(/[^0-9]/g, ''), 10) || 0 })}
+              maxLength={4}
+              style={{ width: 54, marginHorizontal: 4, paddingVertical: 5, borderRadius: 7, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, color: colors.text, textAlign: 'center', fontWeight: '800', opacity: canEdit ? 1 : 0.6 }}
+            />
+            <Text style={{ width: 44, textAlign: 'center', fontWeight: '800', color: colors.text }}>{actual}</Text>
+            <View style={{ width: 44, alignItems: 'center' }}>
+              {hit === true && <Text style={{ fontSize: 11, fontWeight: '900', color: colors.green }}>YES</Text>}
+              {hit === false && <Text style={{ fontSize: 11, fontWeight: '900', color: colors.red || '#dc2626' }}>NO</Text>}
+              {hit === null && <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textMuted }}>{goal > 0 ? `${Math.max(0, goal - actual)} to go` : '–'}</Text>}
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+// ── New Starts Due: worked out from the new starts in the app ──────────────
+function NewStartsDue({ rows }: { rows: any[] }) {
+  const colors = useColors();
+  if (!rows?.length) {
+    return <Text style={{ color: colors.textMuted, fontSize: 12.5, marginTop: 4 }}>No new starts due this month yet.</Text>;
+  }
+  const fmt = (iso: string) => {
+    const [y, m, d] = String(iso || '').split('-');
+    return d ? `${d}/${m}` : '';
+  };
+  const head = { color: colors.onPrimary, fontSize: 10.5, fontWeight: '800' as const, textAlign: 'center' as const };
+  return (
+    <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 12, overflow: 'hidden', marginTop: 6 }}>
+      <View style={{ flexDirection: 'row', backgroundColor: colors.primary, paddingVertical: 8, paddingHorizontal: 10 }}>
+        <Text style={[head, { flex: 1, textAlign: 'left' }]}>NAME</Text>
+        <Text style={[head, { width: 50 }]}>START</Text>
+        <Text style={[head, { width: 66 }]}>SIGN-UPS{'\n'}1ST 3 DAYS</Text>
+        <Text style={[head, { width: 66 }]}>COMPLETED{'\n'}6 DAYS</Text>
+      </View>
+      {rows.map((r: any, i: number) => (
+        <View key={r.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 10, backgroundColor: i % 2 ? colors.background : colors.surface }}>
+          <Text style={{ flex: 1, fontSize: 12.5, fontWeight: '700', color: colors.text }} numberOfLines={1}>{r.name}</Text>
+          <Text style={{ width: 50, textAlign: 'center', fontSize: 12, color: colors.text }}>{fmt(r.start_date)}</Text>
+          <Text style={{ width: 66, textAlign: 'center', fontSize: 12.5, fontWeight: '800', color: colors.text }}>{r.sign_ups_first_3 ?? '–'}</Text>
+          <View style={{ width: 66, alignItems: 'center' }}>
+            {r.completed_6
+              ? <Ionicons name="checkmark-circle" size={18} color={colors.green} />
+              : <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textMuted }}>{r.field_days_done}/6</Text>}
+          </View>
+        </View>
+      ))}
+    </View>
   );
 }
 

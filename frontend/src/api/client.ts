@@ -1165,6 +1165,8 @@ export const apiService = {
       timeout: 120_000,
     });
   },
+  monthlyPlannerGrowth: (month: string, user_id?: string) =>
+    api.get(`/monthly-planners/${month}/growth`, { params: user_id ? { user_id } : {} }),
   monthlyPlannerSalesActual: (month: string) =>
     api.get(`/monthly-planners/${month}/sales-actual`),
   monthlyPlannerTeamRoster: () => api.get('/monthly-planners/team/roster'),

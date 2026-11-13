@@ -86,6 +86,11 @@ def _norm_horizon(v) -> str:
     return v if v in _HORIZONS else "short"
 
 
+def _norm_area(v) -> str:
+    """Business or Personal, as the booklet splits goals (default Business)."""
+    return "personal" if str(v or "").strip().lower() == "personal" else "business"
+
+
 def _normalize_goals(raw) -> dict:
     """Normalize the goals payload. A payload carrying kpis/rocks/version is
     v2 (structured); anything else is treated as the legacy 6-field shape and
@@ -101,6 +106,7 @@ def _normalize_goals(raw) -> dict:
             "name": (str(r.get("name") or "")).strip(),
             "target": (str(r.get("target") or "")).strip(),
             "horizon": _norm_horizon(r.get("horizon")),
+            "area": _norm_area(r.get("area")),
             "reward": (str(r.get("reward") or "")).strip(),
             "smart_ok": bool(r.get("smart_ok")),
         }
@@ -110,6 +116,7 @@ def _normalize_goals(raw) -> dict:
             "id": (r.get("id") or str(uuid.uuid4())),
             "name": (str(r.get("name") or "")).strip(),
             "horizon": _norm_horizon(r.get("horizon")),
+            "area": _norm_area(r.get("area")),
             "reward": (str(r.get("reward") or "")).strip(),
             "done": bool(r.get("done")),
         }
@@ -175,25 +182,117 @@ DEFAULT_SWOT: dict = {
 DEFAULT_NEEDS_LABELS = ["Phone", "Food", "Insurance", "Travel", "Rent"]
 DEFAULT_WANTS_LABELS = ["Savings"]
 
-# 16 leadership traits (Leader Gap Analysis radar). Score 1..5 each.
-GAP_TRAITS: list = [
-    "Adaptability",
-    "Mind-set / Focus",
-    "Professional Image",
-    "Relentlessness",
-    "Doing Extra 10%",
-    "Networking",
-    "Setting Development Goals",
-    "Hitting Sales Targets",
-    "Accepting Criticism",
-    "Proactive Learner",
-    "Solution-orientated",
-    "Proactive Helper",
-    "Planned Impacts",
-    "Time-management",
+# The booklet's two wheels (the Owner, 13 Nov 2026), scored 1..5 each, for
+# everyone. Gap Analysis is the field and office skills wheel; Leader Gap
+# Analysis is the leadership one. Order is the booklet's, clockwise from the top.
+FIELD_GAP_TRAITS: list = [
+    "Pace Setting",
+    "Making a Profit",
+    "Sector Meetings",
+    "Planning",
+    "Controlling Conversations",
+    "Working Different Territory",
+    "Your Story",
     "Customer Service",
     "Coaching New People",
+    "Observations",
+    "Running Impacts",
+    "Quality Control",
+    "Primetime",
+    "Networking",
+    "Roadtrips",
+    "Promoting Leaders",
 ]
+
+LEADER_GAP_TRAITS: list = [
+    "Adaptability",
+    "Time-management",
+    "Planning & Pre-prep",
+    "Having a Calendar",
+    "Planned Impacts",
+    "Proactive Helper",
+    "Solution-orientated",
+    "Proactive Learner",
+    "Accepting Criticism",
+    "Hitting Sign Up Targets",
+    "Setting Development Goals",
+    "Networking",
+    "Doing Extra 10%",
+    "Relentlessness",
+    "Professional Image",
+    "Mind-set / Focus",
+]
+GAP_TRAITS = LEADER_GAP_TRAITS  # older name, still read by the radar's traits route
+
+# Scores saved before 13 Nov 2026 sat on one mixed wheel: carry them over.
+_LEADER_RENAMES = {"Hitting Sales Targets": "Hitting Sign Up Targets"}
+_MOVED_TO_FIELD = ("Customer Service", "Coaching New People")
+
+
+def _clamp_scores(raw, traits: list) -> dict:
+    raw = raw if isinstance(raw, dict) else {}
+    out = {}
+    for t in traits:
+        try:
+            n = int(raw.get(t) or 0)
+        except Exception:
+            n = 0
+        out[t] = max(0, min(5, n))
+    return out
+
+
+def _normalize_gap(raw) -> dict:
+    """{scores: leader wheel, field_scores: Gap Analysis wheel}, old shape migrated."""
+    raw = raw if isinstance(raw, dict) else {}
+    leader_in = dict(raw.get("scores") or {})
+    field_in = dict(raw.get("field_scores") or {})
+    for old, new in _LEADER_RENAMES.items():
+        if old in leader_in and not leader_in.get(new):
+            leader_in[new] = leader_in.pop(old)
+    for t in _MOVED_TO_FIELD:
+        if leader_in.get(t) and not field_in.get(t):
+            field_in[t] = leader_in[t]
+    return {"scores": _clamp_scores(leader_in, LEADER_GAP_TRAITS),
+            "field_scores": _clamp_scores(field_in, FIELD_GAP_TRAITS)}
+
+
+# Recruitment, Sign Ups & Growth: the booklet's four monthly KPIs.
+GROWTH_KPIS = ("shadowers", "sign_ups", "new_starts", "prs")
+FOCUS_BOXES = 30  # Recruitment Focus and PR Focus are 1-30 each
+
+
+def _normalize_focus(raw) -> dict:
+    raw = raw if isinstance(raw, dict) else {}
+    def _ticks(v):
+        out = set()
+        for x in v or []:
+            try:
+                n = int(x)
+            except Exception:
+                continue
+            if 1 <= n <= FOCUS_BOXES:
+                out.add(n)
+        return sorted(out)
+    return {"recruitment": _ticks(raw.get("recruitment")), "pr": _ticks(raw.get("pr"))}
+
+
+def _normalize_kpi_goals(raw) -> dict:
+    raw = raw if isinstance(raw, dict) else {}
+    out = {}
+    for k in GROWTH_KPIS:
+        try:
+            out[k] = max(0, int(raw.get(k) or 0))
+        except Exception:
+            out[k] = 0
+    return out
+
+
+def _quarter(month: str) -> str:
+    try:
+        y, m = str(month).split("-")[:2]
+        return f"{int(y)}-Q{(int(m) - 1) // 3 + 1}"
+    except Exception:
+        return ""
 
 
 def _empty_budget_row(label: str = "") -> dict:
@@ -268,7 +367,6 @@ async def _fill_budget_from_plan(seed: dict, user_id: str) -> dict:
 
 def _seed_planner(user_id: str, office_id: str, month: str, role: str) -> dict:
     now = datetime.now(timezone.utc).isoformat()
-    gap_scores = {t: 0 for t in GAP_TRAITS} if role in ("leader", "admin") else {}
     return {
         "id": str(uuid.uuid4()),
         "user_id": user_id,
@@ -294,7 +392,9 @@ def _seed_planner(user_id: str, office_id: str, month: str, role: str) -> dict:
             "total_sales_required": 0,
         },
         "swot": dict(DEFAULT_SWOT),
-        "gap_analysis": {"scores": gap_scores},
+        "gap_analysis": _normalize_gap({}),
+        "focus": _normalize_focus({}),
+        "kpi_goals": _normalize_kpi_goals({}),
         "targets": {"monthly_sales": 0, "personal_best": 0},
         "created_at": now,
         "updated_at": now,
@@ -373,10 +473,11 @@ async def _resolve_target_user(request: Request, target_user_id: Optional[str]) 
 
 
 def _strip_for_role(doc: dict, target_role: str) -> dict:
-    """Trainees do NOT have Gap Analysis. Strip it from the response so the
-    UI can hide the section."""
-    if target_role == "trainee":
-        doc["gap_analysis"] = {"scores": {}}
+    """Fill in the parts older planners don't have yet. Everyone has both Gap
+    Analysis wheels (the Owner, 13 Nov 2026), so nothing is stripped now."""
+    doc["gap_analysis"] = _normalize_gap(doc.get("gap_analysis"))
+    doc["focus"] = _normalize_focus(doc.get("focus"))
+    doc["kpi_goals"] = _normalize_kpi_goals(doc.get("kpi_goals"))
     return doc
 
 
@@ -385,9 +486,10 @@ def _strip_for_role(doc: dict, target_role: str) -> dict:
 
 @router.get("/monthly-planners/traits")
 async def list_traits(request: Request):
-    """Return the 16 Gap-Analysis traits — used by the radar chart UI."""
+    """Both wheels' topics, for the radar charts. `traits` is the leader wheel
+    (kept for older clients)."""
     await get_current_user(request)
-    return {"traits": GAP_TRAITS}
+    return {"traits": LEADER_GAP_TRAITS, "leader_traits": LEADER_GAP_TRAITS, "field_traits": FIELD_GAP_TRAITS}
 
 
 # NOTE: goal-menu routes are declared BEFORE "/monthly-planners/{month}" so the
@@ -667,16 +769,9 @@ async def upsert_planner(month: str, request: Request):
             "needs": _plan_rows(budget["needs"], "month"), "wants": _plan_rows(budget["wants"], "month"),
             "updated_at": datetime.now(timezone.utc).isoformat(), "from": "monthly_planner"}}})
 
-    gap_in = (body.get("gap_analysis") or {}).get("scores") or {}
-    gap_scores: dict = {}
-    if me.get("role") in ("leader", "admin"):
-        for t in GAP_TRAITS:
-            v = gap_in.get(t)
-            try:
-                n = int(v) if v not in (None, "") else 0
-            except Exception:
-                n = 0
-            gap_scores[t] = max(0, min(5, n))
+    gap = _normalize_gap(body.get("gap_analysis"))
+    focus = _normalize_focus(body.get("focus"))
+    kpi_goals = _normalize_kpi_goals(body.get("kpi_goals"))
 
     # Targets — both are optional positive integers; 0/blank = unset
     def _int_or_zero(v):
@@ -725,10 +820,11 @@ async def upsert_planner(month: str, request: Request):
             "learning": learning,
             "budget": budget,
             "targets": targets,
+            "gap_analysis": gap,
+            "focus": focus,
+            "kpi_goals": kpi_goals,
             "updated_at": now,
         }
-        if me.get("role") in ("leader", "admin"):
-            update["gap_analysis"] = {"scores": gap_scores}
         await db.monthly_planners.update_one({"id": existing["id"]}, {"$set": update})
         existing.update(update)
         return {"ok": True, "planner": _strip_for_role(existing, me.get("role") or "trainee")}
@@ -747,10 +843,11 @@ async def upsert_planner(month: str, request: Request):
         "learning": learning,
         "budget": budget,
         "targets": targets,
+        "gap_analysis": gap,
+        "focus": focus,
+        "kpi_goals": kpi_goals,
         "updated_at": now,
     })
-    if me.get("role") in ("leader", "admin"):
-        doc["gap_analysis"] = {"scores": gap_scores}
     await db.monthly_planners.insert_one(doc.copy())
     return {"ok": True, "planner": _strip_for_role(doc, me.get("role") or "trainee")}
 
@@ -785,13 +882,14 @@ async def start_new_month(month: str, request: Request):
 
     seed = _seed_planner(user_id, me.get("office_id") or "", coerced, role)
     if prev:
-        # SWOT is intentionally NOT inherited — leaders should reflect on
-        # their CURRENT month's strengths/weaknesses each month from scratch.
-        # Inherit gap scores for leaders/admins
-        if role in ("leader", "admin"):
-            prev_scores = (prev.get("gap_analysis") or {}).get("scores") or {}
-            scores = {t: int(prev_scores.get(t) or 0) for t in GAP_TRAITS}
-            seed["gap_analysis"] = {"scores": scores}
+        # SWOT is done quarterly (the Owner, 13 Nov 2026): it carries over
+        # within the quarter and starts fresh in a new one.
+        if _quarter(prev.get("month") or "") == _quarter(coerced):
+            seed["swot"] = {k: (str((prev.get("swot") or {}).get(k) or "")).strip() for k in DEFAULT_SWOT}
+        # Both Gap Analysis wheels carry over, for everyone.
+        seed["gap_analysis"] = _normalize_gap(prev.get("gap_analysis"))
+        # The monthly KPI goals carry over; the tick boxes start empty.
+        seed["kpi_goals"] = _normalize_kpi_goals(prev.get("kpi_goals"))
         # Inherit budget rows + sale_value (numbers stay; user adjusts)
         prev_budget = prev.get("budget") or {}
         seed["budget"]["needs"] = _normalize_budget_rows(prev_budget.get("needs")) or seed["budget"]["needs"]
@@ -886,19 +984,14 @@ async def team_roster(request: Request):
 
 
 
-@router.get("/monthly-planners/{month}/sales-actual")
-async def planner_sales_actual(month: str, request: Request):
-    """Compute the user's actual bells-recorded sales for the given month.
-    Sums (over30 + under30) across every day in every bells_entry where
-    week_ending falls within the calendar month and the day's status is 'in'
-    (excludes off/ab/nc). Used by the monthly planner to show progress
-    against the user's monthly_sales_target."""
-    coerced = _coerce_month(month)
-    if not coerced:
-        raise HTTPException(status_code=400, detail="month must be YYYY-MM")
-    me = await get_current_user(request)
-    user_id = me["id"]
+def _month_bounds(month: str) -> tuple[str, str]:
+    y, m = (int(p) for p in month.split("-"))
+    next_y, next_m = (y + 1, 1) if m == 12 else (y, m + 1)
+    return f"{y:04d}-{m:02d}-01", f"{next_y:04d}-{next_m:02d}-01"
 
+
+async def _bells_sign_ups(user_id: str, coerced: str) -> dict:
+    """A person's Bells sign-ups for a calendar month (days marked In)."""
     # Compute month start/end (YYYY-MM-DD bounds inclusive)
     y, m = (int(p) for p in coerced.split("-"))
     next_y, next_m = (y + 1, 1) if m == 12 else (y, m + 1)
@@ -945,6 +1038,25 @@ async def planner_sales_actual(month: str, request: Request):
                 if sales > 0:
                     days_worked += 1
 
+    return {"total": total, "over30": over30_total, "under30": under30_total, "days_worked": days_worked}
+
+
+@router.get("/monthly-planners/{month}/sales-actual")
+async def planner_sales_actual(month: str, request: Request):
+    """Compute the user's actual bells-recorded sales for the given month.
+    Sums (over30 + under30) across every day in every bells_entry where
+    week_ending falls within the calendar month and the day's status is 'in'
+    (excludes off/ab/nc). Used by the monthly planner to show progress
+    against the user's monthly_sales_target."""
+    coerced = _coerce_month(month)
+    if not coerced:
+        raise HTTPException(status_code=400, detail="month must be YYYY-MM")
+    me = await get_current_user(request)
+    user_id = me["id"]
+
+    t = await _bells_sign_ups(user_id, coerced)
+    total, over30_total, under30_total, days_worked = t["total"], t["over30"], t["under30"], t["days_worked"]
+
     return {
         "month": coerced,
         "total_sales": total,
@@ -952,3 +1064,94 @@ async def planner_sales_actual(month: str, request: Request):
         "under30": under30_total,
         "days_worked": days_worked,
     }
+
+
+# ── Recruitment, Sign Ups & Growth (the Owner, 13 Nov 2026) ─────────────────
+FIELD_DAY_ONE = 3   # assessment day_number 1-2 are BA Academy, 3-8 the six field days
+
+
+async def _new_starts_due(target: dict, month: str) -> list[dict]:
+    """New starts starting this month that are this person's: the whole office
+    for an Admin, their team (and anyone they're Coach to) for a Coach, the
+    ones they're Coach to for anyone else. Worked out, never typed."""
+    from auth import get_subtree_ids
+    start, nxt = _month_bounds(month)
+    q: dict = {"start_date": {"$gte": start, "$lt": nxt}, "closed_out_reason": {"$ne": "not_new_start"}}
+    role = target.get("role")
+    if role == "admin":
+        q["office_id"] = target.get("office_id")
+    else:
+        ids = [target["id"]]
+        if role == "leader":
+            ids = [str(i) for i in await get_subtree_ids(target["id"])]
+        q["$or"] = [{"leader_user_id": target["id"]}, {"trainee_user_id": {"$in": [i for i in ids if i != target["id"]]}}]
+        q["office_id"] = target.get("office_id")
+    hires = await db.new_hires.find(q, {"_id": 0, "id": 1, "name": 1, "start_date": 1, "current_day": 1,
+                                        "trainee_user_id": 1}).sort("start_date", 1).to_list(200)
+    if not hires:
+        return []
+    rows = await db.daily_assessments.find(
+        {"new_hire_id": {"$in": [h["id"] for h in hires]}, "completed": True},
+        {"_id": 0, "new_hire_id": 1, "day_number": 1, "kpi_sales": 1}).to_list(5000)
+    by_hire: dict = {}
+    for a in rows:
+        by_hire.setdefault(a.get("new_hire_id"), []).append(a)
+    today = datetime.now(timezone.utc).date().isoformat()
+    out = []
+    for h in hires:
+        graded = by_hire.get(h["id"], [])
+        field = {int(a.get("day_number") or 0): a for a in graded if int(a.get("day_number") or 0) >= FIELD_DAY_ONE}
+        first3 = [field[d] for d in range(FIELD_DAY_ONE, FIELD_DAY_ONE + 3) if d in field]
+        sign_ups = sum(int(a.get("kpi_sales") or 0) for a in first3) if first3 else None
+        days_done = len([d for d in field if d <= FIELD_DAY_ONE + 5])
+        started = str(h.get("start_date") or "")[:10] <= today
+        attended = started and (bool(graded) or int(h.get("current_day") or 1) > 1)
+        out.append({"id": h["id"], "name": h.get("name") or "", "start_date": str(h.get("start_date") or "")[:10],
+                    "sign_ups_first_3": sign_ups, "field_days_done": days_done,
+                    "completed_6": days_done >= 6, "attended": attended})
+    return out
+
+
+async def _shadowers_taken(user_id: str, month: str) -> int:
+    """Days this month they led a bunny hop with a shadow on it."""
+    start, nxt = _month_bounds(month)
+    n = 0
+    async for sec in db.sectors.find({"date": {"$gte": start, "$lt": nxt}, "member_ids": user_id},
+                                     {"_id": 0, "hops": 1}):
+        for h in sec.get("hops") or []:
+            shadows = [str(i) for i in h.get("shadow_ids") or []]
+            members = [str(i) for i in h.get("member_ids") or []]
+            if shadows and user_id in members and user_id not in shadows:
+                n += len(shadows)
+    return n
+
+
+@router.get("/monthly-planners/{month}/growth")
+async def planner_growth(month: str, request: Request, user_id: Optional[str] = None):
+    """The booklet's Recruitment, Sign Ups & Growth page, worked out: this
+    month's sign-ups (for the Sign Up Focus boxes), shadowers taken, PRs
+    attended (their PR Focus ticks) and New Starts Due with how each is doing.
+    Hit is yes once the month's number reaches the goal."""
+    coerced = _coerce_month(month)
+    if not coerced:
+        raise HTTPException(status_code=400, detail="month must be YYYY-MM")
+    me, target = await _resolve_target_user(request, user_id)
+    doc = await db.monthly_planners.find_one({"user_id": target["id"], "month": coerced},
+                                             {"_id": 0, "focus": 1, "kpi_goals": 1}) or {}
+    focus = _normalize_focus(doc.get("focus"))
+    goals = _normalize_kpi_goals(doc.get("kpi_goals"))
+    sign_ups = (await _bells_sign_ups(target["id"], coerced))["total"]
+    new_starts = await _new_starts_due(target, coerced)
+    actual = {
+        "shadowers": await _shadowers_taken(target["id"], coerced),
+        "sign_ups": sign_ups,
+        "new_starts": sum(1 for r in new_starts if r["attended"]),
+        "prs": len(focus["pr"]),
+    }
+    month_over = _month_bounds(coerced)[1] <= datetime.now(timezone.utc).date().isoformat()
+    kpis = []
+    for k in GROWTH_KPIS:
+        goal, got = goals[k], actual[k]
+        hit = None if not goal else (True if got >= goal else (False if month_over else None))
+        kpis.append({"key": k, "goal": goal, "actual": got, "hit": hit})
+    return {"month": coerced, "sign_ups": sign_ups, "kpis": kpis, "new_starts": new_starts, "month_over": month_over}
