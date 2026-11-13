@@ -241,7 +241,9 @@ def _out(n: dict, me: str) -> dict:
                                   "source_label", "shared", "author_name")} | {
         "mine": n.get("user_id") == me, "photos": n.get("photos") or [],
         # Meet-up notes are deleted in the meet-up itself.
-        "can_delete": n.get("user_id") == me and not str(n.get("ref") or "").startswith("meetup:")}
+        "can_delete": n.get("user_id") == me and not str(n.get("ref") or "").startswith("meetup:"),
+        # Photos can be added to notes that sit in the planner as their own note.
+        "can_photo": n.get("user_id") == me and ":n:" in str(n.get("ref") or "")}
 
 
 @router.get("/notes/folder")
@@ -372,9 +374,12 @@ def _parse_ref(ref: str) -> Optional[dict]:
 
 def _clean_edit(body: dict) -> dict:
     head = str(body.get("head") or "")
+    photos = body.get("photos")
     return {"title": " ".join(str(body.get("title") or "").split())[:MAX_TITLE],
             "body": str(body.get("body") or "")[:MAX_BODY],
-            "head": head if _HEAD.match(head) else ""}
+            "head": head if _HEAD.match(head) else "",
+            # None = leave the note's photos as they are (the Owner, 13 Nov 2026).
+            "photos": [p for p in photos if _photo_ok(p)][:MAX_PHOTOS] if isinstance(photos, list) else None}
 
 
 async def _refile(user: dict, planner: dict) -> None:
@@ -427,7 +432,8 @@ async def edit_note(note_id: str, request: Request):
                 continue
             for i, n in enumerate(notes):
                 if n.get("id") == r["note_id"]:
-                    notes[i] = {**n, "title": e["title"], "body": e["body"], "head": e["head"]}
+                    notes[i] = {**n, "title": e["title"], "body": e["body"], "head": e["head"],
+                                **({"photos": e["photos"]} if e["photos"] is not None else {})}
                     hit = True
         if not hit:
             raise HTTPException(status_code=404, detail="Note not found in your planner")
@@ -497,7 +503,7 @@ async def add_note(request: Request):
     raw = raw if isinstance(raw, dict) else {}
     e = _clean_edit(raw)
     e["head"] = allowed_head(user, e["head"]) if e["head"] else ""
-    if not (e["body"].strip() or e["title"]):
+    if not (e["body"].strip() or e["title"] or e["photos"]):
         raise HTTPException(status_code=400, detail="Write something first")
     from routes.meetups import MEETUP_HEAD, add_from_notes
     if MEETUP_HEAD.match(str(raw.get("head") or "")):
@@ -517,7 +523,7 @@ async def add_note(request: Request):
     key = f"{day}:day"
     nid = uuid.uuid4().hex[:16]
     slot_notes.setdefault(key, []).append({"id": nid, "title": e["title"], "head": e["head"], "body": e["body"],
-                                           "photos": [], "label": "Day notes"})
+                                           "photos": e["photos"] or [], "label": "Day notes"})
     upd = {"slot_notes": clean_slot_notes(slot_notes), "updated_at": datetime.now(timezone.utc).isoformat()}
     await db.weekly_planners.update_one({"_id": planner["_id"]}, {"$set": upd})
     planner.update(upd)
