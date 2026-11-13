@@ -91,6 +91,11 @@ def _norm_area(v) -> str:
     return "personal" if str(v or "").strip().lower() == "personal" else "business"
 
 
+def _how(raw) -> str:
+    """How they'll do a goal (the Owner, 13 Nov 2026): free text."""
+    return (str(raw or "")).strip()[:2000] if not isinstance(raw, (list, dict)) else ""
+
+
 def _normalize_goals(raw) -> dict:
     """Normalize the goals payload. A payload carrying kpis/rocks/version is
     v2 (structured); anything else is treated as the legacy 6-field shape and
@@ -108,6 +113,7 @@ def _normalize_goals(raw) -> dict:
             "horizon": _norm_horizon(r.get("horizon")),
             "area": _norm_area(r.get("area")),
             "reward": (str(r.get("reward") or "")).strip(),
+            "how": _how(r.get("how")),
             "smart_ok": bool(r.get("smart_ok")),
         }
 
@@ -118,6 +124,7 @@ def _normalize_goals(raw) -> dict:
             "horizon": _norm_horizon(r.get("horizon")),
             "area": _norm_area(r.get("area")),
             "reward": (str(r.get("reward") or "")).strip(),
+            "how": _how(r.get("how")),
             "done": bool(r.get("done")),
         }
 

@@ -56,6 +56,7 @@ const goalCell = (label: string, value: string) => `
 const TERM_PDF: Record<string, string> = { short: '1 month', medium: '3 months', long: '6 months' };
 const goalsV2Html = (goals: any): string => {
   const area = (x: any) => (x.area === 'personal' ? 'Personal' : 'Business');
+  const howRow = (x: any) => (x.how ? `<tr><td colspan="4"><span class="muted">How:</span> ${nl2br(x.how)}</td></tr>` : '');
   const block = (title: string, list: any[], row: (x: any) => string, head: string) => {
     const terms = ['short', 'medium', ...(list.some((x) => x.horizon === 'long') ? ['long'] : [])];
     const body = terms.map((t) => {
@@ -66,10 +67,10 @@ const goalsV2Html = (goals: any): string => {
     return `<div class="subsection"><h3>${title}</h3><table class="data"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
   };
   const kpis = block('KPIs · the numbers', goals.kpis || [], (k) => `
-      <tr><td>${k.smart_ok ? '✓ ' : ''}${escapeHtml(k.name)}</td><td class="r">${k.target ? escapeHtml(String(k.target)) : '—'}</td><td>${area(k)}</td><td>${k.reward ? escapeHtml(k.reward) : '—'}</td></tr>`,
+      <tr><td>${k.smart_ok ? '✓ ' : ''}${escapeHtml(k.name)}</td><td class="r">${k.target ? escapeHtml(String(k.target)) : '—'}</td><td>${area(k)}</td><td>${k.reward ? escapeHtml(k.reward) : '—'}</td></tr>${howRow(k)}`,
     '<tr><th>KPI</th><th class="r">Target</th><th>Business / Personal</th><th>Reward</th></tr>');
   const rocks = block("Rocks · did I / didn't I", goals.rocks || [], (r) => `
-      <tr><td>${r.done ? '✓ ' : ''}${escapeHtml(r.name)}</td><td></td><td>${area(r)}</td><td>${r.reward ? escapeHtml(r.reward) : '—'}</td></tr>`,
+      <tr><td>${r.done ? '✓ ' : ''}${escapeHtml(r.name)}</td><td></td><td>${area(r)}</td><td>${r.reward ? escapeHtml(r.reward) : '—'}</td></tr>${howRow(r)}`,
     '<tr><th>Rock</th><th></th><th>Business / Personal</th><th>Reward</th></tr>');
   return `
     <section>
