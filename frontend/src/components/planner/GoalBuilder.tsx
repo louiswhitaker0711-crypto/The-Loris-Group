@@ -336,8 +336,11 @@ function GoalCard({ s, colors, id, canEdit, left, title, meta, done, onRemove, c
       <View style={s.goalRowHead}>
         <View style={s.goalRowLeft}>{left}</View>
         <TouchableOpacity style={s.goalRowMain} onPress={() => { haptics.tap(); setOpen(!open); }} activeOpacity={0.7}>
-          <Text style={[s.goalRowTitle, done && { textDecorationLine: 'line-through', color: colors.textMuted }]} numberOfLines={open ? undefined : 1}>{title}</Text>
-          {!!meta && <Text style={s.goalRowMeta} numberOfLines={1}>{meta}</Text>}
+          {/* Name gets the full width and wraps; the tag sits underneath. */}
+          <View style={{ flex: 1 }}>
+            <Text style={[s.goalRowTitle, done && { textDecorationLine: 'line-through', color: colors.textMuted }]} numberOfLines={open ? undefined : 3}>{title}</Text>
+            {!!meta && <Text style={s.goalRowMeta} numberOfLines={1}>{meta}</Text>}
+          </View>
           <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={15} color={colors.textMuted} />
         </TouchableOpacity>
         {canEdit && (
@@ -717,11 +720,11 @@ const createS = (colors: any) => StyleSheet.create({
   smartDesc: { fontSize: 12, color: colors.textSecondary, marginTop: 1, lineHeight: 16 },
   counter: { fontSize: 12, fontWeight: '800', marginBottom: 10 },
   goalRow: { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, marginBottom: 8 },
-  goalRowHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  goalRowLeft: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center', marginRight: 8 },
+  goalRowHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 2 },
+  goalRowLeft: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center', marginRight: 8, alignSelf: 'flex-start' },
   goalRowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 24 },
-  goalRowTitle: { flex: 1, fontSize: 14, fontWeight: '800', color: colors.text, lineHeight: 20 },
-  goalRowMeta: { fontSize: 11, fontWeight: '700', color: colors.textMuted },
+  goalRowTitle: { fontSize: 14, fontWeight: '800', color: colors.text, lineHeight: 20 },
+  goalRowMeta: { fontSize: 11, fontWeight: '700', color: colors.textMuted, marginTop: 2 },
   tabRow: { flexDirection: 'row', gap: 6, marginBottom: 12 },
   tab: { flex: 1, paddingVertical: 8, paddingHorizontal: 6, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, alignItems: 'center' },
   tabLabel: { fontSize: 12.5, fontWeight: '900', color: colors.text },
