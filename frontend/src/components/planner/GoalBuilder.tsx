@@ -1,16 +1,13 @@
 /**
- * GoalBuilder — the guided, step-by-step goal-setting flow for the Monthly
- * Goal Planner. Replaces the old "fill each box in" 6-cell grid.
+ * GoalBuilder: the Goals section of the Monthly Goal Planner, on one page
+ * (the Owner, 13 Nov 2026). The intro (why goals matter, KPIs vs Rocks, SMART)
+ * folds open at the top, open the first time. Below it the KPIs box sits above
+ * the Rocks box, each split into 1 month and 3 months; every goal is Business
+ * or Personal. The 6-month vision is the long term, at the bottom.
  *
- * It teaches the org's methodology first (why goals matter → KPIs vs Rocks →
- * SMART), then walks the user through picking 4–5 KPIs (each a number + a
- * deadline + a reward) and 2–3 Rocks (did-I/didn't-I tasks). All edits flow up
- * through `onChange` into the planner draft, which autosaves.
- *
- * Data lives in `goals` (v2 shape): { version, kpis[], rocks[], vision }.
- * Teaching steps are shown once (AsyncStorage flag) with a "Replay" link.
- * When `canEdit` is false (locked / someone else's planner) this renders a
- * read-only summary only.
+ * Data lives in `goals` (v2 shape): { version, kpis[], rocks[], vision }, and
+ * every edit flows up through `onChange` into the planner draft (autosaves).
+ * When `canEdit` is false (locked / someone else's planner) it's read-only.
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
@@ -69,9 +66,6 @@ const emptyGoals = (): GoalsV2 => ({ version: 2, kpis: [], rocks: [], vision: ''
 // KPI count → recommended Rock count (4 KPIs → 3 rocks, 5+ → 2). 7 total.
 const recommendedRocks = (kpiCount: number) => (kpiCount >= 5 ? 2 : 3);
 
-// Steps: 0-2 teach, 3 pick KPIs, 4 pick Rocks, 5 review.
-const FIRST_BUILD_STEP = 3;
-const LAST_STEP = 5;
 
 interface Props {
   goals: GoalsV2 | any;
@@ -97,152 +91,225 @@ export function GoalBuilder({ goals: goalsIn, canEdit, onChange }: Props) {
   const kpiMenu: string[] = menuQ.data?.kpis || [];
   const rockMenu: string[] = menuQ.data?.rock_suggestions || [];
 
-  // Mode: show the compact summary by default when goals already exist; open
-  // the wizard for a fresh planner or when the user taps Edit.
-  const [editing, setEditing] = useState(!hasContent && canEdit);
-  const [step, setStep] = useState(FIRST_BUILD_STEP);
-
-  // Decide the opening step once the tutorial flag resolves. Returning users
-  // (or planners already in progress) skip straight to building.
+  // One page (the Owner, 13 Nov 2026): the intro, then the KPIs box above the
+  // Rocks box, each split into 1 month and 3 months, then the 6-month vision.
+  // The intro starts open until they've seen it once.
+  const [introOpen, setIntroOpen] = useState(false);
   useEffect(() => {
     let alive = true;
     AsyncStorage.getItem(TUTORIAL_FLAG)
-      .then((seen) => {
-        if (!alive) return;
-        setStep(seen || hasContent ? FIRST_BUILD_STEP : 0);
-      })
-      .catch(() => setStep(hasContent ? FIRST_BUILD_STEP : 0));
+      .then((seen) => { if (alive) setIntroOpen(!seen && !hasContent && canEdit); })
+      .catch(() => {});
     return () => { alive = false; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const markTutorialSeen = () => { AsyncStorage.setItem(TUTORIAL_FLAG, '1').catch(() => {}); };
+  const toggleIntro = () => {
+    haptics.tap();
+    if (introOpen) AsyncStorage.setItem(TUTORIAL_FLAG, '1').catch(() => {});
+    setIntroOpen(!introOpen);
+  };
 
   // ── Mutators (write the whole goals object up) ──────────────────────────
   const commit = (next: Partial<GoalsV2>) => onChange({ ...emptyGoals(), ...goals, ...next });
   const setKpis = (kpis: Kpi[]) => commit({ kpis });
   const setRocks = (rocks: Rock[]) => commit({ rocks });
 
-  const addKpi = (name: string) => {
+  const addKpi = (name: string, horizon: Horizon) => {
     const nm = name.trim();
     if (!nm) return;
-    if (goals.kpis.some((k) => k.name.toLowerCase() === nm.toLowerCase())) return;
+    if (goals.kpis.some((k) => k.name.toLowerCase() === nm.toLowerCase() && k.horizon === horizon)) return;
     haptics.light();
-    setKpis([...goals.kpis, { id: genId(), name: nm, target: '', horizon: 'short', area: 'business', reward: '', smart_ok: false }]);
+    setKpis([...goals.kpis, { id: genId(), name: nm, target: '', horizon, area: 'business', reward: '', smart_ok: false }]);
   };
   const updateKpi = (id: string, patch: Partial<Kpi>) =>
     setKpis(goals.kpis.map((k) => (k.id === id ? { ...k, ...patch } : k)));
   const removeKpi = (id: string) => { haptics.light(); setKpis(goals.kpis.filter((k) => k.id !== id)); };
 
-  const addRock = (name: string) => {
+  const addRock = (name: string, horizon: Horizon) => {
     const nm = name.trim();
     if (!nm) return;
-    if (goals.rocks.some((r) => r.name.toLowerCase() === nm.toLowerCase())) return;
+    if (goals.rocks.some((r) => r.name.toLowerCase() === nm.toLowerCase() && r.horizon === horizon)) return;
     haptics.light();
-    setRocks([...goals.rocks, { id: genId(), name: nm, horizon: 'short', area: 'business', reward: '', done: false }]);
+    setRocks([...goals.rocks, { id: genId(), name: nm, horizon, area: 'business', reward: '', done: false }]);
   };
   const updateRock = (id: string, patch: Partial<Rock>) =>
     setRocks(goals.rocks.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   const removeRock = (id: string) => { haptics.light(); setRocks(goals.rocks.filter((r) => r.id !== id)); };
 
-  // ── Read-only / summary render ──────────────────────────────────────────
-  if (!editing) {
-    return (
-      <GoalSummary
-        goals={goals}
-        canEdit={canEdit}
-        onEdit={() => { setEditing(true); setStep(FIRST_BUILD_STEP); }}
-        onToggleDone={canEdit ? (id: string, done: boolean) => updateRock(id, { done }) : undefined}
-        s={s}
-        colors={colors}
-      />
-    );
-  }
-
-  // ── Wizard ──────────────────────────────────────────────────────────────
+  // 1 month and 3 months always; 6 months only for goals set that way before.
+  const terms = (list: { horizon: Horizon }[]): Horizon[] =>
+    ['short', 'medium', ...(list.some((x) => x.horizon === 'long') ? ['long' as Horizon] : [])] as Horizon[];
   const kpiCount = goals.kpis.length;
-  const recRocks = recommendedRocks(kpiCount);
-
-  const goNext = () => {
-    haptics.tap();
-    if (step === 2) markTutorialSeen();
-    setStep((v) => Math.min(LAST_STEP, v + 1));
-  };
-  const goBack = () => { haptics.tap(); setStep((v) => Math.max(0, v - 1)); };
-  const finish = () => { haptics.success?.(); setEditing(false); };
 
   return (
     <View>
-      {/* Progress dots */}
-      <View style={s.dots}>
-        {[0, 1, 2, 3, 4, 5].map((i) => (
-          <View key={i} style={[s.dot, i === step && s.dotActive, i < step && s.dotDone]} />
+      {/* The intro */}
+      <TouchableOpacity style={s.introHead} onPress={toggleIntro} activeOpacity={0.7}>
+        <Ionicons name="bulb-outline" size={16} color={colors.primary} />
+        <Text style={s.introHeadText}>How goals work</Text>
+        <Ionicons name={introOpen ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textMuted} />
+      </TouchableOpacity>
+      {introOpen && (
+        <View style={{ gap: 14, marginBottom: 14 }}>
+          <StepWhy s={s} colors={colors} />
+          <StepTypes s={s} colors={colors} />
+          <StepSmart s={s} colors={colors} />
+        </View>
+      )}
+
+      {/* KPIs */}
+      <View style={[s.goalBoxCard, { borderColor: colors.primary }]}>
+        <View style={s.typeHead}>
+          <Ionicons name="stats-chart" size={16} color={colors.primary} />
+          <Text style={[s.typeTitle, { color: colors.primary, flex: 1 }]}>KPIs · the numbers</Text>
+          <Text style={[s.hint, { color: kpiCount >= 4 && kpiCount <= 5 ? colors.green : colors.textMuted }]}>{kpiCount} · aim for 4–5</Text>
+        </View>
+        {terms(goals.kpis).map((h) => (
+          <TermBlock
+            key={h} s={s} colors={colors} label={horizonLabel(h)} canEdit={canEdit}
+            menu={kpiMenu} loading={menuQ.isLoading}
+            chosen={goals.kpis.filter((k) => k.horizon === h).map((k) => k.name)}
+            placeholder="Add your own KPI…"
+            onAdd={(nm: string) => addKpi(nm, h)}
+          >
+            {goals.kpis.filter((k) => k.horizon === h).map((k) => (
+              <KpiRow key={k.id} s={s} colors={colors} k={k} canEdit={canEdit}
+                onUpdate={(p: Partial<Kpi>) => updateKpi(k.id, p)} onRemove={() => removeKpi(k.id)} />
+            ))}
+          </TermBlock>
         ))}
       </View>
 
-      {step === 0 && <StepWhy s={s} colors={colors} />}
-      {step === 1 && <StepTypes s={s} colors={colors} />}
-      {step === 2 && <StepSmart s={s} colors={colors} />}
+      {/* Rocks */}
+      <View style={[s.goalBoxCard, { borderColor: colors.green }]}>
+        <View style={s.typeHead}>
+          <Ionicons name="checkbox" size={16} color={colors.green} />
+          <Text style={[s.typeTitle, { color: colors.green, flex: 1 }]}>Rocks · did I / didn't I</Text>
+          <Text style={s.hint}>{goals.rocks.length} · aim for {kpiCount >= 4 ? recommendedRocks(kpiCount) : '2–3'}</Text>
+        </View>
+        {terms(goals.rocks).map((h) => (
+          <TermBlock
+            key={h} s={s} colors={colors} label={horizonLabel(h)} canEdit={canEdit}
+            menu={rockMenu} loading={menuQ.isLoading}
+            chosen={goals.rocks.filter((r) => r.horizon === h).map((r) => r.name)}
+            placeholder="Add your own Rock…"
+            onAdd={(nm: string) => addRock(nm, h)}
+          >
+            {goals.rocks.filter((r) => r.horizon === h).map((r) => (
+              <RockRow key={r.id} s={s} colors={colors} r={r} canEdit={canEdit}
+                onUpdate={(p: Partial<Rock>) => updateRock(r.id, p)} onRemove={() => removeRock(r.id)} />
+            ))}
+          </TermBlock>
+        ))}
+      </View>
 
-      {step === 3 && (
-        <StepPickKpis
-          s={s} colors={colors}
-          kpis={goals.kpis} menu={kpiMenu} loading={menuQ.isLoading}
-          onAdd={addKpi} onUpdate={updateKpi} onRemove={removeKpi}
-        />
-      )}
-      {step === 4 && (
-        <StepPickRocks
-          s={s} colors={colors}
-          rocks={goals.rocks} menu={rockMenu} loading={menuQ.isLoading}
-          kpiCount={kpiCount} recRocks={recRocks}
-          onAdd={addRock} onUpdate={updateRock} onRemove={removeRock}
-        />
-      )}
-      {step === 5 && (
-        <StepReview
-          s={s} colors={colors} goals={goals}
-          onToggleSmart={(id: string, v: boolean) => updateKpi(id, { smart_ok: v })}
-          onVision={(v: string) => commit({ vision: v })}
-        />
-      )}
+      {/* Long term */}
+      <Text style={[s.pickLabel, { marginTop: 4 }]}>6-month vision</Text>
+      <TextInput
+        style={[s.visionInput, !canEdit && { opacity: 0.6 }]}
+        multiline
+        editable={canEdit}
+        placeholder="Where do you want to be in 6 months?" placeholderTextColor={colors.textMuted}
+        value={goals.vision}
+        onChangeText={(v) => commit({ vision: v })}
+      />
+    </View>
+  );
+}
 
-      {/* Nav */}
-      <View style={s.nav}>
-        {step > 0 ? (
-          <TouchableOpacity style={s.navBack} onPress={goBack}>
-            <Ionicons name="chevron-back" size={16} color={colors.textSecondary} />
-            <Text style={s.navBackText}>Back</Text>
-          </TouchableOpacity>
-        ) : (
-          <View style={{ flex: 1 }} />
-        )}
-
-        {step < LAST_STEP ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            {step < FIRST_BUILD_STEP && (
-              <TouchableOpacity onPress={() => { haptics.tap(); markTutorialSeen(); setStep(FIRST_BUILD_STEP); }}>
-                <Text style={s.skipText}>Skip intro</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity style={s.navNext} onPress={goNext}>
-              <Text style={s.navNextText}>{step === 2 ? 'Start building' : 'Next'}</Text>
-              <Ionicons name="chevron-forward" size={16} color={colors.onPrimary} />
+// ── One term inside a box: its goals, then add your own or tap a suggestion ──
+function TermBlock({ s, colors, label, canEdit, menu, loading, chosen, placeholder, onAdd, children }: any) {
+  const [showSugg, setShowSugg] = useState(false);
+  const rows = React.Children.toArray(children);
+  return (
+    <View style={s.termBlock}>
+      <Text style={s.termLabel}>{label.toUpperCase()}</Text>
+      {rows.length ? rows : <Text style={[s.hint, { marginBottom: 4 }]}>{canEdit ? 'Nothing yet.' : '—'}</Text>}
+      {canEdit && (
+        <>
+          <AddOwn s={s} colors={colors} placeholder={placeholder} onAdd={onAdd} />
+          {menu.length > 0 && (
+            <TouchableOpacity onPress={() => { haptics.tap(); setShowSugg(!showSugg); }} style={{ marginTop: 6 }}>
+              <Text style={[s.skipText, { color: colors.primary }]}>{showSugg ? 'Hide suggestions' : 'Suggestions'}</Text>
             </TouchableOpacity>
-          </View>
-        ) : (
-          <TouchableOpacity style={s.navNext} onPress={finish}>
-            <Ionicons name="checkmark" size={16} color={colors.onPrimary} />
-            <Text style={s.navNextText}>Done</Text>
+          )}
+          {showSugg && <PickerChips s={s} colors={colors} menu={menu} chosen={chosen} loading={loading} onPick={onAdd} />}
+        </>
+      )}
+    </View>
+  );
+}
+
+function KpiRow({ s, colors, k, canEdit, onUpdate, onRemove }: any) {
+  return (
+    <View style={s.goalRow}>
+      <View style={s.goalRowHead}>
+        <TouchableOpacity disabled={!canEdit} onPress={() => onUpdate({ smart_ok: !k.smart_ok })} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+          <Ionicons name={k.smart_ok ? 'checkbox' : 'square-outline'} size={18} color={k.smart_ok ? colors.green : colors.textMuted} />
+        </TouchableOpacity>
+        <Text style={[s.goalName, { flex: 1 }]}>{k.name}</Text>
+        {canEdit && (
+          <TouchableOpacity onPress={onRemove} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="close-circle" size={18} color={colors.textMuted} />
           </TouchableOpacity>
         )}
       </View>
+      <View style={s.fieldRow}>
+        <Text style={s.fieldLabel}>Target</Text>
+        <TextInput
+          style={[s.targetInput, !canEdit && { opacity: 0.6 }]}
+          editable={canEdit}
+          placeholder="e.g. 40" placeholderTextColor={colors.textMuted}
+          keyboardType="numeric"
+          value={k.target}
+          onChangeText={(v) => onUpdate({ target: v })}
+        />
+        {canEdit && <HorizonToggle s={s} colors={colors} value={k.horizon} onChange={(h: Horizon) => onUpdate({ horizon: h })} />}
+      </View>
+      {canEdit
+        ? <AreaToggle s={s} colors={colors} value={k.area} onChange={(a: Area) => onUpdate({ area: a })} />
+        : <Text style={s.sumSub}>{areaLabel(k.area)}</Text>}
+      {(canEdit || !!k.reward) && (
+        <TextInput
+          style={s.rewardInput}
+          editable={canEdit}
+          placeholder="Reward if you hit it (optional)" placeholderTextColor={colors.textMuted}
+          value={k.reward}
+          onChangeText={(v) => onUpdate({ reward: v })}
+        />
+      )}
+      {canEdit && <Text style={[s.hint, { marginTop: 4, fontSize: 11 }]}>Tick the box once it's SMART.</Text>}
+    </View>
+  );
+}
 
-      {/* Replay tutorial link on build steps */}
-      {step >= FIRST_BUILD_STEP && (
-        <TouchableOpacity style={s.replay} onPress={() => { haptics.tap(); setStep(0); }}>
-          <Ionicons name="refresh" size={12} color={colors.textMuted} />
-          <Text style={s.replayText}>Replay the intro</Text>
+function RockRow({ s, colors, r, canEdit, onUpdate, onRemove }: any) {
+  return (
+    <View style={s.goalRow}>
+      <View style={s.goalRowHead}>
+        <TouchableOpacity disabled={!canEdit} onPress={() => onUpdate({ done: !r.done })} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+          <Ionicons name={r.done ? 'checkmark-circle' : 'ellipse-outline'} size={19} color={r.done ? colors.green : colors.textMuted} />
         </TouchableOpacity>
+        <Text style={[s.goalName, { flex: 1 }, r.done && { textDecorationLine: 'line-through', color: colors.textMuted }]}>{r.name}</Text>
+        {canEdit && (
+          <TouchableOpacity onPress={onRemove} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+          </TouchableOpacity>
+        )}
+      </View>
+      {canEdit ? (
+        <View style={[s.fieldRow, { flexWrap: 'wrap' }]}>
+          <HorizonToggle s={s} colors={colors} value={r.horizon} onChange={(h: Horizon) => onUpdate({ horizon: h })} />
+          <AreaToggle s={s} colors={colors} value={r.area} onChange={(a: Area) => onUpdate({ area: a })} />
+        </View>
+      ) : <Text style={s.sumSub}>{areaLabel(r.area)}</Text>}
+      {(canEdit || !!r.reward) && (
+        <TextInput
+          style={s.rewardInput}
+          editable={canEdit}
+          placeholder="Reward if you do it (optional)" placeholderTextColor={colors.textMuted}
+          value={r.reward}
+          onChangeText={(v) => onUpdate({ reward: v })}
+        />
       )}
     </View>
   );
@@ -252,7 +319,7 @@ export function GoalBuilder({ goals: goalsIn, canEdit, onChange }: Props) {
 function StepWhy({ s, colors }: any) {
   return (
     <View>
-      <Text style={s.stepKicker}>STEP 1 OF 3 · WHY</Text>
+      <Text style={s.stepKicker}>WHY</Text>
       <Text style={s.stepTitle}>Why bother with goals?</Text>
       <Text style={s.body}>
         Working with no goals is like watching a match with no goalposts — 23 people running
@@ -263,10 +330,9 @@ function StepWhy({ s, colors }: any) {
         <Text style={s.calloutBody}>
           Same intention — but only one tells you what to do on Monday morning. A goal with a
           number and a deadline pulls you forward; a vague wish just sits there. That’s the
-          difference the rest of this builder makes to your month.
+          difference setting real goals makes to your month.
         </Text>
       </View>
-      <Text style={s.hint}>Next we'll cover the two kinds of goals you'll set.</Text>
     </View>
   );
 }
@@ -274,7 +340,7 @@ function StepWhy({ s, colors }: any) {
 function StepTypes({ s, colors }: any) {
   return (
     <View>
-      <Text style={s.stepKicker}>STEP 2 OF 3 · THE TWO TYPES</Text>
+      <Text style={s.stepKicker}>THE TWO TYPES</Text>
       <Text style={s.stepTitle}>KPIs vs Rocks</Text>
 
       <View style={[s.typeCard, { borderColor: colors.primary }]}>
@@ -318,7 +384,7 @@ function StepSmart({ s, colors }: any) {
   ];
   return (
     <View>
-      <Text style={s.stepKicker}>STEP 3 OF 3 · THE TEST</Text>
+      <Text style={s.stepKicker}>THE TEST</Text>
       <Text style={s.stepTitle}>Make every goal SMART</Text>
       {rows.map(([l, t, d]) => (
         <View key={l} style={s.smartRow}>
@@ -386,7 +452,7 @@ function AddOwn({ s, colors, placeholder, onAdd }: any) {
 function HorizonToggle({ s, colors, value, onChange }: any) {
   return (
     <View style={s.horizonRow}>
-      {HORIZONS.map((h) => {
+      {HORIZONS.filter((h) => h.key !== 'long' || value === 'long').map((h) => {
         const sel = value === h.key;
         return (
           <TouchableOpacity
@@ -402,204 +468,12 @@ function HorizonToggle({ s, colors, value, onChange }: any) {
   );
 }
 
-function StepPickKpis({ s, colors, kpis, menu, loading, onAdd, onUpdate, onRemove }: any) {
-  const count = kpis.length;
-  const tone = count >= 4 && count <= 5 ? colors.green : colors.yellow;
-  return (
-    <View>
-      <Text style={s.stepKicker}>YOUR NUMBERS</Text>
-      <Text style={s.stepTitle}>Pick your KPIs</Text>
-      <Text style={[s.counter, { color: tone }]}>{count} selected · aim for 4–5</Text>
-
-      {kpis.map((k: Kpi) => (
-        <View key={k.id} style={s.goalRow}>
-          <View style={s.goalRowHead}>
-            <Text style={s.goalName}>{k.name}</Text>
-            <TouchableOpacity onPress={() => onRemove(k.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close-circle" size={18} color={colors.textMuted} />
-            </TouchableOpacity>
-          </View>
-          <View style={s.fieldRow}>
-            <Text style={s.fieldLabel}>Target</Text>
-            <TextInput
-              style={s.targetInput}
-              placeholder="e.g. 40" placeholderTextColor={colors.textMuted}
-              keyboardType="numeric"
-              value={k.target}
-              onChangeText={(v) => onUpdate(k.id, { target: v })}
-            />
-            <HorizonToggle s={s} colors={colors} value={k.horizon} onChange={(h: Horizon) => onUpdate(k.id, { horizon: h })} />
-          </View>
-          <AreaToggle s={s} colors={colors} value={k.area} onChange={(a: Area) => onUpdate(k.id, { area: a })} />
-          <TextInput
-            style={s.rewardInput}
-            placeholder="Reward if you hit it (optional)" placeholderTextColor={colors.textMuted}
-            value={k.reward}
-            onChangeText={(v) => onUpdate(k.id, { reward: v })}
-          />
-        </View>
-      ))}
-
-      <Text style={s.pickLabel}>Tap to add</Text>
-      <PickerChips s={s} colors={colors} menu={menu} chosen={kpis.map((k: Kpi) => k.name)} loading={loading} onPick={onAdd} />
-      <AddOwn s={s} colors={colors} placeholder="Add your own KPI…" onAdd={onAdd} />
-    </View>
-  );
-}
-
-function StepPickRocks({ s, colors, rocks, menu, loading, kpiCount, recRocks, onAdd, onUpdate, onRemove }: any) {
-  const count = rocks.length;
-  const tone = count === recRocks ? colors.green : colors.yellow;
-  return (
-    <View>
-      <Text style={s.stepKicker}>YOUR TASKS</Text>
-      <Text style={s.stepTitle}>Pick your Rocks</Text>
-      <Text style={[s.counter, { color: tone }]}>
-        {count} selected · {kpiCount >= 4 ? `you picked ${kpiCount} KPIs, aim for ${recRocks}` : 'aim for 2–3'}
-      </Text>
-
-      {rocks.map((r: Rock) => (
-        <View key={r.id} style={s.goalRow}>
-          <View style={s.goalRowHead}>
-            <Text style={s.goalName}>{r.name}</Text>
-            <TouchableOpacity onPress={() => onRemove(r.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close-circle" size={18} color={colors.textMuted} />
-            </TouchableOpacity>
-          </View>
-          <View style={s.fieldRow}>
-            <Text style={s.fieldLabel}>By</Text>
-            <HorizonToggle s={s} colors={colors} value={r.horizon} onChange={(h: Horizon) => onUpdate(r.id, { horizon: h })} />
-          </View>
-          <AreaToggle s={s} colors={colors} value={r.area} onChange={(a: Area) => onUpdate(r.id, { area: a })} />
-          <TextInput
-            style={s.rewardInput}
-            placeholder="Reward if you do it (optional)" placeholderTextColor={colors.textMuted}
-            value={r.reward}
-            onChangeText={(v) => onUpdate(r.id, { reward: v })}
-          />
-        </View>
-      ))}
-
-      <Text style={s.pickLabel}>Tap to add</Text>
-      <PickerChips s={s} colors={colors} menu={menu} chosen={rocks.map((r: Rock) => r.name)} loading={loading} onPick={onAdd} />
-      <AddOwn s={s} colors={colors} placeholder="Add your own Rock…" onAdd={onAdd} />
-    </View>
-  );
-}
-
-function StepReview({ s, colors, goals, onToggleSmart, onVision }: any) {
-  const total = goals.kpis.length + goals.rocks.length;
-  return (
-    <View>
-      <Text style={s.stepKicker}>REVIEW · {total} GOAL{total === 1 ? '' : 'S'}</Text>
-      <Text style={s.stepTitle}>Tick each one that's SMART</Text>
-      <Text style={s.hint}>Specific, Measurable, Attainable, Realistic, Time-based.</Text>
-
-      {goals.kpis.map((k: Kpi) => (
-        <TouchableOpacity key={k.id} style={s.reviewRow} onPress={() => onToggleSmart(k.id, !k.smart_ok)}>
-          <Ionicons name={k.smart_ok ? 'checkbox' : 'square-outline'} size={20} color={k.smart_ok ? colors.green : colors.textMuted} />
-          <View style={{ flex: 1 }}>
-            <Text style={s.reviewName}>
-              <Text style={{ color: colors.primary }}>KPI</Text>  {k.name}
-              {k.target ? <Text style={s.reviewMeta}>  → {k.target}</Text> : null}
-            </Text>
-            <Text style={s.reviewSub}>{areaLabel(k.area)} · {horizonLabel(k.horizon)}{k.reward ? ` · 🎁 ${k.reward}` : ''}</Text>
-          </View>
-        </TouchableOpacity>
-      ))}
-      {goals.rocks.map((r: Rock) => (
-        <View key={r.id} style={s.reviewRow}>
-          <Ionicons name="ellipse" size={12} color={colors.green} style={{ marginLeft: 4, marginRight: 4 }} />
-          <View style={{ flex: 1 }}>
-            <Text style={s.reviewName}><Text style={{ color: colors.green }}>ROCK</Text>  {r.name}</Text>
-            <Text style={s.reviewSub}>{areaLabel(r.area)} · {horizonLabel(r.horizon)}{r.reward ? ` · 🎁 ${r.reward}` : ''}</Text>
-          </View>
-        </View>
-      ))}
-
-      <Text style={[s.pickLabel, { marginTop: 14 }]}>6-month vision (optional)</Text>
-      <TextInput
-        style={s.visionInput}
-        multiline
-        placeholder="Where do you want to be in 6 months?" placeholderTextColor={colors.textMuted}
-        value={goals.vision}
-        onChangeText={onVision}
-      />
-    </View>
-  );
-}
-
-// ── Compact summary (default view once goals exist / read-only) ────────────
-function GoalSummary({ goals, canEdit, onEdit, onToggleDone, s, colors }: any) {
-  const total = goals.kpis.length + goals.rocks.length;
-  if (total === 0 && !goals.vision) {
-    return (
-      <View style={s.emptySummary}>
-        <Text style={s.hint}>No goals set for this month yet.</Text>
-        {canEdit && (
-          <TouchableOpacity style={s.editBtn} onPress={onEdit}>
-            <Ionicons name="flag" size={14} color={colors.onPrimary} />
-            <Text style={s.editBtnText}>Set your goals</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    );
-  }
-  return (
-    <View>
-      {(['business', 'personal'] as Area[]).map((area) => {
-        const any = goals.kpis.some((k: Kpi) => (k.area || 'business') === area) || goals.rocks.some((r: Rock) => (r.area || 'business') === area);
-        if (!any) return null;
-        return (
-          <View key={area}>
-            <Text style={[s.sumSub, { marginTop: 6, marginBottom: 2, fontWeight: '800' }]}>{areaLabel(area).toUpperCase()}</Text>
-      {goals.kpis.filter((k: Kpi) => (k.area || 'business') === area).map((k: Kpi) => (
-        <View key={k.id} style={s.sumRow}>
-          <View style={[s.sumTag, { backgroundColor: `${colors.primary}18` }]}><Text style={[s.sumTagText, { color: colors.primary }]}>KPI</Text></View>
-          <View style={{ flex: 1 }}>
-            <Text style={s.sumName}>{k.name}{k.target ? <Text style={s.reviewMeta}>  → {k.target}</Text> : null}</Text>
-            <Text style={s.sumSub}>{horizonLabel(k.horizon)}{k.reward ? ` · 🎁 ${k.reward}` : ''}</Text>
-          </View>
-        </View>
-      ))}
-      {goals.rocks.filter((r: Rock) => (r.area || 'business') === area).map((r: Rock) => (
-        <TouchableOpacity
-          key={r.id}
-          style={s.sumRow}
-          activeOpacity={onToggleDone ? 0.6 : 1}
-          onPress={onToggleDone ? () => onToggleDone(r.id, !r.done) : undefined}
-        >
-          <View style={[s.sumTag, { backgroundColor: `${colors.green}22` }]}><Text style={[s.sumTagText, { color: colors.green }]}>ROCK</Text></View>
-          <View style={{ flex: 1 }}>
-            <Text style={[s.sumName, r.done && { textDecorationLine: 'line-through', color: colors.textMuted }]}>{r.name}</Text>
-            <Text style={s.sumSub}>{horizonLabel(r.horizon)}{r.reward ? ` · 🎁 ${r.reward}` : ''}</Text>
-          </View>
-          {onToggleDone && (
-            <Ionicons name={r.done ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={r.done ? colors.green : colors.textMuted} />
-          )}
-        </TouchableOpacity>
-      ))}
-          </View>
-        );
-      })}
-      {!!goals.vision && (
-        <View style={s.visionSum}>
-          <Text style={s.sumSub}>6-MONTH VISION</Text>
-          <Text style={s.sumName}>{goals.vision}</Text>
-        </View>
-      )}
-      {canEdit && (
-        <TouchableOpacity style={s.editBtn} onPress={onEdit}>
-          <Ionicons name="create-outline" size={14} color={colors.onPrimary} />
-          <Text style={s.editBtnText}>Edit goals</Text>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
-}
-
-// ── Styles ──────────────────────────────────────────────────────────────
 const createS = (colors: any) => StyleSheet.create({
+  introHead: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, marginBottom: 12 },
+  introHeadText: { flex: 1, fontSize: 13.5, fontWeight: '800', color: colors.text },
+  goalBoxCard: { borderWidth: 1.5, borderRadius: 14, padding: 12, marginBottom: 14, backgroundColor: colors.surface },
+  termBlock: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border },
+  termLabel: { fontSize: 11.5, fontWeight: '900', letterSpacing: 0.6, color: colors.textSecondary, marginBottom: 6 },
   dots: { flexDirection: 'row', gap: 6, justifyContent: 'center', marginBottom: 14 },
   dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.border },
   dotActive: { backgroundColor: colors.primary, width: 20 },

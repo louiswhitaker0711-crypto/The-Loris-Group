@@ -52,49 +52,35 @@ const goalCell = (label: string, value: string) => `
 `;
 
 // v2 goals (structured KPIs + Rocks). Legacy planners use the 6-cell grid.
-const HORIZON_PDF: Record<string, string> = { short: '1 mo', medium: '3 mo', long: '6 mo' };
-
+// Goals as in the app: KPIs above Rocks, each by 1 month / 3 months.
+const TERM_PDF: Record<string, string> = { short: '1 month', medium: '3 months', long: '6 months' };
 const goalsV2Html = (goals: any): string => {
-  const kpiBody = (goals.kpis || []).filter((k: any) => k && k.name).map((k: any) => `
-    <tr>
-      <td>${escapeHtml(k.name)}</td>
-      <td class="r">${k.target ? escapeHtml(String(k.target)) : '—'}</td>
-      <td>${k.area === 'personal' ? 'Personal' : 'Business'} · ${HORIZON_PDF[k.horizon] || '1 mo'}</td>
-      <td>${k.reward ? escapeHtml(k.reward) : '—'}</td>
-    </tr>`).join('');
-  const rockBody = (goals.rocks || []).filter((r: any) => r && r.name).map((r: any) => `
-    <tr>
-      <td class="ck">${r.done ? '✓' : '·'}</td>
-      <td>${escapeHtml(r.name)}</td>
-      <td>${r.area === 'personal' ? 'Personal' : 'Business'} · ${HORIZON_PDF[r.horizon] || '1 mo'}</td>
-      <td>${r.reward ? escapeHtml(r.reward) : '—'}</td>
-    </tr>`).join('');
-  const kpiTable = kpiBody ? `
-    <div class="subsection">
-      <h3>KPIs — the numbers</h3>
-      <table class="data">
-        <thead><tr><th>KPI</th><th class="r">Target</th><th>By</th><th>Reward</th></tr></thead>
-        <tbody>${kpiBody}</tbody>
-      </table>
-    </div>` : '';
-  const rockTable = rockBody ? `
-    <div class="subsection">
-      <h3>Rocks — did I / didn't I</h3>
-      <table class="data">
-        <thead><tr><th class="ck">Done</th><th>Rock</th><th>By</th><th>Reward</th></tr></thead>
-        <tbody>${rockBody}</tbody>
-      </table>
-    </div>` : '';
-  const visionHtml = goals.vision
-    ? `<div class="subsection"><h3>6-Month Vision</h3><div class="goal-value">${nl2br(goals.vision)}</div></div>`
-    : '';
-  const inner = kpiTable + rockTable + visionHtml;
+  const area = (x: any) => (x.area === 'personal' ? 'Personal' : 'Business');
+  const block = (title: string, list: any[], row: (x: any) => string, head: string) => {
+    const terms = ['short', 'medium', ...(list.some((x) => x.horizon === 'long') ? ['long'] : [])];
+    const body = terms.map((t) => {
+      const items = list.filter((x) => x && x.name && (x.horizon || 'short') === t);
+      return `<tr><td colspan="4" style="background:#f4f8fc;font-weight:800">${TERM_PDF[t]}</td></tr>`
+        + (items.length ? items.map(row).join('') : '<tr><td colspan="4" class="muted">—</td></tr>');
+    }).join('');
+    return `<div class="subsection"><h3>${title}</h3><table class="data"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
+  };
+  const kpis = block('KPIs · the numbers', goals.kpis || [], (k) => `
+      <tr><td>${k.smart_ok ? '✓ ' : ''}${escapeHtml(k.name)}</td><td class="r">${k.target ? escapeHtml(String(k.target)) : '—'}</td><td>${area(k)}</td><td>${k.reward ? escapeHtml(k.reward) : '—'}</td></tr>`,
+    '<tr><th>KPI</th><th class="r">Target</th><th>Business / Personal</th><th>Reward</th></tr>');
+  const rocks = block("Rocks · did I / didn't I", goals.rocks || [], (r) => `
+      <tr><td>${r.done ? '✓ ' : ''}${escapeHtml(r.name)}</td><td></td><td>${area(r)}</td><td>${r.reward ? escapeHtml(r.reward) : '—'}</td></tr>`,
+    '<tr><th>Rock</th><th></th><th>Business / Personal</th><th>Reward</th></tr>');
   return `
     <section>
       <h2>Goals</h2>
-      ${inner || '<div class="goal-value"><span class="muted">No goals set.</span></div>'}
+      ${kpis}
+      ${rocks}
+      ${goals.vision ? `<p class="meta" style="margin-top:8px"><strong>6-month vision:</strong> ${escapeHtml(goals.vision)}</p>` : ''}
     </section>`;
 };
+
+
 
 const planningTable = (title: string, rows: any[]) => {
   const body = (rows || []).filter((r) => r && (r.topic || r.who || r.when))
