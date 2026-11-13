@@ -1,6 +1,6 @@
 /**
  * Monthly Targets block — renders inside the Monthly Planner's "Targets"
- * section. Lets the owner set two numeric targets (Monthly Sales Target,
+ * section. Lets the owner set two numeric targets (Monthly Sign Up Focus,
  * Personal Best Target) and shows live progress bars that auto-pull the
  * actual sales count for the planner's calendar month from the bells data.
  */
@@ -49,10 +49,10 @@ export function MonthlyTargetsBlock({
         <Text style={styles.actualValue}>{q.isLoading ? '…' : actual}</Text>
       </View>
 
-      {/* Monthly Sales Focus — the owner's monthly tracker (his standard: 100) */}
+      {/* Monthly Sign Up Focus: the monthly target (the standard is 100) */}
       <View style={styles.targetRow}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.label}>Monthly Sales Focus</Text>
+          <Text style={styles.label}>Monthly Sign Up Focus</Text>
           <Text style={styles.helperRow}>
             <Text style={styles.helperBold}>{actual}</Text>
             <Text style={styles.helper}> / </Text>

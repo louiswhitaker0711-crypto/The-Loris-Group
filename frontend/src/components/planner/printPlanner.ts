@@ -59,14 +59,14 @@ const goalsV2Html = (goals: any): string => {
     <tr>
       <td>${escapeHtml(k.name)}</td>
       <td class="r">${k.target ? escapeHtml(String(k.target)) : '—'}</td>
-      <td>${HORIZON_PDF[k.horizon] || '1 mo'}</td>
+      <td>${k.area === 'personal' ? 'Personal' : 'Business'} · ${HORIZON_PDF[k.horizon] || '1 mo'}</td>
       <td>${k.reward ? escapeHtml(k.reward) : '—'}</td>
     </tr>`).join('');
   const rockBody = (goals.rocks || []).filter((r: any) => r && r.name).map((r: any) => `
     <tr>
       <td class="ck">${r.done ? '✓' : '·'}</td>
       <td>${escapeHtml(r.name)}</td>
-      <td>${HORIZON_PDF[r.horizon] || '1 mo'}</td>
+      <td>${r.area === 'personal' ? 'Personal' : 'Business'} · ${HORIZON_PDF[r.horizon] || '1 mo'}</td>
       <td>${r.reward ? escapeHtml(r.reward) : '—'}</td>
     </tr>`).join('');
   const kpiTable = kpiBody ? `
@@ -149,17 +149,22 @@ export interface PlannerHtmlOpts {
   ownerName: string;
   month: string;        // YYYY-MM
   draft: any;           // shape from /api/monthly-planners/{month}
-  traits: string[];     // gap analysis trait list (rendered as score table)
-  showGap: boolean;     // hide for trainees
+  traits: string[];     // Leader Gap Analysis topics
+  fieldTraits?: string[]; // Gap Analysis topics
+  showGap: boolean;
+  growth?: any;         // /monthly-planners/{month}/growth (sign-ups, KPIs, new starts)
 }
 
-export function buildPlannerHtml({ ownerName, month, draft, traits, showGap }: PlannerHtmlOpts): string {
+export function buildPlannerHtml({ ownerName, month, draft, traits, fieldTraits, showGap, growth }: PlannerHtmlOpts): string {
   const goals = draft?.goals || {};
   const planning = draft?.monthly_planning || {};
   const learning = draft?.learning || {};
   const budget = draft?.budget || {};
   const swot = draft?.swot || {};
   const gapScores = draft?.gap_analysis?.scores || {};
+  const fieldScores = draft?.gap_analysis?.field_scores || {};
+  const focus = draft?.focus || {};
+  const kpiGoals = draft?.kpi_goals || {};
   const targets = draft?.targets || {};
   const today = new Date().toLocaleDateString(APP_LOCALE, { month: 'long', day: 'numeric', year: 'numeric' });
 
@@ -179,9 +184,9 @@ export function buildPlannerHtml({ ownerName, month, draft, traits, showGap }: P
 
   const targetsHtml = (Number(targets.monthly_sales) > 0 || Number(targets.personal_best) > 0) ? `
     <section>
-      <h2>Targets</h2>
+      <h2>Monthly Sign Up Focus</h2>
       <div class="kpi-row">
-        <div class="kpi"><div class="kpi-label">Monthly Sales Focus</div><div class="kpi-value">${fmtNum(targets.monthly_sales)}</div></div>
+        <div class="kpi"><div class="kpi-label">Monthly Sign Up Focus</div><div class="kpi-value">${fmtNum(targets.monthly_sales)}</div></div>
         <div class="kpi"><div class="kpi-label">Personal Best Target</div><div class="kpi-value">${fmtNum(targets.personal_best)}</div></div>
       </div>
     </section>` : '';
@@ -192,15 +197,15 @@ export function buildPlannerHtml({ ownerName, month, draft, traits, showGap }: P
       <h2>Monthly Planning</h2>
       ${(salesImpacts.coach_others || salesImpacts.still_to_master) ? `
         <div class="subsection">
-          <h3>Sales Impacts</h3>
+          <h3>Sign Up Impacts</h3>
           <div class="goal-grid">
             ${goalCell('I can coach others on…', salesImpacts.coach_others)}
-            ${goalCell('Still to master…', salesImpacts.still_to_master)}
+            ${goalCell('Still need to master…', salesImpacts.still_to_master)}
           </div>
         </div>` : ''}
-      ${planningTable('Development', planning.development)}
+      ${planningTable('Development – COD', planning.development)}
       ${planningTable('Recruitment', planning.recruitment)}
-      ${planningTable('Networking', planning.networking)}
+      ${planningTable('Travelling and Networking Calls', planning.networking)}
     </section>`;
 
   const learningItems = (learning.items || []).filter((it: any) => it && (it.topic || it.mentor || it.notes));
@@ -243,7 +248,7 @@ export function buildPlannerHtml({ ownerName, month, draft, traits, showGap }: P
 
   const swotHtml = `
     <section>
-      <h2>SWOT</h2>
+      <h2>SWOT Analysis <span class="muted" style="font-size:9.5pt">(completed quarterly)</span></h2>
       <div class="swot-grid">
         ${swotQuadrant('Strengths', swot.strengths, true)}
         ${swotQuadrant('Weaknesses', swot.weaknesses, false)}
@@ -252,24 +257,75 @@ export function buildPlannerHtml({ ownerName, month, draft, traits, showGap }: P
       </div>
     </section>`;
 
-  const gapRows = (traits || []).map((t) => {
-    const score = Number(gapScores[t] || 0);
-    const filled = '●'.repeat(score) + '○'.repeat(Math.max(0, 5 - score));
-    return `
+  const gapTable = (title: string, list: string[], sc: Record<string, number>, pageBreak: boolean) => {
+    if (!list || !list.length) return '';
+    const rows = list.map((t) => {
+      const score = Number(sc[t] || 0);
+      const filled = '●'.repeat(score) + '○'.repeat(Math.max(0, 5 - score));
+      return `
       <tr>
         <td>${escapeHtml(t)}</td>
         <td class="dots">${filled}</td>
         <td class="r">${score || '—'}</td>
       </tr>`;
-  }).join('');
-  const gapHtml = (showGap && traits && traits.length) ? `
-    <section class="page-break">
-      <h2>Gap Analysis</h2>
+    }).join('');
+    return `
+    <section${pageBreak ? ' class="page-break"' : ''}>
+      <h2>${escapeHtml(title)}</h2>
       <table class="data">
-        <thead><tr><th>Trait</th><th>Score (1-5)</th><th class="r">#</th></tr></thead>
-        <tbody>${gapRows}</tbody>
+        <thead><tr><th>Topic</th><th>Score (1-5)</th><th class="r">#</th></tr></thead>
+        <tbody>${rows}</tbody>
       </table>
-    </section>` : '';
+    </section>`;
+  };
+  const gapHtml = showGap
+    ? gapTable('Gap Analysis', fieldTraits || [], fieldScores, true) + gapTable('Leader Gap Analysis', traits || [], gapScores, false)
+    : '';
+
+  const boxes = (count: number, ticked: number[]) => {
+    const on = new Set(ticked || []);
+    return `<div class="boxes">${Array.from({ length: count }, (_, i) => i + 1)
+      .map((n) => `<span class="box${on.has(n) ? ' on' : ''}">${on.has(n) ? '✓' : n}</span>`).join('')}</div>`;
+  };
+  const signUps = Number(growth?.sign_ups || 0);
+  const focusHtml = `
+    <section class="page-break">
+      <h2>Monthly Sign Up Focus</h2>
+      ${boxes(100, Array.from({ length: Math.min(100, signUps) }, (_, i) => i + 1))}
+      <h2>Recruitment &amp; PR Focus</h2>
+      <h3>Monthly Recruitment Focus</h3>
+      ${boxes(30, focus.recruitment || [])}
+      <h3>Monthly PR Focus</h3>
+      ${boxes(30, focus.pr || [])}
+    </section>`;
+
+  const growthLabels: Record<string, string> = {
+    shadowers: 'Number of shadowers taken', sign_ups: 'Total number of sign-ups',
+    new_starts: 'Number of new starts attended', prs: 'Number of PRs attended',
+  };
+  const kpiRows = (growth?.kpis || []) as any[];
+  const byKey: Record<string, any> = Object.fromEntries(kpiRows.map((r) => [r.key, r]));
+  const newStarts = (growth?.new_starts || []) as any[];
+  const growthHtml = `
+    <section>
+      <h2>Recruitment, Sign Ups &amp; Growth</h2>
+      <table class="data">
+        <thead><tr><th>KPI</th><th class="r">Monthly goal</th><th class="r">So far</th><th class="ck">Hit</th></tr></thead>
+        <tbody>${Object.keys(growthLabels).map((k) => {
+          const r = byKey[k] || {};
+          const goal = Number(kpiGoals[k] || 0);
+          const actual = Number(r.actual || 0);
+          const hit = goal > 0 && actual >= goal ? 'Yes' : (r.hit === false ? 'No' : '');
+          return `<tr><td>${growthLabels[k]}</td><td class="r">${goal || ''}</td><td class="r">${actual}</td><td class="ck">${hit}</td></tr>`;
+        }).join('')}</tbody>
+      </table>
+      <h3>New Starts Due</h3>
+      ${newStarts.length ? `
+      <table class="data">
+        <thead><tr><th>Name</th><th>Start date</th><th class="r">Sign-ups in 1st 3 days</th><th class="ck">Completed 6 days</th></tr></thead>
+        <tbody>${newStarts.map((r) => `<tr><td>${escapeHtml(r.name || '')}</td><td>${escapeHtml(String(r.start_date || '').split('-').reverse().join('/'))}</td><td class="r">${r.sign_ups_first_3 ?? ''}</td><td class="ck">${r.completed_6 ? '✓' : `${r.field_days_done || 0}/6`}</td></tr>`).join('')}</tbody>
+      </table>` : '<p class="muted">No new starts due this month.</p>'}
+    </section>`;
 
   return `<!doctype html>
 <html lang="en">
@@ -316,6 +372,9 @@ export function buildPlannerHtml({ ownerName, month, draft, traits, showGap }: P
     .swot-label { font-size: 10pt; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; color: #040b15; }
     .swot-value { font-size: 10.5pt; color: #0c2340; }
     p { margin: 0 0 8px; }
+    .boxes { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 10px; }
+    .box { width: 9%; aspect-ratio: 1; border: 1px solid #d3e0ed; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 8.5pt; color: #6a7b90; }
+    .box.on { background: #225bc3; border-color: #225bc3; color: #fff; font-weight: 800; }
   </style>
 </head>
 <body>
@@ -336,6 +395,8 @@ export function buildPlannerHtml({ ownerName, month, draft, traits, showGap }: P
   ${budgetHtml}
   ${swotHtml}
   ${gapHtml}
+  ${focusHtml}
+  ${growthHtml}
 </body>
 </html>`;
 }

@@ -23,8 +23,9 @@ import { haptics } from '../../utils/haptics';
 
 // ── Types ───────────────────────────────────────────────────────────────
 export type Horizon = 'short' | 'medium' | 'long';
-export interface Kpi { id: string; name: string; target: string; horizon: Horizon; reward: string; smart_ok: boolean }
-export interface Rock { id: string; name: string; horizon: Horizon; reward: string; done: boolean }
+export type Area = 'business' | 'personal';
+export interface Kpi { id: string; name: string; target: string; horizon: Horizon; area?: Area; reward: string; smart_ok: boolean }
+export interface Rock { id: string; name: string; horizon: Horizon; area?: Area; reward: string; done: boolean }
 export interface GoalsV2 { version: number; kpis: Kpi[]; rocks: Rock[]; vision: string }
 
 // A planner's goals are v2 (structured) once they carry a version / kpis key.
@@ -40,6 +41,27 @@ const HORIZONS: { key: Horizon; short: string; long: string }[] = [
   { key: 'long', short: '6 mo', long: '6 months' },
 ];
 const horizonLabel = (h: Horizon) => HORIZONS.find((x) => x.key === h)?.long || '1 month';
+// The booklet splits goals Business / Personal (the Owner, 13 Nov 2026).
+const areaLabel = (a?: Area) => (a === 'personal' ? 'Personal' : 'Business');
+
+function AreaToggle({ s, colors, value, onChange }: any) {
+  return (
+    <View style={[s.horizonRow, { marginTop: 8 }]}>
+      {(['business', 'personal'] as Area[]).map((a) => {
+        const sel = (value || 'business') === a;
+        return (
+          <TouchableOpacity
+            key={a}
+            style={[s.horizonPill, sel && { backgroundColor: colors.primary, borderColor: colors.primary }]}
+            onPress={() => { haptics.light(); onChange(a); }}
+          >
+            <Text style={[s.horizonText, sel && { color: colors.onPrimary }]}>{areaLabel(a)}</Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
 
 const genId = () => `g-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 const emptyGoals = (): GoalsV2 => ({ version: 2, kpis: [], rocks: [], vision: '' });
@@ -105,7 +127,7 @@ export function GoalBuilder({ goals: goalsIn, canEdit, onChange }: Props) {
     if (!nm) return;
     if (goals.kpis.some((k) => k.name.toLowerCase() === nm.toLowerCase())) return;
     haptics.light();
-    setKpis([...goals.kpis, { id: genId(), name: nm, target: '', horizon: 'short', reward: '', smart_ok: false }]);
+    setKpis([...goals.kpis, { id: genId(), name: nm, target: '', horizon: 'short', area: 'business', reward: '', smart_ok: false }]);
   };
   const updateKpi = (id: string, patch: Partial<Kpi>) =>
     setKpis(goals.kpis.map((k) => (k.id === id ? { ...k, ...patch } : k)));
@@ -116,7 +138,7 @@ export function GoalBuilder({ goals: goalsIn, canEdit, onChange }: Props) {
     if (!nm) return;
     if (goals.rocks.some((r) => r.name.toLowerCase() === nm.toLowerCase())) return;
     haptics.light();
-    setRocks([...goals.rocks, { id: genId(), name: nm, horizon: 'short', reward: '', done: false }]);
+    setRocks([...goals.rocks, { id: genId(), name: nm, horizon: 'short', area: 'business', reward: '', done: false }]);
   };
   const updateRock = (id: string, patch: Partial<Rock>) =>
     setRocks(goals.rocks.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -408,6 +430,7 @@ function StepPickKpis({ s, colors, kpis, menu, loading, onAdd, onUpdate, onRemov
             />
             <HorizonToggle s={s} colors={colors} value={k.horizon} onChange={(h: Horizon) => onUpdate(k.id, { horizon: h })} />
           </View>
+          <AreaToggle s={s} colors={colors} value={k.area} onChange={(a: Area) => onUpdate(k.id, { area: a })} />
           <TextInput
             style={s.rewardInput}
             placeholder="Reward if you hit it (optional)" placeholderTextColor={colors.textMuted}
@@ -447,6 +470,7 @@ function StepPickRocks({ s, colors, rocks, menu, loading, kpiCount, recRocks, on
             <Text style={s.fieldLabel}>By</Text>
             <HorizonToggle s={s} colors={colors} value={r.horizon} onChange={(h: Horizon) => onUpdate(r.id, { horizon: h })} />
           </View>
+          <AreaToggle s={s} colors={colors} value={r.area} onChange={(a: Area) => onUpdate(r.id, { area: a })} />
           <TextInput
             style={s.rewardInput}
             placeholder="Reward if you do it (optional)" placeholderTextColor={colors.textMuted}
@@ -479,7 +503,7 @@ function StepReview({ s, colors, goals, onToggleSmart, onVision }: any) {
               <Text style={{ color: colors.primary }}>KPI</Text>  {k.name}
               {k.target ? <Text style={s.reviewMeta}>  → {k.target}</Text> : null}
             </Text>
-            <Text style={s.reviewSub}>{horizonLabel(k.horizon)}{k.reward ? ` · 🎁 ${k.reward}` : ''}</Text>
+            <Text style={s.reviewSub}>{areaLabel(k.area)} · {horizonLabel(k.horizon)}{k.reward ? ` · 🎁 ${k.reward}` : ''}</Text>
           </View>
         </TouchableOpacity>
       ))}
@@ -488,7 +512,7 @@ function StepReview({ s, colors, goals, onToggleSmart, onVision }: any) {
           <Ionicons name="ellipse" size={12} color={colors.green} style={{ marginLeft: 4, marginRight: 4 }} />
           <View style={{ flex: 1 }}>
             <Text style={s.reviewName}><Text style={{ color: colors.green }}>ROCK</Text>  {r.name}</Text>
-            <Text style={s.reviewSub}>{horizonLabel(r.horizon)}{r.reward ? ` · 🎁 ${r.reward}` : ''}</Text>
+            <Text style={s.reviewSub}>{areaLabel(r.area)} · {horizonLabel(r.horizon)}{r.reward ? ` · 🎁 ${r.reward}` : ''}</Text>
           </View>
         </View>
       ))}
@@ -523,7 +547,13 @@ function GoalSummary({ goals, canEdit, onEdit, onToggleDone, s, colors }: any) {
   }
   return (
     <View>
-      {goals.kpis.map((k: Kpi) => (
+      {(['business', 'personal'] as Area[]).map((area) => {
+        const any = goals.kpis.some((k: Kpi) => (k.area || 'business') === area) || goals.rocks.some((r: Rock) => (r.area || 'business') === area);
+        if (!any) return null;
+        return (
+          <View key={area}>
+            <Text style={[s.sumSub, { marginTop: 6, marginBottom: 2, fontWeight: '800' }]}>{areaLabel(area).toUpperCase()}</Text>
+      {goals.kpis.filter((k: Kpi) => (k.area || 'business') === area).map((k: Kpi) => (
         <View key={k.id} style={s.sumRow}>
           <View style={[s.sumTag, { backgroundColor: `${colors.primary}18` }]}><Text style={[s.sumTagText, { color: colors.primary }]}>KPI</Text></View>
           <View style={{ flex: 1 }}>
@@ -532,7 +562,7 @@ function GoalSummary({ goals, canEdit, onEdit, onToggleDone, s, colors }: any) {
           </View>
         </View>
       ))}
-      {goals.rocks.map((r: Rock) => (
+      {goals.rocks.filter((r: Rock) => (r.area || 'business') === area).map((r: Rock) => (
         <TouchableOpacity
           key={r.id}
           style={s.sumRow}
@@ -549,6 +579,9 @@ function GoalSummary({ goals, canEdit, onEdit, onToggleDone, s, colors }: any) {
           )}
         </TouchableOpacity>
       ))}
+          </View>
+        );
+      })}
       {!!goals.vision && (
         <View style={s.visionSum}>
           <Text style={s.sumSub}>6-MONTH VISION</Text>
