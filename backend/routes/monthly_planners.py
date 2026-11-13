@@ -78,7 +78,7 @@ LEGACY_GOAL_KEYS = (
 
 def _default_goals() -> dict:
     """Fresh empty v2 goals block (own list instances — never share refs)."""
-    return {"version": GOAL_VERSION, "kpis": [], "rocks": [], "mids": [], "vision": ""}
+    return {"version": GOAL_VERSION, "kpis": [], "rocks": [], "mids": [], "whys": [], "vision": ""}
 
 
 def _norm_horizon(v) -> str:
@@ -89,6 +89,9 @@ def _norm_horizon(v) -> str:
 def _norm_area(v) -> str:
     """Business or Personal, as the booklet splits goals (default Business)."""
     return "personal" if str(v or "").strip().lower() == "personal" else "business"
+
+
+WHY_TAGS = ("people", "lifestyle", "choices", "time", "project")
 
 
 def _how(raw) -> str:
@@ -145,7 +148,14 @@ def _normalize_goals(raw) -> dict:
     vision = (str(raw.get("vision") or "")).strip()
     if vision and not mids:
         mids = [_mid({"name": vision})]
-    return {"version": GOAL_VERSION, "kpis": kpis, "rocks": rocks, "mids": mids, "vision": ""}
+    # Long term is their why (the Owner, 13 Nov 2026), each tagged.
+    whys = []
+    for r in (raw.get("whys") or [])[:_MAX_GOAL_ROWS * 2]:
+        if isinstance(r, dict) and str(r.get("text") or "").strip():
+            tag = str(r.get("tag") or "").strip().lower()
+            whys.append({"id": r.get("id") or str(uuid.uuid4()), "text": str(r.get("text")).strip()[:2000],
+                         "tag": tag if tag in WHY_TAGS else "people"})
+    return {"version": GOAL_VERSION, "kpis": kpis, "rocks": rocks, "mids": mids, "whys": whys, "vision": ""}
 
 
 # ── Goal Builder menu (KPI presets + Rock suggestions) ──────────────────────
