@@ -130,7 +130,7 @@ def test_use_this_writes_my_planner_box_and_note(db, monkeypatch):
     _login(monkeypatch, user)
     out = _run(ai.apply(_Req({"kind": "planner", "data": {"date": "2026-11-03", "box": "sector",
                                                           "text": "Doors first, 120 by 17:00"}})))
-    assert out["box"] == "Sector" and out["day"] == "Tuesday"
+    assert out["box"] == "Sectors" and out["day"] == "Tuesday"   # their own box name
     p = _run(db.weekly_planners.find_one({"user_id": user["id"], "week_ending": "2026-11-08"}))
     assert p["days"]["1"]["sector"] == "Doors first, 120 by 17:00"
     _run(ai.apply(_Req({"kind": "planner", "data": {"date": "2026-11-03", "box": "Sector", "text": "Bunny hop with B"}})))
@@ -141,6 +141,25 @@ def test_use_this_writes_my_planner_box_and_note(db, monkeypatch):
     _run(ai.apply(_Req({"kind": "note", "data": {"date": "2026-11-03", "title": "Close", "body": "Ask, then stop"}})))
     p = _run(db.weekly_planners.find_one({"user_id": user["id"]}))
     assert p["slot_notes"]["1:day"][0]["title"] == "Close"
+
+
+def test_planner_box_by_their_own_name(db, monkeypatch):
+    """A renamed box is found by its new name (the Owner, 15 Nov 2026: "Leaders
+    Meeting" is their Stage 1 box, and their Leaders box is "One on Ones")."""
+    user = _ba()
+    _login(monkeypatch, user)
+    _run(db.planner_sheet_layouts.insert_one({"user_id": user["id"], "rows": [
+        {"key": "stage1", "label": "Leaders Meeting", "time": "10:30"},
+        {"key": "leaders_meeting", "label": "One on Ones", "time": ""}]}))
+    out = _run(ai_actions.set_planner_box(user, "2026-11-17", "Leaders Meeting", "Run-through"))
+    assert out["box"] == "Leaders Meeting"
+    p = _run(db.weekly_planners.find_one({"user_id": user["id"]}))
+    assert p["days"]["1"]["stage1"] == "Run-through" and not p["days"]["1"].get("leaders_meeting")
+    out = _run(ai_actions.set_planner_box(user, "2026-11-17", "10:30 · Leaders Meeting", "More", append=True))
+    assert out["box"] == "Leaders Meeting"
+    with pytest.raises(HTTPException) as e:
+        _run(ai_actions.set_planner_box(user, "2026-11-17", "Nope", "x"))
+    assert "One on Ones" in e.value.detail
 
 
 def test_viewers_cannot_use_this(db, monkeypatch):

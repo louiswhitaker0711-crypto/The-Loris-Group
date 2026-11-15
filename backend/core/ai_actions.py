@@ -143,6 +143,15 @@ def planner_boxes() -> dict:
     return dict(DAY_FIELD_LABELS)
 
 
+async def my_planner_boxes(actor: dict) -> list:
+    """The person's own planner boxes, as their day pages show them: name,
+    default time, and the box behind it."""
+    from routes.weekly_planners import normalize_sheet_layout
+    doc = await db.planner_sheet_layouts.find_one({"user_id": str(actor.get("id"))}, {"_id": 0, "rows": 1})
+    return [{"name": r["label"], "time": r.get("time") or "", "key": r["key"]}
+            for r in normalize_sheet_layout((doc or {}).get("rows")) if r.get("on_day", True)]
+
+
 async def set_planner_box(actor: dict, day: Optional[str], box: str, text: str, append: bool = True) -> dict:
     """Write into one box of a day in their own planner (Mon–Sat)."""
     from routes.notes_folder import _refile
@@ -151,10 +160,20 @@ async def set_planner_box(actor: dict, day: Optional[str], box: str, text: str, 
     d = _day(day)
     if d.weekday() == 6:
         raise HTTPException(status_code=400, detail="The planner runs Monday to Saturday")
+    mine = await my_planner_boxes(actor)
+    want = " ".join(str(box or "").lower().split())
+    # Their own names first (a person may rename boxes, e.g. "Leaders Meeting"
+    # on the Stage 1 box; the Owner, 15 Nov 2026), then the standard names.
+    own = {}
+    for b in mine:
+        own.setdefault(b["name"].lower(), b["key"])
+        if b["time"]:
+            own.setdefault(f"{b['time']} · {b['name']}".lower(), b["key"])
     labels = {v.lower(): k for k, v in DAY_FIELD_LABELS.items()}
-    key = box if box in DAY_FIELD_LABELS else labels.get(str(box or "").strip().lower())
+    key = box if box in DAY_FIELD_LABELS else own.get(want) or labels.get(want)
     if not key:
-        raise HTTPException(status_code=400, detail="Pick one of the planner's boxes: " + ", ".join(DAY_FIELD_LABELS.values()))
+        raise HTTPException(status_code=400, detail="Pick one of their planner's boxes: " + ", ".join(
+            (f"{b['time']} · {b['name']}" if b["time"] else b["name"]) for b in mine))
     text = str(text or "").strip()[:4000]
     if not text:
         raise HTTPException(status_code=400, detail="Nothing to write")
@@ -169,7 +188,8 @@ async def set_planner_box(actor: dict, day: Optional[str], box: str, text: str, 
         await _refile(actor, p)
     except Exception:
         pass
-    return {"date": d.isoformat(), "day": DAY_NAMES[d.weekday()], "box": DAY_FIELD_LABELS[key], "text": new[:4000]}
+    shown = next((b["name"] for b in mine if b["key"] == key), DAY_FIELD_LABELS[key])
+    return {"date": d.isoformat(), "day": DAY_NAMES[d.weekday()], "box": shown, "text": new[:4000]}
 
 
 async def add_planner_note(actor: dict, day: Optional[str], title: str, body: str) -> dict:
