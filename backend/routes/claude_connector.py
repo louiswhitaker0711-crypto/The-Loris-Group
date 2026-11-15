@@ -514,7 +514,27 @@ def _agenda_admin(owner: dict) -> str:
     return owner["office_id"]
 
 
-async def _agenda_load(office_id: str, week: str) -> tuple[Optional[dict], list]:
+async def _last_week_frame(office_id: str, week: str) -> Optional[list]:
+    """Last week's plan rows as a frame for a new week: same rows, order,
+    presenters, times and merges, topics cleared (the Owner, 15 Nov 2026: a
+    new week looks like the usual week, not just the timetable)."""
+    from routes.agenda import _normalize_row
+    prev_week = (date.fromisoformat(week) - timedelta(days=7)).isoformat()
+    prev = await db.weekly_agendas.find_one({"office_id": office_id, "week_ending": prev_week}, {"_id": 0, "rows": 1})
+    if not prev or not prev.get("rows"):
+        return None
+    import uuid
+    rows = []
+    for r in prev["rows"]:
+        nr = _normalize_row(r)
+        nr["id"] = str(uuid.uuid4())
+        for c in nr["cells"]:
+            c["topic"], c["cod"] = "", ""
+        rows.append(nr)
+    return rows
+
+
+async def _agenda_load(office_id: str, week: str, rebuild: bool = False) -> tuple[Optional[dict], list]:
     from routes.agenda import (_build_seed_rows, follow_schedule, _normalize_row,
                                _normalize_themes, _normalize_stats)
     seed = await _build_seed_rows(office_id)
@@ -522,9 +542,23 @@ async def _agenda_load(office_id: str, week: str) -> tuple[Optional[dict], list]
     if doc:
         doc["themes"] = _normalize_themes(doc.get("themes"))
         doc["stats"] = _normalize_stats(doc.get("stats"))
-        rows = follow_schedule(list(doc.get("rows") or []), seed)
+    frame = await _last_week_frame(office_id, week) if (rebuild or not doc) else None
+    if frame is not None:
+        # Carry anything already written this week into the frame.
+        mine = {(r.get("label") or "").strip().lower(): r for r in (doc or {}).get("rows") or []}
+        for r in frame:
+            have = mine.pop((r.get("label") or "").strip().lower(), None)
+            for c in (have or {}).get("cells") or []:
+                if (c.get("topic") or "").strip():
+                    tgt = next((x for x in r["cells"] if x["day"] == c.get("day")), None)
+                    if tgt is not None:
+                        tgt["topic"] = c["topic"]
+                        tgt["presenter"] = c.get("presenter") or tgt.get("presenter") or ""
+        rows = frame + [r for r in mine.values()
+                        if any((c.get("topic") or "").strip() for c in r.get("cells") or [])]
     else:
-        rows = seed
+        rows = list((doc or {}).get("rows") or [])
+    rows = follow_schedule(rows, seed)
     return doc, [_normalize_row(r) for r in rows if isinstance(r, dict)]
 
 
@@ -578,7 +612,7 @@ async def tool_update_weekly_plan(owner: dict, args: dict) -> dict:
     if owner.get("is_demo"):
         raise ValueError("This account can only look, not change things.")
     week = _agenda_week(args.get("week_ending"))
-    doc, rows = await _agenda_load(office_id, week)
+    doc, rows = await _agenda_load(office_id, week, rebuild=args.get("rebuild_from_last_week") is True)
     themes = dict((doc or {}).get("themes") or _normalize_themes(None))
     stats = dict((doc or {}).get("stats") or _normalize_stats(None))
     for k, v in (args.get("themes") or {}).items():
@@ -687,12 +721,18 @@ TOOLS: dict[str, tuple] = {
                            "CHANGES THE APP. Fills in the office's Weekly Plan for a week (Admins only): any theme "
                            "or stat, and any row's topic / presenter / time for a day. Only what you send changes; "
                            "it saves as a draft and the Admin publishes it in the app. Rows by their name "
-                           "(get_weekly_plan lists them), days as Mon–Sat.",
+                           "(get_weekly_plan lists them), days as Mon–Sat. A topic is the short name shown on "
+                           "the plan (a few words, e.g. 'A leader owns the numbers'), never the full run-through: "
+                           "put the detail in the person's planner (write_planner). A new week starts from last "
+                           "week's rows and presenters with the topics cleared.",
                            {"week_ending": {"type": "string", "description": "Any date in the week (YYYY-MM-DD)."},
                             "themes": {"type": "object", "description": "Theme name → text, e.g. "
                                        "{\"leaders\": \"What is a leader\"}. Names: expectations_1, expectations_2, "
                                        "leaders, topic_theme, customer_service_theme, competition, concentration, news, social."},
                             "stats": {"type": "object", "description": "weekly_goal, promotions, personal_recruits."},
+                            "rebuild_from_last_week": {"type": "boolean", "description": "Lay the week out like "
+                                                       "last week again (rows, presenters, times), keeping the "
+                                                       "topics already written. Default false."},
                             "cells": {"type": "array", "description": "Row/day cells to set.",
                                       "items": {"type": "object", "properties": {
                                           "row": {"type": "string"}, "day": {"type": "string"},
