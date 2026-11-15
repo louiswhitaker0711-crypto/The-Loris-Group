@@ -66,6 +66,10 @@ async def apply_breakdown(user: dict, iso: str, bd: dict) -> None:
     from owneriq_sync import owneriq_on
     if await owneriq_on():
         return
+    # A visitor isn't tracked (the Owner, 15 Nov 2026): their breakdown counts
+    # for the sector only, never KPIs or Bells (core/visitors.py).
+    if user.get("is_visitor"):
+        return
     # A shadow day isn't scored: no KPI row, and Bells stays SD (core/hops.py).
     from core.hops import shadow_ids
     uid = str(user["_id"])

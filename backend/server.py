@@ -94,6 +94,7 @@ from routes.ai_assistant import router as ai_assistant_router
 from routes.scorecard import router as scorecard_router
 from routes.coaching_notes import router as coaching_notes_router
 from routes.meetups import router as meetups_router
+from routes.visitors import router as visitors_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -210,6 +211,7 @@ api_router.include_router(ai_assistant_router)
 api_router.include_router(scorecard_router)
 api_router.include_router(coaching_notes_router)
 api_router.include_router(meetups_router)
+api_router.include_router(visitors_router)
 
 app.include_router(api_router)
 
@@ -279,6 +281,9 @@ _CSRF_EXEMPT_PATHS = {
     "/api/new-starts/join",
     "/api/new-starts/signup/check",
     "/api/new-starts/signup",
+    # Visitor code (routes/visitors.py): the code in the body is the credential.
+    "/api/visitors/signup/check",
+    "/api/visitors/signup",
 }
 
 

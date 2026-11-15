@@ -109,6 +109,10 @@ async def get_current_user(request: Request) -> dict:
             raise HTTPException(status_code=401, detail="User not found")
         if int(payload.get("ver", 0)) != int(user.get("session_version") or 0):
             raise HTTPException(status_code=401, detail="Session revoked")
+        if user.get("is_visitor"):
+            from core.visitors import visit_over
+            if visit_over(user):
+                raise HTTPException(status_code=401, detail="Your visit has finished")
         user["id"] = str(user["_id"])
         del user["_id"]
         user.pop("password_hash", None)
@@ -197,7 +201,9 @@ async def demo_user_ids() -> frozenset:
     import time
     now = time.monotonic()
     if now - _demo_ids_cache["at"] > _DEMO_IDS_TTL_SECONDS:
-        rows = await db.users.find({"is_demo": True}, {"_id": 1}).to_list(100)
+        # Visitors carry is_demo to stay off Bells and KPIs, but they fill in
+        # their own sector set-up and breakdown, so they aren't read-only.
+        rows = await db.users.find({"is_demo": True, "is_visitor": {"$ne": True}}, {"_id": 1}).to_list(100)
         _demo_ids_cache["ids"] = frozenset(str(r["_id"]) for r in rows)
         _demo_ids_cache["at"] = now
     return _demo_ids_cache["ids"]
@@ -356,6 +362,11 @@ async def leads_hop_with_hire(user: dict, hire_id: str) -> bool:
         return False
     if await db.new_hires.find_one({"trainee_user_id": me, "active": True, "current_day": {"$lte": 8}}, {"_id": 1}):
         return False
+    # A visitor grades only from Stage 3 up (the Owner, 15 Nov 2026).
+    if user.get("is_visitor"):
+        from core.visitors import stage_number, COACH_STAGE
+        if stage_number(user.get("visitor_stage")) < COACH_STAGE:
+            return False
     from core.app_time import APP_TZ
     today = datetime.now(APP_TZ).date()
     dates = [(today - timedelta(days=i)).isoformat() for i in range(HOP_GRADE_DAYS)]
