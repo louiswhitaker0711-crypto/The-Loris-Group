@@ -84,10 +84,17 @@ async def _require_planner(request: Request, date: Optional[str]) -> tuple[dict,
     return user, iso
 
 
-async def _office_people(office_id: str) -> list[dict]:
-    rows = [{"user_id": str(u["_id"]), "name": u.get("name") or "", "role": u.get("role")}
-            async for u in db.users.find({"office_id": office_id, "role": {"$in": ["trainee", "leader", "admin"]}, **_ACTIVE},
-                                         {"name": 1, "role": 1})]
+def _in_field(q: dict, iso: str) -> dict:
+    """`q` with visitors on their visit days let in (core/visitors.py)."""
+    from core.visitors import with_field_filter
+    return with_field_filter({**q, **_ACTIVE}, iso)
+
+
+async def _office_people(office_id: str, iso: Optional[str] = None) -> list[dict]:
+    rows = [{"user_id": str(u["_id"]), "name": u.get("name") or "", "role": u.get("role"),
+             **({"visitor": True, "visit_office": u.get("visit_office") or None} if u.get("is_visitor") else {})}
+            async for u in db.users.find(_in_field({"office_id": office_id, "role": {"$in": ["trainee", "leader", "admin"]}}, iso),
+                                         {"name": 1, "role": 1, "is_visitor": 1, "visit_office": 1})]
     rows.sort(key=lambda r: r["name"].lower())
     return rows
 
@@ -127,7 +134,7 @@ async def get_plan(request: Request, date: Optional[str] = None):
     iso = _clean_date(date)
     office_id = user.get("office_id")
     await drop_no_shows(office_id, iso)
-    people = await _office_people(office_id)
+    people = await _office_people(office_id, iso)
     names = {p["user_id"]: p["name"] for p in people}
     sectors = []
     where: dict[str, str] = {}
@@ -183,7 +190,7 @@ async def save_planned_sector(request: Request, date: Optional[str] = None):
     wanted = [str(i) for i in (body.get("member_ids") or []) if ObjectId.is_valid(str(i))][:40]
     ids = list(dict.fromkeys([leader] + wanted))
     valid = {str(u["_id"]): u async for u in db.users.find(
-        {"_id": {"$in": [ObjectId(i) for i in ids]}, "office_id": office_id, **_ACTIVE}, {"name": 1})}
+        _in_field({"_id": {"$in": [ObjectId(i) for i in ids]}, "office_id": office_id}, iso), {"name": 1})}
     if leader not in valid:
         raise HTTPException(status_code=400, detail="That leader isn't in your office")
     members = [i for i in ids if i in valid]
@@ -257,7 +264,7 @@ async def save_plan_bulk(request: Request, date: Optional[str] = None):
     # Every leader and member must be in the office and active.
     all_ids = list({i for r in cleaned for i in [r["leader_id"], *r["member_ids"]]})
     valid = {str(u["_id"]): u async for u in db.users.find(
-        {"_id": {"$in": [ObjectId(i) for i in all_ids]}, "office_id": office_id, **_ACTIVE}, {"name": 1})}
+        _in_field({"_id": {"$in": [ObjectId(i) for i in all_ids]}, "office_id": office_id}, iso), {"name": 1})}
     cleaned = [r for r in cleaned if r["leader_id"] in valid]
     from core.hops import clean_lines
     for r in cleaned:
@@ -383,7 +390,7 @@ async def _tell(office_id: str, iso: str, leaders: Optional[list] = None, title_
     `leaders`'). With `leaders` None, anyone out today but not in a sector
     is told too."""
     from core.push import send_push_to_user
-    people = await _office_people(office_id)
+    people = await _office_people(office_id, iso)
     names = {p["user_id"]: p["name"] for p in people}
     sectors = [x async for x in db.sectors.find({"office_id": office_id, "date": iso}, {"_id": 0})]
     everyone: list[str] = []
@@ -507,7 +514,7 @@ async def sector_recap(request: Request, date: Optional[str] = None):
     iso = _clean_date(date) if date else previous_field_day(_now_uk().date())
     if role not in ("leader", "admin") and not await can_plan(user, _now_uk().date().isoformat()):
         raise HTTPException(status_code=403, detail="Coaches and the sector planner see the recap")
-    names = {p["user_id"]: p["name"] for p in await _office_people(office_id)}
+    names = {p["user_id"]: p["name"] for p in await _office_people(office_id, iso)}
     days = {d["user_id"]: d async for d in db.sector_days.find({"date": iso, "office_id": office_id}, {"_id": 0})}
     out = []
     async for sec in db.sectors.find({"office_id": office_id, "date": iso}, {"_id": 0}).sort("leader_name", 1):

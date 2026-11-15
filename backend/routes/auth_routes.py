@@ -165,6 +165,9 @@ async def login(req: LoginRequest, request: Request, response: Response):
     # issues a fresh one (or the person uses Forgot password).
     if user.get("must_change_password") and _starter_expired(user):
         raise HTTPException(status_code=401, detail="That starter password has expired. Ask the Owner for a new one, or use Forgot password.")
+    from core.visitors import visit_over
+    if visit_over(user):
+        raise HTTPException(status_code=401, detail="Your visit has finished. Thanks for coming!")
     _clear_rate(identity_key)
     user_id = str(user["_id"])
     session_version = int(user.get("session_version") or 0)

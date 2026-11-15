@@ -377,8 +377,9 @@ async def _people(user: dict, iso: Optional[str] = None) -> list[dict]:
         sec = await _my_sector(str(user["id"]), iso)
         if sec and sec.get("member_ids"):
             return await _users_by_ids(sec["member_ids"])
-    q: dict = {"office_id": user.get("office_id"), "deleted": {"$ne": True}, "is_active": {"$ne": False},
-               "is_demo": {"$ne": True}, "role": {"$in": ["trainee", "leader", "admin"]}}
+    from core.visitors import with_field_filter
+    q: dict = with_field_filter({"office_id": user.get("office_id"), "deleted": {"$ne": True}, "is_active": {"$ne": False},
+                                 "role": {"$in": ["trainee", "leader", "admin"]}}, iso)
     if role == "leader":
         ids = [ObjectId(i) for i in await get_subtree_ids(str(user["id"])) if ObjectId.is_valid(str(i))]
         q["_id"] = {"$in": ids}
@@ -423,6 +424,11 @@ async def _prefill(user_ids: list[str], iso: str) -> dict:
             cur = out.setdefault(str(e["user_id"]), {})
             cur["hit"] = (day.get("over30") or 0) + (day.get("under30") or 0)
             cur.update(silver=day.get("under30") or 0, gold=day.get("over30") or 0, round=day.get("memberships") or 0)
+    # Visitors are never on Bells: their own breakdown is their sign-ups, so
+    # they still count towards the sector's goal/hit (the Owner, 15 Nov 2026).
+    from core.visitors import visitor_day_numbers
+    for uid, nums in (await visitor_day_numbers(user_ids, iso)).items():
+        out.setdefault(uid, {}).update({k: v for k, v in nums.items() if v is not None})
     return out
 
 
@@ -1009,11 +1015,13 @@ async def sector_roster(request: Request, date: Optional[str] = None):
         for m in sec.get("member_ids") or []:
             taken[m] = sec.get("leader_name") or ""
     rows = []
-    async for u in db.users.find({"office_id": user.get("office_id"), "deleted": {"$ne": True}, "is_active": {"$ne": False},
-                                  "is_demo": {"$ne": True}, "role": {"$in": ["trainee", "leader", "admin"]}},
-                                 {"_id": 1, "name": 1, "role": 1}):
+    from core.visitors import with_field_filter
+    async for u in db.users.find(with_field_filter({"office_id": user.get("office_id"), "deleted": {"$ne": True}, "is_active": {"$ne": False},
+                                                    "role": {"$in": ["trainee", "leader", "admin"]}}, iso),
+                                 {"_id": 1, "name": 1, "role": 1, "is_visitor": 1, "visit_office": 1}):
         uid = str(u["_id"])
         rows.append({"user_id": uid, "user_name": u.get("name") or "", "role": u.get("role"),
+                     "visitor": bool(u.get("is_visitor")), "visit_office": u.get("visit_office") or None,
                      "in_sector_of": taken.get(uid)})
     rows.sort(key=lambda r: r["user_name"].lower())
     return {"date": iso, "people": rows}

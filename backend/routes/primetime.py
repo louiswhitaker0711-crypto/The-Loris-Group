@@ -231,20 +231,31 @@ async def _office_roster(office_id: str, week_ending: str) -> list:
         {
             "office_id": office_id,
             "role": {"$in": ["trainee", "leader", "admin"]},
-            # Top-level so the left_on $or branch can't re-admit a demo user.
-            "is_demo": {"$ne": True},
-            "$or": [
-                # Currently here.
-                _ACTIVE_USER,
-                # Gone, but not before this week started — they still occupy
-                # the days they worked.
-                {"left_on": {"$gte": monday}},
+            "$and": [
+                # Top-level so the left_on $or branch can't re-admit a demo
+                # user. Visitors (core/visitors.py) are the one exception: in
+                # for the weeks their visit covers.
+                {"$or": [{"is_demo": {"$ne": True}},
+                         {"is_visitor": True, "visit_to": {"$gte": monday}, "visit_from": {"$lte": week_ending}}]},
+                {"$or": [
+                    # Currently here.
+                    {k: v for k, v in _ACTIVE_USER.items() if k != "is_demo"},
+                    # Gone, but not before this week started — they still occupy
+                    # the days they worked.
+                    {"left_on": {"$gte": monday}},
+                ]},
             ],
         },
         {"_id": 1, "name": 1, "role": 1, "team_name": 1, "reports_to": 1,
-         "left_on": 1, "deleted": 1, "deleted_at": 1, "is_active": 1},
+         "left_on": 1, "deleted": 1, "deleted_at": 1, "is_active": 1, "is_visitor": 1, "visit_to": 1},
     ).to_list(MAX_ROSTER)
-    return [_person(u, _left_on(u)) for u in rows]
+    # A visitor is on the grid up to and including their last day (visit_to):
+    # `left_on` is the first day they're off.
+    def gone(u: dict) -> Optional[str]:
+        if u.get("is_visitor") and _is_iso_date(u.get("visit_to")):
+            return (date_cls_from_iso(u["visit_to"]) + timedelta(days=1)).isoformat()
+        return _left_on(u)
+    return [_person(u, gone(u)) for u in rows]
 
 
 ACADEMY_DAYS = 2   # BA Academy Days 1-2: in the office, not at Primetime
@@ -1169,7 +1180,7 @@ async def _morning_people(me: dict, day: str) -> tuple[list[dict], bool]:
         ids += [str(sec.get("leader_id") or "")] + [str(x) for x in sec.get("member_ids") or []]
     ids = [i for i in dict.fromkeys(ids) if i]
     if not ids:
-        ids = [p["user_id"] for p in await _office_people(me.get("office_id"))]
+        ids = [p["user_id"] for p in await _office_people(me.get("office_id"), day)]
     return await _named(me, ids), True
 
 
