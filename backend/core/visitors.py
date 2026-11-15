@@ -72,22 +72,24 @@ def with_field_filter(q: dict, iso: Optional[str] = None) -> dict:
     return {**q, **extra}
 
 
-async def visitor_ids(ids: Iterable[str]) -> set[str]:
+async def visitor_ids(ids: Iterable[str], dbh=None) -> set[str]:
     from bson import ObjectId
+    dbh = dbh if dbh is not None else db
     oids = [ObjectId(str(i)) for i in ids if ObjectId.is_valid(str(i))]
     if not oids:
         return set()
-    return {str(u["_id"]) async for u in db.users.find({"_id": {"$in": oids}, "is_visitor": True}, {"_id": 1})}
+    return {str(u["_id"]) async for u in dbh.users.find({"_id": {"$in": oids}, "is_visitor": True}, {"_id": 1})}
 
 
-async def visitor_day_numbers(ids: Iterable[str], iso: str) -> dict:
+async def visitor_day_numbers(ids: Iterable[str], iso: str, dbh=None) -> dict:
     """A visitor's sign-ups for a day come from their own sector breakdown,
     as they're never on Bells: {user_id: {hit, silver, gold, round}}."""
-    vids = await visitor_ids(ids)
+    dbh = dbh if dbh is not None else db
+    vids = await visitor_ids(ids, dbh)
     if not vids:
         return {}
     out: dict = {}
-    async for d in db.sector_days.find({"date": iso, "user_id": {"$in": list(vids)}}, {"_id": 0, "user_id": 1, "breakdown": 1}):
+    async for d in dbh.sector_days.find({"date": iso, "user_id": {"$in": list(vids)}}, {"_id": 0, "user_id": 1, "breakdown": 1}):
         bd = d.get("breakdown") or {}
         hit = bd.get("hit")
         if hit is None and (bd.get("silver") is not None or bd.get("gold") is not None):

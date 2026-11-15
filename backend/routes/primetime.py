@@ -231,19 +231,19 @@ async def _office_roster(office_id: str, week_ending: str) -> list:
         {
             "office_id": office_id,
             "role": {"$in": ["trainee", "leader", "admin"]},
-            "$and": [
-                # Top-level so the left_on $or branch can't re-admit a demo
-                # user. Visitors (core/visitors.py) are the one exception: in
-                # for the weeks their visit covers.
-                {"$or": [{"is_demo": {"$ne": True}},
-                         {"is_visitor": True, "visit_to": {"$gte": monday}, "visit_from": {"$lte": week_ending}}]},
-                {"$or": [
+            "$or": [
+                # Not a demo user — kept inside this branch so the left_on $or
+                # can't re-admit one.
+                {"is_demo": {"$ne": True}, "$or": [
                     # Currently here.
                     {k: v for k, v in _ACTIVE_USER.items() if k != "is_demo"},
                     # Gone, but not before this week started — they still occupy
                     # the days they worked.
                     {"left_on": {"$gte": monday}},
                 ]},
+                # Visitors (core/visitors.py): in for the weeks their visit covers.
+                {"is_visitor": True, "deleted": {"$ne": True},
+                 "visit_to": {"$gte": monday}, "visit_from": {"$lte": week_ending}},
             ],
         },
         {"_id": 1, "name": 1, "role": 1, "team_name": 1, "reports_to": 1,

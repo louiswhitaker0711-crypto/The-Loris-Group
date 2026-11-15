@@ -427,7 +427,7 @@ async def _prefill(user_ids: list[str], iso: str) -> dict:
     # Visitors are never on Bells: their own breakdown is their sign-ups, so
     # they still count towards the sector's goal/hit (the Owner, 15 Nov 2026).
     from core.visitors import visitor_day_numbers
-    for uid, nums in (await visitor_day_numbers(user_ids, iso)).items():
+    for uid, nums in (await visitor_day_numbers(user_ids, iso, db)).items():
         out.setdefault(uid, {}).update({k: v for k, v in nums.items() if v is not None})
     return out
 
