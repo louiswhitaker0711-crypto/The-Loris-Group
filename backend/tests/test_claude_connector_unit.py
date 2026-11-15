@@ -191,3 +191,33 @@ def test_weekly_plan_read_and_fill(monkeypatch):
         asyncio.run(cc.tool_get_weekly_plan({"id": "b1", "role": "leader", "office_id": "o1"}, {}))
     with pytest.raises(ValueError):
         asyncio.run(cc.tool_update_weekly_plan(admin, {"cells": [{"row": "Nope", "day": "Mon"}]}))
+
+
+def test_new_week_starts_from_last_weeks_layout(monkeypatch):
+    """A new week looks like last week (rows, presenters), topics cleared;
+    rebuild_from_last_week keeps topics already written (the Owner, 15 Nov 2026)."""
+    from routes import agenda as ag
+    db = _db(monkeypatch)
+    monkeypatch.setattr(ag, "db", db)
+
+    async def no_sync(*_a, **_k):
+        return None
+    monkeypatch.setattr(ag, "sync_agenda_calendar", no_sync)
+    import core.goal_sync as gs
+    monkeypatch.setattr(gs, "sync_office_weekly_goal", no_sync)
+    monkeypatch.setattr(gs, "goal_for_week", no_sync)
+    cells = lambda topic, who: [{"day": d, "topic": topic, "presenter": who} for d in range(5)]
+    asyncio.run(db.weekly_agendas.insert_one({"id": "w1", "office_id": "o1", "week_ending": "2026-11-15", "rows": [
+        {"id": "r1", "label": "Sales Impact", "cells": cells("Tov in pitch", "Louis")},
+        {"id": "r2", "label": "Morning Meeting", "cells": cells("The J curve", "Louis")}]}))
+    admin = {"id": "a1", "role": "admin", "office_id": "o1"}
+    plan = asyncio.run(cc.tool_get_weekly_plan(admin, {"week_ending": "2026-11-22"}))
+    assert [r["row"] for r in plan["rows"]] == ["Sales Impact", "Morning Meeting"]
+    assert plan["rows"][0]["days"][0] == {"day": "Mon", "topic": "", "presenter": "Louis", "time": ""}
+    asyncio.run(cc.tool_update_weekly_plan(admin, {"week_ending": "2026-11-22", "cells": [
+        {"row": "Morning Meeting", "day": "Tue", "topic": "What's your why?"}]}))
+    out = asyncio.run(cc.tool_update_weekly_plan(admin, {"week_ending": "2026-11-22", "rebuild_from_last_week": True}))
+    plan = asyncio.run(cc.tool_get_weekly_plan(admin, {"week_ending": "2026-11-22"}))
+    mm = next(r for r in plan["rows"] if r["row"] == "Morning Meeting")
+    assert [d["topic"] for d in mm["days"] if d["topic"]] == ["What's your why?"]
+    assert out["saved"]
