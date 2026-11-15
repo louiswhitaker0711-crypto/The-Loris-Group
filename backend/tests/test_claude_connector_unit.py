@@ -159,3 +159,35 @@ def test_mounted_outside_api():
     assert "/mcp/{token}" in paths
     methods = {m for r in cc.router.routes for m in (getattr(r, "methods", None) or set())}
     assert methods <= {"POST", "GET", "DELETE"}
+
+
+def test_weekly_plan_read_and_fill(monkeypatch):
+    """Claude reads and fills the office's Weekly Plan (the Owner, 15 Nov 2026):
+    Admins only, only the cells sent change, saved as a draft."""
+    from routes import agenda as ag
+    db = _db(monkeypatch)
+    monkeypatch.setattr(ag, "db", db)
+
+    async def no_sync(*_a, **_k):
+        return None
+    monkeypatch.setattr(ag, "sync_agenda_calendar", no_sync)
+    import core.goal_sync as gs
+    monkeypatch.setattr(gs, "sync_office_weekly_goal", no_sync)
+    monkeypatch.setattr(gs, "goal_for_week", no_sync)
+    asyncio.run(db.schedule_blocks.insert_many([
+        {"office_id": "o1", "title": "COD 3", "day_of_week": d, "start_time": "10:30"} for d in range(5)]))
+    admin = {"id": "a1", "role": "admin", "office_id": "o1"}
+    plan = asyncio.run(cc.tool_get_weekly_plan(admin, {"week_ending": "2026-11-18"}))
+    assert plan["week_ending"] == "2026-11-22" and plan["status"] == "not started"
+    assert [r["row"] for r in plan["rows"]] == ["COD 3"]
+    out = asyncio.run(cc.tool_update_weekly_plan(admin, {
+        "week_ending": "2026-11-22", "themes": {"leaders": "What is a leader"},
+        "cells": [{"row": "cod 3", "day": "Tue", "topic": "A leader shows up", "presenter": "Louis"}]}))
+    assert out["cells_changed"] == ["COD 3 Tue"] and out["status"] == "draft"
+    plan = asyncio.run(cc.tool_get_weekly_plan(admin, {"week_ending": "2026-11-22"}))
+    assert plan["themes"]["leaders"] == "What is a leader"
+    assert plan["rows"][0]["days"] == [{"day": "Tue", "topic": "A leader shows up", "presenter": "Louis", "time": ""}]
+    with pytest.raises(ValueError):
+        asyncio.run(cc.tool_get_weekly_plan({"id": "b1", "role": "leader", "office_id": "o1"}, {}))
+    with pytest.raises(ValueError):
+        asyncio.run(cc.tool_update_weekly_plan(admin, {"cells": [{"row": "Nope", "day": "Mon"}]}))

@@ -18,6 +18,8 @@ import { Breathe } from '../src/components/ui/Breathe';
 import PressableScale from '../src/components/ui/PressableScale';
 import MeetingCodPick from '../src/components/planner/MeetingCodPick';
 import CodWeekCard from '../src/components/cod/CodWeekCard';
+import WeeklyPlanView from '../src/components/schedule/WeeklyPlanView';
+import { useActiveOffice } from '../src/office/ActiveOfficeContext';
 import FolderTag, { FolderMeta } from '../src/components/notes/FolderTag';
 import PlannerLoaReview from '../src/components/planner/PlannerLoaReview';
 import PrimetimeDayBlock from '../src/components/planner/PrimetimeDayBlock';
@@ -70,12 +72,16 @@ const EIGHT_STEPS = [
 // Step-by-step "Plan the week" wizard — one bite at a time so every part
 // of the plan actually gets filled (goals, crew schedules & absences,
 // meetings, self-review, focus).
-const WIZARD_STEPS: { title: string; hint: string }[] = [
-  { title: 'Review last week', hint: 'The numbers are pulled in for you — add your wins and what you learned.' },
-  { title: 'Goals & crew', hint: "Your sign-up targets, P/A and scoring, then everyone's days and goals. They sync straight to Bells." },
-  { title: 'Meetings & recruitment', hint: 'Plan the meetings, calls, education and recruitment goals for the week.' },
-  { title: 'Self review', hint: '8 Steps, your own development, and who you are developing.' },
-  { title: 'Focus & finish', hint: "Set this week's focuses and the bigger picture — then share the plan." },
+type WizId = 'review' | 'goals' | 'agenda' | 'meetings' | 'self' | 'focus';
+const WIZARD_STEPS: { id: WizId; title: string; hint: string }[] = [
+  { id: 'review', title: 'Review last week', hint: 'The numbers are pulled in for you — add your wins and what you learned.' },
+  { id: 'goals', title: 'Goals & crew', hint: "Your sign-up targets, P/A and scoring, then everyone's days and goals. They sync straight to Bells." },
+  // The office's Weekly Plan (Schedule → Plan), Admins only — the Owner, 15
+  // Nov 2026: "this is the how I'm gonna change things".
+  { id: 'agenda', title: 'Office agenda', hint: 'Themes, COD 3 (Leaders Meeting), Primetime and every meeting for the week. Publish it when it’s ready.' },
+  { id: 'meetings', title: 'Meetings & recruitment', hint: 'Plan the meetings, calls, education and recruitment goals for the week.' },
+  { id: 'self', title: 'Self review', hint: '8 Steps, your own development, and who you are developing.' },
+  { id: 'focus', title: 'Focus & finish', hint: "Set this week's focuses and the bigger picture — then share the plan." },
 ];
 
 // "Plan today" — what leaders plan in advance each day
@@ -398,6 +404,16 @@ export default function WeeklyPlannerScreen() {
     queryFn: () => apiService.weeklyPlannerStats(week, targetUserId).then((r) => r.data),
     staleTime: 1000 * 60,
     enabled: showWeekTab,
+  });
+
+  // The office's Weekly Plan for this week (same cache as Schedule → Plan),
+  // for the Office agenda step's tick (done once it's published).
+  const { officeId: agendaOffice } = useActiveOffice();
+  const agendaQ = useQuery({
+    queryKey: ['agenda', week, agendaOffice],
+    queryFn: () => apiService.getAgenda(week, agendaOffice).then((r) => r.data),
+    enabled: user?.role === 'admin' && !targetUserId,
+    staleTime: 1000 * 30,
   });
 
   // The viewer's own box order and usual times on the day pages.
@@ -846,19 +862,25 @@ export default function WeeklyPlannerScreen() {
 
   // Wizard plumbing: which sections show (all of them in classic list view,
   // one step's worth in wizard mode) + per-step completion for the nudges.
-  const wizStep = (i: number) => wizard === null || wizard === i;
+  // The Office agenda step is the office's plan, so Admins planning their own
+  // week only (the Owner, 15 Nov 2026).
+  const planAdmin = user?.role === 'admin' && !targetUserId;
+  const steps = WIZARD_STEPS.filter((st) => st.id !== 'agenda' || planAdmin);
+  const wizStep = (id: WizId) => wizard === null || steps[wizard]?.id === id;
   const crewList = (statsQ.data?.crew || []) as any[];
   // Goals and crew are one step (the Owner, 8 Nov 2026).
-  const stepDone: boolean[] = [
-    r.wins.length > 0,
-    goalTeam.trim() !== '' && goalPersonal.trim() !== ''
+  const doneById: Record<WizId, boolean> = {
+    review: r.wins.length > 0,
+    goals: goalTeam.trim() !== '' && goalPersonal.trim() !== ''
       && crewList.every((m) => m.goal != null),
-    r.team_management.meetings.trim() !== '',
-    Object.values(r.eight_steps.scores || {}).some((v) => (v || 0) > 0),
-    r.focus_next_week.length > 0,
-  ];
+    agenda: agendaQ.data?.agenda?.status === 'published',
+    meetings: r.team_management.meetings.trim() !== '',
+    self: Object.values(r.eight_steps.scores || {}).some((v) => (v || 0) > 0),
+    focus: r.focus_next_week.length > 0,
+  };
+  const stepDone: boolean[] = steps.map((st) => doneById[st.id]);
   const wizDoneCount = stepDone.filter(Boolean).length;
-  const WIZ_N = WIZARD_STEPS.length;
+  const WIZ_N = steps.length;
   const WIZ_LAST = WIZ_N - 1;
   // Days worked this week, everyone's own and the crew's, from the schedules
   // (the Owner, 8 Nov 2026): a day counts unless it's Scheduled off, In
@@ -979,7 +1001,7 @@ export default function WeeklyPlannerScreen() {
                       : `Continue planning — ${wizDoneCount}/${WIZ_N} steps done`}
                   </Text>
                   <Text style={styles.wizCtaSub}>
-                    {wizDoneCount >= WIZ_N ? 'Revisit any step or share the plan' : 'Goals & crew · meetings · focus'}
+                    {wizDoneCount >= WIZ_N ? 'Revisit any step or share the plan' : planAdmin ? 'Goals & crew · office agenda · meetings · focus' : 'Goals & crew · meetings · focus'}
                   </Text>
                 </View>
                 <View style={styles.wizCtaProgress}><Text style={styles.wizCtaProgressText}>{wizDoneCount}/{WIZ_N}</Text></View>
@@ -991,15 +1013,15 @@ export default function WeeklyPlannerScreen() {
                 <View style={styles.wizHeader}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.wizStepNum}>STEP {wizard + 1} OF {WIZ_N}</Text>
-                    <Text style={styles.wizTitle}>{WIZARD_STEPS[wizard].title}</Text>
-                    <Text style={styles.wizHint}>{WIZARD_STEPS[wizard].hint}</Text>
+                    <Text style={styles.wizTitle}>{steps[wizard]?.title}</Text>
+                    <Text style={styles.wizHint}>{steps[wizard]?.hint}</Text>
                   </View>
                   <TouchableOpacity onPress={() => setWizard(null)} style={styles.wizClose} hitSlop={8}>
                     <Ionicons name="close" size={20} color={colors.textMuted} />
                   </TouchableOpacity>
                 </View>
                 <View style={styles.wizProgressRow}>
-                  {WIZARD_STEPS.map((_, i) => (
+                  {steps.map((_, i) => (
                     <TouchableOpacity key={i} style={{ flex: 1, paddingVertical: 6 }} onPress={() => setWizard(i)} hitSlop={4}>
                       <View style={[styles.wizSeg, stepDone[i] && styles.wizSegDone, wizard === i && styles.wizSegActive]} />
                     </TouchableOpacity>
@@ -1007,7 +1029,7 @@ export default function WeeklyPlannerScreen() {
                 </View>
               </>
             )}
-            {wizStep(0) && (
+            {wizStep('review') && (
               <>
             {/* 🚀 Wins */}
             <Card icon="rocket-outline" title="Wins">
@@ -1107,7 +1129,7 @@ export default function WeeklyPlannerScreen() {
             
               </>
             )}
-            {wizStep(1) && (
+            {wizStep('goals') && (
               <>
             {/* 🎯 This week's goals — sales goals live on the Bells row */}
             <Card icon="flag-outline" title="This Week's Goals">
@@ -1238,7 +1260,12 @@ export default function WeeklyPlannerScreen() {
             
               </>
             )}
-            {wizStep(2) && (
+            {planAdmin && wizStep('agenda') && (
+              <View style={{ marginBottom: 14 }}>
+                <WeeklyPlanView week={week} embedded />
+              </View>
+            )}
+            {wizStep('meetings') && (
               <>
             {/* 🤝 Team coaching */}
             <Card icon="calendar-outline" title="Team Coaching">
@@ -1280,7 +1307,7 @@ export default function WeeklyPlannerScreen() {
             
               </>
             )}
-            {wizStep(3) && (
+            {wizStep('self') && (
               <>
             {/* 🧩 8 Steps */}
             <Card icon="extension-puzzle-outline" title="8 Steps Review (Personal)">
@@ -1346,7 +1373,7 @@ export default function WeeklyPlannerScreen() {
             
               </>
             )}
-            {wizStep(4) && (
+            {wizStep('focus') && (
               <>
             {/* 🎯 Goals — this week's focuses + the bigger picture */}
             <Card icon="golf-outline" title="Goals">
@@ -1379,8 +1406,25 @@ export default function WeeklyPlannerScreen() {
                 <PressableScale
                   style={styles.wizNext}
                   onPress={() => {
-                    if (wizard < WIZ_LAST) setWizard(wizard + 1);
-                    else { setWizard(null); toast.success(wizDoneCount >= WIZ_N ? 'Week fully planned 💪' : 'Plan saved — finish the open steps any time'); }
+                    if (wizard < WIZ_LAST) { setWizard(wizard + 1); return; }
+                    setWizard(null);
+                    toast.success(wizDoneCount >= WIZ_N ? 'Week fully planned 💪' : 'Plan saved — finish the open steps any time');
+                    // Offer to publish the office agenda if it's still a draft.
+                    const ag = agendaQ.data?.agenda;
+                    if (planAdmin && ag?.id && ag.status !== 'published') {
+                      showAlert('Publish the office agenda?', 'Coaches see the week’s plan once it’s published, and the schedule fills with its topics and presenters.', [
+                        { text: 'Not yet', style: 'cancel' },
+                        { text: 'Publish', onPress: async () => {
+                          try {
+                            await apiService.publishAgenda(ag.id, true);
+                            await agendaQ.refetch();
+                            toast.success('Office agenda published');
+                          } catch (e: any) {
+                            showAlert('Could not publish', e?.response?.data?.detail || 'Try again from Schedule → Plan.');
+                          }
+                        } },
+                      ]);
+                    }
                   }}
                 >
                   <Text style={styles.wizNextText}>

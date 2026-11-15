@@ -490,12 +490,126 @@ async def tool_get_coaching(owner: dict, args: dict) -> dict:
         "key_points": (d.get("key_takeaways") or [])[:8]} for d in found]}
 
 
+# ── The office's Weekly Plan (Schedule → Plan: the agenda) ───────────────────
+# The Owner, 15 Nov 2026: Claude can read and fill the Weekly Plan (themes,
+# weekly stats and every row's topic / presenter / time, e.g. COD 3 = the
+# Leaders Meeting). Admins only, as in the app. Publishing stays in the app.
+_AGENDA_DAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
+
+
+def _agenda_week(raw: Any) -> str:
+    from routes.agenda import _coerce_to_sunday
+    if str(raw or "").strip():
+        wk = _coerce_to_sunday(str(raw).strip()[:10])
+        if not wk:
+            raise ValueError("week_ending must be a date (YYYY-MM-DD).")
+        return wk
+    today = datetime.now(APP_TZ).date()
+    return (today + timedelta(days=(6 - today.weekday()) % 7)).isoformat()
+
+
+def _agenda_admin(owner: dict) -> str:
+    if owner.get("role") != "admin" or not owner.get("office_id"):
+        raise ValueError("Only an Admin can see or change the office's Weekly Plan.")
+    return owner["office_id"]
+
+
+async def _agenda_load(office_id: str, week: str) -> tuple[Optional[dict], list]:
+    from routes.agenda import (_build_seed_rows, follow_schedule, _normalize_row,
+                               _normalize_themes, _normalize_stats)
+    seed = await _build_seed_rows(office_id)
+    doc = await db.weekly_agendas.find_one({"office_id": office_id, "week_ending": week}, {"_id": 0})
+    if doc:
+        doc["themes"] = _normalize_themes(doc.get("themes"))
+        doc["stats"] = _normalize_stats(doc.get("stats"))
+        rows = follow_schedule(list(doc.get("rows") or []), seed)
+    else:
+        rows = seed
+    return doc, [_normalize_row(r) for r in rows if isinstance(r, dict)]
+
+
+def _agenda_day(raw: Any) -> int:
+    t = str(raw if raw is not None else "").strip().lower()
+    if t.isdigit() and int(t) in range(6):
+        return int(t)
+    for i, d in enumerate(_AGENDA_DAYS):
+        if t.startswith(d.lower()):
+            return i
+    try:
+        return date.fromisoformat(t[:10]).weekday()
+    except ValueError:
+        raise ValueError(f"'{raw}' isn't a day: use Mon–Sat or a date.")
+
+
+def _agenda_row(rows: list, name: Any) -> dict:
+    want = " ".join(str(name or "").lower().split())
+    if not want:
+        raise ValueError("Say which row, e.g. 'COD 3' or 'Primetime'.")
+    exact = [r for r in rows if (r.get("label") or "").strip().lower() == want]
+    found = exact or [r for r in rows if want in (r.get("label") or "").lower()]
+    if len(found) != 1:
+        names = ", ".join(r.get("label") or "" for r in rows)
+        raise ValueError(f"No single row called '{name}'. Rows this week: {names}.")
+    return found[0]
+
+
+async def tool_get_weekly_plan(owner: dict, args: dict) -> dict:
+    office_id = _agenda_admin(owner)
+    week = _agenda_week(args.get("week_ending"))
+    doc, rows = await _agenda_load(office_id, week)
+    from routes.agenda import _normalize_themes, _normalize_stats
+    return {
+        "week_ending": week,
+        "status": (doc or {}).get("status") or "not started",
+        "stats": (doc or {}).get("stats") or _normalize_stats(None),
+        "themes": (doc or {}).get("themes") or _normalize_themes(None),
+        "rows": [{"row": r.get("label"), "time": r.get("time_label") or "",
+                  "days": [{"day": _AGENDA_DAYS[c["day"]], "topic": c.get("topic") or "",
+                            "presenter": c.get("presenter") or "", "time": c.get("time") or ""}
+                           for c in r.get("cells") or []
+                           if c.get("topic") or c.get("presenter") or c.get("time")]}
+                 for r in rows],
+    }
+
+
+async def tool_update_weekly_plan(owner: dict, args: dict) -> dict:
+    from routes.agenda import save_agenda_doc, _normalize_themes, _normalize_stats, DEFAULT_THEMES, DEFAULT_STATS
+    office_id = _agenda_admin(owner)
+    if owner.get("is_demo"):
+        raise ValueError("This account can only look, not change things.")
+    week = _agenda_week(args.get("week_ending"))
+    doc, rows = await _agenda_load(office_id, week)
+    themes = dict((doc or {}).get("themes") or _normalize_themes(None))
+    stats = dict((doc or {}).get("stats") or _normalize_stats(None))
+    for k, v in (args.get("themes") or {}).items():
+        if k not in DEFAULT_THEMES:
+            raise ValueError(f"Unknown theme '{k}'. Themes: {', '.join(DEFAULT_THEMES)}.")
+        themes[k] = str(v or "")
+    for k, v in (args.get("stats") or {}).items():
+        if k not in DEFAULT_STATS:
+            raise ValueError(f"Unknown stat '{k}'. Stats: {', '.join(DEFAULT_STATS)}.")
+        stats[k] = str(v if v is not None else "")
+    changed = []
+    for c in args.get("cells") or []:
+        row = _agenda_row(rows, c.get("row"))
+        day = _agenda_day(c.get("day"))
+        cell = next(x for x in row["cells"] if x["day"] == day)
+        for key in ("topic", "presenter", "time"):
+            if key in c and c[key] is not None:
+                cell[key] = str(c[key]).strip()
+        changed.append(f"{row.get('label')} {_AGENDA_DAYS[day]}")
+    saved = await save_agenda_doc(owner, office_id, week, rows, _normalize_themes(themes), _normalize_stats(stats))
+    return {"week_ending": week, "saved": True, "status": saved.get("status"), "cells_changed": changed,
+            "note": "Saved as a draft. Publish it from Schedule → Plan when it's ready."}
+
+
 def _box_names() -> str:
     from core.ai_actions import planner_boxes
     return ", ".join(planner_boxes().values())
 
 
-WRITE_TOOLS = {"set_weekly_goal", "save_setup", "write_planner", "add_planner_note", "set_bunny_hops"}
+WRITE_TOOLS = {"set_weekly_goal", "save_setup", "write_planner", "add_planner_note", "set_bunny_hops",
+               "update_weekly_plan"}
 
 
 TOOLS: dict[str, tuple] = {
@@ -563,6 +677,27 @@ TOOLS: dict[str, tuple] = {
                        "box": {"type": "string", "description": "One of the planner's boxes (see instructions)."},
                        "text": {"type": "string"},
                        "replace": {"type": "boolean", "description": "Replace the box instead of adding. Default false."}}),
+    "get_weekly_plan": (tool_get_weekly_plan,
+                        "The office's Weekly Plan (Schedule → Plan, Admins only) for a week: status, weekly stats "
+                        "(weekly_goal, promotions, personal_recruits), themes, and each row (e.g. COD 3 = the Leaders "
+                        "Meeting, Primetime, Morning Meeting) with each day's topic, presenter and time. Default: "
+                        "this week (on a Sunday, the week ending that day).",
+                        {"week_ending": {"type": "string", "description": "Any date in the week (YYYY-MM-DD). Optional."}}),
+    "update_weekly_plan": (tool_update_weekly_plan,
+                           "CHANGES THE APP. Fills in the office's Weekly Plan for a week (Admins only): any theme "
+                           "or stat, and any row's topic / presenter / time for a day. Only what you send changes; "
+                           "it saves as a draft and the Admin publishes it in the app. Rows by their name "
+                           "(get_weekly_plan lists them), days as Mon–Sat.",
+                           {"week_ending": {"type": "string", "description": "Any date in the week (YYYY-MM-DD)."},
+                            "themes": {"type": "object", "description": "Theme name → text, e.g. "
+                                       "{\"leaders\": \"What is a leader\"}. Names: expectations_1, expectations_2, "
+                                       "leaders, topic_theme, customer_service_theme, competition, concentration, news, social."},
+                            "stats": {"type": "object", "description": "weekly_goal, promotions, personal_recruits."},
+                            "cells": {"type": "array", "description": "Row/day cells to set.",
+                                      "items": {"type": "object", "properties": {
+                                          "row": {"type": "string"}, "day": {"type": "string"},
+                                          "topic": {"type": "string"}, "presenter": {"type": "string"},
+                                          "time": {"type": "string"}}, "required": ["row", "day"]}}}),
     "add_planner_note": (tool_add_planner_note,
                          "CHANGES THE APP. Adds a note to a day's Notes box in the person's own planner.",
                          {"date": {"type": "string", "description": "YYYY-MM-DD. Default today."},

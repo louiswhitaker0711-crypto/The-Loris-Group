@@ -663,7 +663,15 @@ async def upsert_agenda(request: Request):
     if isinstance(body.get("photos"), list):
         from routes.notes_folder import _photo_ok
         photos = [p for p in body["photos"] if _photo_ok(p)][:MAX_PLAN_PHOTOS]
-    status_in = (body.get("status") or "draft").lower()
+    return await save_agenda_doc(admin, office_id, week_ending, rows, themes, stats,
+                                 body.get("status"), photos)
+
+
+async def save_agenda_doc(admin: dict, office_id: str, week_ending: str, rows: list, themes: dict,
+                          stats: dict, status_in: Optional[str] = "draft", photos: Optional[list] = None) -> dict:
+    """Save a week's plan (create or update), mirror the weekly goal and sync
+    the office calendar. Used by POST /agenda and the Claude connector."""
+    status_in = (status_in or "draft").lower()
     if status_in not in ("draft", "preview"):
         # 'published' is set only via /publish — silently coerce
         status_in = "draft"
