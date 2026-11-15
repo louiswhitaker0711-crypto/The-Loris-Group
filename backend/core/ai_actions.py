@@ -175,8 +175,8 @@ async def set_planner_box(actor: dict, day: Optional[str], box: str, text: str, 
         raise HTTPException(status_code=400, detail="Pick one of their planner's boxes: " + ", ".join(
             (f"{b['time']} · {b['name']}" if b["time"] else b["name"]) for b in mine))
     text = str(text or "").strip()[:4000]
-    if not text:
-        raise HTTPException(status_code=400, detail="Nothing to write")
+    if not text and append:
+        raise HTTPException(status_code=400, detail="Nothing to write")   # replacing with nothing clears the box
     p = await _my_planner(actor, d)
     slot = str(d.weekday())
     old = ((p.get("days") or {}).get(slot) or {}).get(key) or ""

@@ -726,7 +726,7 @@ TOOLS: dict[str, tuple] = {
                     "kpi_target": {"type": "integer"}, "positive": {"type": "string"}}),
     "write_planner": (tool_write_planner,
                       "CHANGES THE APP. Writes into one box of a day (Monday–Saturday) in the person's own weekly "
-                      "planner. Adds to what's there unless replace is true.",
+                      "planner. Adds to what's there unless replace is true (replace with empty text clears the box).",
                       {"date": {"type": "string", "description": "YYYY-MM-DD."},
                        "box": {"type": "string", "description": "One of the planner's boxes (see instructions)."},
                        "text": {"type": "string"},
