@@ -59,7 +59,7 @@ const STATS_FIELDS: { key: string; label: string; placeholder: string; icon: any
   { key: 'personal_recruits', label: 'Personal Recruits', placeholder: 'e.g. 2',   icon: 'person-add-outline', color: '#22c55e' },
 ];
 
-type Cell = { day: number; topic: string; presenter: string; time?: string; merge_up?: boolean; cod?: string };
+type Cell = { day: number; topic: string; presenter: string; time?: string; merge_up?: boolean; cod?: string; run?: string };
 
 // A COD row ("COD 3", "CoD tie in"…) gets a From the COD picker on each day,
 // starting at the stage in its name (COD 3 → Stage 3 on), the Owner's call,

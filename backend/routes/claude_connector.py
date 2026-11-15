@@ -434,7 +434,13 @@ async def tool_get_quality(owner: dict, args: dict) -> dict:
 async def tool_get_me(owner: dict, args: dict) -> dict:
     """Everything this link's person can see, in one go (as the in-app AI sees it)."""
     from core.ai_context import build_context
-    return await build_context(owner)
+    from core.ai_actions import my_planner_boxes
+    out = await build_context(owner)
+    try:
+        out["planner_boxes"] = [{"name": b["name"], "time": b["time"]} for b in await my_planner_boxes(owner)]
+    except Exception:
+        pass
+    return out
 
 
 # ── Writes (Claude asks the person before each one) ──────────────────────────
@@ -599,7 +605,8 @@ async def tool_get_weekly_plan(owner: dict, args: dict) -> dict:
         "themes": (doc or {}).get("themes") or _normalize_themes(None),
         "rows": [{"row": r.get("label"), "time": r.get("time_label") or "",
                   "days": [{"day": _AGENDA_DAYS[c["day"]], "topic": c.get("topic") or "",
-                            "presenter": c.get("presenter") or "", "time": c.get("time") or ""}
+                            "presenter": c.get("presenter") or "", "time": c.get("time") or "",
+                            **({"run": c["run"]} if c.get("run") else {})}
                            for c in r.get("cells") or []
                            if c.get("topic") or c.get("presenter") or c.get("time")]}
                  for r in rows],
@@ -641,7 +648,7 @@ async def tool_update_weekly_plan(owner: dict, args: dict) -> dict:
             rows.insert(at, row)
         day = _agenda_day(c.get("day"))
         cell = next(x for x in row["cells"] if x["day"] == day)
-        for key in ("topic", "presenter", "time"):
+        for key in ("topic", "presenter", "time", "run"):
             if key in c and c[key] is not None:
                 cell[key] = str(c[key]).strip()
         changed.append(f"{row.get('label')} {_AGENDA_DAYS[day]}")
@@ -719,7 +726,7 @@ TOOLS: dict[str, tuple] = {
                     "kpi_target": {"type": "integer"}, "positive": {"type": "string"}}),
     "write_planner": (tool_write_planner,
                       "CHANGES THE APP. Writes into one box of a day (Monday–Saturday) in the person's own weekly "
-                      "planner. Adds to what's there unless replace is true.",
+                      "planner. Adds to what's there unless replace is true (replace with empty text clears the box).",
                       {"date": {"type": "string", "description": "YYYY-MM-DD."},
                        "box": {"type": "string", "description": "One of the planner's boxes (see instructions)."},
                        "text": {"type": "string"},
@@ -750,7 +757,10 @@ TOOLS: dict[str, tuple] = {
                                       "items": {"type": "object", "properties": {
                                           "row": {"type": "string"}, "day": {"type": "string"},
                                           "topic": {"type": "string"}, "presenter": {"type": "string"},
-                                          "time": {"type": "string"}}, "required": ["row", "day"]}}}),
+                                          "time": {"type": "string"},
+                                          "run": {"type": "string", "description": "The topic's run-through, opened with "
+                                                  "Run it (see RUN_SHEET_FORMAT in the instructions)."}},
+                                                "required": ["row", "day"]}}}),
     "add_planner_note": (tool_add_planner_note,
                          "CHANGES THE APP. Adds a note to a day's Notes box in the person's own planner.",
                          {"date": {"type": "string", "description": "YYYY-MM-DD. Default today."},
@@ -778,9 +788,25 @@ INSTRUCTIONS = (
 )
 
 
+RUN_SHEET_FORMAT = (
+    "RUN_SHEET_FORMAT (a meeting's run-through, opened full screen with Run it, card by card). Write it as "
+    "plain lines: '# Title', '> subtitle (theme · minutes)', then one card per part with '## Part · N min' "
+    "(e.g. Opener, Teach, Activity, Close; for a leaders' meeting Opener, Standard, Why it helps, What's in it "
+    "for them, CoD, Activity). Inside a card: plain lines, '- bullets', 'Say: words to read out', 'Ask: a "
+    "question for the room', 'Steer to: the answer to land on', 'VIDEO: title | url' (no url = a YouTube "
+    "search; never invent a link), 'TIMER: seconds', and diagrams: 'DIAGRAM: flow: A > B > C', "
+    "'DIAGRAM: funnel: Doors 120 > Spoken 70 > ...', 'DIAGRAM: pyramid: top > ... > base', 'DIAGRAM: cycle: A > B > C', "
+    "'DIAGRAM: compare: Head 1 | Head 2 ; row a | row b', 'DIAGRAM: quadrant: x low | x high ; tl | tr | bl | br'. "
+    "Timings add up to the slot (a 30-minute morning meeting's topic is about 20). Put the run-through in the "
+    "planner box (write_planner, the person's own box name) and in the Weekly Plan cell's run; the plan cell's "
+    "topic stays a short name.\n\n"
+)
+
+
 def instructions() -> str:
     from core.sales_coaching import BIG_COACH, PLAYBOOK, RESPONSE_STYLE
-    return (INSTRUCTIONS + _box_names() + ".\n\n"
+    return (INSTRUCTIONS + _box_names() + ". A person may have renamed their boxes: write_planner takes their own "
+            "names (get_me lists them as planner_boxes), and an unknown name lists them.\n\n" + RUN_SHEET_FORMAT +
             "When they ask for sales or coaching advice, coach to make them better, not just to inform: read their "
             "numbers (get_me or get_person) and breakdowns, pull the office's coaching with get_coaching, and "
             "answer in this shape. Measure against what good looks like, not the office average.\n\n"

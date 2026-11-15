@@ -19,6 +19,7 @@ import PressableScale from '../src/components/ui/PressableScale';
 import MeetingCodPick from '../src/components/planner/MeetingCodPick';
 import CodWeekCard from '../src/components/cod/CodWeekCard';
 import WeeklyPlanView from '../src/components/schedule/WeeklyPlanView';
+import RunSheet, { RunItButton } from '../src/components/planner/RunSheet';
 import { useActiveOffice } from '../src/office/ActiveOfficeContext';
 import FolderTag, { FolderMeta } from '../src/components/notes/FolderTag';
 import PlannerLoaReview from '../src/components/planner/PlannerLoaReview';
@@ -559,6 +560,8 @@ export default function WeeklyPlannerScreen() {
     update((c) => ({ ...c, days: { ...c.days, [String(day)]: { ...(c.days[String(day)] || {}), [key]: v } } }));
 
   // Near-full-screen note editor — which box is open (null = closed).
+  // "Run it": a box's run-through full screen (the Owner, 15 Nov 2026).
+  const [runSheet, setRunSheet] = useState<null | { text: string; title: string }>(null);
   const [editorField, setEditorFieldRaw] = useState<null | { where: 'day' | 'notes'; tab?: number; key?: string; title: string; notesOnly?: boolean }>(null);
   // Plan | Notes in the editor (the Owner, 29 Oct 2026): Plan is the slot's own
   // text; Notes are extra notes on it, each filed under a heading.
@@ -720,6 +723,9 @@ export default function WeeklyPlannerScreen() {
         placeholder="Notes…"
         onOpen={() => setEditorField({ where: 'day', tab: dayIdx, key: f.key, title: f.label })}
       />
+      {!!(draft?.days[String(dayIdx)]?.[f.key] || '').trim() && (
+        <RunItButton onPress={() => setRunSheet({ text: draft?.days[String(dayIdx)]?.[f.key] || '', title: f.label })} />
+      )}
       {notesChip(dayIdx, f.key, f.label)}
       {canEdit && NOTE_FIELDS.some((n) => n.key === f.key) && (
         <FolderTag value={draft?.folder?.[`${dayIdx}:${f.key}`]}
@@ -1608,6 +1614,7 @@ export default function WeeklyPlannerScreen() {
           notes get real reading room; the input keeps its own bottom padding
           equal to the keyboard overlap (iOS + mobile web — Android resizes
           the window itself, the hook returns 0 there). */}
+      <RunSheet visible={!!runSheet} text={runSheet?.text || ''} title={runSheet?.title} onClose={() => setRunSheet(null)} />
       <Modal visible={!!editorField} animationType="slide" onRequestClose={() => setEditorField(null)}>
         {/* A full-screen modal covers the top bar, so it needs the device's real
             top inset (the shell zeroes it for screens underneath the bar). */}

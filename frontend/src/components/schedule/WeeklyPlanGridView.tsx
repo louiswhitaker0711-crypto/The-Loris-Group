@@ -12,6 +12,7 @@ import { colors } from '../../theme/colors';
 import { lightColors } from '../../theme/ThemeContext';
 import { GRADIENT, useColors, useTheme } from '../../theme/ThemeContext';
 import { DepthCard } from '../ui/DepthCard';
+import RunSheet from '../planner/RunSheet';
 import { apiService } from '../../api/client';
 import { useActiveOffice } from '../../office/ActiveOfficeContext';
 import { toast } from '../../utils/toast';
@@ -85,7 +86,7 @@ const STATS_FIELDS: { key: string; label: string; icon: any; color: string }[] =
 const COL_WIDTH = 124;
 const LABEL_COL_WIDTH = 102;
 
-type Cell = { day: number; topic: string; presenter: string; time?: string; merge_up?: boolean };
+type Cell = { day: number; topic: string; presenter: string; time?: string; merge_up?: boolean; run?: string };
 export type MergeChange = { rowId: string; day: number; merge: boolean };
 type Row = { id: string; label: string; time_label: string; cells: Cell[] };
 type Themes = Record<string, string>;
@@ -128,6 +129,7 @@ export default function WeeklyPlanGridView({
   const { effective } = useTheme();
   const isDark = effective === 'dark';
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
+  const [runCell, setRunCell] = useState<null | { text: string; title: string }>(null);
   const dayTints = isDark ? DAY_TINTS_DARK : DAY_TINTS;
   const todayCol = todayColumn(weekEnding);
   const queryClient = useQueryClient();
@@ -397,6 +399,7 @@ export default function WeeklyPlanGridView({
 
   return (
     <View>
+      <RunSheet visible={!!runCell} text={runCell?.text || ''} title={runCell?.title} onClose={() => setRunCell(null)} />
       {/* ── Stats strip ─ ── ── */}
       {filledStats.length > 0 && (
         <View style={styles.statsStrip}>
@@ -702,6 +705,14 @@ export default function WeeklyPlanGridView({
                                 <Text style={[styles.cellTopic, { fontSize: topicFontSize }]} numberOfLines={2}>
                                   {sub}
                                 </Text>
+                              )}
+                              {/* A topic with a run-through opens it (the Owner, 15 Nov 2026). */}
+                              {!!cell?.run?.trim() && (
+                                <TouchableOpacity onPress={() => setRunCell({ text: cell?.run || '', title: cell?.topic || row.label })}
+                                  style={styles.runChip} accessibilityRole="button" accessibilityLabel={`Run ${cell.topic || row.label}`}>
+                                  <Ionicons name="play" size={10} color={colors.onPrimary} />
+                                  <Text style={styles.runChipText}>Run it</Text>
+                                </TouchableOpacity>
                               )}
                             </>
                           ) : (
@@ -1067,6 +1078,8 @@ const createStyles = (colors: any, isDark = false) => {
   mergeSub: { fontSize: 12, color: colors.textMuted, marginBottom: 8, lineHeight: 17 },
   mergeOpt: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, paddingHorizontal: 4, borderTopWidth: 1, borderTopColor: hair },
   mergeOptText: { fontSize: 14, fontWeight: '700', color: colors.text },
+  runChip: { flexDirection: 'row', alignItems: 'center', gap: 3, alignSelf: 'flex-start', marginTop: 4, borderRadius: 999, paddingHorizontal: 7, paddingVertical: 2, backgroundColor: colors.primary },
+  runChipText: { fontSize: 10, fontWeight: '800', color: colors.onPrimary },
   cellTopic: { fontSize: 10, fontWeight: '500', fontStyle: 'italic', color: colors.textMuted, lineHeight: 13, marginTop: 2 },
   presenterRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 4 },
   cellPresenter: { fontSize: 12, fontWeight: '800', color: colors.text, lineHeight: 15 },
