@@ -24,7 +24,7 @@
  * Text without any "##" is shown as a single card, so older boxes still open.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Modal, Pressable, ScrollView, useWindowDimensions, Linking, Platform } from 'react-native';
+import { View, Text, Modal, Pressable, ScrollView, useWindowDimensions, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path, Circle, Text as SvgText } from 'react-native-svg';
 import { useColors, fonts } from '../../theme/ThemeContext';
