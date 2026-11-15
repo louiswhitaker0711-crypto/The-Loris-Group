@@ -624,8 +624,21 @@ async def tool_update_weekly_plan(owner: dict, args: dict) -> dict:
             raise ValueError(f"Unknown stat '{k}'. Stats: {', '.join(DEFAULT_STATS)}.")
         stats[k] = str(v if v is not None else "")
     changed = []
+    frame: Optional[list] = None
     for c in args.get("cells") or []:
-        row = _agenda_row(rows, c.get("row"))
+        try:
+            row = _agenda_row(rows, c.get("row"))
+        except ValueError:
+            # A row from last week's layout that this week doesn't have yet
+            # comes back with last week's presenters and times (topics clear).
+            if frame is None:
+                frame = await _last_week_frame(office_id, week) or []
+            row = _agenda_row(frame, c.get("row"))
+            order = [(r.get("label") or "").lower() for r in frame]
+            pos = order.index((row.get("label") or "").lower())
+            later = {lbl for lbl in order[pos + 1:]}
+            at = next((i for i, r in enumerate(rows) if (r.get("label") or "").lower() in later), len(rows))
+            rows.insert(at, row)
         day = _agenda_day(c.get("day"))
         cell = next(x for x in row["cells"] if x["day"] == day)
         for key in ("topic", "presenter", "time"):

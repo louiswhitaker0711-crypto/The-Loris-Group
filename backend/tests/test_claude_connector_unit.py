@@ -221,3 +221,12 @@ def test_new_week_starts_from_last_weeks_layout(monkeypatch):
     mm = next(r for r in plan["rows"] if r["row"] == "Morning Meeting")
     assert [d["topic"] for d in mm["days"] if d["topic"]] == ["What's your why?"]
     assert out["saved"]
+    # A week missing one of last week's rows gets it back when it's written to.
+    asyncio.run(db.weekly_agendas.update_one({"week_ending": "2026-11-22"},
+                                             {"$set": {"rows": [r for r in asyncio.run(db.weekly_agendas.find_one(
+                                                 {"week_ending": "2026-11-22"}))["rows"] if r["label"] == "Morning Meeting"]}}))
+    asyncio.run(cc.tool_update_weekly_plan(admin, {"week_ending": "2026-11-22", "cells": [
+        {"row": "Sales Impact", "day": "Thu", "topic": "Visitor story & tips"}]}))
+    plan = asyncio.run(cc.tool_get_weekly_plan(admin, {"week_ending": "2026-11-22"}))
+    assert [r["row"] for r in plan["rows"]] == ["Sales Impact", "Morning Meeting"]
+    assert plan["rows"][0]["days"][0]["presenter"] == "Louis"
