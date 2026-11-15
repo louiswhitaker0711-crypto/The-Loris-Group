@@ -177,7 +177,10 @@ function visibleDaysOf(row: Row, forced?: number[]): number[] {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-export default function WeeklyPlanView() {
+/** `week` pins the plan to one week (a Sunday); `embedded` drops the view's
+ * own scroll so it can sit inside another screen, e.g. the "Office agenda"
+ * step of Plan your week (the Owner, 15 Nov 2026). */
+export default function WeeklyPlanView({ week: pinnedWeek, embedded = false }: { week?: string; embedded?: boolean } = {}) {
   const colors = useColors();
   const isDark = useTheme().effective === 'dark';
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
@@ -191,7 +194,8 @@ export default function WeeklyPlanView() {
   const queryClient = useQueryClient();
   const isAdmin = user?.role === 'admin';
 
-  const [week, setWeek] = useState<string>(thisSunday());
+  const [week, setWeek] = useState<string>(pinnedWeek || thisSunday());
+  useEffect(() => { if (pinnedWeek) setWeek(pinnedWeek); }, [pinnedWeek]);
   // When admin wants to jump to a different Sunday (e.g. plan next week in
   // advance). We keep `week` as the source of truth for the agenda query.
   const [weekPickerOpen, setWeekPickerOpen] = useState(false);
@@ -655,14 +659,16 @@ export default function WeeklyPlanView() {
   // "Start this week" hero — only when nothing is saved for this week yet.
   const showHero = !draft.id && !heroDismissed;
 
-  // Admins → Fill | Structure | Preview.
+  // Admins → Fill | Structure | Preview. Embedded, the host screen scrolls.
+  const Scroller: any = embedded ? View : ScrollView;
+  const scrollerProps = embedded ? { style: { paddingVertical: 4 } } : {
+    contentContainerStyle: { padding: 12, paddingBottom: 24 },
+    refreshControl: <RefreshControl refreshing={q.isFetching} onRefresh={() => q.refetch()} tintColor={colors.primary} />,
+    keyboardShouldPersistTaps: 'handled',
+  };
   return (
-    <View style={{ flex: 1 }}>
-      <ScrollView
-        contentContainerStyle={{ padding: 12, paddingBottom: 24 }}
-        refreshControl={<RefreshControl refreshing={q.isFetching} onRefresh={() => q.refetch()} tintColor={colors.primary} />}
-        keyboardShouldPersistTaps="handled"
-      >
+    <View style={embedded ? undefined : { flex: 1 }}>
+      <Scroller {...scrollerProps}>
         {/* Header row */}
         <View style={styles.headerRow}>
           <View style={{ flex: 1 }}>
@@ -1084,7 +1090,7 @@ export default function WeeklyPlanView() {
             </View>
           </>
         )}
-      </ScrollView>
+      </Scroller>
 
       {/* Full-size photo */}
       <Modal visible={!!photoOpen} transparent animationType="fade" onRequestClose={() => setPhotoOpen(null)}>
