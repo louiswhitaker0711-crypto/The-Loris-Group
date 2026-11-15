@@ -24,10 +24,11 @@
  * Text without any "##" is shown as a single card, so older boxes still open.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Modal, Pressable, ScrollView, useWindowDimensions, Linking, Platform } from 'react-native';
+import { View, Text, Modal, Pressable, ScrollView, useWindowDimensions, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path, Circle, Text as SvgText } from 'react-native-svg';
 import { useColors, fonts } from '../../theme/ThemeContext';
+import { useDeviceInsets } from '../../nav/AppShell';
 
 type Line =
   | { kind: 'text' | 'bullet' | 'say' | 'ask' | 'steer'; text: string }
@@ -239,6 +240,9 @@ function LineView({ l, c }: { l: Line; c: any }) {
 
 export default function RunSheet({ visible, text, title, onClose }: { visible: boolean; text: string; title?: string; onClose: () => void }) {
   const c = useColors();
+  // A full-screen modal covers the top bar, so it needs the device's real
+  // insets (status bar / notch on an installed iPhone app).
+  const insets = useDeviceInsets();
   const { width } = useWindowDimensions();
   const doc = useMemo(() => parseRunSheet(text, title), [text, title]);
   const [page, setPage] = useState(0);
@@ -253,7 +257,7 @@ export default function RunSheet({ visible, text, title, onClose }: { visible: b
   };
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose} presentationStyle="fullScreen">
-      <View style={{ flex: 1, backgroundColor: c.page || c.background, paddingTop: Platform.OS === 'ios' ? 54 : 18 }}>
+      <View style={{ flex: 1, backgroundColor: c.page || c.background, paddingTop: Math.max(insets.top, 12) + 8 }}>
         <View style={{ width: w, alignSelf: 'center', paddingHorizontal: 18, flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
           <View style={{ flex: 1 }}>
             <Text style={{ fontFamily: fonts.display, fontSize: 26, color: c.text }}>{doc.title}</Text>
@@ -290,7 +294,7 @@ export default function RunSheet({ visible, text, title, onClose }: { visible: b
           ))}
         </ScrollView>
         {n > 1 && (
-          <View style={{ width: w, alignSelf: 'center', flexDirection: 'row', gap: 10, padding: 18, paddingBottom: Platform.OS === 'ios' ? 34 : 18 }}>
+          <View style={{ width: w, alignSelf: 'center', flexDirection: 'row', gap: 10, padding: 18, paddingBottom: Math.max(insets.bottom, 12) + 6 }}>
             <Pressable onPress={() => go(page - 1)} disabled={page === 0}
               style={{ flex: 1, borderRadius: 999, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: c.border, opacity: page === 0 ? 0.4 : 1 }}>
               <Text style={{ fontFamily: fonts.bodySemibold, fontSize: 16, color: c.text }}>Back</Text>
