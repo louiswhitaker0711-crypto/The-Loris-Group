@@ -412,7 +412,9 @@ export default function WeeklyPlannerScreen() {
   const agendaQ = useQuery({
     queryKey: ['agenda', week, agendaOffice],
     queryFn: () => apiService.getAgenda(week, agendaOffice).then((r) => r.data),
-    enabled: user?.role === 'admin' && !targetUserId,
+    // Their own plan, whether opened plain or with their own id (Home's
+    // "Next week's plans → You" passes it).
+    enabled: user?.role === 'admin' && (!targetUserId || String(targetUserId) === String(user?.id)),
     staleTime: 1000 * 30,
   });
 
@@ -864,7 +866,7 @@ export default function WeeklyPlannerScreen() {
   // one step's worth in wizard mode) + per-step completion for the nudges.
   // The Office agenda step is the office's plan, so Admins planning their own
   // week only (the Owner, 15 Nov 2026).
-  const planAdmin = user?.role === 'admin' && !targetUserId;
+  const planAdmin = user?.role === 'admin' && (!targetUserId || String(targetUserId) === String(user?.id));
   const steps = WIZARD_STEPS.filter((st) => st.id !== 'agenda' || planAdmin);
   const wizStep = (id: WizId) => wizard === null || steps[wizard]?.id === id;
   const crewList = (statsQ.data?.crew || []) as any[];
