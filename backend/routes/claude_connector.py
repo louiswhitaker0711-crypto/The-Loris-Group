@@ -207,7 +207,7 @@ async def tool_get_team(owner: dict, args: dict) -> dict:
         legacy = e.get("legacy_vertex_hub") or {}
         h = starts.get(p["user_id"]) or {}
         out.append({
-            "name": p["name"], "role": p["role_label"], "team": p["team"] or None, "coach": p["coach"] or None,
+            "user_id": p["user_id"], "name": p["name"], "role": p["role_label"], "team": p["team"] or None, "coach": p["coach"] or None,
             "coach_plus": bool(e.get("coach_plus")) if p["role"] == "leader" else None,
             "stage": stage_label(e.get("owneriq_stage")) or stage_label(legacy.get("stage")),
             "start_date": h.get("start_date") or legacy.get("start_date"),
@@ -662,8 +662,41 @@ def _box_names() -> str:
     return ", ".join(planner_boxes().values())
 
 
+# ── Every part of the app (Admins; the Owner, 16 Nov 2026) ─────────────────
+
+async def tool_list_areas(owner: dict, args: dict) -> dict:
+    from core.connector_data import list_areas
+    return await list_areas(owner)
+
+
+async def tool_read_data(owner: dict, args: dict) -> dict:
+    from core.connector_data import read_data
+    return await read_data(owner, args)
+
+
+async def tool_change_data(owner: dict, args: dict) -> dict:
+    from core.connector_data import change_data
+    return await change_data(owner, args)
+
+
+async def tool_confirm_change(owner: dict, args: dict) -> dict:
+    from core.connector_data import confirm_change
+    return await confirm_change(owner, args)
+
+
+async def tool_undo_change(owner: dict, args: dict) -> dict:
+    from core.connector_data import undo_change
+    return await undo_change(owner, args)
+
+
+async def tool_recent_changes(owner: dict, args: dict) -> dict:
+    from core.connector_data import recent_changes
+    return await recent_changes(owner, args)
+
+
 WRITE_TOOLS = {"set_weekly_goal", "save_setup", "write_planner", "add_planner_note", "set_bunny_hops",
-               "update_weekly_plan"}
+               "update_weekly_plan", "confirm_change", "undo_change"}
+ADMIN_TOOLS = {"list_areas", "read_data", "change_data", "confirm_change", "undo_change", "recent_changes"}
 
 
 TOOLS: dict[str, tuple] = {
@@ -774,6 +807,56 @@ TOOLS: dict[str, tuple] = {
                         "sector_leader": {"type": "string", "description": "Admins only: whose sector. Blank = their own."}}),
 }
 
+_ANY_PROPS = {"type": "object", "description": "Field → value, as read_data shows them.",
+              "additionalProperties": True}
+
+TOOLS.update({
+    "list_areas": (tool_list_areas,
+                   "ADMINS. Every part of the app Claude can open (each collection): what it is, how many records "
+                   "your office has, and its fields. E.g. monthly_planners = the monthly goal planner, "
+                   "ai_conversations = people's AI chats, academy_workbooks, folder_notes, meetup_plans. Use it "
+                   "when no other tool covers what's asked.",
+                   {}),
+    "read_data": (tool_read_data,
+                  "ADMINS. Reads records from any area (from list_areas), kept to the office. match is a filter "
+                  "on fields, e.g. {\"user_id\": \"<id from get_team>\", \"month\": \"2026-11\"} or "
+                  "{\"week_ending\": {\"$gte\": \"2026-10-01\"}}; _doc_id picks one record. People's ids come "
+                  "back with names beside them (field__name). Never includes emails, phone numbers or passwords.",
+                  {"area": {"type": "string"},
+                   "match": {"type": "object", "additionalProperties": True},
+                   "fields": {"type": "array", "items": {"type": "string"},
+                              "description": "Only these fields. Optional."},
+                   "sort": {"type": "string", "description": "A field; '-' first for newest/highest first. "
+                            "Default -_id (newest added)."},
+                   "limit": {"type": "integer", "description": "1–200. Default 20."},
+                   "skip": {"type": "integer"}}),
+    "change_data": (tool_change_data,
+                    "ADMINS. Prepares a change to any area: update (set / unset fields on the records match picks), "
+                    "add (new records) or delete. NOTHING CHANGES HERE: it returns exactly what would change and a "
+                    "confirm_code. Show the person that, get a clear yes, then call confirm_change. Up to 50 "
+                    "records; read them with read_data first. Dotted fields reach inside, e.g. "
+                    "\"days.2.status\". Who someone is and how they sign in (email, phone, password, office) "
+                    "can't be changed.",
+                    {"area": {"type": "string"},
+                     "action": {"type": "string", "enum": ["update", "add", "delete"]},
+                     "match": {"type": "object", "additionalProperties": True},
+                     "set": _ANY_PROPS,
+                     "unset": {"type": "array", "items": {"type": "string"}},
+                     "record": _ANY_PROPS,
+                     "records": {"type": "array", "items": _ANY_PROPS},
+                     "why": {"type": "string", "description": "One line on what this is for (kept in the log)."}}),
+    "confirm_change": (tool_confirm_change,
+                       "CHANGES THE APP. Makes a change prepared by change_data, only after the person has said "
+                       "yes to exactly what it showed. Returns a change_id for undo_change.",
+                       {"confirm_code": {"type": "string"}}),
+    "undo_change": (tool_undo_change,
+                    "CHANGES THE APP. Puts a confirmed change back exactly as it was (ask first).",
+                    {"change_id": {"type": "string"}}),
+    "recent_changes": (tool_recent_changes,
+                       "ADMINS. The last 20 changes made through Claude: when, by whom, what, and whether undone.",
+                       {}),
+})
+
 INSTRUCTIONS = (
     f"{APP_NAME}, the field app for a UK Modern Milkman door-to-door sales office. "
     "Self-employed Brand Ambassadors (BAs) sign up customers; Coaches develop them. Gold = a sign-up with a £10+ "
@@ -784,7 +867,10 @@ INSTRUCTIONS = (
     "self-employed language (no 'staff', 'employees', 'manager', 'hire'), British English. "
     "This connector belongs to one person and sees what they can see in the app (get_me first). Tools marked "
     "CHANGES THE APP write to it as that person: before each one, show them exactly what you'll write and get a "
-    "clear yes. Planner boxes: "
+    "clear yes. On an Admin's link Claude can open every part of the app: list_areas, then read_data; to "
+    "change anything there, change_data (shows the change, changes nothing), the person's yes, then "
+    "confirm_change. Never call confirm_change without that yes. Prefer the named tools when one fits. "
+    "Planner boxes: "
 )
 
 
@@ -817,12 +903,18 @@ def _schema(props: dict) -> dict:
     return {"type": "object", "properties": props, "additionalProperties": False}
 
 
-def tools_list() -> list[dict]:
+def _is_admin(viewer: Optional[dict]) -> bool:
+    return viewer is None or bool(viewer.get("is_super_admin")) or (viewer.get("role") or "").lower() == "admin"
+
+
+def tools_list(viewer: Optional[dict] = None) -> list[dict]:
+    """Every tool; the every-part-of-the-app ones only on an Admin's link."""
+    admin = _is_admin(viewer)
     return [{"name": n, "description": d, "inputSchema": _schema(p),
-             "annotations": ({"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False,
-                              "openWorldHint": False} if n in WRITE_TOOLS
+             "annotations": ({"readOnlyHint": False, "destructiveHint": n in ("confirm_change", "undo_change"),
+                              "idempotentHint": False, "openWorldHint": False} if n in WRITE_TOOLS
                              else {"readOnlyHint": True, "openWorldHint": False})}
-            for n, (_f, d, p) in TOOLS.items()]
+            for n, (_f, d, p) in TOOLS.items() if admin or n not in ADMIN_TOOLS]
 
 
 async def handle(msg: dict, viewer: Optional[dict] = None) -> Optional[dict]:
@@ -848,7 +940,7 @@ async def handle(msg: dict, viewer: Optional[dict] = None) -> Optional[dict]:
     if method == "ping":
         return ok({})
     if method == "tools/list":
-        return ok({"tools": tools_list()})
+        return ok({"tools": tools_list(viewer)})
     if method == "tools/call":
         name = params.get("name")
         if name not in TOOLS:

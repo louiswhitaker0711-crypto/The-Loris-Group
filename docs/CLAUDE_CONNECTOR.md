@@ -45,6 +45,21 @@ Each is marked as changing the app, so Claude shows what it will write and asks 
 
 Never sent: emails, phone numbers, photos, badge numbers, passwords, the office's MC fees.
 
+## Every part of the app (Admins' links)
+
+From 16 Nov 2026, an Admin's link (and the Owner's original link) can open **everything** in the Hub, not just the tools above: the monthly goal planner, people's AI chats, Academy workbooks, notes, meet-up planners, COD progress, schedules and the rest (`backend/core/connector_data.py`). BAs' and Coaches' links don't get these tools.
+
+| Tool | What it does |
+| --- | --- |
+| `list_areas` | Every part of the app with records in your office: what it is, how many, its fields |
+| `read_data` | Reads any of them, kept to your office, names shown beside people's ids |
+| `change_data` | Prepares a change (update, add or delete, up to 50 records). **Changes nothing**: shows exactly what would change and gives a confirm code |
+| `confirm_change` | Makes that change, only after you've said yes (the code lasts 15 minutes and works once) |
+| `undo_change` | Puts a confirmed change back as it was |
+| `recent_changes` | The last 20 changes made through Claude |
+
+Never sent or changed, anywhere: emails, phone numbers, passwords, sign-in codes and keys. Who someone is and how they sign in (email, phone, password, office, super-admin) can't be changed through Claude. Every confirmed change is logged in `connector_changes` with a copy of the records before it.
+
 ## Connect a personal link
 
 1. In the app: **Profile → Connect Claude → Make my link**, then **Copy link**.
