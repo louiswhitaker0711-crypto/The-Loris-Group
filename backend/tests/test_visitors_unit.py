@@ -96,3 +96,23 @@ def test_signup_checks():
             rv._clean_dates(a, b)
     with pytest.raises(HTTPException):
         rv._clean_office("  ")
+
+
+def test_visiting_coaches_are_asked_to_start_their_sector(monkeypatch):
+    """A visiting Coach on their visit days gets the "start your sector
+    set-up" push like the office's own Coaches (the Owner, 17 Nov 2026)."""
+    from routes import sector as rs
+    db = AsyncMongoMockClient()["visitors_sector_test"]
+    today = cv.today_iso()
+    _run(db.users.insert_many([
+        {"name": "Example Coach", "role": "leader", "office_id": "o"},
+        {"name": "Example Visitor", "role": "leader", "office_id": "o", "is_demo": True, "is_visitor": True,
+         "visit_from": today, "visit_to": today},
+        {"name": "Example Gone", "role": "leader", "office_id": "o", "is_demo": True, "is_visitor": True,
+         "visit_from": "2020-01-01", "visit_to": "2020-01-02"},
+        {"name": "Example Trial", "role": "leader", "office_id": "o", "is_demo": True},
+    ]))
+    monkeypatch.setattr(rs, "db", db)
+    ids = set(_run(rs._leaders_out_today()))
+    names = {str(u["_id"]): u["name"] for u in _run(db.users.find({}).to_list(10))}
+    assert sorted(names[i] for i in ids) == ["Example Coach", "Example Visitor"]

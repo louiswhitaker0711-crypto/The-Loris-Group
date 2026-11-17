@@ -1357,8 +1357,12 @@ async def _leaders_out_today() -> list[str]:
         elif st == "in":
             in_today.add(str(e.get("user_id")))
     out = []
-    async for u in db.users.find({"role": {"$in": ["leader", "admin"]}, "deleted": {"$ne": True},
-                                  "is_active": {"$ne": False}, "is_demo": {"$ne": True}}, {"_id": 1, "role": 1}):
+    # Visiting Coaches (Stage 3+) on their visit days are asked too: they
+    # lead sectors and do set-ups like anyone else (the Owner, 17 Nov 2026).
+    from core.visitors import with_field_filter
+    async for u in db.users.find(with_field_filter({"role": {"$in": ["leader", "admin"]}, "deleted": {"$ne": True},
+                                                    "is_active": {"$ne": False}, "is_demo": {"$ne": True}},
+                                                   d.isoformat()), {"_id": 1, "role": 1}):
         uid = str(u["_id"])
         if uid in away:
             continue

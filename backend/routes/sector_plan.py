@@ -172,7 +172,10 @@ async def get_plan(request: Request, date: Optional[str] = None):
             "planner": ({"user_id": planner["user_id"], "name": names.get(planner["user_id"], "")} if planner else None),
             "sectors": sectors,
             "people": [{**p, "sector_leader_id": where.get(p["user_id"]),
-                        "in_today": bells_status.get(p["user_id"]) == "in",
+                        # Visitors are never on Bells: on their visit days they're in, so
+                        # they can be placed in a sector and do their set-up (the Owner,
+                        # 17 Nov 2026). _office_people only lists them on those days.
+                        "in_today": bells_status.get(p["user_id"]) == "in" or bool(p.get("visitor")),
                         "no_show": bells_status.get(p["user_id"]) == "ns",
                         "not_scheduled": bells_status.get(p["user_id"]) == "ab",
                         "day_status": bells_status.get(p["user_id"]) or ""} for p in people],
@@ -397,7 +400,8 @@ async def _tell(office_id: str, iso: str, leaders: Optional[list] = None, title_
     if leaders is None:
         from routes.field_reset import out_today
         out = await out_today(datetime.fromisoformat(iso).date())
-        everyone = [p["user_id"] for p in people if p["role"] in ("trainee", "leader") and p["user_id"] in out]
+        everyone = [p["user_id"] for p in people
+                    if p["role"] in ("trainee", "leader") and (p["user_id"] in out or p.get("visitor"))]
     msgs = plan_messages(sectors, names, everyone)
     if leaders is not None:
         keep: set[str] = set()
