@@ -81,13 +81,17 @@ async def _scoped_rows_raw(caller: dict, from_date: str, to_date: str, own_offic
     is_super = bool(caller.get("is_super_admin"))
     proj = {"_id": 0}
 
+    # Visitors' own KPI rows (no office pin, marked visitor) never go into an
+    # office-wide view; a visitor still sees their own (the Owner, 17 Nov 2026).
+    own = {"cg1_user_id": str(caller.get("id"))}
     if is_super and not own_office:
-        return await db.owneriq_kpis.find(date_q, proj).to_list(length=20000)
+        return await db.owneriq_kpis.find({**date_q, "$or": [{"visitor": {"$ne": True}}, own]}, proj).to_list(length=20000)
 
     if sees_whole_office(caller):   # an Admin, or a Coach+
         pin = await _office_pin(caller.get("office_id"))
         if pin:
-            return await db.owneriq_kpis.find({**date_q, "mc_pin": pin}, proj).to_list(length=20000)
+            q = {**date_q, "$or": [{"mc_pin": pin}, own]} if caller.get("is_visitor") else {**date_q, "mc_pin": pin}
+            return await db.owneriq_kpis.find(q, proj).to_list(length=20000)
         # No resolvable office pin: fall back to this office's linked users.
         office_ids = [
             str(u["_id"])
@@ -96,7 +100,8 @@ async def _scoped_rows_raw(caller: dict, from_date: str, to_date: str, own_offic
             )
         ] if caller.get("office_id") else []
         return await db.owneriq_kpis.find(
-            {**date_q, "cg1_user_id": {"$in": office_ids}, **ID_LINKED}, proj
+            {**date_q, "cg1_user_id": {"$in": office_ids}, **ID_LINKED,
+             "$or": [{"visitor": {"$ne": True}}, own]}, proj
         ).to_list(length=20000)
 
     # leader → self + downline; trainee → self only

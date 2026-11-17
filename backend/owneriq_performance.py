@@ -248,7 +248,8 @@ async def fill_bells(iso_from: str, iso_to: str) -> dict:
                                                            {"name": 1, "role": 1, "office_id": 1})}
     per_day: dict[tuple, dict] = {}
     async for r in db.owneriq_kpis.find({"date": {"$gte": iso_from, "$lte": iso_to},
-                                        "cg1_user_id": {"$ne": None}, "test_mode": {"$ne": True}, **ID_LINKED}):
+                                        "cg1_user_id": {"$ne": None}, "test_mode": {"$ne": True},
+                                        "visitor": {"$ne": True}, **ID_LINKED}):
         k = (str(r["cg1_user_id"]), r["date"])
         cur = per_day.setdefault(k, {"sales": 0, "doors": 0})
         cur["sales"] += int(r.get("sales") or 0)
