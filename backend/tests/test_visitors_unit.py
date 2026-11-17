@@ -70,7 +70,7 @@ def test_visitor_sign_ups_come_from_their_breakdown():
     assert out == {str(vid): {"hit": 4, "silver": 1, "gold": 3, "round": 2}}
 
 
-def test_breakdown_never_writes_kpis_or_bells_for_a_visitor(monkeypatch):
+def test_breakdown_keeps_a_visitors_own_kpis_but_never_bells(monkeypatch):
     from core import breakdown_numbers as bn
     db = AsyncMongoMockClient()["visitors_test3"]
     bn.db = db
@@ -81,7 +81,13 @@ def test_breakdown_never_writes_kpis_or_bells_for_a_visitor(monkeypatch):
     monkeypatch.setattr(owneriq_sync, "owneriq_on", off)
     _run(bn.apply_breakdown({"_id": "v1", "office_id": "o", "is_visitor": True}, "2026-11-18",
                             {"doors": 120, "spoken": 70, "pitched": 25, "closed": 15, "hit": 4}))
-    assert _run(db.owneriq_kpis.count_documents({})) == 0
+    rows = _run(db.owneriq_kpis.find({}).to_list(10))
+    assert len(rows) == 1
+    r = rows[0]
+    # Their own KPI row: marked visitor and no office pin, so it never goes
+    # into the office's figures (the Owner, 17 Nov 2026).
+    assert r["cg1_user_id"] == "v1" and r["visitor"] is True and r["mc_pin"] is None
+    assert r["doors_knocked"] == 120 and r["sales"] == 4
     assert _run(db.bells_entries.count_documents({})) == 0
 
 

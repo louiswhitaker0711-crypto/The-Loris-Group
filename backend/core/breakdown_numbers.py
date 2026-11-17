@@ -66,10 +66,11 @@ async def apply_breakdown(user: dict, iso: str, bd: dict) -> None:
     from owneriq_sync import owneriq_on
     if await owneriq_on():
         return
-    # A visitor isn't tracked (the Owner, 15 Nov 2026): their breakdown counts
-    # for the sector only, never KPIs or Bells (core/visitors.py).
-    if user.get("is_visitor"):
-        return
+    # A visitor's breakdown counts for the sector, and keeps their OWN KPIs so
+    # their numbers, conversions and AI coach work for them; it never goes on
+    # Bells or into the office's figures (the Owner, 17 Nov 2026): the row has
+    # no office pin and is marked visitor, and every office-wide read skips it.
+    visitor = bool(user.get("is_visitor"))
     # A shadow day isn't scored: no KPI row, and Bells stays SD (core/hops.py).
     from core.hops import shadow_ids
     uid = str(user["_id"])
@@ -78,9 +79,13 @@ async def apply_breakdown(user: dict, iso: str, bd: dict) -> None:
         return
     from owneriq_config import office_pin
     pin = await office_pin(user.get("office_id"), db)
-    row = kpi_row(user, iso, bd, pin)
+    row = kpi_row(user, iso, bd, None if visitor else pin)
+    if visitor:
+        row["visitor"] = True
     await db.owneriq_kpis.update_one({"_id": row["owneriq_id"]},
                                      {"$set": row, "$setOnInsert": {"first_seen_at": row["synced_at"]}}, upsert=True)
+    if visitor:
+        return
     vals = bells_values(bd)
     if not vals:
         return
