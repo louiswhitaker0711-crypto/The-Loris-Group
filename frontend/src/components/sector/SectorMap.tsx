@@ -85,9 +85,10 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
   useEffect(() => {
     if (!data) return;
     // A BA draws in their hop's colour.
-    if (!data.leads && data.my_colour) setColour(data.my_colour);
+    // A Coach planning areas picks their own colour.
+    if (!data.leads && !data.can_plan_areas && data.my_colour) setColour(data.my_colour);
     if (!chosen.current) { chosen.current = true; setKind('move'); }
-    else if (!data.can_confirm) setKind((k) => (k === 'plan' ? 'move' : k));
+    else if (!data.can_confirm && !data.can_plan_areas) setKind((k) => (k === 'plan' ? 'move' : k));
   }, [data]);
   const pick = (k: Kind) => {
     chosen.current = true;
@@ -110,7 +111,8 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
     }
     try {
       const r = await apiService.saveCoverage({ date: dt, lines: [pts], leader_id: lid,
-        kind: d?.can_confirm ? (k === 'plan' ? 'plan' : 'done') : (k === 'request' ? 'request' : 'done'), colour: col });
+        kind: k === 'plan' && (d?.can_confirm || d?.can_plan_areas) ? 'plan'
+          : d?.can_confirm ? 'done' : (k === 'request' ? 'request' : 'done'), colour: col });
       if (r.data?.id) setUndoStack((u) => [...u, r.data.id]);
       load();
     } catch (e: any) {
@@ -161,7 +163,7 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
         const ll = m.containerPointToLatLng(p);
         pts = [[ll.lat, ll.lng]];
         const { kind: k, colour: col, data: d } = st.current;
-        const planning = d?.can_confirm && k === 'plan';
+        const planning = (d?.can_confirm || d?.can_plan_areas) && k === 'plan';
         const asking = !d?.can_confirm && k === 'request';
         live = L.polyline(pts, k === 'edit'
           ? { color: hopHex(st.current.editColour, c.primary), ...PLAN_STYLE, opacity: 0.8, lineCap: 'round', lineJoin: 'round', interactive: false }
@@ -399,6 +401,16 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
   const shape = data?.shape;
   const drafts = data?.drafts || 0;
   const leads = !!data?.can_confirm;
+  // Any Coach in the sector plans the hop areas too (the Owner, 18 Nov 2026).
+  const plans = leads || !!data?.can_plan_areas;
+  const swatches = (
+    <View style={s.colours}>
+      {HOP_COLOURS.map((h) => (
+        <Pressable key={h.key} onPress={() => setColour(h.key)} accessibilityLabel={h.label} accessibilityState={{ selected: colour === h.key }}
+          style={[s.swatchBtn, { backgroundColor: h.hex }, colour === h.key && s.swatchOn]} />
+      ))}
+    </View>
+  );
   const hops: any[] = data?.hops || [];
   const myColour: string | null = data?.my_colour || null;
 
@@ -438,23 +450,21 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
               </Pressable>
             ))}
           </View>
-          {kind === 'plan' && <View style={s.colours}>
-            {HOP_COLOURS.map((h) => (
-              <Pressable key={h.key} onPress={() => setColour(h.key)} accessibilityLabel={h.label} accessibilityState={{ selected: colour === h.key }}
-                style={[s.swatchBtn, { backgroundColor: h.hex }, colour === h.key && s.swatchOn]} />
-            ))}
-          </View>}
+          {kind === 'plan' && swatches}
         </View>
       )}
       {!!data?.can_draw && !leads && (
         <View style={s.tools}>
           <View style={s.seg}>
-            {([['move', 'Move map'], ['done', 'Mark done'], ['request', 'Request more streets']] as const).map(([k, label]) => (
+            {((plans
+              ? [['move', 'Move map'], ['plan', 'Plan areas'], ['done', 'Mark done'], ['request', 'Request more streets']]
+              : [['move', 'Move map'], ['done', 'Mark done'], ['request', 'Request more streets']]) as [Kind, string][]).map(([k, label]) => (
               <Pressable key={k} onPress={() => pick(k)} style={[s.segBtn, kind === k && s.segOn]} accessibilityRole="button" accessibilityState={{ selected: kind === k }} testID={`map-kind-${k}`}>
                 <Text style={[s.segText, kind === k && { color: c.onPrimary }]}>{label}</Text>
               </Pressable>
             ))}
           </View>
+          {kind === 'plan' && swatches}
         </View>
       )}
       {!!data?.late && !!data?.can_draw && (
@@ -462,12 +472,12 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
       )}
       {!!data?.can_draw && kind === 'move' && (
         <Text style={s.small}>
-          {leads ? 'One finger moves the map. Press Plan areas or Mark done to draw.' : 'One finger moves the map. Press Mark done to mark off your streets, or Request more streets to ask for more.'}
+          {leads ? 'One finger moves the map. Press Plan areas or Mark done to draw.' : plans ? 'One finger moves the map. Press Plan areas to draw the hops\u2019 areas, Mark done to mark off your streets, or Request more streets to ask for more.' : 'One finger moves the map. Press Mark done to mark off your streets, or Request more streets to ask for more.'}
         </Text>
       )}
       {drawing && (
         <Text style={s.small}>
-          {leads && kind === 'plan' ? `Draw the ${hopLabel(colour).toLowerCase()} area with one finger. `
+          {plans && kind === 'plan' ? `Draw the ${hopLabel(colour).toLowerCase()} area with one finger. `
             : !leads && kind === 'request' ? 'Draw the extra streets you’d like with one finger, then press Send request: it goes to your sector leader as one request. '
             : kind === 'edit' ? `Draw the streets you want them to have, in their colour. What they asked for shows in grey. Then press Send updated map. `
             : 'Draw over the streets you’ve done in black with one finger, on top of the coloured area. '}

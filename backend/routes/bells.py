@@ -943,6 +943,22 @@ async def bells_week_for(user: dict, week: Optional[str] = None, office: Optiona
     cur = db.bells_entries.find(entries_filter, {"_id": 0}).sort("user_name", 1)
     entries = await cur.to_list(500)
 
+    # Visitors and demo accounts never show on Bells, even if a row was saved
+    # for them earlier (the Owner, 18 Nov 2026).
+    _uids = []
+    for e in entries:
+        try:
+            _uids.append(ObjectId(e["user_id"]))
+        except Exception:
+            pass
+    if _uids:
+        _hidden = await db.users.find(
+            {"_id": {"$in": _uids}, "$or": [{"is_visitor": True}, {"is_demo": True}]},
+            {"_id": 1}).to_list(1000)
+        _hidden_ids = {str(h["_id"]) for h in _hidden}
+        if _hidden_ids:
+            entries = [e for e in entries if e.get("user_id") not in _hidden_ids]
+
     # ── AUTO-POPULATE: include every team member (even without entries this week) ─
     # Leader: see their own subtree (descendants + self).
     # Admin: see every trainee + leader in the office.

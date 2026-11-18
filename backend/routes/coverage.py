@@ -109,6 +109,16 @@ def _is_admin(user: dict) -> bool:
     return (user.get("role") or "").lower() == "admin"
 
 
+def can_plan_areas(user: dict, sec: Optional[dict]) -> bool:
+    """The sector leader, an Admin, or any Coach (role leader) in the sector."""
+    if not sec:
+        return _is_admin(user)
+    uid = str(user["id"])
+    if _is_admin(user) or sec.get("leader_id") == uid:
+        return True
+    return (user.get("role") or "").lower() == "leader" and uid in [str(x) for x in (sec.get("member_ids") or [])]
+
+
 @router.post("/coverage")
 async def save_coverage(request: Request):
     user = await get_current_user(request)
@@ -133,8 +143,11 @@ async def save_coverage(request: Request):
         raise HTTPException(status_code=403, detail="You can mark off your own sector's streets on the day or the day after")
     kind = body.get("kind") if body.get("kind") in ("plan", "request") else "done"
     leads = bool(sec) and (sec.get("leader_id") == str(user["id"]) or _is_admin(user))
-    if kind == "plan" and not leads:
-        raise HTTPException(status_code=403, detail="Only the sector leader plans the areas")
+    # Any Coach in the sector that day can plan the bunny hop areas, not just
+    # the sector leader (the Owner, 18 Nov 2026). Confirming and approving
+    # requests stay with the leader and Admins.
+    if kind == "plan" and not can_plan_areas(user, sec):
+        raise HTTPException(status_code=403, detail="Only a Coach in the sector plans the areas")
     colour = str(body.get("colour") or "").lower()
     if kind in ("done", "request") and not leads:
         # A BA draws in their bunny hop's colour.
