@@ -1479,7 +1479,7 @@ async def sector_map(request: Request, date: Optional[str] = None, leader: Optio
     members = await _users_by_ids(sec.get("member_ids") or [])
     names = {p["user_id"]: p["user_name"] for p in members}
     leads = sec["leader_id"] == me
-    from routes.coverage import HOP_COLOURS, my_hop_colour
+    from routes.coverage import HOP_COLOURS, can_plan_areas, my_hop_colour
     hops = [{"colour": h.get("colour"), "member_ids": h.get("member_ids") or [],
              "shadow_ids": h.get("shadow_ids") or [],
              "members": [names.get(i, "") for i in h.get("member_ids") or [] if i in names]}
@@ -1504,6 +1504,8 @@ async def sector_map(request: Request, date: Optional[str] = None, leader: Optio
                     and (leads or is_admin or me in (sec.get("member_ids") or [])),
         "late": iso != today_iso(),
         "can_confirm": leads or is_admin,
+        # Any Coach in the sector can plan the hop areas (the Owner, 18 Nov 2026).
+        "can_plan_areas": can_plan_areas(user, sec),
         "can_share": leads,
         "shared": bool(sec.get("map_shared_at")),
         "drafts": sum(1 for m in marks if m["status"] == "draft" and not m.get("other")),

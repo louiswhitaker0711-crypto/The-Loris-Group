@@ -162,6 +162,14 @@ async def _bells_entry(user: dict, week_ending: str) -> dict | None:
     office_id = user.get("office_id")
     if not office_id:
         return None
+    # Visitors and demo accounts are never on Bells ("they don't make me
+    # money"). Look the flags up when the caller passed a slim user doc.
+    flags = user
+    if "is_visitor" not in user or "is_demo" not in user:
+        flags = await db.users.find_one(
+            {"_id": user["_id"]}, {"is_visitor": 1, "is_demo": 1}) or user
+    if flags.get("is_visitor") or flags.get("is_demo") or user.get("is_visitor") or user.get("is_demo"):
+        return None
     q = {"office_id": office_id, "week_ending": week_ending, "user_id": str(user["_id"])}
     e = await db.bells_entries.find_one(q)
     if e:
