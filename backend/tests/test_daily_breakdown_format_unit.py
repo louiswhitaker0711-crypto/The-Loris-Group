@@ -42,3 +42,10 @@ def test_office_numbers_add_up_the_breakdowns():
 def test_prompt_asks_for_office_bits():
     prompt = build_daily_breakdown_prompt({}, "")
     assert "OFFICE BITS" in prompt and "office_today" in prompt
+
+
+def test_missing_callouts_finds_people_left_out():
+    from routes.daily_breakdown import missing_callouts
+    text = "Wednesday done\n\n🔔 *Louis: 3* 🔥\nGood day.\n\n🎓 *Zainab: 1* 🌱\nOn the board."
+    assert missing_callouts(text, ["Louis", "Liam", "Val", "Zainab"]) == ["Liam", "Val"]
+    assert missing_callouts(text, ["Louis", "Zainab"]) == []

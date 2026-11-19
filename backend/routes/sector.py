@@ -590,7 +590,7 @@ async def save_sector_day(user_id: str, request: Request, date: Optional[str] = 
         upd["breakdown"] = {**clean_breakdown(body.get("breakdown") or {}), "by_id": str(user["id"]), "at": now}
     if not upd:
         raise HTTPException(status_code=400, detail="Nothing to save")
-    target = await db.users.find_one({"_id": ObjectId(user_id)}, {"name": 1, "office_id": 1, "role": 1, "badge_number": 1}) \
+    target = await db.users.find_one({"_id": ObjectId(user_id)}, {"name": 1, "office_id": 1, "role": 1, "badge_number": 1, "is_visitor": 1, "is_demo": 1}) \
         if ObjectId.is_valid(user_id) else None
     if not target:
         raise HTTPException(status_code=404, detail="Person not found")

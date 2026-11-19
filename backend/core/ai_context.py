@@ -99,6 +99,22 @@ async def recent_sector_days(user_id: str, days: int = DAYS_OF_SECTORS) -> list[
     return out
 
 
+BREAKDOWN_KEYS = ("doors", "spoken", "pitched", "closed", "goal", "hit", "gold", "silver", "round",
+                  "proud", "gap", "why", "change")
+
+
+async def team_breakdowns(user_id: str, n: int = 3) -> list[dict]:
+    """Someone's last few breakdowns, just the numbers and what they said."""
+    out = []
+    async for d in db.sector_days.find({"user_id": user_id, "breakdown": {"$ne": None}},
+                                       {"_id": 0, "date": 1, "breakdown": 1}).sort("date", -1).limit(n):
+        bd = d.get("breakdown") or {}
+        row = {k: bd.get(k) for k in BREAKDOWN_KEYS if bd.get(k) not in (None, "", [])}
+        if row:
+            out.append({"date": d.get("date"), **row})
+    return out
+
+
 async def this_week_plan(user_id: str) -> dict:
     """The person's planner for this week: the filled-in boxes and notes titles."""
     from routes.weekly_planners import DAY_FIELD_LABELS, DAY_NAMES
@@ -311,7 +327,7 @@ async def build_context(user: dict) -> dict:
     team_ids = ids - {me}
     names = {str(u["_id"]): u.get("name") async for u in db.users.find(
         {"_id": {"$in": [ObjectId(i) for i in team_ids if ObjectId.is_valid(i)]},
-         "deleted": {"$ne": True}, "is_active": {"$ne": False}}, {"name": 1})}
+         "deleted": {"$ne": True}, "is_active": {"$ne": False}, "is_demo": {"$ne": True}}, {"name": 1})}
     def _team_row(i: str) -> dict:
         w = rows.get(i, {}).get("weeks", {})
         this = w.get(weeks[-1]) or {}
@@ -333,6 +349,19 @@ async def build_context(user: dict) -> dict:
     for row, i in zip(team, list(names)):
         try:
             row["development"] = await development_of(i)
+        except Exception:
+            pass
+        # Their numbers on the doors (the Owner, 19 Nov 2026): Law of Averages
+        # this week and the last 28 days, from their breakdowns, and their
+        # last few breakdowns, so the AI coaches from real KPIs.
+        try:
+            their = slim_page(strip_private(await person_breakdown_for(user, i))) or {}
+            if their.get("law_of_averages"):
+                row["kpis"] = their["law_of_averages"]
+        except Exception:
+            pass
+        try:
+            row["recent_breakdowns"] = await team_breakdowns(i)
         except Exception:
             pass
     # If the picture has to be trimmed, the end goes first: so people in my

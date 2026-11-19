@@ -69,6 +69,19 @@ def _band_label(n: int) -> str:
     return next(label for _f, k, label in WEEK_BANDS if k == key)
 
 
+async def _hidden_ids(office_id: str) -> set:
+    """Visitors and demo accounts: never in the office's figures ("they don't
+    make me money", the Owner). Their old Bells rows and their breakdowns are
+    left out of the daily breakdown."""
+    return {str(u["_id"]) async for u in db.users.find(
+        {"office_id": office_id, "$or": [{"is_visitor": True}, {"is_demo": True}]}, {"_id": 1})}
+
+
+def missing_callouts(text: str, names: list) -> list:
+    """Callout names the AI left out of the message."""
+    return [n for n in names if f"*{n}:" not in text and f"{n}:" not in text]
+
+
 def office_day_numbers(breakdowns: list) -> dict:
     """Today's office numbers on the doors, added up from everyone's
     breakdown (KPIs come from the breakdowns, the Owner, 11 Nov 2026)."""
@@ -167,8 +180,11 @@ async def _aggregate_office_totals(
     if user_id_filter is not None:
         # Empty list → zero results (correct — leader with no team sees nothing)
         pipeline_match["user_id"] = {"$in": [str(u) for u in user_id_filter]}
+    hidden = await _hidden_ids(office_id)
     rows: list = []
     async for e in db.bells_entries.find(pipeline_match, {"_id": 0, "user_id": 1, "user_name": 1, "days": 1, "role": 1}):
+        if str(e.get("user_id") or "") in hidden:
+            continue
         rows.append(e)
 
     sales = 0
@@ -345,7 +361,8 @@ async def daily_breakdown(request: Request):
     weekday_name = target_dt.strftime("%A")
     pretty_date = f"{target_dt.strftime('%a')} {_day_month(target_dt)}"
     goal_remaining = max(0, weekly_goal - week_to_date["sales"])
-    days_left = max(0, 7 - (day_idx + 1))
+    # The week runs Monday to Saturday: after Wednesday there are 3 days left.
+    days_left = max(0, 5 - day_idx)
 
     # Build a pre-formatted "Tomorrow's Schedule" block so the LLM can drop it
     # in verbatim instead of rewriting times (which models love to hallucinate).
@@ -389,7 +406,9 @@ async def daily_breakdown(request: Request):
     day_q: dict = {"date": target_iso, "office_id": office_id}
     if user_id_filter is not None:
         day_q["user_id"] = {"$in": [str(u) for u in user_id_filter]}
-    office_bds = [sd.get("breakdown") async for sd in db.sector_days.find(day_q, {"_id": 0, "breakdown": 1})]
+    hidden = await _hidden_ids(office_id)
+    office_bds = [sd.get("breakdown") async for sd in db.sector_days.find(day_q, {"_id": 0, "user_id": 1, "breakdown": 1})
+                  if str(sd.get("user_id") or "") not in hidden]
     by_day = []
     for i in range(day_idx + 1):
         this_i = today if i == day_idx else await _aggregate_office_totals(office_id, week_ending, i, user_id_filter)
@@ -404,7 +423,6 @@ async def daily_breakdown(request: Request):
         "week_by_day": by_day,
         "best_day_this_week": best["day"] if best and best["sign_ups"] else None,
         "today_is_best_day_this_week": bool(best and best["sign_ups"] and today["sales"] >= best["sign_ups"]),
-        "week_traffic_light": _band_label(week_to_date["sales"]),
     }
 
     summary_context = {
@@ -425,6 +443,8 @@ async def daily_breakdown(request: Request):
         },
         "last_week_total": last_week["sales"],
         "rep_callouts": callout_reps,
+        "callout_names": [r["name"] for r in callout_reps],
+        "callout_count": len(callout_reps),
         "office_today": office_today,
         "goal_remaining": goal_remaining,
         "days_left_in_week": days_left,
@@ -452,8 +472,20 @@ async def daily_breakdown(request: Request):
         logger.exception("daily breakdown AI call failed")
         raise HTTPException(status_code=502, detail="The AI call failed. Try again shortly.")
 
-    text = response if isinstance(response, str) else str(response)
-    text = text.strip()
+    text = (response if isinstance(response, str) else str(response)).strip()
+    # The AI must call out everyone who rang a bell (the Owner, 19 Nov 2026):
+    # ask once more if anyone's missing.
+    missing = missing_callouts(text, [r["name"] for r in callout_reps])
+    if missing:
+        try:
+            again = await asyncio.wait_for(chat.send_message(UserMessage(text=(
+                prompt + f"\n\nIMPORTANT: a first try left out {', '.join(missing)}. Write a callout "
+                f"for every name in callout_names, in order."))), timeout=25)
+            again = (again if isinstance(again, str) else str(again)).strip()
+            if not missing_callouts(again, [r["name"] for r in callout_reps]):
+                text = again
+        except Exception:
+            logger.exception("daily breakdown retry failed")
     # Strip stray markdown fences if the model added them
     if text.startswith("```"):
         text = re.sub(r"^```(?:[a-zA-Z]+)?\s*", "", text)
