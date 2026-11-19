@@ -91,6 +91,38 @@ def test_breakdown_keeps_a_visitors_own_kpis_but_never_bells(monkeypatch):
     assert _run(db.bells_entries.count_documents({})) == 0
 
 
+def test_breakdown_for_a_slim_visitor_doc_still_skips_the_office(monkeypatch):
+    """Someone else saving a visitor's breakdown passes a slim user doc
+    (no is_visitor): the flag is looked up, so the row gets no office pin."""
+    from core import breakdown_numbers as bn
+    db = AsyncMongoMockClient()["visitors_test5"]
+    bn.db = db
+
+    async def off():
+        return False
+    import owneriq_sync
+    monkeypatch.setattr(owneriq_sync, "owneriq_on", off)
+    _run(db.users.insert_one({"_id": "v2", "office_id": "o", "is_visitor": True}))
+    _run(bn.apply_breakdown({"_id": "v2", "office_id": "o", "name": "Example Visitor"}, "2026-11-18",
+                            {"doors": 120, "spoken": 70, "pitched": 25, "closed": 15, "hit": 4}))
+    r = _run(db.owneriq_kpis.find_one({}))
+    assert r["visitor"] is True and r["mc_pin"] is None
+    assert _run(db.bells_entries.count_documents({})) == 0
+
+
+def test_old_visitor_kpi_rows_leave_the_office():
+    from core.content_fixes import _fix_visitor_kpi_rows
+    db = AsyncMongoMockClient()["visitors_test6"]
+    _run(db.users.insert_many([{"_id": "v3", "is_visitor": True}, {"_id": "b1"}]))
+    _run(db.owneriq_kpis.insert_many([{"_id": "a", "cg1_user_id": "v3", "mc_pin": "1234"},
+                                      {"_id": "b", "cg1_user_id": "b1", "mc_pin": "1234"}]))
+    assert _run(_fix_visitor_kpi_rows(db)) == 1
+    a = _run(db.owneriq_kpis.find_one({"_id": "a"}))
+    assert a["visitor"] is True and a["mc_pin"] is None
+    assert _run(db.owneriq_kpis.find_one({"_id": "b"}))["mc_pin"] == "1234"
+    assert _run(_fix_visitor_kpi_rows(db)) == 0
+
+
 def test_signup_checks():
     assert rv._clean_stage("Stage 3") == "3"
     assert rv._clean_stage("3+") == "SL"

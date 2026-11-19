@@ -71,6 +71,11 @@ async def apply_breakdown(user: dict, iso: str, bd: dict) -> None:
     # Bells or into the office's figures (the Owner, 17 Nov 2026): the row has
     # no office pin and is marked visitor, and every office-wide read skips it.
     visitor = bool(user.get("is_visitor"))
+    if "is_visitor" not in user:
+        # A slim user doc: look the flag up, so a visitor's row never gets
+        # the office pin (the Owner, 19 Nov 2026).
+        flags = await db.users.find_one({"_id": user["_id"]}, {"is_visitor": 1}) or {}
+        visitor = bool(flags.get("is_visitor"))
     # A shadow day isn't scored: no KPI row, and Bells stays SD (core/hops.py).
     from core.hops import shadow_ids
     uid = str(user["_id"])

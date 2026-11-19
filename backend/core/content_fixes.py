@@ -322,11 +322,30 @@ async def _fix_sl_name(db) -> int:
     return fixed
 
 
+async def _fix_visitor_kpi_rows(db) -> int:
+    """Visitors' KPI rows saved with the office pin (a breakdown written for
+    them before 19 Nov 2026 missed the visitor flag): mark them visitor and
+    take the pin off, so they leave the office's Field KPIs (idempotent)."""
+    ids = [str(u["_id"]) async for u in db.users.find({"is_visitor": True}, {"_id": 1})]
+    if not ids:
+        return 0
+    r = await db.owneriq_kpis.update_many(
+        {"cg1_user_id": {"$in": ids}, "$or": [{"visitor": {"$ne": True}}, {"mc_pin": {"$nin": [None, ""]}}]},
+        {"$set": {"visitor": True, "mc_pin": None}})
+    if r.modified_count:
+        logger.info(f"content_fixes: {r.modified_count} visitor KPI row(s) taken out of the office figures")
+    return r.modified_count
+
+
 async def run_content_fixes(db) -> dict:
     """Run every fix. Each step is individually guarded so one failure never
     blocks the rest (or the app boot — server.py wraps the call as well)."""
     result = {"fixed": 0, "skipped_edited": 0, "orphan_modules_deleted": 0,
               "checklist_office_backfilled": 0, "gifts_fixed": 0}
+    try:
+        result["visitor_kpi_rows"] = await _fix_visitor_kpi_rows(db)
+    except Exception as e:
+        logger.warning(f"content_fixes: visitor KPI rows fix failed: {e}")
     try:
         result["quality_weeks_checked"] = await _fix_quality_percents(db)
     except Exception as e:
