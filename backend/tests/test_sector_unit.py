@@ -54,9 +54,13 @@ def test_kpi_suggestion_is_the_step_furthest_behind():
 def test_inputs_are_checked():
     assert sec.clean_setup({"goal": "4", "kpi_metric": "Closes", "kpi_target": "20", "focus": "  tov "}) == {
         "goal": 4, "kpi_metric": "closes", "kpi_target": 20, "focus": "tov", "positive": "", "cod_module_id": None,
-        "teacher_id": None, "example_module_id": None, "example_text": ""}
+        "teacher_id": None, "example_module_id": None, "example_text": "", "watching": ""}
     with pytest.raises(HTTPException):
         sec.clean_setup({"kpi_metric": "vibes"})
+    # Call backs are never a KPI (the Owner, 22 Nov 2026): an old one drops off.
+    assert sec.clean_setup({"kpi_metric": "callbacks"})["kpi_metric"] is None
+    assert sec.clean_breakdown({"know_metric": "callbacks"})["know_metric"] == ""
+    assert "callbacks" not in sec.PICKABLE_KPIS and "Call backs" not in sec.CHANGE_OPTIONS
     with pytest.raises(HTTPException):
         sec.clean_breakdown({"doors": "lots"})
 
@@ -403,3 +407,14 @@ def test_breakdown_gap_why_positives_primetime_and_how_ill_know():
     assert "Proud of: Good intro, Work ethic\nBiggest gap: Spoken → pitched\nWhy: Losing them at the intro\n" \
            "Change: Neighbour story\nPrimetime: Intros\nHow I'll know: 25 pitched" in text
     assert sec.clean_breakdown({"gap": "volume"})["gap"] == "volume"
+
+
+def test_shadow_day_watching_comes_back_at_the_breakdown():
+    """Shadow day (the Owner, 22 Nov 2026): what they watched in the set-up,
+    what they noticed and their tally in the breakdown, both on the WhatsApp."""
+    assert sec.clean_setup({"watching": "  how my Coach handles the close "})["watching"] == "how my Coach handles the close"
+    bd = sec.clean_breakdown({"noticed": "Pauses after the ask", "watch_tally": "6"})
+    assert bd["noticed"] == "Pauses after the ask" and bd["watch_tally"] == 6
+    row = {"user_name": "Example Person", "shadow": True, "setup": {"watching": "the close"}, "breakdown": bd}
+    assert "Watching: the close" in sec.setup_text([row], "2026-11-23")
+    assert "Noticed: Pauses after the ask (tally 6)" in sec.breakdown_text([row], "2026-11-23")

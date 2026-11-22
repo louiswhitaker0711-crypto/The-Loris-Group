@@ -59,7 +59,8 @@ Closed → sign-up (the sign-up process)
 - Before leaving, go back over what they've chosen, when it arrives and what happens next, so they feel sure and the sign-up sticks.
 
 Call backs
-- Never suggest setting or making call backs. A lot of "come back later" means sign-ups are being lost at the Close: the answer is getting the sign-up there and then, by timing the close better and handling the objection on the doorstep.
+- Never suggest setting or making call backs with the main shopper. A lot of "come back later" means sign-ups are being lost at the Close: the answer is getting the sign-up there and then, by timing the close better and handling the objection on the doorstep ("ask my partner" included: "What do you reckon they'd say?").
+- The only call back is when you haven't got the right customer yet: on the first lap, the person at the door doesn't do the shopping, so you go back for the main shopper.
 
 How to know it's working (always end on this)
 - One step improves at a time. Pick the KPI that matches the change (doors, spoken, pitched or closes), set \

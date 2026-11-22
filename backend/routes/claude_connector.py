@@ -750,12 +750,12 @@ TOOLS: dict[str, tuple] = {
                         {"goal": {"type": "integer", "description": "Sign-ups for the week."}}),
     "save_setup": (tool_save_setup,
                    "CHANGES THE APP. Fills in a sector set-up for a day: sign-ups goal, focus, KPI (doors, spoken, "
-                   "pitched, closes or callbacks) and its target, and a positive to keep doing. Their own, or "
+                   "pitched or closes) and its target, and a positive to keep doing. Their own, or "
                    "someone else's if they lead that sector or coach them. Keeps their COD pick.",
                    {"date": {"type": "string", "description": "YYYY-MM-DD. Default today."},
                     "person": {"type": "string", "description": "Whose set-up (a name). Blank = their own."},
                     "goal": {"type": "integer"}, "focus": {"type": "string"},
-                    "kpi_metric": {"type": "string", "enum": ["doors", "spoken", "pitched", "closes", "callbacks"]},
+                    "kpi_metric": {"type": "string", "enum": ["doors", "spoken", "pitched", "closes"]},
                     "kpi_target": {"type": "integer"}, "positive": {"type": "string"}}),
     "write_planner": (tool_write_planner,
                       "CHANGES THE APP. Writes into one box of a day (Monday–Saturday) in the person's own weekly "

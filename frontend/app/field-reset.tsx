@@ -110,7 +110,7 @@ export default function FieldResetScreen() {
         <TextInput
           value={focus}
           onChangeText={setFocus}
-          placeholder="e.g. hooklines before every close, call backs after 7"
+          placeholder="e.g. hooklines before every close, a full rehash"
           placeholderTextColor={c.textMuted}
           style={s.input}
           maxLength={200}

@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 KPI_OPTIONS = [
-    "Doors", "Spoken to", "Pitched", "Closed", "Call backs",
+    "Doors", "Spoken to", "Pitched", "Closed",
     "Order value", "The Round", "Rehash & quality",
 ]
 MAX_FOCUS = 200

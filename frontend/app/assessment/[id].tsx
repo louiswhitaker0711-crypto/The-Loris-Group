@@ -5,7 +5,7 @@
  * chips (Poor→Excellent = 2/4/6/8/10, same 0–10 numbers to the backend), KPIs
  * are −/+ steppers vs target, checklist grading stays inline with a per-
  * category "Mark all" quick action, and coaching text is down to two optional
- * fields (Today's win → coaching_actions, Focus for tomorrow). A live score
+ * fields (Best thing they did today → coaching_actions, Focus for tomorrow). A live score
  * ring + status color updates as the leader taps; "Day guide" opens the full
  * what-to-teach crib sheet for the day. Field day ≈ 15–20 taps total.
  *
@@ -666,12 +666,12 @@ export default function AssessmentScreen() {
               <Text style={styles.sectionScore}>optional</Text>
             </View>
             <View style={styles.card}>
-              <Text style={styles.textInputLabel}>🏆 Today's win</Text>
+              <Text style={styles.textInputLabel}>🏆 Best thing they did today</Text>
               <TextInput
                 style={styles.textArea}
                 value={notes.coaching_actions}
                 onChangeText={(text) => setNotes((p) => ({ ...p, coaching_actions: text }))}
-                placeholder="One thing they did well today…"
+                placeholder="Be specific, e.g. your intro on number 12 was spot on"
                 placeholderTextColor={colors.textMuted}
                 multiline
               />

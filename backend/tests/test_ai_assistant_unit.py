@@ -302,7 +302,7 @@ def test_analyse_me_stays_open_when_todays_analysis_is_in_the_old_shape(db, monk
 def test_the_ai_never_pushes_call_backs_and_reads_rehash_as_the_second_lap():
     from core.sales_coaching import PLAYBOOK, RESPONSE_STYLE
     assert '"callbacks"' not in ai.ANALYSE_SHAPE and '"callbacks"' not in ai.SETUP_SHAPE
-    assert "second lap" in RESPONSE_STYLE and "Never suggest setting or making call backs" in PLAYBOOK
+    assert "second lap" in RESPONSE_STYLE and "Never suggest setting or making call backs with the main shopper" in PLAYBOOK
 
 
 def test_right_now_reads_todays_sector_but_never_todays_bells(db, monkeypatch):

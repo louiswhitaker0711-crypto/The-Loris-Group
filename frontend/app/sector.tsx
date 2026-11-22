@@ -23,7 +23,7 @@ import { SectorMap } from '../src/components/sector/SectorMap';
 import BreakdownPrimetime from '../src/components/sector/BreakdownPrimetime';
 import AiFocusSuggest from '../src/components/ai/AiFocusSuggest';
 
-type Setup = { goal: number | null; kpi_metric: string | null; kpi_target: number | null; focus: string; positive?: string; cod_module_id?: string | null;
+type Setup = { goal: number | null; kpi_metric: string | null; kpi_target: number | null; focus: string; positive?: string; cod_module_id?: string | null; watching?: string;
   teacher_id?: string | null; example_module_id?: string | null; example_text?: string };
 type WeekFocus = { module_id: string; topic: string; stage: number } | null;
 type CodItem = { id: string; stage: number; topic: string; category?: string };
@@ -31,7 +31,7 @@ type CodDay = { stages: number[]; pick: CodItem | null; observed: { by_name: str
 type Breakdown = { doors: number | null; spoken: number | null; pitched: number | null; closed: number | null;
   note: string; goal: number | null; hit: number | null; proud: string; change: string;
   silver?: number | null; gold?: number | null; round?: number | null; cod_note?: string;
-  proud2?: string; proud3?: string; gap?: string; why?: string; primetime?: string;
+  proud2?: string; proud3?: string; gap?: string; why?: string; primetime?: string; noticed?: string; watch_tally?: number | null;
   know_metric?: string | null; know_target?: number | null };
 type Person = { user_id: string; user_name: string; setup: Setup | null; breakdown: Breakdown | null;
   prefill: Partial<Record<'doors' | 'spoken' | 'pitched' | 'closed' | 'hit' | 'silver' | 'gold' | 'round', number>>;
@@ -441,6 +441,8 @@ function SetupCard({ p, date, opts, codOptions, sectorPeople, open, onToggle, on
   const [target, setTarget] = useState(cur.kpi_target != null ? String(cur.kpi_target) : fromBd && yb0.kpi.kpi_target != null ? String(yb0.kpi.kpi_target) : '');
   const [focus, setFocus] = useState(cur.focus || (!p.setup ? yb0.change || '' : ''));
   const [positive, setPositive] = useState(cur.positive || '');
+  // Shadow day (the Owner, 22 Nov 2026): what they're watching and tracking on their Coach's hop.
+  const [watching, setWatching] = useState(cur.watching || '');
   const [busy, setBusy] = useState(false);
   const y = p.yesterday || {};
   const metrics: Array<{ key: string; label: string; loa: number | null }> = opts?.kpi_metrics || [];
@@ -462,7 +464,8 @@ function SetupCard({ p, date, opts, codOptions, sectorPeople, open, onToggle, on
         cod_module_id: canPickCod ? (cod || null) : (cur.cod_module_id || null),
         teacher_id: canPickCod ? (teacher || null) : null,
         example_module_id: exampleMode ? (exMod || null) : null,
-        example_text: exampleMode && !exMod ? exText.trim() : '' } });
+        example_text: exampleMode && !exMod ? exText.trim() : '',
+        watching: shadow ? watching.trim() : '' } });
       toast.success('Saved'); onSaved(); onToggle();
     } catch (e) { showAlert('Could not save', errText(e, 'Try again.')); }
     finally { setBusy(false); }
@@ -490,7 +493,13 @@ function SetupCard({ p, date, opts, codOptions, sectorPeople, open, onToggle, on
             if (x.positive && !positive) setPositive(x.positive);
           }} />
           {shadow && (
-            <Text style={s.muted}>{p.hop || 'Shadow day'}. No sales goal or KPI today: set what they're learning and their focus.</Text>
+            <>
+              <Text style={s.muted}>{p.hop || 'Shadow day'}. No sales goal or KPI today: set what they're learning and their focus.</Text>
+              <Text style={s.label}>What I'm watching and tracking today</Text>
+              <Text style={s.muted}>One thing to watch their Coach do all day, and keep a tally of. It comes back at the breakdown.</Text>
+              <TextInput value={watching} onChangeText={setWatching} placeholder={'e.g. how my Coach handles "I\'ll think about it"'}
+                placeholderTextColor={c.textMuted} style={s.input} maxLength={160} testID="setup-watching" />
+            </>
           )}
           {!shadow && (y.goal != null || y.kpi) && (
             <Pressable onPress={useYesterday} style={s.hint} accessibilityRole="button">
@@ -683,6 +692,9 @@ function BreakdownCard({ p, date, opts, canMarkCod, open, onToggle, onSaved, s, 
   const [gap, setGap] = useState<string>(cur.gap || '');
   const [why, setWhy] = useState(cur.why || '');
   const [pt, setPt] = useState(cur.primetime || '');
+  // Shadow day: what they noticed and their tally (the Owner, 22 Nov 2026).
+  const [noticed, setNoticed] = useState(cur.noticed || '');
+  const [tally, setTally] = useState(cur.watch_tally != null ? String(cur.watch_tally) : '');
   const [know, setKnow] = useState<string>(cur.know_metric || '');
   const [knowTarget, setKnowTarget] = useState(cur.know_target != null ? String(cur.know_target) : '');
   const metrics: Array<{ key: string; label: string; loa: number | null }> = opts?.kpi_metrics || [];
@@ -727,7 +739,8 @@ function BreakdownCard({ p, date, opts, canMarkCod, open, onToggle, onSaved, s, 
         doors: num(vals.doors), spoken: num(vals.spoken), pitched: num(vals.pitched), closed: num(vals.closed),
         hit: signups, silver: num(vals.silver), gold: num(vals.gold), round: num(vals.round), goal: num(goal), note, proud, change, cod_note: codNote,
         proud2: extraProud >= 1 ? proud2 : '', proud3: extraProud >= 2 ? proud3 : '',
-        gap: gapNow, why, primetime: pt, know_metric: know || null, know_target: know ? num(knowTarget) : null } });
+        gap: gapNow, why, primetime: pt, know_metric: know || null, know_target: know ? num(knowTarget) : null,
+        noticed: p.shadow ? noticed : '', watch_tally: p.shadow ? num(tally) : null } });
       toast.success('Saved'); onSaved(); onToggle();
     } catch (e) { showAlert('Could not save', errText(e, 'Try again.')); }
     finally { setBusy(false); }
@@ -753,6 +766,19 @@ function BreakdownCard({ p, date, opts, canMarkCod, open, onToggle, onSaved, s, 
             </>
           )}
           <CodObserved p={p} date={date} canMark={canMarkCod} onSaved={onSaved} s={s} c={c} />
+          <Text style={s.muted}>Ask each question and type their answer, so they do the talking. Vague answer? Ask "Like what?" until it's specific.</Text>
+          {!!p.shadow && (
+            <>
+              <Text style={s.label}>Shadow day: what did you notice? And what else?</Text>
+              {!!p.setup?.watching && <Text style={s.muted}>They were watching: {p.setup.watching}</Text>}
+              <TextInput value={noticed} onChangeText={setNoticed} placeholder="What they noticed today" placeholderTextColor={c.textMuted}
+                style={s.input} maxLength={160} testID="bd-noticed" />
+              <View style={s.numBox}>
+                <Text style={s.tiny}>Tally</Text>
+                <TextInput value={tally} onChangeText={setTally} keyboardType="number-pad" style={[s.input, s.numInput]} testID="bd-tally" />
+              </View>
+            </>
+          )}
           <View style={s.numRow}>
             {(['doors', 'spoken', 'pitched', 'closed'] as const).map((k) => (
               <View key={k} style={s.numBox}>
@@ -778,9 +804,9 @@ function BreakdownCard({ p, date, opts, canMarkCod, open, onToggle, onSaved, s, 
           <Text style={s.muted}>
             {split ? `Hit ${signups ?? 0} (Silver + Gold). ` : ''}Copy your numbers from Field IQ: Silver £5–£9.99, Gold £10+, and how many took The Round.
           </Text>
-          <Text style={s.label}>Proud of</Text>
+          <Text style={s.label}>Proud of: what went well? What exactly did you do?</Text>
           <Chips items={opts?.proud || []} value={proud} onPick={setProud} s={s} c={c} />
-          <TextInput value={proud} onChangeText={setProud} placeholder="A positive from today" placeholderTextColor={c.textMuted} style={s.input} testID="bd-proud" />
+          <TextInput value={proud} onChangeText={setProud} placeholder="e.g. used the street's sign-ups on the rehash and got two" placeholderTextColor={c.textMuted} style={s.input} testID="bd-proud" />
           {extraProud >= 1 && <TextInput value={proud2} onChangeText={setProud2} placeholder="Another positive" placeholderTextColor={c.textMuted} style={s.input} testID="bd-proud2" />}
           {extraProud >= 2 && <TextInput value={proud3} onChangeText={setProud3} placeholder="And another" placeholderTextColor={c.textMuted} style={s.input} testID="bd-proud3" />}
           {extraProud < 2 && (
@@ -790,7 +816,7 @@ function BreakdownCard({ p, date, opts, canMarkCod, open, onToggle, onSaved, s, 
             </Pressable>
           )}
 
-          <Text style={s.label}>Biggest gap</Text>
+          <Text style={s.label}>Biggest gap: looking at your numbers, where's the gap? And what else?</Text>
           <View style={s.chips}>
             {gaps.map((g) => (
               <Pressable key={g.key} onPress={() => pickGap(g.key)} style={[s.chip, gapNow === g.key && s.chipOn]} accessibilityRole="button" testID={`bd-gap-${g.key}`}>
@@ -803,14 +829,14 @@ function BreakdownCard({ p, date, opts, canMarkCod, open, onToggle, onSaved, s, 
               {gaps.find((g) => g.key === gapNow)?.detail}{!gap && gapNow ? ' · suggested from the numbers' : ''}
             </Text>
           )}
-          <Text style={s.label}>Why?</Text>
-          <TextInput value={why} onChangeText={setWhy} placeholder="What happened at that step" placeholderTextColor={c.textMuted} style={s.input} testID="bd-why" />
-          <Text style={s.label}>What will change (tomorrow's focus)</Text>
+          <Text style={s.label}>What got in the way?</Text>
+          <TextInput value={why} onChangeText={setWhy} placeholder="e.g. kept stopping after the short story" placeholderTextColor={c.textMuted} style={s.input} testID="bd-why" />
+          <Text style={s.label}>What will you do differently in the first hour tomorrow?</Text>
           <Chips items={opts?.change || []} value={change} onPick={setChange} s={s} c={c} />
-          <TextInput value={change} onChangeText={setChange} placeholder="Or type it" placeholderTextColor={c.textMuted} style={s.input} />
-          <Text style={s.label}>Primetime topic</Text>
+          <TextInput value={change} onChangeText={setChange} placeholder="An action, e.g. close on every pitch" placeholderTextColor={c.textMuted} style={s.input} />
+          <Text style={s.label}>Primetime: what's the one skill that would close that gap?</Text>
           <TextInput value={pt} onChangeText={setPt} placeholder="What you'll work on in Primetime" placeholderTextColor={c.textMuted} style={s.input} testID="bd-primetime" />
-          <Text style={s.label}>How will I know it's worked? (tomorrow's KPI)</Text>
+          <Text style={s.label}>What will I see on your numbers tomorrow? (tomorrow's KPI)</Text>
           <View style={s.chips}>
             {metrics.map((m) => (
               <Pressable key={m.key} onPress={() => { setKnow(know === m.key ? '' : m.key); if (know !== m.key) setKnowTarget(m.loa ? String(m.loa) : ''); }}

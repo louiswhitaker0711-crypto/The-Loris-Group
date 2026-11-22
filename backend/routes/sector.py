@@ -42,6 +42,9 @@ router = APIRouter()
 # The Owner's Law of Averages for a day.
 LOA = {"doors": 120, "spoken": 70, "pitched": 25, "closes": 15}
 KPI_METRICS = {"doors": "doors", "spoken": "spoken", "pitched": "pitched", "closes": "closes", "callbacks": "call backs"}
+# Call backs are never a KPI to pick (the Owner, 22 Nov 2026): they stay in
+# KPI_METRICS only so older set-ups and breakdowns still read.
+PICKABLE_KPIS = ("doors", "spoken", "pitched", "closes")
 PROUD_OPTIONS = [
     "Good intro", "S.E.E.", "Tone of voice", "Body language", "Being confident", "Shorter pitch",
     "Hooklines", "Handling objections", "Closing effectively", "Rehash", "Creating the order",
@@ -50,7 +53,7 @@ PROUD_OPTIONS = [
 CHANGE_OPTIONS = [
     "Speak to more people", "S.E.E.", "Tone of voice", "Body language", "K.I.S.S.", "Building trust",
     "Hooklines", "Handling objections", "Closing", "Timing the close", "Rehash", "Not wasting time",
-    "Qualifying early", "Call backs", "Intro",
+    "Qualifying early", "Intro",
 ]
 MAX_TEXT = 160
 # The breakdown's biggest gap (the Owner, 30 Oct 2026): low volume, or the
@@ -88,8 +91,10 @@ def _text(v) -> str:
 
 def clean_setup(body: dict) -> dict:
     metric = str(body.get("kpi_metric") or "").strip().lower()
-    if metric and metric not in KPI_METRICS:
-        raise HTTPException(status_code=400, detail="Pick the KPI: doors, spoken, pitched, closes or call backs")
+    if metric == "callbacks":   # no longer a KPI (an old set-up re-saved drops it)
+        metric = ""
+    if metric and metric not in PICKABLE_KPIS:
+        raise HTTPException(status_code=400, detail="Pick the KPI: doors, spoken, pitched or closes")
     cod = str(body.get("cod_module_id") or "").strip()[:64] or None
     return {"goal": _int(body.get("goal"), 0, 30), "kpi_metric": metric or None,
             "kpi_target": _int(body.get("kpi_target"), 0, 300), "focus": _text(body.get("focus")),
@@ -98,7 +103,10 @@ def clean_setup(body: dict) -> dict:
             "teacher_id": str(body.get("teacher_id") or "").strip()[:64] or None,
             # Stage 3+: what they're being an example of — a COD item, or their own words.
             "example_module_id": str(body.get("example_module_id") or "").strip()[:64] or None,
-            "example_text": _text(body.get("example_text"))}
+            "example_text": _text(body.get("example_text")),
+            # Shadow day only (the Owner, 22 Nov 2026): what the new start is
+            # watching and tracking on their Coach's hop; it comes back at the breakdown.
+            "watching": _text(body.get("watching"))}
 
 
 # ── COD learning in the set-up ──────────────────────────────────────────────
@@ -159,7 +167,7 @@ def clean_breakdown(body: dict) -> dict:
     gap = str(body.get("gap") or "").strip()
     gap = gap if gap in GAP_LABELS else ""
     know = str(body.get("know_metric") or "").strip().lower()
-    know = know if know in KPI_METRICS else ""
+    know = know if know in PICKABLE_KPIS else ""
     out = {"doors": _int(body.get("doors")), "spoken": _int(body.get("spoken")),
            "pitched": _int(body.get("pitched")), "closed": _int(body.get("closed")),
            "note": _text(body.get("note")), "goal": _int(body.get("goal"), 0, 30),
@@ -175,7 +183,9 @@ def clean_breakdown(body: dict) -> dict:
            "silver": _int(body.get("silver"), 0, 30), "gold": _int(body.get("gold"), 0, 30),
            "round": _int(body.get("round"), 0, 30),
            # Stage 2-3: how this week's COD focus went today (the Owner, 27 Oct 2026).
-           "cod_note": _text(body.get("cod_note"))}
+           "cod_note": _text(body.get("cod_note")),
+           # Shadow day: what they noticed, and their tally of what they were tracking.
+           "noticed": _text(body.get("noticed")), "watch_tally": _int(body.get("watch_tally"), 0, 300)}
     if out["silver"] is not None or out["gold"] is not None:
         out["hit"] = (out["silver"] or 0) + (out["gold"] or 0)
         if out["round"] is not None:
@@ -271,6 +281,8 @@ def setup_text(rows: list, iso: str, sector_goal: Optional[int] = None, postcode
             out.append(f"Goal: {s['goal']}")
         if s.get("kpi_metric") and not r.get("shadow"):
             out.append(f"KPI: {kpi_text(s)}")
+        if r.get("shadow") and s.get("watching"):
+            out.append(f"Watching: {s['watching']}")
         if s.get("focus"):
             out += ["", f"Focus: {s['focus']}"]
         learn = ((r.get("cod") or {}).get("pick") or {}).get("topic")
@@ -297,7 +309,8 @@ def breakdown_text(rows: list, iso: str, sector_goal: Optional[int] = None, post
         b = r.get("breakdown") or {}
         nums = [b.get(k) for k in ("doors", "spoken", "pitched", "closed")]
         if not any(v is not None for v in nums) and b.get("hit") is None and not b.get("proud") and not b.get("change") \
-                and not b.get("cod_note") and not b.get("gap") and not b.get("why") and not b.get("primetime"):
+                and not b.get("cod_note") and not b.get("gap") and not b.get("why") and not b.get("primetime") \
+                and not b.get("noticed"):
             continue
         out += ["", f"*{_first(r.get('user_name'))}*"]
         if any(v is not None for v in nums):
@@ -323,6 +336,9 @@ def breakdown_text(rows: list, iso: str, sector_goal: Optional[int] = None, post
         if b.get("know_metric") in KPI_METRICS:
             t = b.get("know_target")
             out.append(f"How I'll know: {f'{t} ' if t is not None else ''}{KPI_METRICS[b['know_metric']]}")
+        if b.get("noticed") or b.get("watch_tally") is not None:
+            tally = f" (tally {b['watch_tally']})" if b.get("watch_tally") is not None else ""
+            out.append(f"Noticed: {b.get('noticed') or '-'}{tally}")
         if b.get("cod_note"):
             topic = (r.get("week_focus") or {}).get("topic")
             out.append(f"COD{f' ({topic})' if topic else ''}: {b['cod_note']}")
@@ -534,7 +550,7 @@ async def sector_day(request: Request, date: Optional[str] = None, who: Optional
         "sector_people": sector_people,
         "sector": sector,
         "options": {"proud": PROUD_OPTIONS, "change": CHANGE_OPTIONS,
-                    "kpi_metrics": [{"key": k, "label": v, "loa": LOA.get(k)} for k, v in KPI_METRICS.items()]},
+                    "kpi_metrics": [{"key": k, "label": KPI_METRICS[k], "loa": LOA.get(k)} for k in PICKABLE_KPIS]},
         "people": rows,
         "whatsapp": {"setup": setup_text(rows, iso, (sector or {}).get("goal"), (sector or {}).get("postcode") or ""),
                      "breakdown": breakdown_text(rows, iso, (sector or {}).get("goal"), (sector or {}).get("postcode") or "",
