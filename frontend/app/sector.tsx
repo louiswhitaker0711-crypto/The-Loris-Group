@@ -9,7 +9,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors, fonts } from '../src/theme/ThemeContext';
-import { apiService } from '../src/api/client';
+import { apiService, Cod2Day } from '../src/api/client';
 import PostcodePair from '../src/components/sector/PostcodePair';
 import { splitPostcodes } from '../src/utils/postcodes';
 import { toast } from '../src/utils/toast';
@@ -40,7 +40,9 @@ type Person = { user_id: string; user_name: string; setup: Setup | null; breakdo
   /** Stage 3+: "What I'm being an example of" instead of learning. */
   example_mode?: boolean; week_focus?: WeekFocus; teacher_name?: string; example?: string;
   /** Shadow day: watching a hop, no sales goal or KPI. `hop` says who with. */
-  shadow?: boolean; hop?: string | null };
+  shadow?: boolean; hop?: string | null;
+  /** The COD 2 calendar: that day's items and what's behind (the Owner, 23 Nov 2026). */
+  cod2?: Cod2Day | null };
 type Mode = 'setup' | 'breakdown';
 const errText = (e: any, f: string) => (typeof e?.response?.data?.detail === 'string' ? e.response.data.detail : f);
 
@@ -427,7 +429,9 @@ function SetupCard({ p, date, opts, codOptions, sectorPeople, open, onToggle, on
   // This week's COD focus fills a new set-up (never one already saved).
   const wf: WeekFocus = p.week_focus || null;
   const wfLearn = wf && canPickCod && stages.includes(wf.stage) ? wf.module_id : '';
-  const [cod, setCod] = useState<string>(cur.cod_module_id || (!p.setup ? wfLearn : ''));
+  // On the COD 2 calendar, today's COD 2 item is the day's learning (the Owner, 23 Nov 2026).
+  const cod2Learn = canPickCod && stages.includes(2) ? (p.cod2?.today?.[0]?.module_id || '') : '';
+  const [cod, setCod] = useState<string>(cur.cod_module_id || (!p.setup ? (cod2Learn || wfLearn) : ''));
   const [teacher, setTeacher] = useState<string>(cur.teacher_id || '');
   const [exMod, setExMod] = useState<string>(cur.example_module_id || (!p.setup && exampleMode && wf ? wf.module_id : ''));
   const [exText, setExText] = useState<string>(cur.example_text || '');
@@ -483,6 +487,7 @@ function SetupCard({ p, date, opts, codOptions, sectorPeople, open, onToggle, on
       {open && (
         <View style={{ gap: 10 }}>
           <CodFocusBanner p={p} s={s} c={c} />
+          <Cod2Line p={p} s={s} c={c} />
           {/* The AI's focus, KPI, goal and a tip for today (the Owner, 5 Nov 2026): fills the form, then Save. */}
           <AiFocusSuggest userId={p.user_id} date={date} shadow={shadow} onUse={(x) => {
             if (x.focus) setFocus(x.focus);
@@ -607,6 +612,62 @@ function CodFocusBanner({ p, s, c }: any) {
       </View>
       <Ionicons name="chevron-forward" size={16} color={c.textMuted} />
     </Pressable>
+  );
+}
+
+const cod2Name = (it: { topic: string; part?: number | null }) => (it.part ? `${it.topic} (part ${it.part})` : it.topic);
+
+/** Set-up: today's COD 2 from their calendar, and anything still behind. */
+function Cod2Line({ p, s, c }: any) {
+  const d: Cod2Day | null | undefined = p.cod2;
+  if (!d) return null;
+  return (
+    <View style={[s.hint, { alignItems: 'flex-start' }]} testID="setup-cod2">
+      <Ionicons name="calendar-outline" size={16} color={c.primary} />
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={[s.ghostText, { color: c.text }]}>
+          {d.today.length ? `COD 2 day ${d.day} of ${d.total}: ${d.today.map(cod2Name).join(' + ')}` : 'No new COD 2 topic today'}
+        </Text>
+        {d.behind.length > 0 && <Text style={s.muted}>Still to get to Know: {d.behind.map(cod2Name).join(', ')}</Text>}
+      </View>
+    </View>
+  );
+}
+
+/** Breakdown: tick Know on today's COD 2 (and anything behind). Know only:
+ * Do and Deliver stay with their Coach on the COD screen (the Owner, 23 Nov 2026). */
+function Cod2Know({ p, onSaved, s, c }: any) {
+  const d: Cod2Day | null | undefined = p.cod2;
+  const [busy, setBusy] = useState<string>('');
+  if (!d) return null;
+  const items = [...d.today, ...d.behind.filter((b) => !d.today.some((t) => t.module_id === b.module_id))];
+  if (!items.length) return null;
+  const tick = async (moduleId: string, know: boolean) => {
+    setBusy(moduleId);
+    try { await apiService.codCalendarKnow(p.user_id, moduleId, know); onSaved(); }
+    catch (e) { showAlert('Could not save', errText(e, 'Try again.')); }
+    finally { setBusy(''); }
+  };
+  return (
+    <View style={{ gap: 6 }} testID="bd-cod2">
+      <Text style={s.label}>Today's COD 2: do you know it?</Text>
+      <Text style={s.muted}>Tick Know when you could explain it to someone. Your Coach signs off Do and Deliver on your COD.</Text>
+      {items.map((it) => {
+        const known = (it.ladder || 0) >= 1;
+        const late = d.behind.some((b) => b.module_id === it.module_id);
+        return (
+          <View key={`${it.module_id}-${it.part || 0}`} style={[s.hint, { alignItems: 'center' }]}>
+            <Ionicons name={known ? 'checkmark-circle' : 'book-outline'} size={16} color={known ? c.green : late ? c.yellow : c.primary} />
+            <Text style={[s.ghostText, { flex: 1, color: c.text }]}>{cod2Name(it)}{late ? ' · from an earlier day' : ''}</Text>
+            <Pressable onPress={() => tick(it.module_id, !known)} disabled={!!busy || (known && (it.ladder || 0) > 1)}
+              style={[s.chip, !known && s.chipOn]} accessibilityRole="button" testID={`bd-cod2-know-${it.module_id}`}>
+              {busy === it.module_id ? <ActivityIndicator size="small" color={known ? c.primary : c.onPrimary} />
+                : <Text style={[s.chipText, !known && { color: c.onPrimary }]}>{known ? ((it.ladder || 0) > 1 ? 'Signed off' : 'Undo') : 'I know it'}</Text>}
+            </Pressable>
+          </View>
+        );
+      })}
+    </View>
   );
 }
 
@@ -766,6 +827,7 @@ function BreakdownCard({ p, date, opts, canMarkCod, open, onToggle, onSaved, s, 
             </>
           )}
           <CodObserved p={p} date={date} canMark={canMarkCod} onSaved={onSaved} s={s} c={c} />
+          <Cod2Know p={p} onSaved={onSaved} s={s} c={c} />
           <Text style={s.muted}>Ask each question and type their answer, so they do the talking. Vague answer? Ask "Like what?" until it's specific.</Text>
           {!!p.shadow && (
             <>

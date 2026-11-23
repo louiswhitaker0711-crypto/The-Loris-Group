@@ -5,6 +5,7 @@
 - GET  /cod-calendar/office        everyone with a calendar you can see: today's topics, done, behind
 - POST /cod-calendar/start         start or restart someone's from a date (Coach/Admin)
 - DELETE /cod-calendar/person/{id} stop it (Coach/Admin)
+- POST /cod-calendar/know          tick Know on a COD 2 item from the calendar, at the breakdown
 """
 from __future__ import annotations
 
@@ -134,3 +135,47 @@ async def stop_calendar(user_id: str, request: Request):
         raise HTTPException(status_code=403, detail="You can't stop this person's COD")
     await db.cod_calendars.delete_one({"user_id": user_id})
     return {"stopped": True}
+
+
+class KnowBody(BaseModel):
+    user_id: Optional[str] = None   # default: yourself
+    module_id: str
+    know: bool = True
+
+
+@router.post("/cod-calendar/know")
+async def tick_know(body: KnowBody, request: Request):
+    """At the breakdown (the Owner, 23 Nov 2026): a BA ticks Know on today's
+    COD 2 item, or an earlier one still behind. Know only: Do and Deliver stay
+    with their Coach on the COD screen. Only items on their own calendar. The
+    person themselves, their Coach (or an Admin), or today's sector leader
+    filling in their breakdown. Unticking only takes back a Know given here."""
+    me = await get_current_user(request)
+    uid = body.user_id or str(me["id"])
+    target = await _target(uid)
+    allowed = await can_set(me, target)
+    if not allowed:
+        from routes.coverage import sector_of
+        sec = await sector_of(uid, _today(), target.get("office_id"))
+        allowed = bool(sec) and str(sec.get("leader_id") or "") == str(me["id"])
+    if not allowed:
+        raise HTTPException(status_code=403, detail="Only for yourself, or someone you're doing the breakdown with")
+    doc = await db.cod_calendars.find_one({"user_id": uid}, {"_id": 0})
+    if not doc or body.module_id not in cal.module_ids_of(doc):
+        raise HTTPException(status_code=404, detail="That item isn't on their COD 2 calendar")
+    if body.know:
+        mod = await db.training_modules.find_one({"id": body.module_id}, {"_id": 0, "id": 1, "stage": 1})
+        if not mod:
+            raise HTTPException(status_code=404, detail="COD item not found")
+        from core.cod_ticks import raise_rung
+        await raise_rung(uid, mod, 1, str(me["id"]), _today(), "cod2_breakdown")
+    else:
+        row = await db.module_progress.find_one({"target_user_id": uid, "module_id": body.module_id},
+                                                {"_id": 1, "ladder": 1, "ticked_from": 1, "ladder_dates": 1})
+        if row and int(row.get("ladder") or 0) == 1 and row.get("ticked_from") == "cod2_breakdown":
+            from routes.modules import _apply_ladder_dates
+            await db.module_progress.update_one({"_id": row["_id"]}, {"$set": {
+                "ladder": 0, "completed": False,
+                "ladder_dates": _apply_ladder_dates(row.get("ladder_dates") or {}, 0, None, 0, _today())}})
+    lad = await cal.ladders(uid, cal.module_ids_of(doc))
+    return {"cod2": cal.day_view(doc, lad, _today())}
