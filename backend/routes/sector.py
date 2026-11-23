@@ -497,6 +497,10 @@ async def sector_day(request: Request, date: Optional[str] = None, who: Optional
     missing = [t for t in missing if t and t not in names]
     if missing:
         names.update({u["user_id"]: u["user_name"] for u in await _users_by_ids(missing)})
+    # The COD 2 calendar (core/cod_calendar.py, the Owner, 23 Nov 2026): that
+    # day's COD 2 fills a Stage 2's set-up, and they tick Know at the breakdown.
+    from core.cod_calendar import day_views as _cod2_views
+    cod2 = await _cod2_views(ids, iso)
     from core.hops import shadow_ids as _shadows, describe as _hop_text
     shadows = _shadows(sector)
     rows = []
@@ -518,6 +522,7 @@ async def sector_day(request: Request, date: Optional[str] = None, who: Optional
             # Stage 3+ (no learning pick): "what I'm being an example of".
             "example_mode": not stages,
             "week_focus": week_focus.get(p["user_id"]),
+            "cod2": cod2.get(p["user_id"]),
             "cod_prompt": cod_prompt_for(cod_stage_of(targets.get(p["user_id"]) or {}, stages)),
             "teacher_name": names.get(st.get("teacher_id") or "") or "",
             "example": example,

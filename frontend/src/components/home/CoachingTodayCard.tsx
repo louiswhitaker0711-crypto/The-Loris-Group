@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useColors, fonts } from '../../theme/ThemeContext';
-import { api } from '../../api/client';
+import { api, Cod2Person } from '../../api/client';
 import { toast } from '../../utils/toast';
 import { inFieldHours, fieldStarted, ukNow } from '../../utils/fieldTime';
 import AiFocusSuggest from '../ai/AiFocusSuggest';
@@ -57,7 +57,9 @@ export const firstName = (n: string) => (n || '').trim().split(/\s+/)[0] || n;
 export function useCoachingToday() {
   return useQuery({
     queryKey: ['coaching-today'],
-    queryFn: async () => (await api.get('/coaching/today')).data as { date: string; people: CoachPerson[] },
+    queryFn: async () => (await api.get('/coaching/today')).data as { date: string; people: CoachPerson[];
+      /** Today's COD 2: the Coach's team in the morning, their bunny hop in the field (the Owner, 23 Nov 2026). */
+      cod2?: { mode: 'team' | 'hop' | null; people: Cod2Person[] } },
     refetchInterval: 5 * 60 * 1000,
     retry: false,
   });
@@ -90,8 +92,47 @@ export default function CoachingTodayCard() {
   const s = useMemo(() => styles(c), [c]);
   const { data } = useCoachingToday();
   const people = data?.people || [];
-  if (!people.length) return null;
-  return <>{people.map((p) => <PersonCard key={p.hire_id} p={p} s={s} c={c} />)}</>;
+  const cod2 = data?.cod2;
+  if (!people.length && !cod2?.people?.length) return null;
+  return (
+    <>
+      {people.map((p) => <PersonCard key={p.hire_id} p={p} s={s} c={c} />)}
+      {!!cod2?.people?.length && <Cod2Card mode={cod2.mode} people={cod2.people} s={s} c={c} />}
+    </>
+  );
+}
+
+const cod2Name = (it: { topic: string; part?: number | null }) => (it.part ? `${it.topic} (part ${it.part})` : it.topic);
+
+/** Today's COD 2 for the Stage 2s you look after (the Owner, 23 Nov 2026):
+ * your team in the morning, your bunny hop once the field's started. */
+function Cod2Card({ mode, people, s, c }: { mode: 'team' | 'hop' | null; people: Cod2Person[]; s: any; c: any }) {
+  const router = useRouter();
+  return (
+    <View style={s.card} testID="coaching-today-cod2">
+      <Text style={s.kicker}>{mode === 'hop' ? 'COD 2 on your hop' : 'Your team’s COD 2 today'}</Text>
+      <Text style={s.sub}>{mode === 'hop' ? 'What to look for on the doors. They tick Know at the breakdown.' : 'Plan it into Primetime and their set-ups.'}</Text>
+      {people.map((p) => (
+        <View key={p.user_id} style={s.teach}>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={s.teachText}>{firstName(p.name)}{p.day ? ` · day ${p.day} of ${p.total}` : ''}</Text>
+            {p.today.map((it) => (
+              <Pressable key={`${it.module_id}-${it.part || 0}`} onPress={() => router.push(`/module/${it.module_id}` as never)} accessibilityRole="button">
+                <Text style={[s.body, (it.ladder || 0) >= 1 && s.teachDone]}>{cod2Name(it)}</Text>
+              </Pressable>
+            ))}
+            {!p.today.length && <Text style={s.sub}>No new topic today</Text>}
+            {p.behind.length > 0 && (
+              <View style={s.behind}>
+                <Text style={s.behindTitle}>Behind</Text>
+                <Text style={s.behindItem}>{p.behind.map(cod2Name).join(', ')}</Text>
+              </View>
+            )}
+          </View>
+        </View>
+      ))}
+    </View>
+  );
 }
 
 function PersonCard({ p, s, c }: { p: CoachPerson; s: any; c: any }) {

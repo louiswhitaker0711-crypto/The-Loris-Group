@@ -747,6 +747,14 @@ export interface CodCalendar {
   user_id: string; start_date: string; days: CodCalendarDay[]; total: number; done: number; behind: number;
   today: CodCalendarItem[]; current_day: number; finished: boolean; ends: string | null;
 }
+/** One person's COD 2 for a day (the Owner, 23 Nov 2026): that day's items
+ * and anything earlier still not at Know. On sector rows and Coaching today. */
+export interface Cod2Day {
+  day: number | null; total: number; done: number;
+  today: CodCalendarItem[];
+  behind: Array<CodCalendarItem & { date: string; day: number }>;
+}
+export interface Cod2Person extends Cod2Day { user_id: string; name: string }
 export interface CodCalendarRow {
   user_id: string; name: string; start_date: string; ends: string | null; total: number; done: number;
   behind: number; current_day: number; today: string[]; finished: boolean;
@@ -1368,6 +1376,9 @@ export const apiService = {
   startCodCalendar: (userId: string, startDate?: string) =>
     api.post<{ calendar: CodCalendar | null }>('/cod-calendar/start', { user_id: userId, start_date: startDate }),
   stopCodCalendar: (userId: string) => api.delete(`/cod-calendar/person/${userId}`),
+  /** Tick Know on a COD 2 item at the breakdown (Know only; Do and Deliver stay with the Coach). */
+  codCalendarKnow: (userId: string, moduleId: string, know = true) =>
+    api.post<{ cod2: Cod2Day | null }>('/cod-calendar/know', { user_id: userId, module_id: moduleId, know }),
   getMyModuleProgress: (stage: 1 | 2 | 3 | 4 | 5) =>
     api.get<{ stage: number; progress: Array<any>; primetime_pending?: Record<string, string> }>(`/module-progress/me`, { params: { stage } }),
   upsertModuleProgress: (

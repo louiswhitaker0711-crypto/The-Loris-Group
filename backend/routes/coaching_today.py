@@ -137,6 +137,49 @@ async def _past_grades(hire_id: str, day: int) -> list[dict]:
 @router.get("/coaching/today")
 async def coaching_today(request: Request):
     user = await get_current_user(request)
+    out = await _new_starts_today(user)
+    try:
+        out["cod2"] = await cod2_today(user, out["date"])
+    except Exception:
+        import logging
+        logging.getLogger(__name__).warning("coaching today: COD 2 failed", exc_info=True)
+        out["cod2"] = {"mode": None, "people": []}
+    return out
+
+
+async def cod2_today(user: dict, iso: str, now: Optional[datetime] = None) -> dict:
+    """Today's COD 2 for the Stage 2s a Coach looks after (the Owner, 23 Nov
+    2026): in the morning, everyone on their team (to plan Primetime and the
+    set-ups); once the field has started, only the people on their own bunny
+    hop (what to look for on the doors). Each with today's items and anything
+    earlier still not at Know."""
+    from core.cod_calendar import day_views
+    from auth import get_subtree_ids
+    from bson import ObjectId
+    role = (user.get("role") or "").lower()
+    me = str(user["id"])
+    now = (now or datetime.now(APP_TZ)).astimezone(APP_TZ)
+    in_field = now.weekday() != 6 and latest_field_start(now).date() == now.date()
+    if in_field:
+        mode = "hop"
+        ids = hop_mates(await _my_sector(user, iso), me)
+    elif role in ("leader", "admin"):
+        mode = "team"
+        ids = [i for i in await get_subtree_ids(me) if i != me]
+    else:
+        return {"mode": None, "people": []}
+    views = await day_views(ids, iso)
+    if not views:
+        return {"mode": mode, "people": []}
+    names = {str(u["_id"]): u.get("name") or "" async for u in db.users.find(
+        {"_id": {"$in": [ObjectId(i) for i in views if ObjectId.is_valid(i)]},
+         "deleted": {"$ne": True}, "is_active": {"$ne": False}}, {"name": 1})}
+    people = [{"user_id": uid, "name": names[uid], **v} for uid, v in views.items() if uid in names]
+    people.sort(key=lambda p: (-len(p["behind"]), p["name"].lower()))
+    return {"mode": mode, "people": people}
+
+
+async def _new_starts_today(user: dict) -> dict:
     iso = _today()
     role = (user.get("role") or "").lower()
     if role not in ("leader", "admin", "trainee"):
