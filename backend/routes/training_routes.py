@@ -381,6 +381,10 @@ async def update_assessment(assessment_id: str, update: DailyAssessmentUpdate, r
         # The day's Know / Do / Deliver ticks move their COD up (core/cod_day_sync.py).
         from core.cod_day_sync import sync_day_to_cod
         await sync_day_to_cod({**assessment, **merged}, user)
+        if not assessment.get("completed"):
+            # The evaluation (Day 8) done: COD 2 starts the next field day (core/cod_calendar.py).
+            from core.cod_calendar import start_after_evaluation
+            await start_after_evaluation({**assessment, **merged}, user)
         all_a = await db.daily_assessments.find({"new_hire_id": assessment["new_hire_id"]}).to_list(10)
         completed_days = [a["day_number"] for a in all_a if a.get("completed")]
         next_day = max(completed_days) + 1 if completed_days else 1
@@ -738,6 +742,11 @@ async def get_checklist(assessment_id: str, request: Request):
         from core.cod_day_sync import FIELD_TO_COD
         for it in items:
             it["cod_items"] = FIELD_TO_COD.get((it.get("topic") or "").strip(), [])
+    elif assessment and int(assessment.get("day_number") or 0) in (1, 2):
+        # Academy items graded Learnt give their COD item Know (core/cod_ticks.py).
+        from core.cod_ticks import ACADEMY_TO_COD
+        for it in items:
+            it["cod_items"] = ACADEMY_TO_COD.get((it.get("topic") or "").strip(), [])
     return [DeliveryChecklist(**i) for i in items]
 
 @router.put("/checklist/{item_id}")

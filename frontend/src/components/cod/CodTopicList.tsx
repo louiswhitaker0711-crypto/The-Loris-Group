@@ -160,6 +160,13 @@ function Rung({ size, radius, lit, hue, ring, children }: {
   );
 }
 
+// "Tue 24 Nov": the Primetime day a Know is waiting on.
+function pendingDay(iso: string): string {
+  const d = new Date(`${iso}T12:00:00Z`);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+}
+
 export function CodTopicList({ modules, progressById, onPress }: {
   modules: any[];
   progressById: Record<string, any>;
@@ -254,11 +261,17 @@ export function CodTopicList({ modules, progressById, onPress }: {
                       ladder >= 3 ? { backgroundColor: colors.green }
                         : (ladder > 0 || pendingRung || p?.quiz_passed) ? { backgroundColor: colors.yellow }
                           : { backgroundColor: colors.borderDark }]} />
-                    <Text style={[s.topic, { color: colors.text }]} numberOfLines={2}>{m.topic}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[s.topic, { color: colors.text }]} numberOfLines={2}>{m.topic}</Text>
+                      {/* On a Primetime for it: Know ticks once that day's done and they were in. */}
+                      {!!p?.know_pending && ladder < 1 && (
+                        <Text style={[s.pendingNote, { color: colors.textMuted }]}>⚡ Know pending · Primetime {pendingDay(p.know_pending)}</Text>
+                      )}
+                    </View>
                     <View style={[s.boxRow, { gap: KEY_GAP }]}>
                       {BOXES.map((b) => {
                         const on = ladder >= b.rung;
-                        const pending = !on && pendingRung && b.rung === ladder + 1;
+                        const pending = !on && ((pendingRung && b.rung === ladder + 1) || (b.rung === 1 && !!p?.know_pending));
                         const radius = Math.round(KEY * 0.3);
                         return (
                           <Rung key={b.rung} size={KEY} radius={radius} lit={on} hue={accent} ring={pending ? colors.yellow : undefined}>
@@ -302,6 +315,7 @@ const s = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 9 },
   dot: { width: 9, height: 9, borderRadius: 5 },
   topic: { flex: 1, fontFamily: fonts.body, fontSize: 13.5, lineHeight: 18 },
+  pendingNote: { fontFamily: fonts.body, fontSize: 11.5, marginTop: 2 },
   boxRow: { flexDirection: 'row' },
   // Flat key: Keycap's geometry, none of its bevel/drop shadow (see header).
   rung: { alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },

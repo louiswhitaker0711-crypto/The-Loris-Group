@@ -438,8 +438,28 @@ async def _snapshot_names(user_ids: list, office_id: str, limit: int = MAX_WITH_
 # Reads
 # ---------------------------------------------------------------------------
 
+async def plans_everyone(me: dict, plan_from: Optional[str]) -> bool:
+    """Planning from the breakdown or the morning sector plan (the Owner,
+    23 Nov 2026): whoever is leading a sector that day (any role), the day's
+    sector planner, or an Admin may place anyone who's in on the board, not
+    just their own team. Last save wins for each person."""
+    if not plan_from or not _is_iso_date(plan_from) or me.get("is_viewer"):
+        return False
+    if (me.get("role") or "").lower() == "admin":
+        return True
+    if await db.sectors.find_one({"office_id": me.get("office_id"), "date": plan_from, "leader_id": str(me["id"])},
+                                 {"_id": 1}):
+        return True
+    try:
+        from routes.sector_plan import can_plan
+        return bool(await can_plan(me, plan_from))
+    except Exception:
+        return False
+
+
 @router.get("/primetime/week")
-async def get_primetime_week(request: Request, week: Optional[str] = None, office: Optional[str] = None):
+async def get_primetime_week(request: Request, week: Optional[str] = None, office: Optional[str] = None,
+                             plan_from: Optional[str] = None):
     """The whole office's Primetime plan for one week.
 
     Readable by everyone in the office — cross-team visibility is the entire
@@ -459,7 +479,8 @@ async def get_primetime_week(request: Request, week: Optional[str] = None, offic
     ).to_list(MAX_ROSTER * len(DAYS))
     entries = _dedupe_entries([_scrub(e) for e in entries])
 
-    editable = await _editable_ids(me, office_id) if coach else set()
+    plans_all = await plans_everyone(me, plan_from)
+    editable = None if plans_all else (await _editable_ids(me, office_id) if coach else set())
     known_ids = {p["user_id"] for p in roster}
 
     # Ghosts: someone with a row this week who is no longer in the roster
@@ -527,6 +548,8 @@ async def get_primetime_week(request: Request, week: Optional[str] = None, offic
         "entries": out_entries,
         "sessions": _build_sessions(out_entries),
         "can_edit_any": bool(editable is None or editable),
+        # Planning from a breakdown/morning plan: anyone in may be placed, any role.
+        "plans_everyone": plans_all,
     }
 
 
@@ -1370,6 +1393,14 @@ class DayBoardBody(BaseModel):
     day_index: int
     sessions: list[BoardSession] = []
     office: Optional[str] = None
+    # From the breakdown / morning sector plan (the Owner, 23 Nov 2026): the
+    # sector's date, so a sector leader can place anyone who's in.
+    plan_from: Optional[str] = None
+    # The people this save changed (the board works it out against what it
+    # loaded). When sent, only they are written or cleared, so a board opened
+    # earlier never undoes someone else's newer plan; for anyone changed, the
+    # last save wins.
+    touched: Optional[list[str]] = None
 
 
 def board_rows(sessions: list, week_ending: str, day_index: int) -> dict:
@@ -1405,7 +1436,10 @@ async def save_primetime_day(body: DayBoardBody, request: Request):
     as they are, so two Coaches can each put their people into the same
     triangle. Someone you plan for who's no longer on the board loses their
     Primetime for the day (a solo note with no session is kept)."""
-    me = await require_admin_or_leader(request)
+    me = await get_current_user(request)
+    plans_all = await plans_everyone(me, body.plan_from)
+    if not plans_all:
+        me = await require_admin_or_leader(request)
     office_id = await resolve_office_id(request, me, body.office)
     wk = _coerce_to_sunday(body.week_ending) if body.week_ending else None
     if not wk or wk != body.week_ending:
@@ -1416,13 +1450,16 @@ async def save_primetime_day(body: DayBoardBody, request: Request):
         raise HTTPException(status_code=400, detail="Too many sessions")
 
     day_date = _day_date(wk, body.day_index)
-    editable = await _editable_ids(me, office_id)
+    editable = None if plans_all else await _editable_ids(me, office_id)
+    touched = {str(x) for x in body.touched} if body.touched is not None else None
     existing = _dedupe_entries([_scrub(e) for e in await db.primetime_entries.find(
         {"office_id": office_id, "week_ending": wk, "day_index": body.day_index}).to_list(MAX_ROSTER)])
     by_uid = {e["subject_user_id"]: e for e in existing}
     free = {e["subject_user_id"] for e in existing if e.get("mode") == "free"}
 
     def mine(uid: str) -> bool:
+        if touched is not None and uid not in touched:
+            return False
         return editable is None or uid in editable or uid in free
 
     want = board_rows([b.model_dump() for b in body.sessions], wk, body.day_index)
@@ -1437,8 +1474,9 @@ async def save_primetime_day(body: DayBoardBody, request: Request):
         if not mine(uid):
             # Not yours to place: fine if the board already says the same thing.
             cur = by_uid.get(uid) or {}
-            if cur.get("session_id") != w["session_id"] or cur.get("mode") != w["mode"]:
-                skipped.append(names.get(uid) or "")
+            if touched is None or uid in touched:
+                if cur.get("session_id") != w["session_id"] or cur.get("mode") != w["mode"]:
+                    skipped.append(names.get(uid) or "")
             continue
         await _write_row({
             "office_id": office_id, "week_ending": wk, "day_index": body.day_index, "day_date": day_date,

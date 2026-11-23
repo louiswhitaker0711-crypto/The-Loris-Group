@@ -72,26 +72,27 @@ export default function BreakdownPrimetime({ date, scope = 'breakdown' }: { date
     <View style={s.card} testID="breakdown-primetime">
       <Text style={s.h}>⚡ Primetime plan · {d.day_name}{d.is_today ? ' (today)' : ''}</Text>
       <Text style={s.muted}>
-        {coach
+        {coach || d.leads
           ? `Plan ${when}'s Primetime: add a topic, who's running it, then who's watching and who's learning. Save Primetime when you're done.`
           : d.leads ? `${when === 'today' ? 'Today' : when}'s Primetime. Say what you and your sector are doing below.` : `${when === 'today' ? 'Today' : when}'s Primetime. Say what you're doing below.`}
       </Text>
 
       {/* The same board as the Primetime page: the triangles (the Owner, 2 Nov 2026). */}
-      <PrimetimeDayBoard week={d.week_ending} dayIndex={d.day_index} showMine={!coach} />
+      {/* A sector leader plans anyone scheduled in (the Owner, 23 Nov 2026); last save wins per person. */}
+      <PrimetimeDayBoard week={d.week_ending} dayIndex={d.day_index} showMine={!coach} planFrom={date} />
 
       {/* A BA (or a BA leading the sector) can't place people on the board:
           they say what they're doing, run something, join one, or free to work with. */}
-      {!coach && (
+      {!coach && !d.leads && (
         <>
-          <Text style={s.sub}>{d.leads ? 'Your sector' : 'You'}</Text>
+          <Text style={s.sub}>You</Text>
           {people.map((p: any) => (
             <PersonRow key={p.user_id} p={p} date={date} scope={scope}
               sessions={sessions} topicTitles={topicTitles} onSaved={refresh} s={s} c={c} />
           ))}
         </>
       )}
-      {coach && unplanned.length > 0 && <Text style={s.unsetLine}>Not planned yet: {unplanned.map(who).join(', ')}</Text>}
+      {(coach || d.leads) && unplanned.length > 0 && <Text style={s.unsetLine}>Not planned yet: {unplanned.map(who).join(', ')}</Text>}
     </View>
   );
 }

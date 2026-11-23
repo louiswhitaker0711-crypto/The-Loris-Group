@@ -24,9 +24,11 @@ export function usePlansFor() {
   return { me: String((user as any)?.id || ''), coach: (role === 'leader' || role === 'admin') && !(user as any)?.is_viewer };
 }
 
-export default function PrimetimeDayBoard({ week, dayIndex, editable = true, showMine = true }: {
+export default function PrimetimeDayBoard({ week, dayIndex, editable = true, showMine = true, planFrom }: {
   week: string;
   dayIndex: number;
+  /** Planning from a sector on this date: its leader plans anyone scheduled in (the server decides). */
+  planFrom?: string;
   /** False to show it read-only even to a Coach. */
   editable?: boolean;
   /** Call out where the viewer is ("You're learning Closing with Sam"). */
@@ -36,8 +38,8 @@ export default function PrimetimeDayBoard({ week, dayIndex, editable = true, sho
   const s = useMemo(() => styles(c), [c]);
   const { me, coach } = usePlansFor();
   const q = useQuery({
-    queryKey: ['primetime-week', week, 'mine'],
-    queryFn: () => apiService.primetimeWeek(week).then((r) => r.data),
+    queryKey: ['primetime-week', week, 'mine', planFrom || ''],
+    queryFn: () => apiService.primetimeWeek(week, undefined, planFrom).then((r) => r.data),
     enabled: !!week && dayIndex >= 0,
   });
   if (q.isLoading) return <ActivityIndicator color={c.primary} />;
@@ -66,7 +68,8 @@ export default function PrimetimeDayBoard({ week, dayIndex, editable = true, sho
           <Text style={s.mineText}>{mine}</Text>
         </View>
       )}
-      <PrimetimeBoard data={data} week={week} dayIndex={dayIndex} canEdit={editable && coach && !!data.can_edit_any} />
+      <PrimetimeBoard data={data} week={week} dayIndex={dayIndex} planFrom={data.plans_everyone ? planFrom : undefined}
+        canEdit={editable && (coach || !!data.plans_everyone) && !!data.can_edit_any} />
     </View>
   );
 }

@@ -90,6 +90,25 @@ def _in_field(q: dict, iso: str) -> dict:
     return with_field_filter({**q, **_ACTIVE}, iso)
 
 
+async def primetime_wants(office_id: str, iso: str, user_ids: list) -> dict:
+    """user_id → the Primetime topic they wrote in their latest breakdown
+    before `iso` (within the last week), shown next to their name when the
+    sectors are planned in the morning (the Owner, 23 Nov 2026). A note to
+    plan from, never put on the board by itself."""
+    try:
+        since = (datetime.fromisoformat(iso).date() - timedelta(days=7)).isoformat()
+    except ValueError:
+        return {}
+    out: dict = {}
+    async for d in db.sector_days.find({"user_id": {"$in": [str(u) for u in user_ids]}, "date": {"$lt": iso, "$gte": since},
+                                        "breakdown.primetime": {"$nin": [None, ""]}},
+                                       {"_id": 0, "user_id": 1, "breakdown.primetime": 1}).sort("date", -1):
+        uid = str(d.get("user_id") or "")
+        if uid and uid not in out:
+            out[uid] = str(((d.get("breakdown") or {}).get("primetime")) or "").strip()[:120]
+    return out
+
+
 async def _office_people(office_id: str, iso: Optional[str] = None) -> list[dict]:
     rows = [{"user_id": str(u["_id"]), "name": u.get("name") or "", "role": u.get("role"),
              **({"visitor": True, "visit_office": u.get("visit_office") or None} if u.get("is_visitor") else {})}
@@ -159,6 +178,7 @@ async def get_plan(request: Request, date: Optional[str] = None):
         st = (days[widx] or {}).get("status") if widx < len(days) else None
         if st:
             bells_status[str(e.get("user_id"))] = st
+    wants = await primetime_wants(office_id, iso, [p["user_id"] for p in people])
     planner = await planner_for(office_id, iso)
     sent = await db.sector_plan_sends.find_one({"office_id": office_id, "date": iso}, {"_id": 0})
     d = datetime.fromisoformat(iso).date()
@@ -178,7 +198,9 @@ async def get_plan(request: Request, date: Optional[str] = None):
                         "in_today": bells_status.get(p["user_id"]) == "in" or bool(p.get("visitor")),
                         "no_show": bells_status.get(p["user_id"]) == "ns",
                         "not_scheduled": bells_status.get(p["user_id"]) == "ab",
-                        "day_status": bells_status.get(p["user_id"]) or ""} for p in people],
+                        "day_status": bells_status.get(p["user_id"]) or "",
+                        # What they said at their last breakdown they want in Primetime.
+                        "wants_primetime": wants.get(p["user_id"]) or ""} for p in people],
             "sent_at": (sent or {}).get("at")}
 
 

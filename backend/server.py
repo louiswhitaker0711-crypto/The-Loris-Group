@@ -90,6 +90,7 @@ from routes.coach_suggestions import router as coach_suggestions_router
 from routes.viewers import router as viewers_router
 from routes.team_history import router as team_history_router
 from routes.cod_focus import router as cod_focus_router
+from routes.cod_calendar import router as cod_calendar_router
 from routes.ai_assistant import router as ai_assistant_router
 from routes.scorecard import router as scorecard_router
 from routes.coaching_notes import router as coaching_notes_router
@@ -207,6 +208,7 @@ api_router.include_router(coach_suggestions_router)
 api_router.include_router(viewers_router)
 api_router.include_router(team_history_router)
 api_router.include_router(cod_focus_router)
+api_router.include_router(cod_calendar_router)
 api_router.include_router(ai_assistant_router)
 api_router.include_router(scorecard_router)
 api_router.include_router(coaching_notes_router)
@@ -1104,6 +1106,18 @@ async def _startup_work():
                 logger.info(f"COD meeting quiz nudge: {await cod_meeting_quiz_tick()} sent")
             except Exception as ex:
                 logger.error(f"COD meeting quiz nudge failed: {ex}")
+
+        async def _primetime_cod_know():
+            try:
+                from core.cod_ticks import primetime_know_tick
+                logger.info(f"Primetime COD Know: {await primetime_know_tick()} ticked")
+            except Exception as ex:
+                logger.error(f"Primetime COD Know failed: {ex}")
+
+        # Being in a Primetime on a COD topic gives it Know once the day's
+        # Primetime is over, if they were in (the Owner, 23 Nov 2026).
+        scheduler.add_job(_primetime_cod_know, "cron", day_of_week="mon-sat", hour="12,21", minute=10,
+                          id="primetime_cod_know", replace_existing=True)
 
         # A COD item picked for today's Leaders Meeting → the BAs in today
         # get a nudge at 10:58 to do its quiz and test.

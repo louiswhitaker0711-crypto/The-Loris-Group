@@ -302,7 +302,7 @@ def test_analyse_me_stays_open_when_todays_analysis_is_in_the_old_shape(db, monk
 def test_the_ai_never_pushes_call_backs_and_reads_rehash_as_the_second_lap():
     from core.sales_coaching import PLAYBOOK, RESPONSE_STYLE
     assert '"callbacks"' not in ai.ANALYSE_SHAPE and '"callbacks"' not in ai.SETUP_SHAPE
-    assert "second lap" in RESPONSE_STYLE and "Never suggest setting or making call backs with the main shopper" in PLAYBOOK
+    assert "second lap" in RESPONSE_STYLE and "Always go for the sign-up there and then" in PLAYBOOK and "only done on the Rehash, as you walk past" in PLAYBOOK
 
 
 def test_right_now_reads_todays_sector_but_never_todays_bells(db, monkeypatch):
@@ -341,7 +341,7 @@ def test_no_ai_repeats_coaching_notes_back():
 def test_both_ais_are_told_to_be_a_big_coach():
     from core.sales_coaching import BIG_COACH
     assert BIG_COACH in ai.ABOUT and BIG_COACH in cc.instructions()
-    assert "right_now" in BIG_COACH and "no call backs" in BIG_COACH
+    assert "right_now" in BIG_COACH and "except on the Rehash" in BIG_COACH
 
 
 def test_the_big_coach_asks_follow_up_questions_when_it_needs_to():

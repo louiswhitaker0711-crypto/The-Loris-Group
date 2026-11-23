@@ -38,6 +38,7 @@ import { TwoLadders, salesNextFrom, salesStepsFrom, LadderStep } from '../../src
 // bottom-tab UX mirrors what trainees see at the same slot.
 import LeadershipScreen from '../leadership';
 import WeeklyCodFocus from '../../src/components/cod/WeeklyCodFocus';
+import CodCalendarCard from '../../src/components/cod/CodCalendarCard';
 
 // ── Stage hero ───────────────────────────────────────────────────────────────
 // The "Ink & Cube" stage header (spec §4 COD): a paper EditorialHero with a
@@ -214,7 +215,7 @@ export default function TraineeProgressScreen() {
   });
   const stage1ProgressQ = useQuery({
     queryKey: ['module-progress', 1],
-    queryFn: () => apiService.getMyModuleProgress(1).then(r => r.data.progress),
+    queryFn: () => apiService.getMyModuleProgress(1).then(r => withPending(r.data.progress, r.data.primetime_pending)),
     enabled: !isLeaderOrAdmin && (tab === 'stage1' || devStage === 1),
   });
   const stage2Q = useQuery({
@@ -224,7 +225,7 @@ export default function TraineeProgressScreen() {
   });
   const stage2ProgressQ = useQuery({
     queryKey: ['module-progress', 2],
-    queryFn: () => apiService.getMyModuleProgress(2).then(r => r.data.progress),
+    queryFn: () => apiService.getMyModuleProgress(2).then(r => withPending(r.data.progress, r.data.primetime_pending)),
     enabled: !isLeaderOrAdmin && (tab === 'stage2' || devStage === 2) && !!stageStatusQ.data?.stage_2_unlocked,
   });
   // Sales Development Path — the parallel ladder card. {enabled:false} while
@@ -306,6 +307,7 @@ export default function TraineeProgressScreen() {
     >
       {/* This week's COD focus, picked by their Coach. */}
       <WeeklyCodFocus />
+      <View style={{ paddingHorizontal: 12 }}><CodCalendarCard /></View>
       {/* The Cycle (was half of Coaching): the impacts by stage, in COD now. */}
       <TouchableOpacity
         style={styles.journeyTouch}
@@ -616,3 +618,13 @@ const createStyles = (colors: any) => StyleSheet.create({
 // Fallback static styles (used if a sub-component didn't pick up the
 // useColors hook). Always light-mode — won't react to theme changes.
 const styles = createStyles(lightColors);
+
+// A Primetime planned on a COD topic shows "Know pending" on that item until it ticks.
+function withPending(rows: any[], pending?: Record<string, string>): any[] {
+  if (!pending) return rows;
+  const out = rows.map((r) => (pending[r.module_id] ? { ...r, know_pending: pending[r.module_id] } : r));
+  for (const [id, day] of Object.entries(pending)) {
+    if (!out.some((r) => r.module_id === id)) out.push({ module_id: id, ladder: 0, know_pending: day });
+  }
+  return out;
+}

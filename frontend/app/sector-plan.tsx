@@ -28,7 +28,7 @@ import { splitPostcodes } from '../src/utils/postcodes';
 // Not here today (Bells): No show, Scheduled off, In office.
 const AWAY = { ns: 'No show', ab: 'Scheduled off', pc: 'In office' } as const;
 const isAway = (p: { day_status?: string }) => ['ns', 'ab', 'pc'].includes(p.day_status || '');
-type Person = { user_id: string; name: string; role: string; sector_leader_id?: string | null; in_today?: boolean; no_show?: boolean; not_scheduled?: boolean; day_status?: string; visitor?: boolean };
+type Person = { user_id: string; name: string; role: string; sector_leader_id?: string | null; in_today?: boolean; no_show?: boolean; not_scheduled?: boolean; day_status?: string; visitor?: boolean; wants_primetime?: string };
 type Sector = { leader_id: string; leader_name: string; postcode: string; goal: number | null; member_ids: string[]; can_delete: boolean; hops?: HopLine[] };
 type Draft = { leader_id: string; postcode: string; goal: string; member_ids: string[] };
 type BoardSec = { leader_id: string; leader_name: string; postcode: string; goal: string; member_ids: string[]; hops: HopLine[] };
@@ -202,6 +202,9 @@ export default function SectorPlanScreen() {
                       <Text style={s.small}>
                         {away ? AWAY[st] : p.sector_leader_id ? `In ${first(nameOf(p.sector_leader_id))}'s${sec?.postcode ? ` · ${sec.postcode}` : ''}` : 'Not placed yet'}
                       </Text>
+                      {!!p.wants_primetime && !away && (
+                        <Text style={s.small} numberOfLines={2}>⚡ Wants to learn: {p.wants_primetime}</Text>
+                      )}
                     </View>
                     {away
                       ? <Pressable onPress={() => shownUp(p.user_id)} disabled={busy === `ns:${p.user_id}`} style={s.nsTag} accessibilityRole="button" accessibilityLabel={`Put ${p.name} back in`} testID={`plan-undo-ns-${p.user_id}`}>

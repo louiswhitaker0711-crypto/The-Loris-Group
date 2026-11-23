@@ -460,7 +460,7 @@ async def my_progress(
     })
     async for r in cursor:
         rows.append(_normalise_progress_row(r))
-    return {"stage": stage, "progress": rows}
+    return {"stage": stage, "progress": rows, "primetime_pending": await _pending(user_id, user.get("office_id"))}
 
 
 async def _user_can_grade_target(user: dict, target_user_id: str, stage: int) -> bool:
@@ -1025,7 +1025,18 @@ async def trainee_module_progress(trainee_user_id: str, request: Request, stage:
     })
     async for r in cursor:
         rows.append(_normalise_progress_row(r))
-    return {"stage": stage, "trainee_user_id": trainee_user_id, "progress": rows}
+    return {"stage": stage, "trainee_user_id": trainee_user_id, "progress": rows,
+            "primetime_pending": await _pending(trainee_user_id, user.get("office_id"))}
+
+
+async def _pending(user_id: str, office_id) -> dict:
+    """module_id → date of a planned Primetime on it: Know pending (core/cod_ticks.py)."""
+    try:
+        from core.cod_ticks import pending_for
+        return await pending_for(user_id, office_id)
+    except Exception as e:
+        logger.warning(f"primetime pending for {user_id}: {e}")
+        return {}
 
 
 # ───────────────────────────── Pass-off ────────────────────────────────────

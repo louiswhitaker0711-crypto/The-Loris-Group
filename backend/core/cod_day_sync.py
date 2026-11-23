@@ -94,7 +94,9 @@ async def sync_day_to_cod(assessment: dict, grader: dict) -> int:
     from database import db
     try:
         if int(assessment.get("day_number") or 0) < 3:
-            return 0
+            # Academy days: "Learnt" gives the COD item Know (the Owner, 23 Nov 2026).
+            from core.cod_ticks import sync_academy_day
+            return await sync_academy_day(assessment, grader)
         hire = await db.new_hires.find_one({"id": assessment.get("new_hire_id")},
                                            {"_id": 0, "trainee_user_id": 1, "office_id": 1})
         target = str((hire or {}).get("trainee_user_id") or "")

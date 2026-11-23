@@ -27,12 +27,27 @@ type Pick = { kind: 'new'; layout: Layout } | { kind: 'host'; key: string } | { 
 
 const first = (n: string) => (n || '').trim().split(' ')[0] || 'Someone';
 
-export default function PrimetimeBoard({ data, week, dayIndex, office, canEdit }: {
+// Where each person sits on a board, so a save from a sector only sends the
+// people whose place changed (the last planner wins for them, the Owner,
+// 23 Nov 2026; nobody else's place is touched by an old copy of the board).
+const places = (b: Board[]): Record<string, string> => {
+  const out: Record<string, string> = {};
+  for (const x of b) {
+    out[x.host_id] = `host|${x.topic.trim()}|${x.layout}`;
+    for (const id of x.watching) out[id] = `watching|${x.host_id}|${x.topic.trim()}`;
+    for (const id of x.learning) out[id] = `learning|${x.host_id}|${x.topic.trim()}`;
+  }
+  return out;
+};
+
+export default function PrimetimeBoard({ data, week, dayIndex, office, canEdit, planFrom }: {
   data: PrimetimeWeek;
   week: string;
   dayIndex: number;
   office?: string;
   canEdit: boolean;
+  /** Planned from a sector on this date: saves send only who changed. */
+  planFrom?: string;
 }) {
   const c = useColors();
   const s = useMemo(() => styles(c), [c]);
@@ -65,11 +80,12 @@ export default function PrimetimeBoard({ data, week, dayIndex, office, canEdit }
       learning: x.attendees.filter((a) => a.mode !== 'watching').map((a) => a.user_id),
     }));
   const [board, setBoard] = useState<Board[]>(fromServer);
+  const [loaded, setLoaded] = useState<Board[]>(fromServer);
   const [dirty, setDirty] = useState(false);
   const [pick, setPick] = useState<Pick>(null);
   const [saving, setSaving] = useState(false);
   // Load from the server unless there are unsaved edits on the board.
-  useEffect(() => { if (!dirty) setBoard(fromServer()); }, [data, dayIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!dirty) { const b = fromServer(); setBoard(b); setLoaded(b); } }, [data, dayIndex]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setDirty(false); setPick(null); }, [week, dayIndex]);
 
   const placedWhere = (id: string): string | null => {
@@ -102,8 +118,14 @@ export default function PrimetimeBoard({ data, week, dayIndex, office, canEdit }
   const save = async () => {
     setSaving(true);
     try {
+      let touched: string[] | undefined;
+      if (planFrom) {
+        const was = places(loaded), now = places(board);
+        touched = Array.from(new Set([...Object.keys(was), ...Object.keys(now)])).filter((id) => was[id] !== now[id]);
+      }
       const r = await apiService.savePrimetimeDay({
         week_ending: week, day_index: dayIndex, office,
+        ...(planFrom ? { plan_from: planFrom, touched } : {}),
         sessions: board.map((x) => ({ host_id: x.host_id, topic: x.topic.trim(), layout: x.layout, watching: x.watching, learning: x.learning })),
       });
       setDirty(false);

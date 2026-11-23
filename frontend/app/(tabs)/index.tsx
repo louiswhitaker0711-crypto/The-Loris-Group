@@ -47,6 +47,7 @@ import MyWeekCard from '../../src/components/home/today/MyWeekCard';
 import WaitingOnYouCard from '../../src/components/home/today/WaitingOnYouCard';
 import NewStartTodayHero from '../../src/components/home/today/NewStartTodayHero';
 import LearnTodayCard from '../../src/components/home/today/LearnTodayCard';
+import CodCalendarCard from '../../src/components/cod/CodCalendarCard';
 import MoreSection from '../../src/components/home/today/MoreSection';
 import SuggestionsCard from '../../src/components/home/today/SuggestionsCard';
 import MeetingsTodayCard from '../../src/components/home/today/MeetingsTodayCard';
@@ -1577,6 +1578,7 @@ export default function HomeScreen() {
     <>
       {nextPending && <NewStartTodayHero day={nextPending.day_number} target={todayTarget} coach={coachName} />}
       {pStartHere}
+      <CodCalendarCard compact />
       <LearnTodayCard stage={codStage || 1} />
       {pPlanner}
     </>

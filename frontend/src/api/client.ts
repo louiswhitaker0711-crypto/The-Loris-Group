@@ -735,6 +735,21 @@ export interface PrimetimeWeek {
   entries: PrimetimeEntry[];
   sessions: PrimetimeSession[];
   can_edit_any: boolean;
+  /** Planning from a sector: this person may plan anyone scheduled that day. */
+  plans_everyone?: boolean;
+}
+
+export interface CodCalendarItem { module_id: string; topic: string; part?: number | null; ladder?: number }
+export interface CodCalendarDay {
+  date: string; day: number; items: CodCalendarItem[]; taught: boolean; behind: boolean; is_today: boolean;
+}
+export interface CodCalendar {
+  user_id: string; start_date: string; days: CodCalendarDay[]; total: number; done: number; behind: number;
+  today: CodCalendarItem[]; current_day: number; finished: boolean; ends: string | null;
+}
+export interface CodCalendarRow {
+  user_id: string; name: string; start_date: string; ends: string | null; total: number; done: number;
+  behind: number; current_day: number; today: string[]; finished: boolean;
 }
 
 export interface PrimetimeHome {
@@ -1027,9 +1042,11 @@ export const apiService = {
   // writes to your own tree. The roster is computed live from the tree on
   // every read and never stored, which is why someone who leaves drops off
   // future days while their existing rows survive as ghost records.
-  primetimeWeek: (week?: string, office?: string) =>
+  // planFrom: the sector day being planned from (a sector leader plans
+  // anyone scheduled the next day; the server decides, `plans_everyone`).
+  primetimeWeek: (week?: string, office?: string, planFrom?: string) =>
     api.get<PrimetimeWeek>('/primetime/week', {
-      params: { ...(week ? { week } : {}), ...(office ? { office } : {}) },
+      params: { ...(week ? { week } : {}), ...(office ? { office } : {}), ...(planFrom ? { plan_from: planFrom } : {}) },
     }),
   // Compact Home-card payload for the next plannable day (Sunday looks ahead
   // to Monday, since there is no Primetime on a Sunday).
@@ -1051,6 +1068,9 @@ export const apiService = {
   savePrimetimeDay: (body: {
     week_ending: string; day_index: number; office?: string;
     sessions: Array<{ host_id: string; topic: string; layout: 'triangle' | 'list'; watching: string[]; learning: string[] }>;
+    // Sent from a sector: only the people whose place changed are written
+    // (the last planner wins for them, nobody else is touched).
+    plan_from?: string; touched?: string[];
   }) => api.put<{ ok: boolean; written: number; cleared: number; skipped: string[] }>('/primetime/day', body),
   // Follow-ups set from the planner: on that day's page, on Home until ticked, and a push at the time.
   followUps: (params: { date?: string; due?: boolean } = {}) =>
@@ -1341,8 +1361,15 @@ export const apiService = {
     api.get<{ quiz_id: string; questions: Array<{ id: string; question: string; choices: string[] }> }>(`/modules/${moduleId}/quiz`),
   submitModuleQuiz: (moduleId: string, body: { quiz_id: string; answers: Record<string, number> }) =>
     api.post<{ score: number; total: number; passed: boolean; results: Array<{ id: string; correct: number; chosen: number; ok: boolean }> }>(`/modules/${moduleId}/quiz/submit`, body),
+  // The COD 2 calendar: one topic (or a pair) a day after the evaluation.
+  codCalendarMe: () => api.get<{ calendar: CodCalendar | null }>('/cod-calendar/me'),
+  codCalendarPerson: (userId: string) => api.get<{ calendar: CodCalendar | null }>(`/cod-calendar/person/${userId}`),
+  codCalendarOffice: () => api.get<{ today: string; people: CodCalendarRow[]; others: Array<{ user_id: string; name: string }> }>('/cod-calendar/office'),
+  startCodCalendar: (userId: string, startDate?: string) =>
+    api.post<{ calendar: CodCalendar | null }>('/cod-calendar/start', { user_id: userId, start_date: startDate }),
+  stopCodCalendar: (userId: string) => api.delete(`/cod-calendar/person/${userId}`),
   getMyModuleProgress: (stage: 1 | 2 | 3 | 4 | 5) =>
-    api.get<{ stage: number; progress: Array<any> }>(`/module-progress/me`, { params: { stage } }),
+    api.get<{ stage: number; progress: Array<any>; primetime_pending?: Record<string, string> }>(`/module-progress/me`, { params: { stage } }),
   upsertModuleProgress: (
     moduleId: string,
     scores: { knowledge?: number; skill?: number; consistency?: number; independence?: number; leader_notes?: string; ladder?: number; ladder_dates?: Record<string, string>; wgll_checked?: number[] },
