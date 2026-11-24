@@ -85,3 +85,28 @@ def test_not_scheduled_on_bells_leaves_todays_sectors(monkeypatch):
                                "member_ids": ["lead", "off"]}))
     assert run(sp.drop_no_shows("o1", "2026-10-16")) == 1
     assert run(db.sectors.find_one({"id": "s1"}))["member_ids"] == ["lead"]
+
+
+def test_new_starts_are_in_office_on_their_academy_days(monkeypatch):
+    """New starts are In office on BA Academy Days 1-2 (Monday and Tuesday) and
+    out of any sector, unless the planner puts them back in for the day; from
+    Wednesday they're in the field as normal (the Owner, 24 Nov 2026)."""
+    import asyncio
+    from mongomock_motor import AsyncMongoMockClient
+    import routes.sector_plan as sp
+    db = AsyncMongoMockClient()["t"]
+    monkeypatch.setattr(sp, "db", db)
+    monkeypatch.setattr(sp, "_now_uk", lambda: datetime(2026, 11, 23, 10, 0))   # a Monday
+    run = asyncio.run
+    run(db.new_hires.insert_many([
+        {"office_id": "o1", "trainee_user_id": "new", "start_date": "2026-11-23", "active": True},
+        {"office_id": "o1", "trainee_user_id": "back", "start_date": "2026-11-23", "active": True},
+    ]))
+    run(db.academy_field_days.insert_one({"office_id": "o1", "user_id": "back", "date": "2026-11-24"}))
+    assert run(sp.academy_in_office("o1", "2026-11-23")) == {"new", "back"}       # Monday
+    assert run(sp.academy_in_office("o1", "2026-11-24")) == {"new"}               # Tuesday, one put back in
+    assert run(sp.academy_in_office("o1", "2026-11-25")) == set()                 # Wednesday: shadow day
+    run(db.sectors.insert_one({"id": "s1", "office_id": "o1", "date": "2026-11-23", "leader_id": "lead",
+                               "member_ids": ["lead", "new", "here"]}))
+    assert run(sp.drop_no_shows("o1", "2026-11-23")) == 1
+    assert run(db.sectors.find_one({"id": "s1"}))["member_ids"] == ["lead", "here"]

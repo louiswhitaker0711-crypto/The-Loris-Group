@@ -120,6 +120,49 @@ async def _office_people(office_id: str, iso: Optional[str] = None) -> list[dict
 
 # Bells statuses that mean someone isn't out today: No show (X) and Not scheduled (NS).
 OUT_TODAY = ("ns", "ab")
+# In office (yellow) also keeps someone out of a sector (the Planner's Not here
+# → In office already pulls them out; this catches it set on Bells too).
+NOT_IN_SECTOR = OUT_TODAY + ("pc",)
+
+# New starts are in the office on their BA Academy days (Day 1 and Day 2 from
+# their start date, normally Monday and Tuesday), so by default they read In
+# office and aren't put in a sector (the Owner, 24 Nov 2026). The planner can
+# still put one back in for the day (`academy_field_days`).
+ACADEMY_DAYS = 2
+
+
+async def academy_in_office(office_id: str, iso: str, database=None) -> set[str]:
+    """user_ids of new starts on a BA Academy day on `iso`, unless the planner
+    has put them back in the field for that day or they're down as a shadow."""
+    db_ = database if database is not None else db
+    if not office_id:
+        return set()
+    try:
+        d0 = datetime.fromisoformat(iso).date()
+    except ValueError:
+        return set()
+    out: set[str] = set()
+    async for h in db_.new_hires.find({"office_id": office_id, "active": {"$ne": False},
+                                      "trainee_user_id": {"$nin": [None, ""]}},
+                                     {"_id": 0, "trainee_user_id": 1, "start_date": 1}):
+        try:
+            start = datetime.fromisoformat(str(h.get("start_date") or "")[:10]).date()
+        except ValueError:
+            continue
+        if 0 <= (d0 - start).days < ACADEMY_DAYS:
+            out.add(str(h["trainee_user_id"]))
+    if not out:
+        return out
+    async for o in db_.academy_field_days.find({"office_id": office_id, "date": iso, "user_id": {"$in": list(out)}},
+                                              {"_id": 0, "user_id": 1}):
+        out.discard(str(o.get("user_id")))
+    week_ending = (d0 + timedelta(days=6 - d0.weekday())).isoformat()
+    async for e in db_.bells_entries.find({"office_id": office_id, "week_ending": week_ending,
+                                          "user_id": {"$in": list(out)}}, {"user_id": 1, "days": 1}):
+        days = e.get("days") or []
+        if d0.weekday() < len(days) and (days[d0.weekday()] or {}).get("status") == "sd":
+            out.discard(str(e.get("user_id")))
+    return out
 
 
 async def drop_no_shows(office_id: str, iso: str) -> int:
@@ -134,11 +177,11 @@ async def drop_no_shows(office_id: str, iso: str) -> int:
     d0 = datetime.fromisoformat(iso).date()
     week_ending = (d0 + timedelta(days=6 - d0.weekday())).isoformat()
     widx = d0.weekday()
-    ns: list[str] = []
+    ns: list[str] = list(await academy_in_office(office_id, iso))
     async for e in db.bells_entries.find({"office_id": office_id, "week_ending": week_ending,
                                           "user_id": {"$type": "string"}}, {"user_id": 1, "days": 1}):
         days = e.get("days") or []
-        if widx < len(days) and (days[widx] or {}).get("status") in OUT_TODAY:
+        if widx < len(days) and (days[widx] or {}).get("status") in NOT_IN_SECTOR:
             ns.append(str(e["user_id"]))
     if not ns:
         return 0
@@ -178,6 +221,11 @@ async def get_plan(request: Request, date: Optional[str] = None):
         st = (days[widx] or {}).get("status") if widx < len(days) else None
         if st:
             bells_status[str(e.get("user_id"))] = st
+    # New starts on their Academy days read In office unless already off or a no show.
+    academy = await academy_in_office(office_id, iso)
+    for uid in academy:
+        if bells_status.get(uid) not in ("ns", "ab"):
+            bells_status[uid] = "pc"
     wants = await primetime_wants(office_id, iso, [p["user_id"] for p in people])
     planner = await planner_for(office_id, iso)
     sent = await db.sector_plan_sends.find_one({"office_id": office_id, "date": iso}, {"_id": 0})
@@ -199,6 +247,7 @@ async def get_plan(request: Request, date: Optional[str] = None):
                         "no_show": bells_status.get(p["user_id"]) == "ns",
                         "not_scheduled": bells_status.get(p["user_id"]) == "ab",
                         "day_status": bells_status.get(p["user_id"]) or "",
+                        "academy": p["user_id"] in academy,
                         # What they said at their last breakdown they want in Primetime.
                         "wants_primetime": wants.get(p["user_id"]) or ""} for p in people],
             "sent_at": (sent or {}).get("at")}
@@ -290,6 +339,8 @@ async def save_plan_bulk(request: Request, date: Optional[str] = None):
     all_ids = list({i for r in cleaned for i in [r["leader_id"], *r["member_ids"]]})
     valid = {str(u["_id"]): u async for u in db.users.find(
         _in_field({"_id": {"$in": [ObjectId(i) for i in all_ids]}, "office_id": office_id}, iso), {"name": 1})}
+    for i in await academy_in_office(office_id, iso):
+        valid.pop(i, None)
     cleaned = [r for r in cleaned if r["leader_id"] in valid]
     from core.hops import clean_lines
     for r in cleaned:
@@ -600,6 +651,7 @@ async def mark_no_show(request: Request, date: Optional[str] = None):
         days[idx] = day
         await db.bells_entries.update_one({"id": entry["id"]},
             {"$set": {"days": days, "updated_at": datetime.now(timezone.utc).isoformat()}})
+    await db.academy_field_days.delete_many({"office_id": office_id, "user_id": uid, "date": iso})
     before = {x["leader_id"]: x async for x in db.sectors.find({"office_id": office_id, "date": iso}, {"_id": 0})}
     await db.sectors.update_many({"office_id": office_id, "date": iso}, {"$pull": {"member_ids": uid}})
     sent = await db.sector_plan_sends.find_one({"office_id": office_id, "date": iso}, {"_id": 0})
@@ -643,6 +695,10 @@ async def undo_no_show(request: Request, date: Optional[str] = None):
                                      {"name": 1, "role": 1, "office_id": 1})
     if not target:
         raise HTTPException(status_code=404, detail="Person not found")
+    # A new start on an Academy day put back in: in the field today after all.
+    if uid in await academy_in_office(office_id, iso):
+        await db.academy_field_days.update_one({"office_id": office_id, "user_id": uid, "date": iso},
+            {"$set": {"by": str(user.get("id") or ""), "at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
     d0 = datetime.fromisoformat(iso).date()
     widx = d0.weekday()
     week_ending = (d0 + timedelta(days=6 - widx)).isoformat()
