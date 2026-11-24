@@ -31,7 +31,7 @@ from auth import get_current_user
 from core.ai_context import context_text, next_field_day, today_uk
 from core.analyse_trend import trend_for
 from core.brand import APP_NAME, BRITISH_ENGLISH, SELF_EMPLOYED_TERMS
-from core.sales_coaching import BIG_COACH, PLAYBOOK, RESPONSE_STYLE
+from core.sales_coaching import BIG_COACH, COACHING_GUIDE, PLAYBOOK, RESPONSE_STYLE
 from core.llm_guard import acquire_llm_slot
 from core.llm_keys import llm_configured
 from core.rate_limit import take_ai_quota
@@ -79,7 +79,7 @@ ABOUT = (
     "on them, but never quote, list or mention the notes. When there's a scorecard (Admins and Coaches only), use it "
     "for who's ready to lead a sector and who to give a new start to, and say why from their numbers; never "
     "mention it to or about a BA as a ranking. Short sentences, no waffle: it's read on a phone between doors.\n\n"
-    + BIG_COACH + "\n" + PLAYBOOK + "\n" + RESPONSE_STYLE + "\n"
+    + BIG_COACH + "\n" + COACHING_GUIDE + "\n" + PLAYBOOK + "\n" + RESPONSE_STYLE + "\n"
     + BRITISH_ENGLISH + " " + SELF_EMPLOYED_TERMS
 )
 

@@ -890,13 +890,13 @@ RUN_SHEET_FORMAT = (
 
 
 def instructions() -> str:
-    from core.sales_coaching import BIG_COACH, PLAYBOOK, RESPONSE_STYLE
+    from core.sales_coaching import BIG_COACH, COACHING_GUIDE, PLAYBOOK, RESPONSE_STYLE
     return (INSTRUCTIONS + _box_names() + ". A person may have renamed their boxes: write_planner takes their own "
             "names (get_me lists them as planner_boxes), and an unknown name lists them.\n\n" + RUN_SHEET_FORMAT +
             "When they ask for sales or coaching advice, coach to make them better, not just to inform: read their "
             "numbers (get_me or get_person) and breakdowns, pull the office's coaching with get_coaching, and "
             "answer in this shape. Measure against what good looks like, not the office average.\n\n"
-            + BIG_COACH + "\n" + RESPONSE_STYLE + "\n" + PLAYBOOK)
+            + BIG_COACH + "\n" + COACHING_GUIDE + "\n" + RESPONSE_STYLE + "\n" + PLAYBOOK)
 
 
 def _schema(props: dict) -> dict:

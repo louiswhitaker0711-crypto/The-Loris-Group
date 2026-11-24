@@ -450,3 +450,21 @@ def test_past_chats_are_your_own_and_can_be_carried_on(db, monkeypatch):
     assert _run(db.ai_conversations.find_one({"id": "c-now"}))["closed"] is True
     with pytest.raises(HTTPException):
         _run(ai.reopen_chat("c-theirs", _Req()))
+
+
+def test_coaching_library_is_in_both_ais():
+    """The Owner's coaching library (24 Nov 2026): how we coach, picking people up
+    and the situation playbook go to the app's AI and the connector."""
+    from core.sales_coaching import COACHING_GUIDE, HOW_WE_COACH, PICK_UP, SITUATIONS
+    from routes import ai_assistant, claude_connector
+    assert "Diagnose before you motivate" in HOW_WE_COACH
+    assert "It happens, it's okay" in HOW_WE_COACH and "Never call it normal" in HOW_WE_COACH
+    assert "GP" in PICK_UP and "not a counsellor" in PICK_UP
+    assert "giving it a proper go for the first few weeks" in SITUATIONS
+    assert "24. Money and breakeven" in SITUATIONS
+    for banned in ("Chimp", "Sinek", "Voss", "Radical Candor", "Multipliers", "Louis"):
+        assert banned not in COACHING_GUIDE, banned
+    for word in ("salary", "wages", "bonus", "boss", "promotion", "hire "):
+        assert word not in COACHING_GUIDE.lower(), word
+    assert COACHING_GUIDE in ai_assistant.ABOUT
+    assert "HOW WE COACH" in claude_connector.instructions()
