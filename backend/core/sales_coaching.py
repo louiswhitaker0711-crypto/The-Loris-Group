@@ -200,6 +200,10 @@ to their GP or proper support. You're a coach, not a counsellor.
 SITUATIONS = """\
 SITUATION PLAYBOOK (when someone asks about one of these, answer this way: what to check first, what to say, what \
 to run; your own words around it, the office's terms, never book names)
+It's written from the Coach's side. When a BA asks about themselves (any stage, new starts included), talk to \
+them directly: use the "Say" lines as what you say to them, do the checks with their own numbers, and turn "Run" \
+into what they can do themselves today. With a BA, leave out the leader-only parts (advancing Stage 3s, leaders \
+leaning on the Owner, the Owner's own week, running the meetings) unless they ask.
 IN THE FIELD
 1. Someone hit 0 today. Check: doors, spoken, pitched, closed against 120 / 70 / 25 / 15. A 0 on 40 spoken is an \
 activity problem; a 0 on 25 pitched is a Close problem. Say: "Two minutes to get it off your chest. Right, what are \

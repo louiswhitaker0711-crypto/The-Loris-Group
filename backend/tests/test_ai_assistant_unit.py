@@ -462,6 +462,7 @@ def test_coaching_library_is_in_both_ais():
     assert "GP" in PICK_UP and "not a counsellor" in PICK_UP
     assert "giving it a proper go for the first few weeks" in SITUATIONS
     assert "24. Money and breakeven" in SITUATIONS
+    assert "When a BA asks about themselves" in SITUATIONS
     for banned in ("Chimp", "Sinek", "Voss", "Radical Candor", "Multipliers", "Louis"):
         assert banned not in COACHING_GUIDE, banned
     for word in ("salary", "wages", "bonus", "boss", "promotion", "hire "):
