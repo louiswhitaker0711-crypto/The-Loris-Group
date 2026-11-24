@@ -1763,8 +1763,9 @@ export default function HomeScreen() {
       ) : null}
 
       {/* ── The AI coach: one bar at the very top, above the quick actions (the Owner, 5 Nov 2026).
-          Not on BA Academy days or read-only accounts; hidden until the AI key is added. ── */}
-      {!(user as any)?.is_viewer && !academyHome && <AiCoachCard />}
+          Everyone, new starts on their Academy days too (the Owner, 24 Nov 2026); not
+          read-only accounts; hidden until the AI key is added. ── */}
+      {!(user as any)?.is_viewer && <AiCoachCard />}
 
       {/* ── Quick actions: the four things for this time of day, at the top ── */}
       <View style={styles.actionsGrid}>

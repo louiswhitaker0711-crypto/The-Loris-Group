@@ -10,71 +10,46 @@ from __future__ import annotations
 from core.brand import BRITISH_ENGLISH, SELF_EMPLOYED_TERMS
 
 # ─────────────────────────────────────────────────────────────────────────────
-# House mantra + goal lines (kept here so they can be tweaked in one place)
+# The team's motto and the vision (the Owner, 24 Nov 2026): the old mantra and
+# the fixed goal block came out, as they read the same every day.
 # ─────────────────────────────────────────────────────────────────────────────
-HOUSE_MANTRA = (
-    "High standards\n"
-    "High intensity\n"
-    "Tomorrow is a new day 🌱"
-)
-HOUSE_GOALS = (
-    "📈 Hit the weekly target\n"
-    "📈 Fails under 10%\n"
-    "📈 75%+ in The Round and reaching their 4th week"
-)
+MOTTO = "Tomorrow is a new day 🌱"
+VISION = "200LW: 200 sales a week. The Loris Group's emoji is 🐒."
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Tone references — verbatim sample messages the user shared. The LLM is
-# instructed to match this tone but NOT to copy these BAs' names. Kept as
-# raw strings so future edits stay readable.
+# Tone references. The LLM matches the tone but never copies the names, the
+# wording or the order: they show the shape, not lines to reuse.
 # ─────────────────────────────────────────────────────────────────────────────
 TONE_EXAMPLES = """\
 EXAMPLE A:
-Monday smashed 💪 11 sign-ups today.
+Monday done 💪 11 sign-ups on the board, 39 to go with 5 days left.
+
+On average we spoke to 64 and pitched 21 each. The pitches are there, now it's turning them into closes 🎯
 
 🔔 *Owen: 5* 🔥
-Goal of 4 and beat it. 80 spoken to and 4 of the 5 were quality sign-ups, setting the pace.
+New PB. 80 spoken to and 4 of the 5 Gold. Already Amber for the week on day one.
 
-🛎️ *Tess: 3* 🌟
-Hit her goal of 3 with 2 taking The Round. Her closes are landing.
+⭐ *Maya: 1* 🌱
+First ever sign-up, and 85 spoken to on her second field day. That's the work that brings the bells.
 
-🎓 *Maya: 1* 🙂
-First sign-up on the board on her second field day. Foundation laid.
+Every bell is a step to 200LW 🐒
 
-Shoutout to everyone who kept knocking late. That's where the standard gets set 🫡
-
-We're on 11 for the week with 39 to go and 5 days left. Stay locked in ⚡
-
-High standards
-High intensity
 Tomorrow is a new day 🌱
-
-📈 Hit the weekly target
-📈 Fails under 10%
-📈 75%+ in The Round and reaching their 4th week
-
-Who's stepping up to make tomorrow the biggest day of the week?! 💥
 
 EXAMPLE B:
-Wednesday done 💪 14 sign-ups today, our best day of the week so far.
+Big Wednesday 🔔 14 today, our best day of the week. 22 for the week, 28 to go.
+
+Closes averaged 15 a person, right on the Law of Averages. That's the standard 📈
 
 🔔 *Liam F: 4* 🔥
-1 above his goal and all 4 were quality sign-ups. Setting the pace.
+Hit his weekly goal of 15 today and into Green. Consistent all week.
 
-🛎️ *Liam B: 2* 💫
-Hit his goal of 2 and spoke to 72 people. Volume is there, the closes will follow.
+⭐ *Tess: 3* 💫
+15 pitched and 10 closed. Her averages are up because of today, the bells are coming.
 
-Coaches are stepping up and the pace is rising 📈 We're on 22 for the week with 28 to go and 4 days left.
+🐒 200LW is built on days like this.
 
-High standards
-High intensity
 Tomorrow is a new day 🌱
-
-📈 Hit the weekly target
-📈 Fails under 10%
-📈 75%+ in The Round and reaching their 4th week
-
-Who's ready to finish the week the right way? 🫡
 """
 
 SYSTEM_MESSAGE = (
@@ -114,84 +89,75 @@ def build_daily_breakdown_prompt(
         )
 
     return (
-        "You are writing an END-OF-DAY WhatsApp breakdown for a high-energy "
-        "door-to-door sales office. The message is posted to a group with "
-        "the entire network (coaches + Brand Ambassadors + new BAs). Match this house tone "
-        "EXACTLY — energetic, masculine, growth-mindset, motivational without "
-        "being cringey.\n\n"
+        "You are writing an END-OF-DAY WhatsApp breakdown for a door-to-door "
+        "sales office. It goes to the whole group (Coaches, Brand Ambassadors "
+        "and new BAs). Its purpose: a light recap of the day and where we are "
+        "against the goals, but mainly to PROMOTE POSITIVES and THE VISION. "
+        "Energetic, growth-mindset, motivational without being cringey. Short "
+        "and scannable.\n\n"
         f"{custom_block}"
-        "═════════ TONE REFERENCES ═════════\n"
+        "═════════ TONE REFERENCES (shape and tone only) ═════════\n"
         f"{TONE_EXAMPLES}"
         "═══════════════════════════════════\n\n"
-        "STRUCTURE — follow this order strictly:\n"
-        "1) ONE punchy opener line that names the day and today's total (e.g. "
-        "'Wednesday done 💪 14 sign-ups today.'). Never compare with the same day "
-        "last week, here or anywhere in the message.\n"
-        "2) A blank line, then one callout per person, a blank line between each. "
-        "Write a callout for EVERY name in `callout_names` (`callout_count` of them), "
-        "in that order: never skip anyone, even if their name matches an example. "
-        "Each callout is TWO lines:\n"
-        "     line 1: '<emoji> *<name>: <sign-ups>* <vibe emoji>'\n"
-        "     line 2: one or two short sentences: their goal and their positives.\n"
-        "   Emojis: 🔔 = top performer(s) of the day (most sign-ups), 🛎️ = anyone "
-        "else who rang a bell, 🎓 = new BAs (role == 'trainee').\n"
-        "   Use the name EXACTLY as given in `rep_callouts` (first name, or first "
-        "name and initial when two people share a first name). Never add a surname.\n"
-        "   GOAL: when `goal_today` is set, say how they did against it (beat it, "
-        "hit it, or how close they got, kept encouraging). If it isn't set, leave "
-        "goals out for that person.\n"
-        "   POSITIVES: write them yourself from their data, and make them GOOD: "
-        "specific, backed by a real number, and different for each person (never "
-        "the same line twice in one message). Pick the one or two strongest: "
-        "quality sign-ups (`today_over30` "
-        "= Gold, an order of £10+); sign-ups taking The Round (`today_memberships`, "
-        "never a sign-up of its own); strong numbers on the doors "
-        "(`today_numbers` against the Law of Averages in "
-        "`office_today.law_of_averages_per_person`, e.g. 'spoke to 82, well past "
-        "the 70', or a strong close rate like '4 from 9 closed'); their week so "
-        "far (`week_so_far`, `week_traffic_light`, e.g. 'already Green for the "
-        "week'); consistency (`week_days_with_signups`). Say what it shows about "
-        "them (setting the pace, the closes are landing, consistent all week). New BA "
-        "with a first sign-up → getting on the board. Positives only: no "
-        "criticism in a callout.\n"
-        "   Skip anyone with 0 sign-ups today.\n"
-        "3) ONE shoutout line to anyone who pushed late or grinded.\n"
-        "4) OFFICE BITS: 2 to 4 short lines of general office info for the group, "
-        "from `office_today` and the week figures. Always say where the week "
-        "stands (`week_to_date`, `goal_remaining`, `days_left_in_week`). Never give "
-        "the office a traffic light colour (Red/Amber/Green/Super Green are for "
-        "one person's week). Then pick the "
-        "best of: how many people rang a bell; how many Gold sign-ups and how many "
-        "took The Round today; the office's doors / spoken to / pitched / closed "
-        "today (`on_the_doors`, only when `breakdowns_in` > 0); today being the "
-        "best day of the week so far. Only good news or a rallying point: "
-        "if a figure is behind, frame it as what's still there to take.\n"
-        "5) The mantra block (each on its own line):\n"
-        f"{HOUSE_MANTRA}\n"
-        "6) The goal block (each on its own line):\n"
-        f"{HOUSE_GOALS}\n"
-        "7) ONE rallying close line ending in a question (e.g. \"Who's stepping "
-        "up to make tomorrow the biggest day of the week?! 💥\"). Nothing after it: "
-        "no schedule.\n\n"
+        "THE RULE: we don't mention every person, but we do mention every "
+        "positive. The people in `rep_callouts` have already been picked for "
+        "you from their numbers: each one has `why_they_are_in`. Write a "
+        "callout for every one of them, and nobody else. Never mention anyone "
+        "not in `rep_callouts`.\n\n"
+        "STRUCTURE, in this order:\n"
+        "1) OPENER: one line with the day, today's total and where the week "
+        "stands (`week_to_date`, `weekly_goal`, `goal_remaining`, "
+        "`days_left_in_week`). Today's way in: `opener_style_today`.\n"
+        "2) OFFICE KPIs: one or two lines with the office's average per person "
+        "today (`office_today.average_kpis_per_person`: `per_person` against "
+        "`law_of_averages`), naming either the positive (`strongest`, or "
+        "anything in `at_or_above_target`) or the focus for tomorrow (`focus`), "
+        "said as what's there to take, never as a telling-off. Always include "
+        "this when it's there; if it's empty, leave this part out.\n"
+        "3) ROUND OF RESULTS: one callout per person in `rep_callouts`, in "
+        "order, a blank line between each. Two lines each:\n"
+        "     line 1: '<emoji> *<name>: <sign-ups today>* <vibe emoji>'\n"
+        "     line 2: one or two short sentences: well done, what they did and "
+        "why it matters, from `why_they_are_in` and their facts.\n"
+        "   Emojis: 🔔 = rang the bell (4+ sign-ups; the bell is 4), ⭐ = a "
+        "standout under 4, 🎓 = a new BA (`is_new_start`) on line 1.\n"
+        "   Lead with their best reason. A new PB (`pb_day`, `pb_week`, "
+        "`pb_spoken`) or `first_ever_sign_up` is ALWAYS said. Being on track "
+        "for their weekly goal (`on_track_for_weekly_goal`, `weekly_goal_hit`) "
+        "is said when it's there. Their goal for the day (`goal_today`) is said "
+        "only when they hit or beat it (`hit_goal_today`, `beat_goal_today`). Their traffic light colour (`week_light`, "
+        "`moved_up_to`) is THEIR OWN week: Red under 8, Amber 8 to 14, Green "
+        "15 to 19, Super Green 20+. Use their numbers on the doors to back it "
+        "up (`numbers` against the Law of Averages, `law_of_averages_hit`, "
+        "`averages_up`). Under 4 sign-ups, the callout is about the standout "
+        "number, never an apology for the sign-ups. Different words for each "
+        "person: never the same line twice. Positives only.\n"
+        "   Use the name EXACTLY as given (first name, or first name and "
+        "initial). Never add a surname.\n"
+        "4) VISION: one short line about 200LW (200 sales a week) with 🐒. Vary "
+        "it every day: tie it to today (how today's bells move us towards it, "
+        "or what a week of days like today would add up to). Never claim we're "
+        "at or near it unless the numbers say so.\n"
+        f"5) Last line, on its own: {MOTTO}\n\n"
         "RULES:\n"
+        "• If `rep_callouts` is empty, skip step 3 and write one honest, upbeat "
+        "line instead (the work compounds, tomorrow's the day).\n"
+        "• DON'T REPEAT YOURSELF: `recent_messages_do_not_repeat` holds the last "
+        "few days' messages. Don't reuse their opener, their sentences, their "
+        "vision line or their vibe emojis in the same places. Today should read "
+        "fresh.\n"
+        "• Never give the office a traffic light colour.\n"
+        "• Never compare with the same day last week.\n"
         "• NO DASHES. Never use – or — anywhere in the message. Use a colon "
         "after a name, and full stops or commas in sentences.\n"
         "• Plain text + emojis only. NO markdown headers (no #, no **). Single "
         "asterisks *like this* are OK for WhatsApp bold.\n"
-        "• ⚠️ ONLY use names that appear in the `rep_callouts` array of "
-        "TODAY'S DATA below. NEVER use names from the EXAMPLE messages above "
-        "(Owen / Tess / Maya / Liam F / Liam B) unless they are actually present in "
-        "rep_callouts. Everyone in rep_callouts gets a callout, whatever their name.\n"
-        "• If `rep_callouts` is empty (nobody rang a bell today), SKIP steps 2-3 "
-        "and write a short line like 'A grinder of a day. Heads down, no bells, "
-        "but the work compounds.' Then carry on from step 4.\n"
-        "• Numbers must match the data exactly. Do not invent sign-ups, goals or "
-        "door numbers; leave out anything the data doesn't have.\n"
-        "• Keep it tight and scannable.\n"
-        "• Don't be cringey. No 'champions' / 'rockstars' / 'crushed it'. Match "
-        "the reference tone.\n"
-        "• Return ONLY the message text: no preamble, no JSON, no quotes "
-        "around the output.\n"
+        "• ONLY use names in `rep_callouts`. NEVER use names from the examples "
+        "(Owen / Tess / Maya / Liam F) unless they're in `rep_callouts`.\n"
+        "• Numbers must match the data exactly. Don't invent sign-ups, goals, "
+        "PBs or door numbers; leave out anything the data doesn't have.\n"
+        "• No 'champions' / 'rockstars' / 'crushed it'.\n"
+        "• Return ONLY the message text: no preamble, no JSON, no quotes.\n"
         f"• {BRITISH_ENGLISH}\n"
         f"• {SELF_EMPLOYED_TERMS}\n\n"
         f"═════════ TODAY'S DATA ═════════\n{summary_context}\n"

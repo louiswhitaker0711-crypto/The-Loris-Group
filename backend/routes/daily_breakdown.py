@@ -19,8 +19,8 @@ from auth import get_current_user, get_subtree_ids
 from database import db
 from core.rate_limit import take_ai_quota
 from core.app_time import APP_TZ
-from core.week_bands import WEEK_BANDS, week_band
 from core.llm_keys import anthropic_api_key
+from core.breakdown_picks import BELL, office_averages, opener_style, person_facts, pick_callouts
 from prompts.daily_breakdown_prompt import (
     SYSTEM_MESSAGE as DAILY_BREAKDOWN_SYSTEM_MESSAGE,
     build_daily_breakdown_prompt,
@@ -64,17 +64,102 @@ def display_names(full_names: list) -> dict:
     return out
 
 
-def _band_label(n: int) -> str:
-    key = week_band(n)
-    return next(label for _f, k, label in WEEK_BANDS if k == key)
-
-
 async def _hidden_ids(office_id: str) -> set:
     """Visitors and demo accounts: never in the office's figures ("they don't
     make me money", the Owner). Their old Bells rows and their breakdowns are
     left out of the daily breakdown."""
     return {str(u["_id"]) async for u in db.users.find(
         {"office_id": office_id, "$or": [{"is_visitor": True}, {"is_demo": True}]}, {"_id": 1})}
+
+
+async def _recent_texts(office_id: str, before_iso: str, n: int = 3) -> list:
+    """The last few days' messages, so today's doesn't read the same."""
+    out = []
+    async for d in db.daily_breakdown_history.find(
+            {"office_id": office_id, "date": {"$lt": before_iso}}, {"_id": 0, "text": 1, "date": 1}
+    ).sort("date", -1).limit(n * 3):
+        if d.get("text") and d.get("date") not in {o["date"] for o in out}:
+            out.append({"date": d["date"], "text": d["text"][:1500]})
+        if len(out) >= n:
+            break
+    return out
+
+
+def _day_sales(d: dict) -> int:
+    return int((d or {}).get("over30") or 0) + int((d or {}).get("under30") or 0)
+
+
+async def _people_facts(office_id: str, week_ending: str, day_idx: int, target_iso: str,
+                        user_id_filter: Optional[list]) -> list:
+    """One fact sheet per person on this week's Bells (visitors and demo
+    accounts left out): today, the week, their weekly goal, their PBs from
+    every past Bells week and breakdown, and their recent breakdowns."""
+    q: dict = {"office_id": office_id, "week_ending": week_ending}
+    if user_id_filter is not None:
+        q["user_id"] = {"$in": [str(u) for u in user_id_filter]}
+    hidden = await _hidden_ids(office_id)
+    entries = [e async for e in db.bells_entries.find(
+        q, {"_id": 0, "user_id": 1, "user_name": 1, "days": 1, "role": 1, "weekly_goal": 1})
+        if e.get("user_id") and str(e["user_id"]) not in hidden]
+    ids = [str(e["user_id"]) for e in entries]
+    if not ids:
+        return []
+    # Past Bells: best day and best week before today.
+    best_day: dict = {}
+    best_week: dict = {}
+    weeks_n: dict = {}
+    async for e in db.bells_entries.find({"user_id": {"$in": ids}, "week_ending": {"$lt": week_ending}},
+                                         {"_id": 0, "user_id": 1, "days": 1}):
+        uid = str(e["user_id"])
+        sales = [_day_sales(d) for d in (e.get("days") or [])]
+        if sales:
+            best_day[uid] = max(best_day.get(uid, 0), max(sales))
+            best_week[uid] = max(best_week.get(uid, 0), sum(sales))
+            weeks_n[uid] = weeks_n.get(uid, 0) + 1
+    # Past breakdowns, newest first.
+    recent: dict = {}
+    best_spoken: dict = {}
+    today_bd: dict = {}
+    today_goal: dict = {}
+    async for sd in db.sector_days.find({"user_id": {"$in": ids}, "date": {"$lte": target_iso}},
+                                        {"_id": 0, "user_id": 1, "date": 1, "breakdown": 1, "setup": 1}
+                                        ).sort("date", -1):
+        uid, bd = str(sd.get("user_id")), sd.get("breakdown") or {}
+        if sd.get("date") == target_iso:
+            today_bd[uid] = bd
+            g = (sd.get("setup") or {}).get("goal")
+            today_goal[uid] = g if g is not None else bd.get("goal")
+            continue
+        if not any(bd.get(k) for k in ("doors", "spoken", "pitched", "closed")):
+            continue
+        recent.setdefault(uid, [])
+        if len(recent[uid]) < 10:
+            recent[uid].append(bd)
+        best_spoken[uid] = max(best_spoken.get(uid, 0), int(bd.get("spoken") or 0))
+    out = []
+    for e in entries:
+        uid = str(e["user_id"])
+        days = e.get("days") or []
+        td = days[day_idx] if day_idx < len(days) else {}
+        td = td or {}
+        sales = _day_sales(td) if (td.get("status") or "off") == "in" else 0
+        before = [_day_sales(d) for d in days[:day_idx]]
+        before_week = sum(before)
+        if sales <= 0 and not today_bd.get(uid):
+            continue
+        f = person_facts(
+            sales=sales, gold=int(td.get("over30") or 0), the_round=int(td.get("memberships") or 0),
+            numbers=today_bd.get(uid), goal_today=today_goal.get(uid), week_before_today=before_week,
+            weekly_goal=e.get("weekly_goal"), days_done=day_idx + 1,
+            prev_best_day=max([best_day.get(uid, 0)] + before) if (uid in best_day or before) else None,
+            prev_best_week=best_week.get(uid), prev_weeks=weeks_n.get(uid, 0),
+            ever_signed_up=bool(best_day.get(uid) or before_week),
+            prev_best_spoken=best_spoken.get(uid), recent_days=recent.get(uid, []),
+            is_new_start=(e.get("role") == "trainee" and weeks_n.get(uid, 0) < 2),
+        )
+        f.update({"user_id": uid, "full_name": e.get("user_name") or "", "role": e.get("role") or "trainee"})
+        out.append(f)
+    return out
 
 
 def missing_callouts(text: str, names: list) -> list:
@@ -317,45 +402,19 @@ async def daily_breakdown(request: Request):
     # Tomorrow's recurring office schedule (meetings & blocks)
     tomorrow = await _tomorrow_schedule(office_id, target_dt)
 
-    # What each person set out to do today and did on the doors: their goal
-    # from the set-up (or breakdown) and their numbers from the breakdown, so
-    # the AI can write goals and positives from them (the Owner, 11 Nov 2026).
-    today_ids = [str(r["user_id"]) for r in today["top_reps"] if r.get("user_id")]
-    days_by_id: dict = {}
-    if today_ids:
-        async for sd in db.sector_days.find({"date": target_iso, "user_id": {"$in": today_ids}},
-                                            {"_id": 0, "user_id": 1, "setup": 1, "breakdown": 1}):
-            days_by_id[str(sd.get("user_id"))] = sd
-    week_by_id = {str(r.get("user_id")): r for r in week_to_date["top_reps"] if r.get("user_id")}
-
-    # First names only; a surname initial when two current people share one.
+    # Everyone's day, with their PBs, weekly goal, personal traffic light and
+    # averages worked out here, then only the people with a positive worth
+    # promoting go to the AI (the Owner, 24 Nov 2026: "we don't want to
+    # mention every person but we do want to mention every positive").
     roster: list = []
     async for u in db.users.find({"office_id": office_id, "is_active": {"$ne": False}, "is_demo": {"$ne": True}},
                                  {"_id": 0, "name": 1}):
         roster.append(u.get("name") or "")
-    shown = display_names(roster + [r.get("name") or "" for r in today["top_reps"]])
-
-    rep_deltas = []
-    for r in today["top_reps"]:
-        sd = days_by_id.get(str(r.get("user_id")), {})
-        setup, bd = sd.get("setup") or {}, sd.get("breakdown") or {}
-        goal = setup.get("goal") if setup.get("goal") is not None else bd.get("goal")
-        numbers = {k: bd.get(k) for k in ("doors", "spoken", "pitched", "closed") if bd.get(k) is not None}
-        week = week_by_id.get(str(r.get("user_id")), {})
-        rep_deltas.append({
-            "name": shown.get(r["name"], r["name"]),
-            "role": r.get("role") or "rep",
-            "today": r["sales"],
-            "goal_today": goal,
-            "today_over30": r["over30"],
-            "today_memberships": r["memberships"],
-            "today_numbers": numbers,
-            "week_so_far": week.get("sales", r["sales"]),
-            "week_days_with_signups": week.get("days", 1),
-            "week_traffic_light": _band_label(week.get("sales", r["sales"])),
-        })
-    # Order: highest sales today first (so top performer leads), with deltas as tiebreak
-    rep_deltas.sort(key=lambda x: (x["today"], x["week_so_far"]), reverse=True)
+    people = await _people_facts(office_id, week_ending, day_idx, target_iso, user_id_filter)
+    shown = display_names(roster + [p["full_name"] for p in people])
+    for p in people:
+        p["name"] = shown.get(p["full_name"], p["full_name"])
+    rep_deltas = pick_callouts([{k: v for k, v in p.items() if k not in ("full_name", "user_id")} for p in people])
 
     # Compose context for the LLM
     weekday_name = target_dt.strftime("%A")
@@ -390,8 +449,7 @@ async def daily_breakdown(request: Request):
             f"Rest day — recharge & reload. 🔋"
         )
 
-    # Trim rep list — only include reps who actually rang a bell today
-    callout_reps = [r for r in rep_deltas if r["today"] > 0][:12]
+    callout_reps = rep_deltas[:12]
 
     # Load admin-authored prompt overrides for this office (if any). Empty
     # string is the baseline — the stock prompt rules apply as-is.
@@ -415,11 +473,13 @@ async def daily_breakdown(request: Request):
         by_day.append({"day": ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")[i], "sign_ups": this_i["sales"]})
     best = max(by_day, key=lambda d: d["sign_ups"]) if by_day else None
     office_today = {
-        "people_who_rang_a_bell": len([r for r in rep_deltas if r["today"] > 0]),
+        "people_with_a_sign_up": len([p for p in people if p["sales"] > 0]),
+        "people_who_rang_the_bell_4_plus": len([p for p in people if p["sales"] >= BELL]),
         "gold_sign_ups": today["over30"],
         "took_the_round": today["memberships"],
         "on_the_doors": office_day_numbers(office_bds),
-        "law_of_averages_per_person": {"doors": 120, "spoken": 70, "pitched": 25, "closed": 15, "sign_ups": 4},
+        "average_kpis_per_person": office_averages(office_day_numbers(office_bds), today["sales"],
+                                                   len([p for p in people if p.get("numbers") or p["sales"]])),
         "week_by_day": by_day,
         "best_day_this_week": best["day"] if best and best["sign_ups"] else None,
         "today_is_best_day_this_week": bool(best and best["sign_ups"] and today["sales"] >= best["sign_ups"]),
@@ -442,6 +502,10 @@ async def daily_breakdown(request: Request):
             "memberships": week_to_date["memberships"],
         },
         "last_week_total": last_week["sales"],
+        "vision": {"name": "200LW", "meaning": "200 sales a week", "emoji": "🐒",
+                   "this_week_so_far": week_to_date["sales"], "last_week": last_week["sales"]},
+        "opener_style_today": opener_style(target_iso),
+        "recent_messages_do_not_repeat": await _recent_texts(office_id, target_iso),
         "rep_callouts": callout_reps,
         "callout_names": [r["name"] for r in callout_reps],
         "callout_count": len(callout_reps),
@@ -473,14 +537,14 @@ async def daily_breakdown(request: Request):
         raise HTTPException(status_code=502, detail="The AI call failed. Try again shortly.")
 
     text = (response if isinstance(response, str) else str(response)).strip()
-    # The AI must call out everyone who rang a bell (the Owner, 19 Nov 2026):
-    # ask once more if anyone's missing.
+    # Every positive gets a mention (the Owner, 24 Nov 2026): ask once more
+    # if anyone picked is missing.
     missing = missing_callouts(text, [r["name"] for r in callout_reps])
     if missing:
         try:
             again = await asyncio.wait_for(chat.send_message(UserMessage(text=(
                 prompt + f"\n\nIMPORTANT: a first try left out {', '.join(missing)}. Write a callout "
-                f"for every name in callout_names, in order."))), timeout=25)
+                f"for every name in callout_names, in order, and still nobody else."))), timeout=25)
             again = (again if isinstance(again, str) else str(again)).strip()
             if not missing_callouts(again, [r["name"] for r in callout_reps]):
                 text = again
@@ -491,6 +555,12 @@ async def daily_breakdown(request: Request):
         text = re.sub(r"^```(?:[a-zA-Z]+)?\s*", "", text)
         text = re.sub(r"\s*```\s*$", "", text)
     text = no_dashes(text)
+    try:
+        await db.daily_breakdown_history.update_one(
+            {"office_id": office_id, "date": target_iso, "by": me.get("id")},
+            {"$set": {"text": text, "at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+    except Exception:
+        logger.exception("couldn't keep the breakdown for next time")
 
     return {
         "text": text,
