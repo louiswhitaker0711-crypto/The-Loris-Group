@@ -1054,6 +1054,9 @@ async def save_my_sector(request: Request, date: Optional[str] = None):
         raise HTTPException(status_code=400, detail="Pick at least one person")
     valid = {str(u["_id"]) async for u in db.users.find(
         {"_id": {"$in": [ObjectId(i) for i in wanted]}, "office_id": user.get("office_id"), "deleted": {"$ne": True}}, {"_id": 1})}
+    # New starts on their Academy days are in the office, not in a sector.
+    from routes.sector_plan import academy_in_office
+    valid -= await academy_in_office(user.get("office_id"), iso, db)
     members = [i for i in dict.fromkeys(wanted) if i in valid]
     if not members:
         raise HTTPException(status_code=400, detail="Nobody from your office in that list")

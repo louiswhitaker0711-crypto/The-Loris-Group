@@ -28,7 +28,7 @@ import { splitPostcodes } from '../src/utils/postcodes';
 // Not here today (Bells): No show, Scheduled off, In office.
 const AWAY = { ns: 'No show', ab: 'Scheduled off', pc: 'In office' } as const;
 const isAway = (p: { day_status?: string }) => ['ns', 'ab', 'pc'].includes(p.day_status || '');
-type Person = { user_id: string; name: string; role: string; sector_leader_id?: string | null; in_today?: boolean; no_show?: boolean; not_scheduled?: boolean; day_status?: string; visitor?: boolean; wants_primetime?: string };
+type Person = { user_id: string; name: string; role: string; sector_leader_id?: string | null; in_today?: boolean; no_show?: boolean; not_scheduled?: boolean; day_status?: string; visitor?: boolean; wants_primetime?: string; academy?: boolean };
 type Sector = { leader_id: string; leader_name: string; postcode: string; goal: number | null; member_ids: string[]; can_delete: boolean; hops?: HopLine[] };
 type Draft = { leader_id: string; postcode: string; goal: string; member_ids: string[] };
 type BoardSec = { leader_id: string; leader_name: string; postcode: string; goal: string; member_ids: string[]; hops: HopLine[] };
@@ -59,7 +59,9 @@ export default function SectorPlanScreen() {
   // Prefer people marked In on Bells today; if nobody's marked In yet, show
   // everyone so you're never stuck (and existing members always stay visible).
   const anyIn = people.some((p) => p.in_today && !p.visitor);
-  const canPlace = (p: Person) => !!p.visitor || (anyIn ? !!p.in_today : true);
+  // Nobody away (No show, Scheduled off, In office: new starts on their Academy
+  // days read In office) goes in a sector.
+  const canPlace = (p: Person) => !isAway(p) && (!!p.visitor || (anyIn ? !!p.in_today : true));
   const nameOf = (id: string) => people.find((p) => p.user_id === id)?.name || '';
   const sectors: Sector[] = d?.sectors || [];
   const refresh = (data?: any) => {
@@ -200,7 +202,7 @@ export default function SectorPlanScreen() {
                     <View style={{ flex: 1 }}>
                       <Text style={[s.rosterName, away && s.rosterNo]}>{p.name}</Text>
                       <Text style={s.small}>
-                        {away ? AWAY[st] : p.sector_leader_id ? `In ${first(nameOf(p.sector_leader_id))}'s${sec?.postcode ? ` · ${sec.postcode}` : ''}` : 'Not placed yet'}
+                        {away ? `${AWAY[st]}${p.academy && st === 'pc' ? ' · BA Academy' : ''}` : p.sector_leader_id ? `In ${first(nameOf(p.sector_leader_id))}'s${sec?.postcode ? ` · ${sec.postcode}` : ''}` : 'Not placed yet'}
                       </Text>
                       {!!p.wants_primetime && !away && (
                         <Text style={s.small} numberOfLines={2}>⚡ Wants to learn: {p.wants_primetime}</Text>
