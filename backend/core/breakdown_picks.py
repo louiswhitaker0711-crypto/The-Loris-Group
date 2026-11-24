@@ -51,7 +51,9 @@ def person_facts(*, sales: int, gold: int = 0, the_round: int = 0, numbers: dict
                  goal_today=None, week_before_today: int = 0, weekly_goal=None,
                  days_done: int = 1, prev_best_day: int | None = None, prev_best_week: int | None = None,
                  prev_weeks: int = 0, ever_signed_up: bool = True, prev_best_spoken: int | None = None,
-                 recent_days: list[dict] | None = None, is_new_start: bool = False) -> dict:
+                 recent_days: list[dict] | None = None, is_new_start: bool = False,
+                 breakeven: int | None = None, ever_gold: bool = True, ever_round: bool = True,
+                 week_days_in: list[int] | None = None, prev_days_at: dict | None = None) -> dict:
     """Everything worth knowing about one person's day.
 
     week_before_today: sign-ups this week before today. days_done: field days
@@ -83,6 +85,29 @@ def person_facts(*, sales: int, gold: int = 0, the_round: int = 0, numbers: dict
     if has_numbers and prev_best_spoken is not None and n["spoken"] > prev_best_spoken \
             and len(recent_days or []) >= 3:
         f["pb_spoken"] = {"now": n["spoken"], "was": prev_best_spoken}
+    if gold > 0 and not ever_gold:
+        f["first_ever_gold"] = True
+    if the_round > 0 and not ever_round:
+        f["first_ever_round"] = True
+    # A number they've never done in a day before (e.g. a first 3).
+    if sales > 0 and prev_best_day is not None and sales > prev_best_day:
+        f["first_time_on"] = sales
+    # Breakeven: their week's sign-ups covering their weekly needs.
+    if breakeven:
+        f["breakeven"] = int(breakeven)
+        if week >= breakeven and week_before_today < breakeven and sales > 0:
+            f["breakeven_hit_today"] = True
+            f["breakeven_in_days"] = days_done
+        elif week < breakeven:
+            f["to_go_for_breakeven"] = int(breakeven) - week
+    # Consistency this week: every day in on the board.
+    wd = list(week_days_in or [])
+    if sales > 0 and len(wd) >= 1:
+        run = [*wd, sales]
+        if len(run) >= 2 and all(x > 0 for x in run):
+            f["on_the_board_every_day_this_week"] = len(run)
+        if len(run) >= 2 and all(x >= 3 for x in run):
+            f["three_plus_every_day_this_week"] = len(run)
     # The personal traffic light: did today move them up a colour?
     before = band_label(week_before_today)
     if sales > 0 and before != f["week_light"]:
@@ -128,7 +153,17 @@ def reasons(f: dict) -> list[str]:
     if f.get("first_ever_sign_up"):
         out.append("first ever sign-up")
     if f.get("pb_day"):
-        out.append(f"new PB day: {f['pb_day']['now']} (best was {f['pb_day']['was']})")
+        out.append(f"new PB day, first time ever on {f['pb_day']['now']} (best was {f['pb_day']['was']})")
+    if f.get("breakeven_hit_today"):
+        out.append(f"hit their breakeven of {f['breakeven']} for the week in {f['breakeven_in_days']} days")
+    if f.get("first_ever_gold"):
+        out.append("first ever Gold sign-up")
+    if f.get("first_ever_round"):
+        out.append("first ever sign-up taking The Round")
+    if f.get("three_plus_every_day_this_week") and s >= 3:
+        out.append(f"3+ every day this week ({f['three_plus_every_day_this_week']} days)")
+    elif f.get("on_the_board_every_day_this_week", 0) >= 3 and s >= 2:
+        out.append(f"on the board every day this week ({f['on_the_board_every_day_this_week']} days)")
     if f.get("pb_week"):
         out.append(f"best week ever already: {f['pb_week']['now']} (best was {f['pb_week']['was']})")
     if f.get("pb_spoken"):
@@ -157,6 +192,61 @@ def reasons(f: dict) -> list[str]:
     if s < BELL and len(out) == 0:
         return []
     return out
+
+
+def office_wins(*, today_sales: int, people_in_today: int, people_on_board: int,
+                week_sales: int, week_person_days: int, last_week_sales: int, last_week_person_days: int,
+                last_week_to_day_sales: int, last_week_to_day_person_days: int,
+                today_gold: int, today_round: int, best_day_this_week: bool, averages: dict | None,
+                week_goal: int = 0) -> list[str]:
+    """Every office positive worth saying today, worked out from the numbers.
+    P/A = sign-ups per person per day in."""
+    wins: list[str] = []
+    pa_today = round(today_sales / people_in_today, 2) if people_in_today else None
+    pa_week = round(week_sales / week_person_days, 2) if week_person_days else None
+    pa_last = round(last_week_sales / last_week_person_days, 2) if last_week_person_days else None
+    pa_last_to_day = (round(last_week_to_day_sales / last_week_to_day_person_days, 2)
+                      if last_week_to_day_person_days else None)
+    if pa_week is not None and pa_last is not None and pa_week > pa_last:
+        wins.append(f"office P/A this week {pa_week} is better than last week's {pa_last}")
+    elif pa_week is not None and pa_last_to_day is not None and pa_week > pa_last_to_day:
+        wins.append(f"office P/A this week {pa_week} is ahead of last week at this point ({pa_last_to_day})")
+    if pa_today is not None and pa_last is not None and pa_today > pa_last and pa_today >= 2:
+        wins.append(f"today's P/A {pa_today} beat last week's {pa_last}")
+    if pa_today is not None and pa_today >= BELL:
+        wins.append(f"today's P/A {pa_today}: the whole office rang the bell on average")
+    if people_in_today and people_on_board == people_in_today and people_in_today >= 2:
+        wins.append(f"everyone in today got on the board ({people_on_board} of {people_in_today})")
+    if best_day_this_week and today_sales:
+        wins.append(f"best day of the week so far: {today_sales}")
+    if today_sales >= 5 and today_gold / today_sales >= 0.9:
+        wins.append(f"{today_gold} of {today_sales} Gold today, at the 90% standard")
+    if today_sales >= 5 and today_round / today_sales >= 0.75:
+        wins.append(f"{today_round} of {today_sales} took The Round today, at the 75% standard")
+    if week_goal and week_sales >= week_goal:
+        wins.append(f"weekly goal of {week_goal} hit: {week_sales}")
+    for k in (averages or {}).get("at_or_above_target") or []:
+        if k != "sign_ups":
+            wins.append(f"office average {k} {averages['per_person'][k]} at or above the {DAILY[k]}")
+    return wins
+
+
+ADVICE_ANGLES = (
+    "the mindset behind tomorrow's focus number",
+    "one technique on the doors for the focus number (words, tone or body language)",
+    "the Rehash: the second lap and the people it finds",
+    "pace and energy in the first hour",
+    "the Close: asking for the sign-up on every pitch",
+    "quality: Gold orders and The Round on every sign-up",
+    "consistency: the Law of Averages day after day",
+    "what the best people did today that everyone can copy tomorrow",
+)
+
+
+def advice_angle(date_iso: str) -> str:
+    """A different side of the advice each day."""
+    from datetime import date as _d
+    return ADVICE_ANGLES[_d.fromisoformat(date_iso).toordinal() % len(ADVICE_ANGLES)]
 
 
 def pick_callouts(people: list[dict]) -> list[dict]:
@@ -199,5 +289,5 @@ OPENER_STYLES = (
 
 def opener_style(date_iso: str) -> str:
     """A different way in each day, so no two days read the same."""
-    n = sum(int(c) for c in date_iso if c.isdigit())
-    return OPENER_STYLES[n % len(OPENER_STYLES)]
+    from datetime import date as _d
+    return OPENER_STYLES[_d.fromisoformat(date_iso).toordinal() % len(OPENER_STYLES)]

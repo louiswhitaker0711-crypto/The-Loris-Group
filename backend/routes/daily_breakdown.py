@@ -20,7 +20,8 @@ from database import db
 from core.rate_limit import take_ai_quota
 from core.app_time import APP_TZ
 from core.llm_keys import anthropic_api_key
-from core.breakdown_picks import BELL, office_averages, opener_style, person_facts, pick_callouts
+from core.breakdown_picks import (BELL, advice_angle, office_averages, office_wins, opener_style,
+                                  person_facts, pick_callouts)
 from prompts.daily_breakdown_prompt import (
     SYSTEM_MESSAGE as DAILY_BREAKDOWN_SYSTEM_MESSAGE,
     build_daily_breakdown_prompt,
@@ -99,7 +100,7 @@ async def _people_facts(office_id: str, week_ending: str, day_idx: int, target_i
         q["user_id"] = {"$in": [str(u) for u in user_id_filter]}
     hidden = await _hidden_ids(office_id)
     entries = [e async for e in db.bells_entries.find(
-        q, {"_id": 0, "user_id": 1, "user_name": 1, "days": 1, "role": 1, "weekly_goal": 1})
+        q, {"_id": 0, "user_id": 1, "user_name": 1, "days": 1, "role": 1, "weekly_goal": 1, "break_even": 1})
         if e.get("user_id") and str(e["user_id"]) not in hidden]
     ids = [str(e["user_id"]) for e in entries]
     if not ids:
@@ -108,10 +109,16 @@ async def _people_facts(office_id: str, week_ending: str, day_idx: int, target_i
     best_day: dict = {}
     best_week: dict = {}
     weeks_n: dict = {}
+    ever_gold: set = set()
+    ever_round: set = set()
     async for e in db.bells_entries.find({"user_id": {"$in": ids}, "week_ending": {"$lt": week_ending}},
                                          {"_id": 0, "user_id": 1, "days": 1}):
         uid = str(e["user_id"])
         sales = [_day_sales(d) for d in (e.get("days") or [])]
+        if any(int((d or {}).get("over30") or 0) for d in (e.get("days") or [])):
+            ever_gold.add(uid)
+        if any(int((d or {}).get("memberships") or 0) for d in (e.get("days") or [])):
+            ever_round.add(uid)
         if sales:
             best_day[uid] = max(best_day.get(uid, 0), max(sales))
             best_week[uid] = max(best_week.get(uid, 0), sum(sales))
@@ -136,10 +143,39 @@ async def _people_facts(office_id: str, week_ending: str, day_idx: int, target_i
         if len(recent[uid]) < 10:
             recent[uid].append(bd)
         best_spoken[uid] = max(best_spoken.get(uid, 0), int(bd.get("spoken") or 0))
+    # Breakeven, worked out the same way as Bells and the breakeven push.
+    from bson import ObjectId
+    from core.breakeven_alerts import breakeven_for
+    fees = (await db.commission_fees.find_one({"office_id": office_id}, {"_id": 0})
+            or await db.commission_fees.find_one({}, {"_id": 0}))
+    plans: dict = {}
+    oids = []
+    for i in ids:
+        try:
+            oids.append(ObjectId(i))
+        except Exception:
+            pass
+    async for u in db.users.find({"_id": {"$in": oids}}):
+        plans[str(u["_id"])] = u
     out = []
     for e in entries:
         uid = str(e["user_id"])
         days = e.get("days") or []
+        person = plans.get(uid) or {}
+        be = None
+        try:
+            rate = None
+            if person.get("earnings_plan"):
+                from core.sign_up_value import rate_for
+                rate = (await rate_for(db, person, fees))["per_sign_up"]
+            be = breakeven_for(e, person.get("earnings_plan"), fees, rate)
+        except Exception:
+            logger.exception("breakeven for the breakdown")
+        earlier = days[:day_idx]
+        if any(int((d or {}).get("over30") or 0) for d in earlier):
+            ever_gold.add(uid)
+        if any(int((d or {}).get("memberships") or 0) for d in earlier):
+            ever_round.add(uid)
         td = days[day_idx] if day_idx < len(days) else {}
         td = td or {}
         sales = _day_sales(td) if (td.get("status") or "off") == "in" else 0
@@ -156,10 +192,29 @@ async def _people_facts(office_id: str, week_ending: str, day_idx: int, target_i
             ever_signed_up=bool(best_day.get(uid) or before_week),
             prev_best_spoken=best_spoken.get(uid), recent_days=recent.get(uid, []),
             is_new_start=(e.get("role") == "trainee" and weeks_n.get(uid, 0) < 2),
+            breakeven=be, ever_gold=uid in ever_gold, ever_round=uid in ever_round,
+            week_days_in=[_day_sales(d) for d in earlier if (d or {}).get("status") == "in"],
         )
         f.update({"user_id": uid, "full_name": e.get("user_name") or "", "role": e.get("role") or "trainee"})
         out.append(f)
     return out
+
+
+async def _office_pa(office_id: str, week_ending: str, upto_idx: int, user_id_filter: Optional[list]) -> dict:
+    """Sign-ups and person-days in (Bells days marked in) up to a day of a week."""
+    q: dict = {"office_id": office_id, "week_ending": week_ending}
+    if user_id_filter is not None:
+        q["user_id"] = {"$in": [str(u) for u in user_id_filter]}
+    hidden = await _hidden_ids(office_id)
+    sales = person_days = 0
+    async for e in db.bells_entries.find(q, {"_id": 0, "user_id": 1, "days": 1}):
+        if str(e.get("user_id") or "") in hidden:
+            continue
+        for d in (e.get("days") or [])[:upto_idx + 1]:
+            if (d or {}).get("status") == "in":
+                person_days += 1
+                sales += _day_sales(d)
+    return {"sales": sales, "person_days": person_days}
 
 
 def missing_callouts(text: str, names: list) -> list:
@@ -484,6 +539,26 @@ async def daily_breakdown(request: Request):
         "best_day_this_week": best["day"] if best and best["sign_ups"] else None,
         "today_is_best_day_this_week": bool(best and best["sign_ups"] and today["sales"] >= best["sign_ups"]),
     }
+    this_pa = await _office_pa(office_id, week_ending, day_idx, user_id_filter)
+    today_pa = this_pa
+    before_pa = await _office_pa(office_id, week_ending, day_idx - 1, user_id_filter) if day_idx else {"sales": 0, "person_days": 0}
+    last_pa = await _office_pa(office_id, last_week_ending, 6, user_id_filter)
+    last_to_day = await _office_pa(office_id, last_week_ending, day_idx, user_id_filter)
+    people_in_today = today_pa["person_days"] - before_pa["person_days"]
+    office_today["office_wins"] = office_wins(
+        today_sales=today["sales"], people_in_today=people_in_today,
+        people_on_board=len([p for p in people if p["sales"] > 0]),
+        week_sales=this_pa["sales"], week_person_days=this_pa["person_days"],
+        last_week_sales=last_pa["sales"], last_week_person_days=last_pa["person_days"],
+        last_week_to_day_sales=last_to_day["sales"], last_week_to_day_person_days=last_to_day["person_days"],
+        today_gold=today["over30"], today_round=today["memberships"],
+        best_day_this_week=office_today["today_is_best_day_this_week"] and day_idx > 0,
+        averages=office_today["average_kpis_per_person"], week_goal=weekly_goal)
+    office_today["pa"] = {
+        "today": round(today["sales"] / people_in_today, 2) if people_in_today else None,
+        "this_week": round(this_pa["sales"] / this_pa["person_days"], 2) if this_pa["person_days"] else None,
+        "last_week": round(last_pa["sales"] / last_pa["person_days"], 2) if last_pa["person_days"] else None,
+    }
 
     summary_context = {
         "office": office_name,
@@ -505,6 +580,7 @@ async def daily_breakdown(request: Request):
         "vision": {"name": "200LW", "meaning": "200 sales a week", "emoji": "🐒",
                    "this_week_so_far": week_to_date["sales"], "last_week": last_week["sales"]},
         "opener_style_today": opener_style(target_iso),
+        "advice_angle_today": advice_angle(target_iso),
         "recent_messages_do_not_repeat": await _recent_texts(office_id, target_iso),
         "rep_callouts": callout_reps,
         "callout_names": [r["name"] for r in callout_reps],

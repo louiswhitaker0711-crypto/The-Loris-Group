@@ -32,6 +32,8 @@ New PB. 80 spoken to and 4 of the 5 Gold. Already Amber for the week on day one.
 ⭐ *Maya: 1* 🌱
 First ever sign-up, and 85 spoken to on her second field day. That's the work that brings the bells.
 
+Tomorrow, take your first 10 doors at the pace you finished on. Energy is set early ⚡
+
 Every bell is a step to 200LW 🐒
 
 Tomorrow is a new day 🌱
@@ -46,6 +48,10 @@ Hit his weekly goal of 15 today and into Green. Consistent all week.
 
 ⭐ *Tess: 3* 💫
 15 pitched and 10 closed. Her averages are up because of today, the bells are coming.
+
+Office P/A is 2.4, up on last week's 2.1, and everyone in got on the board 📈
+
+Tomorrow, ask for the sign-up on every pitch. Make them say no 🎯
 
 🐒 200LW is built on days like this.
 
@@ -113,7 +119,11 @@ def build_daily_breakdown_prompt(
         "`law_of_averages`), naming either the positive (`strongest`, or "
         "anything in `at_or_above_target`) or the focus for tomorrow (`focus`), "
         "said as what's there to take, never as a telling-off. Always include "
-        "this when it's there; if it's empty, leave this part out.\n"
+        "this when it's there; if it's empty, leave this part out. Then EVERY "
+        "office win in `office_today.office_wins` (P/A better than last week, "
+        "everyone on the board, Gold or The Round at the standard, best day "
+        "of the week...), short, in your own words. `office_today.pa` is "
+        "sign-ups per person per day in.\n"
         "3) ROUND OF RESULTS: one callout per person in `rep_callouts`, in "
         "order, a blank line between each. Two lines each:\n"
         "     line 1: '<emoji> *<name>: <sign-ups today>* <vibe emoji>'\n"
@@ -121,7 +131,10 @@ def build_daily_breakdown_prompt(
         "why it matters, from `why_they_are_in` and their facts.\n"
         "   Emojis: 🔔 = rang the bell (4+ sign-ups; the bell is 4), ⭐ = a "
         "standout under 4, 🎓 = a new BA (`is_new_start`) on line 1.\n"
-        "   Lead with their best reason. A new PB (`pb_day`, `pb_week`, "
+        "   Lead with their best reason. Every item in `why_they_are_in` is a "
+        "win to say: a first time on a number (\"first time on 3\"), "
+        "breakeven hit and how many days it took (\"breakeven covered in 2 "
+        "days\"), a first Gold or first Round, every day on the board. A new PB (`pb_day`, `pb_week`, "
         "`pb_spoken`) or `first_ever_sign_up` is ALWAYS said. Being on track "
         "for their weekly goal (`on_track_for_weekly_goal`, `weekly_goal_hit`) "
         "is said when it's there. Their goal for the day (`goal_today`) is said "
@@ -134,20 +147,23 @@ def build_daily_breakdown_prompt(
         "person: never the same line twice. Positives only.\n"
         "   Use the name EXACTLY as given (first name, or first name and "
         "initial). Never add a surname.\n"
-        "4) VISION: one short line about 200LW (200 sales a week) with 🐒. Vary "
+        "4) ADVICE: one short, practical line for tomorrow, NEW every day. "
+        "Today's angle: `advice_angle_today`, aimed at the office's `focus` "
+        "number. Never the same advice as in `recent_messages_do_not_repeat`.\n"
+        "5) VISION: one short line about 200LW (200 sales a week) with 🐒. Vary "
         "it every day: tie it to today (how today's bells move us towards it, "
         "or what a week of days like today would add up to). Never claim we're "
         "at or near it unless the numbers say so.\n"
-        f"5) Last line, on its own: {MOTTO}\n\n"
+        f"6) Last line, on its own: {MOTTO}\n\n"
         "RULES:\n"
         "• If `rep_callouts` is empty, skip step 3 and write one honest, upbeat "
         "line instead (the work compounds, tomorrow's the day).\n"
         "• DON'T REPEAT YOURSELF: `recent_messages_do_not_repeat` holds the last "
         "few days' messages. Don't reuse their opener, their sentences, their "
         "vision line or their vibe emojis in the same places. Today should read "
-        "fresh.\n"
+        "fresh: new wins, new advice, new wording.\n"
         "• Never give the office a traffic light colour.\n"
-        "• Never compare with the same day last week.\n"
+        "• Compare with last week only through the P/A in `office_wins`.\n"
         "• NO DASHES. Never use – or — anywhere in the message. Use a colon "
         "after a name, and full stops or commas in sentences.\n"
         "• Plain text + emojis only. NO markdown headers (no #, no **). Single "
