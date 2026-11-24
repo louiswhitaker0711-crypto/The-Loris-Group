@@ -164,3 +164,35 @@ async def start_after_evaluation(assessment: dict, grader: dict) -> Optional[dic
         import logging
         logging.getLogger(__name__).warning("cod_calendar: not started after evaluation", exc_info=True)
         return None
+
+
+def day_view(cal: dict, ladder: dict, on: str) -> Optional[dict]:
+    """One person's COD 2 for the day `on` (the Owner, 23 Nov 2026), for the
+    set-up, the breakdown and Coaching today: that day's items with their
+    rung, and any earlier day still not at Know. None when there's nothing
+    for that day (not started yet, finished, or no items left)."""
+    st = status(cal, ladder, on)
+    if not st["total"]:
+        return None
+    today = next((d for d in st["days"] if d["date"] == on), None)
+    behind = [{**it, "date": d["date"], "day": d["day"]}
+              for d in st["days"] if d["date"] < on
+              for it in d["items"] if int(it.get("ladder") or 0) < 1]
+    if not today and not behind:
+        return None
+    return {"day": today["day"] if today else None, "total": st["total"], "done": st["done"],
+            "today": today["items"] if today else [], "behind": behind}
+
+
+async def day_views(user_ids: list[str], on: str) -> dict:
+    """day_view for everyone in `user_ids` who has a COD 2 calendar."""
+    from database import db
+    out: dict = {}
+    ids = [str(i) for i in user_ids if i]
+    if not ids:
+        return out
+    async for doc in db.cod_calendars.find({"user_id": {"$in": ids}}, {"_id": 0}):
+        v = day_view(doc, await ladders(doc["user_id"], module_ids_of(doc)), on)
+        if v:
+            out[doc["user_id"]] = v
+    return out
