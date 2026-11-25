@@ -110,3 +110,29 @@ def test_new_starts_are_in_office_on_their_academy_days(monkeypatch):
                                "member_ids": ["lead", "new", "here"]}))
     assert run(sp.drop_no_shows("o1", "2026-11-23")) == 1
     assert run(db.sectors.find_one({"id": "s1"}))["member_ids"] == ["lead", "here"]
+
+
+def test_a_shadow_reads_in_office_on_bells_but_stays_in_the_sector(monkeypatch):
+    """Wednesday's shadow day: In office on Bells, still in the sector (the Owner, 25 Nov 2026)."""
+    import asyncio
+    from mongomock_motor import AsyncMongoMockClient
+    import routes.sector_plan as sp
+    import database
+    from core import hops
+    db = AsyncMongoMockClient()["t"]
+    monkeypatch.setattr(sp, "db", db)
+    monkeypatch.setattr(database, "db", db)
+    monkeypatch.setattr(sp, "_now_uk", lambda: datetime(2026, 11, 25, 10, 0))   # a Wednesday
+    run = asyncio.run
+    run(db.bells_entries.insert_one({"id": "e1", "office_id": "o1", "week_ending": "2026-11-29", "user_id": "new",
+                                     "days": [{"status": "in"}] * 7}))
+    sec = {"id": "s1", "office_id": "o1", "date": "2026-11-25", "leader_id": "lead", "member_ids": ["lead", "new"],
+           "hops": [{"member_ids": ["lead", "new"], "shadow_ids": ["new"]}]}
+    run(db.sectors.insert_one(dict(sec)))
+    assert hops.SHADOW_STATUS == "pc"
+    assert run(sp.drop_no_shows("o1", "2026-11-25")) == 0          # In office on Bells, but a shadow: stays
+    assert run(db.sectors.find_one({"id": "s1"}))["member_ids"] == ["lead", "new"]
+    run(db.bells_entries.insert_one({"id": "e2", "office_id": "o1", "week_ending": "2026-11-22", "user_id": "old",
+                                     "days": [{"status": "sd"}, {"status": "in"}]}))
+    assert run(hops.shadow_days_to_in_office(db)) == 1
+    assert run(db.bells_entries.find_one({"id": "e2"}))["days"][0]["status"] == "pc"

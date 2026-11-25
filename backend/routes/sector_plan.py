@@ -131,6 +131,17 @@ NOT_IN_SECTOR = OUT_TODAY + ("pc",)
 ACADEMY_DAYS = 2
 
 
+async def shadows_on(office_id: str, iso: str, database=None) -> set[str]:
+    """user_ids down as a shadow on a bunny hop in any of the day's sectors.
+    Bells has them In office, but they're out in the field."""
+    from core.hops import shadow_ids
+    db_ = database if database is not None else db
+    out: set[str] = set()
+    async for s in db_.sectors.find({"office_id": office_id, "date": iso}, {"_id": 0, "hops": 1}):
+        out |= shadow_ids(s)
+    return out
+
+
 async def academy_in_office(office_id: str, iso: str, database=None) -> set[str]:
     """user_ids of new starts on a BA Academy day on `iso`, unless the planner
     has put them back in the field for that day or they're down as a shadow."""
@@ -162,7 +173,7 @@ async def academy_in_office(office_id: str, iso: str, database=None) -> set[str]
         days = e.get("days") or []
         if d0.weekday() < len(days) and (days[d0.weekday()] or {}).get("status") == "sd":
             out.discard(str(e.get("user_id")))
-    return out
+    return out - await shadows_on(office_id, iso, db_)
 
 
 async def drop_no_shows(office_id: str, iso: str) -> int:
@@ -183,6 +194,9 @@ async def drop_no_shows(office_id: str, iso: str) -> int:
         days = e.get("days") or []
         if widx < len(days) and (days[widx] or {}).get("status") in NOT_IN_SECTOR:
             ns.append(str(e["user_id"]))
+    # A shadow reads In office on Bells but is out on a bunny hop: they stay.
+    shadows = await shadows_on(office_id, iso)
+    ns = [i for i in ns if i not in shadows]
     if not ns:
         return 0
     res = await db.sectors.update_many({"office_id": office_id, "date": iso, "member_ids": {"$in": ns}},
@@ -226,6 +240,10 @@ async def get_plan(request: Request, date: Optional[str] = None):
     for uid in academy:
         if bells_status.get(uid) not in ("ns", "ab"):
             bells_status[uid] = "pc"
+    # Shadows read In office on Bells but they're here: out on a bunny hop.
+    for uid in await shadows_on(office_id, iso):
+        if bells_status.get(uid) in ("pc", "sd"):
+            bells_status[uid] = "in"
     wants = await primetime_wants(office_id, iso, [p["user_id"] for p in people])
     planner = await planner_for(office_id, iso)
     sent = await db.sector_plan_sends.find_one({"office_id": office_id, "date": iso}, {"_id": 0})

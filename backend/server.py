@@ -458,6 +458,16 @@ async def _startup_work():
     except Exception:
         logger.exception("relay history cleanup failed (continuing)")
 
+    # Shadow days read In office on Bells (the Owner, 25 Nov 2026): turn the
+    # old SD cells into In office. Idempotent.
+    try:
+        from core.hops import shadow_days_to_in_office
+        n = await shadow_days_to_in_office(db)
+        if n:
+            logger.info(f"bells: {n} shadow days now read In office")
+    except Exception:
+        logger.exception("shadow day clean-up failed (continuing)")
+
     # The Inbox keeps one-offs only: clear the everyday pushes from it.
     try:
         from core.notify import clear_daily_rows

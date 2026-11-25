@@ -59,6 +59,10 @@ def keep_shadows(new_hops: list[dict], old_hops: list[dict]) -> list[dict]:
     return new_hops
 
 
+# What a shadow day reads on Bells: In office (the Owner, 25 Nov 2026).
+SHADOW_STATUS = "pc"
+
+
 def shadow_ids(sec: Optional[dict]) -> set[str]:
     return {str(i) for h in (sec or {}).get("hops") or [] for i in (h.get("shadow_ids") or [])}
 
@@ -92,16 +96,17 @@ def describe(sec: Optional[dict], uid: str, names: dict) -> Optional[str]:
 
 
 async def sync_shadow_days(office_id: str, iso: str, before: Iterable[dict], after: Iterable[dict]) -> None:
-    """Bells for the day: a shadow reads SD (shadow day); someone who was a
-    shadow and isn't any more goes back to In. A day with sign-ups on it, or
-    marked Not scheduled / No show / In office, is left alone."""
+    """Bells for the day: a shadow reads In office (yellow, 'pc'), as a shadow
+    day isn't a field day on Bells (the Owner, 25 Nov 2026; it used to read
+    SD); someone who was a shadow and isn't any more goes back to In. A day
+    with sign-ups on it, or marked Not scheduled / No show, is left alone."""
     from datetime import date, timedelta
     from bson import ObjectId
     from database import db
     from owneriq_performance import _bells_entry
     was = set().union(*[shadow_ids(s) for s in before]) if before else set()
     now = set().union(*[shadow_ids(s) for s in after]) if after else set()
-    changes = {i: "sd" for i in now - was} | {i: "in" for i in was - now}
+    changes = {i: SHADOW_STATUS for i in now - was} | {i: "in" for i in was - now}
     if not changes:
         return
     d = date.fromisoformat(iso)
@@ -119,11 +124,22 @@ async def sync_shadow_days(office_id: str, iso: str, before: Iterable[dict], aft
         day = dict(days[idx] or {})
         has_sales = any(day.get(k) for k in ("over30", "under30", "memberships"))
         st = day.get("status")
-        if want == "sd" and (has_sales or st not in (None, "off", "normal", "in")):
+        if want == SHADOW_STATUS and (has_sales or st not in (None, "", "off", "normal", "in", "sd", SHADOW_STATUS)):
             continue
-        if want == "in" and st != "sd":
+        if want == "in" and st not in ("sd", SHADOW_STATUS):
             continue
         day["status"] = want
         days[idx] = day
         await db.bells_entries.update_one({"office_id": entry.get("office_id"), "week_ending": week_ending,
                                            "user_id": str(u["_id"])}, {"$set": {"days": days}})
+
+
+async def shadow_days_to_in_office(database) -> int:
+    """Old SD (shadow day) cells on Bells become In office. Returns rows changed."""
+    n = 0
+    async for e in database.bells_entries.find({"days.status": "sd"}, {"_id": 1, "days": 1}):
+        days = [({**d, "status": SHADOW_STATUS} if isinstance(d, dict) and d.get("status") == "sd" else d)
+                for d in (e.get("days") or [])]
+        await database.bells_entries.update_one({"_id": e["_id"]}, {"$set": {"days": days}})
+        n += 1
+    return n
