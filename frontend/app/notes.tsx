@@ -98,7 +98,7 @@ export default function NotesScreen() {
       <ScrollView contentContainerStyle={[s.content, { paddingBottom: 32 + tabClear }]} keyboardShouldPersistTaps="handled">
         <View style={s.shell}>
           {/* Write a note here, filed under the heading you're in; it also lands in today's planner (the Owner, 29 Oct 2026). */}
-          {!(view.kind === 'head' && view.head === 'pitch:morning') && <Pressable onPress={() => setEditing({ head: view.kind === 'head' ? view.head : '' })} style={s.write} accessibilityRole="button" testID="notes-write">
+          {!(view.kind === 'head' && ['pitch:morning', 'pitch:leaders'].includes(view.head)) && <Pressable onPress={() => setEditing({ head: view.kind === 'head' ? view.head : '' })} style={s.write} accessibilityRole="button" testID="notes-write">
             <Ionicons name="create-outline" size={20} color={c.onPrimary} />
             <Text style={s.writeT}>{view.kind === 'head' ? `New note in ${view.label}` : 'New note'}</Text>
           </Pressable>}
@@ -537,10 +537,10 @@ function FolderPicker({ d, loading, current, onPick, s, c }: { d: any; loading: 
           <View style={s.list}>
             {(d.pitch || []).filter((p: any) => !p.group || p.group === 'sales').map((p: any, i: number) => <Row key={p.head} head={p.head} label={p.label} i={i} onPress={() => onPick(p.head)} />)}
           </View>
-          {(d.pitch || []).some((p: any) => p.group && p.group !== 'sales' && p.head !== 'pitch:morning') && <>
+          {(d.pitch || []).some((p: any) => p.group && p.group !== 'sales' && !['pitch:morning', 'pitch:leaders'].includes(p.head)) && <>
             <Text style={s.kicker}>Meetings</Text>
             <View style={s.list}>
-              {(d.pitch || []).filter((p: any) => p.group && p.group !== 'sales' && p.head !== 'pitch:morning').map((p: any, i: number) => <Row key={p.head} head={p.head} label={p.group === 'owner' ? `${p.label} · just you` : p.label} i={i} onPress={() => onPick(p.head)} />)}
+              {(d.pitch || []).filter((p: any) => p.group && p.group !== 'sales' && !['pitch:morning', 'pitch:leaders'].includes(p.head)).map((p: any, i: number) => <Row key={p.head} head={p.head} label={p.group === 'owner' ? `${p.label} · just you` : p.label} i={i} onPress={() => onPick(p.head)} />)}
             </View>
           </>}
           <Text style={s.kicker}>The CoD</Text>
@@ -583,8 +583,8 @@ function NoteList({ notes, loading, empty, s, c, showHead, ownerName, onEdit }: 
         {n.meeting && big && (
           <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
             <RunItButton onPress={() => setRun(n)} />
-            <Pressable onPress={() => router.push('/weekly-planner' as any)} hitSlop={6} accessibilityRole="button">
-              <Text style={s.back}>Change it in the planner</Text>
+            <Pressable onPress={() => router.push((n.head === 'pitch:leaders' ? '/(tabs)/schedule?view=plan' : '/weekly-planner') as any)} hitSlop={6} accessibilityRole="button">
+              <Text style={s.back}>{n.head === 'pitch:leaders' ? 'Change it on the Weekly Plan' : 'Change it in the planner'}</Text>
             </Pressable>
           </View>
         )}

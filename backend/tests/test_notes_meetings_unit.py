@@ -7,7 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from routes.notes_folder import planner_entries  # noqa: E402
 
 
-def test_morning_parts_make_one_meeting_and_leaders_its_own():
+def test_morning_parts_make_one_meeting_and_leaders_box_stays_a_note():
     days = {"2": {"morning_news": "Val hit 6", "morning_topic": "# Own the close\n> Close · 20 min\n## Opener · 5 min",
                   "morning_bells": "Office 42", "leaders_meeting": "# What is a leader?\n## Opener · 5 min",
                   "leaders_meeting_cod": "abc123"}}
@@ -16,6 +16,5 @@ def test_morning_parts_make_one_meeting_and_leaders_its_own():
     morning = next(e for e in out if e["head"] == "pitch:morning")
     assert morning["title"] == "Own the close" and morning["meeting"]
     assert morning["body"].startswith("News\nVal hit 6") and "Bells\nOffice 42" in morning["body"]
-    lead = next(e for e in out if e["head"] == "pitch:leaders")
-    assert lead["title"] == "What is a leader?" and lead["meeting"]
-    assert not any(e["head"] == "pitch:other" for e in out)
+    lead = next(e for e in out if e["source_label"] == "Leaders Meeting")
+    assert lead["head"] == "cod:abc123" and not lead.get("meeting")

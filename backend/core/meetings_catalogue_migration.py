@@ -5,7 +5,7 @@ import logging
 from bson import ObjectId
 
 logger = logging.getLogger(__name__)
-FLAG = "notes_meetings_catalogue_v1"
+FLAG = "notes_meetings_catalogue_v2"
 
 
 async def run_meetings_catalogue(db) -> None:

@@ -1,3 +1,4 @@
+import { useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Platform, ScrollView, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -47,7 +48,10 @@ export default function ScheduleScreen() {
   const roomy = width >= 700;      // one-row toolbar, week view by default
   const today = todayISO();
 
-  const [view, setView] = useState<View3>(roomy ? 'week' : 'day');
+  const viewParam = useLocalSearchParams<{ view?: string }>().view;
+  const [view, setView] = useState<View3>(viewParam === 'plan' ? 'plan' : roomy ? 'week' : 'day');
+  // Opened from Notes → Leaders meetings: go to the Weekly Plan.
+  useEffect(() => { if (viewParam === 'plan') setView('plan'); }, [viewParam]);
   const [anchor, setAnchor] = useState(today);
   const [zoom, setZoom] = useState(3);
   const [lanes, setLanes] = useState<'office' | 'mine'>(isAdmin ? 'office' : 'mine');
