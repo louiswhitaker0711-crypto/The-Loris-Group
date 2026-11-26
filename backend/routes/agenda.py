@@ -1532,3 +1532,109 @@ async def scan_agenda_image(request: Request, file: UploadFile = File(...), offi
 
     normalized = _normalize_scan_payload(parsed, allowed_labels, saved_map)
     return {"ok": True, **normalized}
+
+
+# ── Share a topic (the Owner, 26 Nov 2026) ───────────────────────────────
+# From the Weekly Plan, an Admin taps Share on a topic and picks people: the
+# topic's run-through lands in each person's own planner on that day, in the
+# matching box, where it opens with Run it like anywhere else. Re-sharing the
+# same topic replaces it rather than adding a second copy.
+
+# Plan row → the planner box it belongs in (by the box's standard key).
+ROW_TO_BOX = {
+    "morning meeting": "morning_topic",
+    "news & bells": "morning_bells",
+    "customer service": "morning_cs",
+    "sales impact": "sales_impact",
+    "product coaching": "product_coaching",
+    "primetime": "primetime",
+    "cod 3": "leaders_meeting",
+    "cod 1&2": "stage1",
+    "sector leaders": "sector",
+}
+
+
+def share_box_key(row_label: str, layout: list) -> str:
+    """The person's own box for a plan row. Someone may have renamed boxes
+    (e.g. "Leaders Meeting" on their Stage 2 box), so a box whose name matches
+    the standard name wins over the standard key."""
+    from routes.weekly_planners import DAY_FIELD_LABELS
+    key = ROW_TO_BOX.get(" ".join(str(row_label or "").lower().split()), "crew_plan")
+    want = DAY_FIELD_LABELS[key].lower()
+    for b in layout or []:
+        if (b.get("label") or "").strip().lower() == want and b.get("on_day", True):
+            return b["key"]
+    return key
+
+
+def merge_shared(old: str, text: str) -> str:
+    """Put a shared run-through in a box: an earlier share of the same topic
+    (same '# Title' line) is replaced, an empty box is filled, otherwise it
+    goes under what's already there."""
+    old, text = (old or "").strip(), (text or "").strip()
+    title = text.split("\n", 1)[0].strip()
+    if not old:
+        return text
+    lines = old.split("\n")
+    if title.startswith("# ") and title in (l.strip() for l in lines):
+        i = next(n for n, l in enumerate(lines) if l.strip() == title)
+        j = next((n for n in range(i + 1, len(lines)) if lines[n].startswith("# ")), len(lines))
+        return "\n".join(lines[:i] + text.split("\n") + lines[j:]).strip()
+    return f"{old}\n\n{text}"
+
+
+@router.post("/agenda/share")
+async def share_topic(request: Request):
+    """Body: {week_ending, row, day (0=Mon..5=Sat), user_ids: [...]}."""
+    admin = await require_admin(request)
+    body = await request.json()
+    week = str(body.get("week_ending") or "")
+    row_label = str(body.get("row") or "")
+    try:
+        day = int(body.get("day"))
+        assert 0 <= day <= 5
+        date.fromisoformat(week)
+    except Exception:
+        raise HTTPException(status_code=400, detail="week_ending and a day (Mon–Sat) are required")
+    ids = [str(i) for i in (body.get("user_ids") or []) if i][:50]
+    if not ids:
+        raise HTTPException(status_code=400, detail="Pick at least one person")
+    office_id = admin.get("office_id") or ""
+    doc = await db.weekly_agendas.find_one({"office_id": office_id, "week_ending": week}, {"_id": 0, "rows": 1})
+    row = next((r for r in (doc or {}).get("rows") or [] if (r.get("label") or "") == row_label), None)
+    cell = next((c for c in (row or {}).get("cells") or [] if int(c.get("day", -1)) == day), None)
+    run = ((cell or {}).get("run") or "").strip()
+    topic = ((cell or {}).get("topic") or "").strip()
+    if not run:
+        raise HTTPException(status_code=404, detail="That topic has no run-through to share")
+
+    from bson import ObjectId
+    from core.ai_actions import _my_planner
+    from routes.weekly_planners import normalize_sheet_layout
+    oids = [ObjectId(i) for i in ids if ObjectId.is_valid(i)]
+    people = [u async for u in db.users.find(
+        {"_id": {"$in": oids}, "office_id": office_id, "deleted": {"$ne": True}, "is_active": {"$ne": False}},
+        {"name": 1, "office_id": 1})]
+    if not people:
+        raise HTTPException(status_code=404, detail="Nobody to share with")
+    on = date.fromisoformat(week) - timedelta(days=6 - day)
+    now = datetime.now(timezone.utc).isoformat()
+    shared = []
+    for u in people:
+        uid = str(u["_id"])
+        lay = await db.planner_sheet_layouts.find_one({"user_id": uid}, {"_id": 0, "rows": 1})
+        key = share_box_key(row_label, normalize_sheet_layout((lay or {}).get("rows")))
+        p = await _my_planner({"id": uid, "office_id": u.get("office_id")}, on)
+        old = (((p or {}).get("days") or {}).get(str(day)) or {}).get(key) or ""
+        await db.weekly_planners.update_one({"_id": p["_id"]}, {"$set": {
+            f"days.{day}.{key}": merge_shared(old, run)[:4000], "updated_at": now}})
+        try:
+            from core.push import send_push_to_user
+            first = (admin.get("name") or "The Owner").split()[0]
+            await send_push_to_user(uid, f"{first} shared a plan with you",
+                                    f"{topic or row_label}, {on.strftime('%a %-d %b')}. It's in your planner: open it and tap Run it.",
+                                    {"type": "agenda_share", "date": on.isoformat()})
+        except Exception:
+            logger.warning("agenda share push failed", exc_info=True)
+        shared.append({"user_id": uid, "name": u.get("name") or "", "box": key})
+    return {"shared": shared, "date": on.isoformat()}
