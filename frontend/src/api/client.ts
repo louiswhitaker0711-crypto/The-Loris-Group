@@ -1166,7 +1166,12 @@ export const apiService = {
   getAreaDistrict: (name: string, days?: number) => api.get(`/areas/district/${encodeURIComponent(name)}`, { params: { days } }),
   lookupArea: (postcode: string) => api.get('/areas/lookup', { params: { postcode } }),
   getCoverage: (b: { south: number; west: number; north: number; east: number }) => api.get('/coverage', { params: b }),
-  saveCoverage: (body: { date: string; postcode?: string; lines: number[][][]; note?: string; leader_id?: string; kind?: 'plan' | 'done' | 'request'; colour?: string }) => api.post('/coverage', body),
+  saveCoverage: (body: { date: string; postcode?: string; lines: number[][][]; note?: string; leader_id?: string; kind?: 'plan' | 'done' | 'request' | 'route'; colour?: string; half?: boolean; side?: string; snapped?: boolean }) => api.post('/coverage', body),
+  // Street snapping and hop routes (the Owner, 26 Nov 2026).
+  snapLines: (lines: number[][][], tolerance_m: number) => api.post('/roads/snap', { lines, tolerance_m }),
+  warmRoads: (b: { s: number; w: number; n: number; e: number }) => api.post('/roads/warm', b),
+  setRouteFlag: (body: { date: string; colour: string; which: 'start' | 'finish'; at: number[] | null; leader_id?: string }) => api.put('/coverage/route-flag', body),
+  clearRoute: (date: string, colour: string, leaderId?: string) => api.delete('/coverage/route', { params: { date, colour, leader_id: leaderId } }),
   // The sector on screen (its leader's id), not always the caller's own.
   // Every Bells week as one Excel file (a tab per week). Admins only.
   exportBells: (office?: string) => api.get('/bells/export', { params: office ? { office } : {}, responseType: 'blob', timeout: 120000 }),

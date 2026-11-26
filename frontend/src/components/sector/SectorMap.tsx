@@ -13,6 +13,13 @@
 //   • Through the day each hop draws what they've DONE in their colour; the
 //     leader can draw, erase and add too. Confirm turns what's done solid
 //     black and puts it on the Owner's territory map.
+//   • Snap to streets (the Owner, 26 Nov 2026): every line drawn is moved
+//     onto the roads it went along (OpenStreetMap roads, not footpaths;
+//     POST /roads/snap). The switch turns it off to draw freehand.
+//   • Half street: a done line (or a route) on one side of the road only.
+//   • Draw route: optional, per bunny hop. The hop's route in its colour,
+//     arrows the way it was drawn, a start and a finish flag. Only that hop
+//     and the Coaches planning the areas see it (src/utils/mapDeco.ts).
 //
 // Web only (the app ships as an installed web app). Leaflet is served from
 // /vendor/leaflet; tiles are OpenStreetMap. (GET /sector/map)
@@ -26,10 +33,22 @@ import { showAlert } from '../../utils/showAlert';
 import { APP_LOCALE } from '../../utils/appTime';
 import { loadLeaflet, placePostcode, OSM_TILES, OSM_ATTRIBUTION, esc } from '../../utils/leaflet';
 import { HOP_COLOURS, hopHex, hopLabel } from '../../utils/hopColours';
+import { setDeco, decoFor, isDeco } from '../../utils/mapDeco';
 
 const FREE_MAP_TOOLS = 'https://www.freemaptools.com/uk-postcode-map.htm';
 const MAX_POINTS = 380;
-type Kind = 'plan' | 'done' | 'request' | 'move' | 'edit';
+type Kind = 'plan' | 'done' | 'request' | 'move' | 'edit' | 'route';
+type RouteTool = 'draw' | 'start' | 'finish';
+const SNAP_KEY = 'loris.map.snap';
+const readSnap = () => { try { return globalThis.localStorage?.getItem(SNAP_KEY) !== '0'; } catch { return true; } };
+// A light moving average: takes the wobble out of a freehand line.
+const smoothLine = (pts: number[][]) => {
+  let out = pts;
+  for (let k = 0; k < 2 && out.length > 2; k++) {
+    out = [out[0], ...out.slice(1, -1).map((p, i) => [(out[i][0] + 2 * p[0] + out[i + 2][0]) / 4, (out[i][1] + 2 * p[1] + out[i + 2][1]) / 4]), out[out.length - 1]];
+  }
+  return out;
+};
 // Line weights: planned areas a soft, fairly thin band; done lines thin.
 const PLAN_STYLE = { weight: 7, opacity: 0.45 };
 const DONE_WEIGHT = 3.5;
@@ -61,13 +80,18 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
   const [busy, setBusy] = useState<string | null>(null);
   const placed = useRef(false);
   const [undoStack, setUndoStack] = useState<string[]>([]);
+  const [snap, setSnapState] = useState<boolean>(readSnap);
+  const setSnap = (v: boolean) => { setSnapState(v); try { globalThis.localStorage?.setItem(SNAP_KEY, v ? '1' : '0'); } catch { /* fine */ } };
+  const [half, setHalf] = useState(false);
+  const [routeTool, setRouteTool] = useState<RouteTool>('draw');
+  const warmed = useRef('');
   // A request for more streets (a BA) or a sector leader's redraw of one is
   // drawn here first, then sent as one: nothing is saved line by line.
   const [pending, setPending] = useState<number[][][]>([]);
   const [editing, setEditing] = useState<any>(null);   // the request being redrawn
   // The pointer handlers read the latest state through refs.
-  const st = useRef({ kind, colour, data, date, leaderId, editColour: '' });
-  st.current = { kind, colour, data, date, leaderId, editColour: editing?.colour || '' };
+  const st = useRef({ kind, colour, data, date, leaderId, editColour: '', snap, half, routeTool });
+  st.current = { kind, colour, data, date, leaderId, editColour: editing?.colour || '', snap, half, routeTool };
 
   const load = useCallback(async () => {
     try {
@@ -87,6 +111,13 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
     // A BA draws in their hop's colour.
     // A Coach planning areas picks their own colour.
     if (!data.leads && !data.can_plan_areas && data.my_colour) setColour(data.my_colour);
+    // Fetch the sector's roads ahead of the first line, so snapping is quick.
+    const b = data.shape?.bbox;
+    const key = b ? `${b.s},${b.w},${b.n},${b.e}` : '';
+    if (key && warmed.current !== key) {
+      warmed.current = key;
+      apiService.warmRoads({ s: b.s - 0.003, w: b.w - 0.005, n: b.n + 0.003, e: b.e + 0.005 }).catch(() => { /* snapping fetches on demand */ });
+    }
     if (!chosen.current) { chosen.current = true; setKind('move'); }
     else if (!data.can_confirm && !data.can_plan_areas) setKind((k) => (k === 'plan' ? 'move' : k));
   }, [data]);
@@ -99,20 +130,44 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
   const drawing = !!data?.can_draw && kind !== 'move';
 
   const saveStroke = useCallback(async (latlngs: number[][]) => {
-    const { kind: k, colour: col, data: d, date: dt, leaderId: lid } = st.current;
+    const { kind: k, colour: col, data: d, date: dt, leaderId: lid, snap: snapOn, half: halfOn } = st.current;
     let pts = latlngs;
     if (pts.length > MAX_POINTS) {
       const step = Math.ceil(pts.length / MAX_POINTS);
       pts = pts.filter((_, i) => i % step === 0 || i === latlngs.length - 1);
     }
+    // Snap to the streets (or smooth a freehand line), and find the side
+    // of the road it was drawn on for Half street.
+    let side = 'left';
+    let snapped = false;
+    if (snapOn) {
+      try {
+        const z = map.current?.getZoom?.() ?? 17;
+        const lat = pts[0][0];
+        const mpp = (40075016.686 * Math.cos((lat * Math.PI) / 180)) / Math.pow(2, z + 8);
+        // Never keep someone waiting: after 8 seconds the line goes in freehand.
+        const r: any = await Promise.race([
+          apiService.snapLines([pts], Math.max(8, Math.min(45, mpp * 22))),
+          new Promise((_, no) => setTimeout(() => no(new Error('slow')), 8000)),
+        ]);
+        const o = r.data?.lines?.[0];
+        if (o?.line?.length >= 2) { pts = o.line; side = o.side || 'left'; snapped = !!o.snapped; }
+      } catch { pts = smoothLine(pts); }
+    } else {
+      pts = smoothLine(pts);
+    }
     if (k === 'edit' || (!d?.can_confirm && k === 'request')) {
       setPending((p) => [...p, pts]);
       return;
     }
+    const routing = k === 'route';
+    const halfLine = halfOn && (routing || k === 'done');
     try {
       const r = await apiService.saveCoverage({ date: dt, lines: [pts], leader_id: lid,
-        kind: k === 'plan' && (d?.can_confirm || d?.can_plan_areas) ? 'plan'
-          : d?.can_confirm ? 'done' : (k === 'request' ? 'request' : 'done'), colour: col });
+        kind: routing ? 'route' : k === 'plan' && (d?.can_confirm || d?.can_plan_areas) ? 'plan'
+          : d?.can_confirm ? 'done' : (k === 'request' ? 'request' : 'done'),
+        colour: routing && !d?.can_plan_areas && d?.my_colour ? d.my_colour : col,
+        half: halfLine || undefined, side: halfLine ? side : undefined, snapped });
       if (r.data?.id) setUndoStack((u) => [...u, r.data.id]);
       load();
     } catch (e: any) {
@@ -120,6 +175,19 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
       load();
     }
   }, [load]);
+
+  const flagRef = useRef<(w: 'start' | 'finish', at: number[]) => void>(() => {});
+  const placeFlag = (w: 'start' | 'finish', at: number[]) => flagRef.current(w, at);
+  flagRef.current = async (w, at) => {
+    const d = st.current.data;
+    const col = d?.can_plan_areas ? st.current.colour : (d?.my_colour || st.current.colour);
+    try {
+      await apiService.setRouteFlag({ date: st.current.date, colour: col, which: w, at, leader_id: st.current.leaderId });
+      toast.success(w === 'start' ? 'Start flag placed' : 'Finish flag placed');
+      setRouteTool('draw');
+      load();
+    } catch (e: any) { showAlert('Could not place the flag', e?.response?.data?.detail || 'Try again.'); }
+  };
 
   // Build the map once, with freehand drawing on top of it.
   useEffect(() => {
@@ -157,6 +225,12 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
         }
         if (fingers.size > 1) { cancelStroke(); return; }
         if (e.pointerType === 'mouse' && e.button !== 0) return;
+        if (st.current.kind === 'route' && st.current.routeTool !== 'draw') {
+          // Tap the map to put the start or finish flag there.
+          const ll = m.containerPointToLatLng(m.mouseEventToContainerPoint(e));
+          placeFlag(st.current.routeTool as 'start' | 'finish', [ll.lat, ll.lng]);
+          return;
+        }
         drawingNow = true;
         const p = m.mouseEventToContainerPoint(e);
         lastPx = p;
@@ -165,7 +239,9 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
         const { kind: k, colour: col, data: d } = st.current;
         const planning = (d?.can_confirm || d?.can_plan_areas) && k === 'plan';
         const asking = !d?.can_confirm && k === 'request';
-        live = L.polyline(pts, k === 'edit'
+        live = L.polyline(pts, k === 'route'
+          ? { color: hopHex(d?.can_plan_areas ? col : (d?.my_colour || col)), weight: 4, opacity: 0.9, lineCap: 'round', lineJoin: 'round', interactive: false }
+          : k === 'edit'
           ? { color: hopHex(st.current.editColour, c.primary), ...PLAN_STYLE, opacity: 0.8, lineCap: 'round', lineJoin: 'round', interactive: false }
           : planning
           ? { color: hopHex(col), ...PLAN_STYLE, lineCap: 'round', lineJoin: 'round', interactive: false }
@@ -192,9 +268,10 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
         if (panFrom) { panFrom = null; return; }
         if (!drawingNow) return;
         drawingNow = false;
-        if (pts.length >= 2) saveStroke(pts.map((q) => [q[0], q[1]]));
+        // The line stays on screen until it's snapped and saved.
+        if (pts.length >= 2) saveStroke(pts.map((q) => [q[0], q[1]])).finally(() => setTimeout(() => liveLayer.current?.clearLayers(), 150));
+        else setTimeout(() => liveLayer.current?.clearLayers(), 600);
         pts = [];
-        setTimeout(() => liveLayer.current?.clearLayers(), 600);
       };
       const noMenu = (e: Event) => { if (st.current.data?.can_draw && st.current.kind !== 'move') e.preventDefault(); };
       el.addEventListener('contextmenu', noMenu);
@@ -257,6 +334,7 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
     // Another sector's plan and today's lines lie faint underneath everything.
     const order = (mk: any) => (mk.other ? -1 : mk.status === 'plan' ? 0 : mk.status === 'requested' ? 1 : mk.status === 'draft' ? 2 : 3);
     const marks = (data.marks || []).slice().sort((a: any, b: any) => order(a) - order(b));
+    const styleOf: Record<string, any> = {};
     for (const mk of marks) {
       const when = new Date(mk.date + 'T12:00:00').toLocaleDateString(APP_LOCALE, { weekday: 'short', day: 'numeric', month: 'short' });
       const who = esc(mk.author_name || mk.leader_name || 'Someone');
@@ -275,6 +353,9 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
       } else if (mk.status === 'plan') {
         style = { color: hopHex(mk.colour), ...PLAN_STYLE, lineCap: 'round', lineJoin: 'round' };
         title = `${esc(hopLabel(mk.colour) || 'Planned')} area`;
+      } else if (mk.status === 'route') {
+        style = { color: hopHex(mk.colour), weight: 4, opacity: 0.9, lineCap: 'round', lineJoin: 'round' };
+        title = `${esc(hopLabel(mk.colour) || 'Bunny hop')} hop's route${mk.half ? ' · half street' : ''}`;
       } else if (mk.status === 'draft') {
         // Marked done: black, over the top of the coloured plan.
         style = { color: '#000', weight: DONE_WEIGHT, opacity: 0.95, lineCap: 'round', lineJoin: 'round' };
@@ -283,11 +364,13 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
         style = { color: '#000', weight: WORKED_WEIGHT, opacity: mk.days_ago > 28 ? 0.35 : 0.85, lineCap: 'round', lineJoin: 'round' };
         title = `Worked ${esc(when)}`;
       }
+      if (mk.half && mk.status !== 'route') title += ' · half street';
+      styleOf[mk.id] = style;
       for (const line of mk.lines || []) {
         // A wider invisible line underneath makes thin lines easy to tap.
         const hit = L.polyline(line, { weight: 18, opacity: 0, interactive: true }).addTo(marksLayer.current);
-        const pl = L.polyline(line, { ...style, interactive: false }).addTo(marksLayer.current);
-        void pl;
+        // Half street lines and routes are drawn on the decoration layer.
+        if (!isDeco(mk)) L.polyline(line, { ...style, interactive: false }).addTo(marksLayer.current);
         const del = mk.can_delete ? `<br/><a href="#" data-del="${esc(mk.id)}">Remove</a>` : '';
         hit.bindPopup(`<b>${title}</b><br/>By ${who}${del}`);
         hit.on('popupopen', (ev: any) => {
@@ -300,6 +383,7 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
         });
       }
     }
+    setDeco(L, map.current, decoFor(marks, data.routes || [], (mk) => styleOf[mk.id] || { color: '#000', weight: DONE_WEIGHT, opacity: 0.95 }, (k) => hopHex(k)));
   }, [data, ready, c.primary, c.red, load, editing]);
 
   // What's drawn but not sent yet.
@@ -340,6 +424,19 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
       stopEdit(); load();
     } catch (e: any) { showAlert('Could not send', e?.response?.data?.detail || 'Try again.'); }
     finally { setBusy(null); }
+  };
+
+  const clearRoute = () => {
+    const col = data?.can_confirm || data?.can_plan_areas ? colour : (data?.my_colour || colour);
+    const go = async () => {
+      setBusy('route');
+      try { await apiService.clearRoute(date, col, leaderId); toast.success('Route cleared'); load(); }
+      catch (e: any) { showAlert('Could not clear', e?.response?.data?.detail || 'Try again.'); }
+      finally { setBusy(null); }
+    };
+    showAlert('Clear the route?', `The ${hopLabel(col).toLowerCase()} hop's route and its flags come off the map.`, [
+      { text: 'Cancel', style: 'cancel' }, { text: 'Clear', style: 'destructive', onPress: go },
+    ]);
   };
 
   const locate = () => {
@@ -444,13 +541,14 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
       {!!data?.can_draw && leads && (
         <View style={s.tools}>
           <View style={s.seg}>
-            {([['move', 'Move map'], ['plan', 'Plan areas'], ['done', 'Mark done']] as const).map(([k, label]) => (
+            {(([['move', 'Move map'], ['plan', 'Plan areas'], ['done', 'Mark done']] as [Kind, string][])
+              .concat(data?.can_route ? [['route', 'Draw route']] : [])).map(([k, label]) => (
               <Pressable key={k} onPress={() => pick(k)} style={[s.segBtn, kind === k && s.segOn]} accessibilityRole="button" accessibilityState={{ selected: kind === k }}>
                 <Text style={[s.segText, kind === k && { color: c.onPrimary }]}>{label}</Text>
               </Pressable>
             ))}
           </View>
-          {kind === 'plan' && swatches}
+          {(kind === 'plan' || kind === 'route') && swatches}
         </View>
       )}
       {!!data?.can_draw && !leads && (
@@ -458,13 +556,44 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
           <View style={s.seg}>
             {((plans
               ? [['move', 'Move map'], ['plan', 'Plan areas'], ['done', 'Mark done'], ['request', 'Request more streets']]
-              : [['move', 'Move map'], ['done', 'Mark done'], ['request', 'Request more streets']]) as [Kind, string][]).map(([k, label]) => (
+              : [['move', 'Move map'], ['done', 'Mark done'], ['request', 'Request more streets']]) as [Kind, string][])
+              .concat(data?.can_route ? [['route', 'Draw route']] : []).map(([k, label]) => (
               <Pressable key={k} onPress={() => pick(k)} style={[s.segBtn, kind === k && s.segOn]} accessibilityRole="button" accessibilityState={{ selected: kind === k }} testID={`map-kind-${k}`}>
                 <Text style={[s.segText, kind === k && { color: c.onPrimary }]}>{label}</Text>
               </Pressable>
             ))}
           </View>
-          {kind === 'plan' && swatches}
+          {(kind === 'plan' || (kind === 'route' && plans)) && swatches}
+        </View>
+      )}
+      {drawing && kind === 'route' && (
+        <View style={s.tools}>
+          <View style={s.seg}>
+            {([['draw', 'Draw'], ['start', 'Start flag'], ['finish', 'Finish flag']] as [RouteTool, string][]).map(([k, label]) => (
+              <Pressable key={k} onPress={() => setRouteTool(k)} style={[s.segBtn, routeTool === k && s.segOn]} accessibilityRole="button"
+                accessibilityState={{ selected: routeTool === k }} testID={`route-tool-${k}`}>
+                <Text style={[s.segText, routeTool === k && { color: c.onPrimary }]}>{label}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <Pressable onPress={clearRoute} disabled={!!busy} style={s.ghost} accessibilityRole="button" testID="route-clear">
+            <Ionicons name="trash-outline" size={15} color={c.primary} />
+            <Text style={s.ghostText}>Clear route</Text>
+          </Pressable>
+        </View>
+      )}
+      {drawing && (
+        <View style={s.switches}>
+          <Pressable onPress={() => setSnap(!snap)} style={s.switchRow} accessibilityRole="switch" accessibilityState={{ checked: snap }} testID="map-snap">
+            <View style={[s.switch, snap && s.switchOn]}><View style={[s.knob, snap && s.knobOn]} /></View>
+            <Text style={s.line}>Snap to streets</Text>
+          </Pressable>
+          {(kind === 'done' || kind === 'route') && (
+            <Pressable onPress={() => setHalf(!half)} style={s.switchRow} accessibilityRole="switch" accessibilityState={{ checked: half }} testID="map-half">
+              <View style={[s.switch, half && s.switchOn]}><View style={[s.knob, half && s.knobOn]} /></View>
+              <Text style={s.line}>Half street</Text>
+            </Pressable>
+          )}
         </View>
       )}
       {!!data?.late && !!data?.can_draw && (
@@ -477,10 +606,15 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
       )}
       {drawing && (
         <Text style={s.small}>
-          {plans && kind === 'plan' ? `Draw the ${hopLabel(colour).toLowerCase()} area with one finger. `
+          {kind === 'route' ? (routeTool === 'draw'
+              ? `Draw the ${hopLabel(plans ? colour : (myColour || colour)).toLowerCase()} hop's route with one finger, the way they'll walk it: arrows show the way it's drawn. ${half ? 'Half street is on: draw on the side of the road they’ll work. ' : ''}`
+              : `Tap the map where the ${routeTool === 'start' ? 'start' : 'finish'} flag goes. `)
+            : plans && kind === 'plan' ? `Draw the ${hopLabel(colour).toLowerCase()} area with one finger. `
             : !leads && kind === 'request' ? 'Draw the extra streets you’d like with one finger, then press Send request: it goes to your sector leader as one request. '
             : kind === 'edit' ? `Draw the streets you want them to have, in their colour. What they asked for shows in grey. Then press Send updated map. `
+            : half ? 'Half street is on: draw along the side of the road you’ve done. '
             : 'Draw over the streets you’ve done in black with one finger, on top of the coloured area. '}
+          {snap ? 'Lines snap to the streets. ' : 'Freehand: lines stay where you draw them. '}
           Two fingers move and zoom. Tap a line to remove it.
         </Text>
       )}
@@ -647,6 +781,12 @@ const styles = (c: any) => StyleSheet.create({
   segOn: { backgroundColor: c.primary },
   segText: { fontFamily: fonts.bodySemibold, fontSize: 13, color: c.text },
   undo: { position: 'absolute', left: 10, bottom: 24, zIndex: 1000, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, height: 38, borderRadius: 19, backgroundColor: c.background, borderWidth: 1, borderColor: c.border },
+  switches: { flexDirection: 'row', alignItems: 'center', gap: 16, flexWrap: 'wrap' },
+  switchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
+  switch: { width: 38, height: 22, borderRadius: 11, backgroundColor: c.border, padding: 2, justifyContent: 'center' },
+  switchOn: { backgroundColor: c.primary },
+  knob: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#fff' },
+  knobOn: { alignSelf: 'flex-end' },
   undoText: { fontFamily: fonts.bodySemibold, fontSize: 13.5, color: c.text },
   colours: { flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
   swatchBtn: { width: 28, height: 28, borderRadius: 14, borderWidth: 3, borderColor: 'transparent' },

@@ -1468,11 +1468,11 @@ async def sector_map(request: Request, date: Optional[str] = None, leader: Optio
     if box:
         # Confirmed streets anywhere in (or crossing) the sector's box.
         pad = 0.002
-        ors.append({"date": {"$gte": since}, "status": {"$nin": ["draft", "plan", "requested"]},
+        ors.append({"date": {"$gte": since}, "status": {"$nin": ["draft", "plan", "requested", "route"]},
                     "bbox.s": {"$lte": box["n"] + pad}, "bbox.n": {"$gte": box["s"] - pad},
                     "bbox.w": {"$lte": box["e"] + pad}, "bbox.e": {"$gte": box["w"] - pad}})
     elif sec.get("postcode"):
-        ors.append({"date": {"$gte": since}, "status": {"$nin": ["draft", "plan", "requested"]},
+        ors.append({"date": {"$gte": since}, "status": {"$nin": ["draft", "plan", "requested", "route"]},
                     "district": {"$in": [district_of(p) for p in postcode_parts(sec["postcode"])]}})
     # Other sectors working the same area that day: their plan and what
     # they've marked done so far, shown faintly and view-only.
@@ -1500,6 +1500,13 @@ async def sector_map(request: Request, date: Optional[str] = None, leader: Optio
         m["can_delete"] = not other and (is_admin or author == me or (m.get("sector_leader_id") == me))
         for k in ("bbox", "author_id", "leader_id", "sector_leader_id"):
             m.pop(k, None)
+    # A hop's route is for that hop (and whoever plans the areas) only.
+    from routes.coverage import can_plan_areas as _plans, my_hop_colour as _my_colour
+    planner = _plans(user, sec)
+    my_col = _my_colour(sec, me)
+    marks = [m for m in marks if m["status"] != "route" or (not m.get("other") and (planner or m.get("colour") == my_col))]
+    route_flags = [{"colour": r.get("colour"), "start": r.get("start"), "finish": r.get("finish")}
+                   for r in sec.get("routes") or [] if planner or r.get("colour") == my_col]
     members = await _users_by_ids(sec.get("member_ids") or [])
     names = {p["user_id"]: p["user_name"] for p in members}
     leads = sec["leader_id"] == me
@@ -1534,6 +1541,9 @@ async def sector_map(request: Request, date: Optional[str] = None, leader: Optio
         "shared": bool(sec.get("map_shared_at")),
         "drafts": sum(1 for m in marks if m["status"] == "draft" and not m.get("other")),
         "requests": sum(1 for m in marks if m["status"] == "requested"),
+        "routes": route_flags,
+        # Anyone in a hop draws their own hop's route; Coaches any hop's.
+        "can_route": (planner or bool(my_col)) and iso == today_iso(),
         "others": sorted({m["other_leader"] for m in marks if m.get("other") and m.get("other_leader")}),
         "me": me,
     }

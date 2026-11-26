@@ -84,6 +84,7 @@ from routes.people import router as people_router
 from routes.insights import router as insights_router
 from routes.areas import router as areas_router
 from routes.coverage import router as coverage_router
+from routes.roads import router as roads_router
 from routes.territory import router as territory_router
 from routes.cod_tests import router as cod_tests_router
 from routes.coach_suggestions import router as coach_suggestions_router
@@ -202,6 +203,7 @@ api_router.include_router(people_router)
 api_router.include_router(insights_router)
 api_router.include_router(areas_router)
 api_router.include_router(coverage_router)
+api_router.include_router(roads_router)
 api_router.include_router(territory_router)
 api_router.include_router(cod_tests_router)
 api_router.include_router(coach_suggestions_router)
@@ -502,6 +504,10 @@ async def _startup_work():
         logger.exception("Meetings catalogue re-file failed (continuing)")
 
     await db.users.create_index("email", unique=True)
+    try:
+        await db.road_tiles.create_index("key", unique=True)   # street snapping cache
+    except Exception:
+        logger.exception("road_tiles index failed (continuing)")
     # Primetime reads the whole office's week on every Home render, and writes
     # upsert by (office, week, day, person). One compound index serves both.
     # UNIQUE since 2026-08-14: the old check-then-insert in _write_row could

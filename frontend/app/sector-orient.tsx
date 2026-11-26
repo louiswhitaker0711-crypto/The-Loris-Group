@@ -13,6 +13,7 @@ import { apiService } from '../src/api/client';
 import { todayISO } from '../src/utils/calendarDates';
 import { loadLeaflet, OSM_TILES, OSM_ATTRIBUTION } from '../src/utils/leaflet';
 import { hopHex, hopLabel } from '../src/utils/hopColours';
+import { setDeco, decoFor, isDeco } from '../src/utils/mapDeco';
 
 const norm = (deg: number) => ((deg % 360) + 360) % 360;
 
@@ -77,6 +78,7 @@ export default function SectorOrientScreen() {
         L.geoJSON(d.shape.geometry, { interactive: false, style: { color: c.primary, weight: 1.5, fillOpacity: 0.04 } }).addTo(m);
       }
       const order = (mk: any) => (mk.other ? -1 : mk.status === 'plan' ? 0 : mk.status === 'requested' ? 1 : mk.status === 'draft' ? 2 : 3);
+      const styleOf: Record<string, any> = {};
       for (const mk of marks.slice().sort((a, b) => order(a) - order(b))) {
         const style = mk.other
           ? { color: '#6b7280', weight: mk.status === 'plan' ? 7 : 3.5, opacity: mk.status === 'plan' ? 0.2 : 0.55 }
@@ -87,8 +89,12 @@ export default function SectorOrientScreen() {
           : mk.status === 'draft'
             ? { color: '#000', weight: 3.5, opacity: 0.95 }
             : { color: '#000', weight: 4, opacity: mk.days_ago > 28 ? 0.35 : 0.85 };
+        styleOf[mk.id] = style;
+        // Half street lines and the hop's route go on the decoration layer.
+        if (isDeco(mk)) continue;
         for (const line of mk.lines || []) L.polyline(line, { ...style, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(m);
       }
+      setDeco(L, m, decoFor(marks, d?.routes || [], (mk) => styleOf[mk.id] || { color: '#000', weight: 3.5, opacity: 0.95 }, (k) => hopHex(k)));
       map.current = m;
       const refit = () => {
         if (map.current !== m) return;
