@@ -395,15 +395,17 @@ async def _fetch(s, w, n, e) -> dict:
                     raise RuntimeError(f"{url} answered {r.status_code}: {r.text[:120]}")
                 return parse_overpass(r.json())
             except Exception as ex:   # try the next server
-                last = ex
+                last = RuntimeError(f"{url}: {type(ex).__name__} {ex}")
     raise RuntimeError(f"Overpass unavailable: {last}")
 
 
-async def _tile(db, key: str, fetch=None) -> Optional[dict]:
+async def _tile(db, key: str, fetch=None, cached_only: bool = False) -> Optional[dict]:
     fresh = (datetime.now(timezone.utc) - timedelta(days=ROAD_DAYS)).isoformat()
     doc = await db.road_tiles.find_one({"key": key}, {"_id": 0})
-    if doc and doc.get("fetched_at", "") >= fresh:
+    if doc and (doc.get("fetched_at", "") >= fresh or cached_only):
         return doc
+    if cached_only:
+        return None
     lock = _locks.setdefault(key, asyncio.Lock())
     async with lock:
         doc2 = await db.road_tiles.find_one({"key": key}, {"_id": 0})
@@ -419,7 +421,7 @@ async def _tile(db, key: str, fetch=None) -> Optional[dict]:
         except Exception as ex:
             logger.warning("road tile %s fetch failed: %s", key, ex)
             _failed[key] = time.monotonic()
-            last_error[key] = f"{type(ex).__name__}: {ex}"[:300]
+            last_error[key] = f"{type(ex).__name__}: {ex!r}"[:300]
             return doc   # an old copy beats nothing
         new = {"key": key, "nodes": got["nodes"], "ways": got["ways"],
                "fetched_at": datetime.now(timezone.utc).isoformat()}
@@ -428,13 +430,13 @@ async def _tile(db, key: str, fetch=None) -> Optional[dict]:
 
 
 async def roads_in(db, s: float, w: float, n: float, e: float, fetch=None,
-                   missing: Optional[list] = None) -> tuple[dict, list]:
+                   missing: Optional[list] = None, cached_only: bool = False) -> tuple[dict, list]:
     """Every road in the box: ({node id: (lat, lng)}, [[node ids], …]).
     Tiles that couldn't be fetched are added to `missing`."""
     nodes: dict = {}
     ways: list = []
     for key in tile_keys(s, w, n, e)[:12]:
-        t = await _tile(db, key, fetch)
+        t = await _tile(db, key, fetch, cached_only)
         if not t:
             if missing is not None:
                 missing.append(key)
@@ -459,7 +461,8 @@ def tile_from_upload(key: str, data: dict) -> dict:
     return {"key": key, "nodes": nodes, "ways": ways, "fetched_at": datetime.now(timezone.utc).isoformat(), "from": "phone"}
 
 
-async def snap_lines(db, lines: list, tol_m: float = 25.0, fetch=None, missing: Optional[list] = None) -> list[dict]:
+async def snap_lines(db, lines: list, tol_m: float = 25.0, fetch=None, missing: Optional[list] = None,
+                     cached_only: bool = False) -> list[dict]:
     """Each drawn stroke snapped to the streets (see `match_line`)."""
     pts = [p for line in lines for p in line]
     if not pts:
@@ -470,7 +473,7 @@ async def snap_lines(db, lines: list, tol_m: float = 25.0, fetch=None, missing: 
     w = min(p[1] for p in pts) - pad * 1.7
     e = max(p[1] for p in pts) + pad * 1.7
     try:
-        nodes, ways = await roads_in(db, s, w, n, e, fetch, missing)
+        nodes, ways = await roads_in(db, s, w, n, e, fetch, missing, cached_only)
     except Exception as ex:
         logger.warning("road lookup failed: %s", ex)
         nodes, ways = {}, []

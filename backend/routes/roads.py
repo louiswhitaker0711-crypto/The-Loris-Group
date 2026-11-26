@@ -54,18 +54,25 @@ async def snap(request: Request):
     except (TypeError, ValueError):
         tol = 25.0
     missing: list = []
-    out = await roads.snap_lines(db, lines, tol, missing=missing)
+    # Never wait on OpenStreetMap here (the server's own fetches time out):
+    # only roads already saved; the phone fetches any that are missing.
+    out = await roads.snap_lines(db, lines, tol, missing=missing, cached_only=True)
     if missing:
         # The server couldn't get these roads: the phone can fetch them from
         # OpenStreetMap itself and send them (POST /roads/tile), then retry.
-        errs = sorted({roads.last_error.get(k, "") for k in missing} - {""})
-        try:
-            await db.road_fetch_log.insert_one({"office_id": user.get("office_id"), "at": datetime.now(timezone.utc).isoformat(),
-                                                "tiles": missing[:12], "error": "; ".join(errs)[:500]})
-        except Exception:
-            pass
         return {"lines": out, "missing": [{"key": k, "query": roads.overpass_query(*_padded(k))} for k in missing[:6]]}
     return {"lines": out}
+
+
+async def _background(keys: list, office_id) -> None:
+    for k in keys[:12]:
+        try:
+            t = await roads._tile(db, k)
+            if not t:
+                await db.road_fetch_log.insert_one({"office_id": office_id, "at": datetime.now(timezone.utc).isoformat(),
+                                                    "tiles": [k], "error": roads.last_error.get(k, "")[:300] or "no roads"})
+        except Exception:
+            pass
 
 
 def _padded(key: str):
@@ -93,7 +100,7 @@ async def upload_tile(request: Request):
 
 @router.post("/roads/warm")
 async def warm(request: Request):
-    await get_current_user(request)
+    user = await get_current_user(request)
     b = await request.json()
     try:
         s, w, n, e = float(b["s"]), float(b["w"]), float(b["n"]), float(b["e"])
@@ -102,6 +109,10 @@ async def warm(request: Request):
     if not (UK_BOX[0] <= s <= n <= UK_BOX[2] and UK_BOX[1] <= w <= e <= UK_BOX[3]) or n - s > 0.08 or e - w > 0.12:
         return {"tiles": 0}
     missing: list = []
-    nodes, _ways = await roads.roads_in(db, s, w, n, e, missing=missing)
+    nodes, _ways = await roads.roads_in(db, s, w, n, e, missing=missing, cached_only=True)
+    if missing:
+        # Try from the server too, in the background (the phone is fetching them as well).
+        import asyncio
+        asyncio.create_task(_background(list(missing), user.get("office_id")))
     return {"tiles": len(roads.tile_keys(s, w, n, e)), "nodes": len(nodes),
             "missing": [{"key": k, "query": roads.overpass_query(*_padded(k))} for k in missing[:6]]}
