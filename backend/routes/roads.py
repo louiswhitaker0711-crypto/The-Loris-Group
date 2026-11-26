@@ -2,10 +2,15 @@
 
   POST /api/roads/snap {lines, tolerance_m}  each drawn stroke snapped to the roads
   POST /api/roads/warm {s, w, n, e}          fetch a sector's roads ahead of drawing
+  POST /api/roads/tile {key, data}           a tile the phone fetched itself, when the
+                                             server couldn't reach OpenStreetMap
 
 Roads come from OpenStreetMap (core/roads.py), cached in `road_tiles`.
 """
 from __future__ import annotations
+
+import re
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Request
 
@@ -35,7 +40,7 @@ def _lines(raw) -> list:
 
 @router.post("/roads/snap")
 async def snap(request: Request):
-    await get_current_user(request)
+    user = await get_current_user(request)
     body = await request.json()
     lines = _lines(body.get("lines"))
     if not lines:
@@ -48,7 +53,42 @@ async def snap(request: Request):
         tol = float(body.get("tolerance_m") or 25)
     except (TypeError, ValueError):
         tol = 25.0
-    return {"lines": await roads.snap_lines(db, lines, tol)}
+    missing: list = []
+    out = await roads.snap_lines(db, lines, tol, missing=missing)
+    if missing:
+        # The server couldn't get these roads: the phone can fetch them from
+        # OpenStreetMap itself and send them (POST /roads/tile), then retry.
+        errs = sorted({roads.last_error.get(k, "") for k in missing} - {""})
+        try:
+            await db.road_fetch_log.insert_one({"office_id": user.get("office_id"), "at": datetime.now(timezone.utc).isoformat(),
+                                                "tiles": missing[:12], "error": "; ".join(errs)[:500]})
+        except Exception:
+            pass
+        return {"lines": out, "missing": [{"key": k, "query": roads.overpass_query(*_padded(k))} for k in missing[:6]]}
+    return {"lines": out}
+
+
+def _padded(key: str):
+    s, w, n, e = roads.tile_box(key)
+    return (s - 0.001, w - 0.001, n + 0.001, e + 0.001)
+
+
+@router.post("/roads/tile")
+async def upload_tile(request: Request):
+    await get_current_user(request)
+    body = await request.json()
+    key = str(body.get("key") or "")
+    if not re.fullmatch(r"-?\d{1,5}:-?\d{1,5}", key):
+        raise HTTPException(status_code=400, detail="Which tile?")
+    try:
+        doc = roads.tile_from_upload(key, body.get("data") or {})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Those roads couldn't be read")
+    if not doc["nodes"]:
+        raise HTTPException(status_code=400, detail="No roads in that tile")
+    await db.road_tiles.update_one({"key": key}, {"$set": doc}, upsert=True)
+    roads._failed.pop(key, None)
+    return {"ok": True, "nodes": len(doc["nodes"])}
 
 
 @router.post("/roads/warm")
@@ -61,5 +101,7 @@ async def warm(request: Request):
         raise HTTPException(status_code=400, detail="Which area?")
     if not (UK_BOX[0] <= s <= n <= UK_BOX[2] and UK_BOX[1] <= w <= e <= UK_BOX[3]) or n - s > 0.08 or e - w > 0.12:
         return {"tiles": 0}
-    nodes, _ways = await roads.roads_in(db, s, w, n, e)
-    return {"tiles": len(roads.tile_keys(s, w, n, e)), "nodes": len(nodes)}
+    missing: list = []
+    nodes, _ways = await roads.roads_in(db, s, w, n, e, missing=missing)
+    return {"tiles": len(roads.tile_keys(s, w, n, e)), "nodes": len(nodes),
+            "missing": [{"key": k, "query": roads.overpass_query(*_padded(k))} for k in missing[:6]]}
