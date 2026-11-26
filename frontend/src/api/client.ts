@@ -1119,6 +1119,9 @@ export const apiService = {
   getMyFieldReset: () => api.get('/field-reset/today'),
   saveMyFieldReset: (body: { more_signups: number; kpi: string; focus: string }) => api.put('/field-reset/today', body),
   listPeople: () => api.get('/people'),
+  /** Share a Weekly Plan topic's run-through into people's planners (the Owner, 26 Nov 2026). */
+  shareAgendaTopic: (week_ending: string, row: string, day: number, user_ids: string[]) =>
+    api.post<{ shared: Array<{ user_id: string; name: string; box: string }>; date: string }>('/agenda/share', { week_ending, row, day, user_ids }),
   getResetBoard: () => api.get('/field-reset/board'),
   getTeamFieldResets: (date?: string) => api.get('/field-reset/team', { params: date ? { date } : {} }),
   // Sector set-up and breakdown

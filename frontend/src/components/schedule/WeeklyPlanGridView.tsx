@@ -130,6 +130,7 @@ export default function WeeklyPlanGridView({
   const isDark = effective === 'dark';
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
   const [runCell, setRunCell] = useState<null | { text: string; title: string }>(null);
+  const [shareCell, setShareCell] = useState<null | { row: string; day: number; title: string }>(null);
   const dayTints = isDark ? DAY_TINTS_DARK : DAY_TINTS;
   const todayCol = todayColumn(weekEnding);
   const queryClient = useQueryClient();
@@ -400,6 +401,9 @@ export default function WeeklyPlanGridView({
   return (
     <View>
       <RunSheet visible={!!runCell} text={runCell?.text || ''} title={runCell?.title} onClose={() => setRunCell(null)} />
+      {shareCell && weekEnding && (
+        <ShareTopicSheet week={weekEnding} row={shareCell.row} day={shareCell.day} title={shareCell.title} onClose={() => setShareCell(null)} />
+      )}
       {/* ── Stats strip ─ ── ── */}
       {filledStats.length > 0 && (
         <View style={styles.statsStrip}>
@@ -712,6 +716,14 @@ export default function WeeklyPlanGridView({
                                   style={styles.runChip} accessibilityRole="button" accessibilityLabel={`Run ${cell.topic || row.label}`}>
                                   <Ionicons name="play" size={10} color={colors.onPrimary} />
                                   <Text style={styles.runChipText}>Run it</Text>
+                                </TouchableOpacity>
+                              )}
+                              {/* Share it into someone's planner (the Owner, 26 Nov 2026). */}
+                              {isAdmin && !!weekEnding && !!cell?.run?.trim() && (
+                                <TouchableOpacity onPress={() => setShareCell({ row: row.label, day: di, title: cell?.topic || row.label })}
+                                  style={[styles.runChip, styles.shareChip]} accessibilityRole="button" accessibilityLabel={`Share ${cell.topic || row.label}`}>
+                                  <Ionicons name="share-outline" size={10} color={colors.primary} />
+                                  <Text style={[styles.runChipText, { color: colors.primary }]}>Share</Text>
                                 </TouchableOpacity>
                               )}
                             </>
@@ -1080,6 +1092,7 @@ const createStyles = (colors: any, isDark = false) => {
   mergeOptText: { fontSize: 14, fontWeight: '700', color: colors.text },
   runChip: { flexDirection: 'row', alignItems: 'center', gap: 3, alignSelf: 'flex-start', marginTop: 4, borderRadius: 999, paddingHorizontal: 7, paddingVertical: 2, backgroundColor: colors.primary },
   runChipText: { fontSize: 10, fontWeight: '800', color: colors.onPrimary },
+  shareChip: { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.primary },
   cellTopic: { fontSize: 10, fontWeight: '500', fontStyle: 'italic', color: colors.textMuted, lineHeight: 13, marginTop: 2 },
   presenterRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 4 },
   cellPresenter: { fontSize: 12, fontWeight: '800', color: colors.text, lineHeight: 15 },
@@ -1115,3 +1128,60 @@ const createStyles = (colors: any, isDark = false) => {
 // Fallback static styles (used if a sub-component didn't pick up the
 // useColors hook). Always light-mode — won't react to theme changes.
 const styles = createStyles(lightColors, false);
+
+
+/** Pick people to share a topic's run-through with: it lands in their own
+ * planner on that day, ready to Run it (the Owner, 26 Nov 2026). */
+function ShareTopicSheet({ week, row, day, title, onClose }: { week: string; row: string; day: number; title: string; onClose: () => void }) {
+  const [picked, setPicked] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const { data } = useQuery({
+    queryKey: ['people-for-share'],
+    queryFn: async () => (await apiService.listPeople()).data as { people: Array<{ user_id: string; name: string; role_label: string; team: string }> },
+  });
+  const people = data?.people || [];
+  const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  const share = async () => {
+    if (!picked.length) return;
+    setBusy(true);
+    try {
+      const r = await apiService.shareAgendaTopic(week, row, day, picked);
+      const names = r.data.shared.map((s) => s.name.split(' ')[0]).join(', ');
+      toast.success(`Shared with ${names}`, "It's in their planner.");
+      onClose();
+    } catch (e: any) {
+      showAlert('Could not share', e?.response?.data?.detail || 'Try again.');
+    } finally { setBusy(false); }
+  };
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.mergeBackdrop} onPress={onClose}>
+        <Pressable style={[styles.mergeSheet, { maxHeight: '80%' }]} onPress={() => {}}>
+          <Text style={styles.mergeTitle}>Share "{title}"</Text>
+          <Text style={{ color: colors.textSecondary, fontSize: 13, marginBottom: 6 }}>
+            {DAY_FULL[day]}: it goes into their planner, and they open it with Run it.
+          </Text>
+          <ScrollView style={{ maxHeight: 360 }}>
+            {people.map((p) => {
+              const on = picked.includes(p.user_id);
+              return (
+                <TouchableOpacity key={p.user_id} onPress={() => toggle(p.user_id)} style={styles.mergeOpt} accessibilityRole="checkbox" accessibilityState={{ checked: on }}>
+                  <Ionicons name={on ? 'checkbox' : 'square-outline'} size={20} color={on ? colors.primary : colors.textSecondary} />
+                  <Text style={{ flex: 1, color: colors.text, fontSize: 15 }}>{p.name}</Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 12 }}>{p.team || p.role_label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+          <TouchableOpacity onPress={share} disabled={!picked.length || busy}
+            style={[styles.mergeOpt, { justifyContent: 'center', backgroundColor: picked.length ? colors.primary : colors.border, borderRadius: 10, borderTopWidth: 0, marginTop: 8 }]} accessibilityRole="button">
+            <Text style={{ color: colors.onPrimary, fontWeight: '800' }}>{busy ? 'Sharing…' : picked.length ? `Share with ${picked.length}` : 'Pick someone'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onClose} style={[styles.mergeOpt, { justifyContent: 'center' }]} accessibilityRole="button">
+            <Text style={{ color: colors.textSecondary }}>Cancel</Text>
+          </TouchableOpacity>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
