@@ -31,6 +31,8 @@ TILE_LAT = 0.02          # ~2.2 km
 TILE_LNG = 0.03          # ~2 km at UK latitudes
 ROAD_DAYS = 30
 OVERPASS = ("https://overpass-api.de/api/interpreter",
+            "https://overpass.private.coffee/api/interpreter",
+            "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
             "https://overpass.kumi.systems/api/interpreter")
 ROAD_TYPES = ("trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|"
               "unclassified|residential|living_street|road")
@@ -387,7 +389,7 @@ async def _fetch(s, w, n, e) -> dict:
     import httpx
     q = overpass_query(s, w, n, e)
     last: Optional[Exception] = None
-    async with httpx.AsyncClient(timeout=25, headers={"User-Agent": "TheLorisHub/1.0 (street snapping)"}) as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(20, connect=6), headers={"User-Agent": "TheLorisHub/1.0 (street snapping)"}) as client:
         for url in OVERPASS:
             try:
                 r = await client.post(url, data={"data": q}, headers={"Accept": "application/json"})
