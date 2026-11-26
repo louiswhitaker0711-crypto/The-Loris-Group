@@ -871,6 +871,18 @@ async def _startup_work():
         scheduler.add_job(_field_days_job, "interval", minutes=10, id="field_days_tick",
                           replace_existing=True, max_instances=1, coalesce=True)
 
+        # ── Streets for snapping: every territory sector's roads, overnight ───
+        async def _roads_job():
+            try:
+                from core.roads import prefetch_territory
+                n = await prefetch_territory(db)
+                logger.info(f"road tiles fetched: {n}")
+            except Exception as ex:
+                logger.error(f"road tiles job failed: {ex}")
+
+        scheduler.add_job(_roads_job, "cron", hour=2, minute=17, id="road_tiles",
+                          replace_existing=True, max_instances=1, coalesce=True)
+
         # ── New month: everyone checks their breakeven (1st, 09:12 UK) ────────
         async def _breakeven_month_job():
             try:

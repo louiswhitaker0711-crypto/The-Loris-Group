@@ -30,9 +30,10 @@ logger = logging.getLogger(__name__)
 TILE_LAT = 0.02          # ~2.2 km
 TILE_LNG = 0.03          # ~2 km at UK latitudes
 ROAD_DAYS = 30
-OVERPASS = ("https://overpass-api.de/api/interpreter",
+# Fastest first (26 Nov 2026: maps.mail.ru ~15 s a tile, overpass-api.de ~2 min).
+OVERPASS = ("https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+            "https://overpass-api.de/api/interpreter",
             "https://overpass.private.coffee/api/interpreter",
-            "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
             "https://overpass.kumi.systems/api/interpreter")
 ROAD_TYPES = ("trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|"
               "unclassified|residential|living_street|road")
@@ -389,7 +390,7 @@ async def _fetch(s, w, n, e) -> dict:
     import httpx
     q = overpass_query(s, w, n, e)
     last: Optional[Exception] = None
-    async with httpx.AsyncClient(timeout=httpx.Timeout(20, connect=6), headers={"User-Agent": "TheLorisHub/1.0 (street snapping)"}) as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(45, connect=8), headers={"User-Agent": "TheLorisHub/1.0 (street snapping)"}) as client:
         for url in OVERPASS:
             try:
                 r = await client.post(url, data={"data": q}, headers={"Accept": "application/json"})
@@ -480,3 +481,23 @@ async def snap_lines(db, lines: list, tol_m: float = 25.0, fetch=None, missing: 
         logger.warning("road lookup failed: %s", ex)
         nodes, ways = {}, []
     return [match_line(line, nodes, ways, tol_m) for line in lines]
+
+
+async def prefetch_territory(db, limit: int = 400) -> int:
+    """Overnight: fetch the streets for every sector on the territory map
+    that isn't saved yet (or is a month old), so drawing never waits."""
+    fresh = (datetime.now(timezone.utc) - timedelta(days=ROAD_DAYS - 2)).isoformat()
+    have = {d["key"] async for d in db.road_tiles.find({"fetched_at": {"$gte": fresh}}, {"key": 1})}
+    keys: list[str] = []
+    async for sec in db.territory_sectors.find({"bbox": {"$exists": True}}, {"bbox": 1}):
+        b = sec.get("bbox") or {}
+        if not all(k in b for k in "swne"):
+            continue
+        for k in tile_keys(b["s"], b["w"], b["n"], b["e"]):
+            if k not in have and k not in keys:
+                keys.append(k)
+    done = 0
+    for k in keys[:limit]:
+        if await _tile(db, k):
+            done += 1
+    return done

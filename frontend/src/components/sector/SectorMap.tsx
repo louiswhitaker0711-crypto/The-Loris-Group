@@ -44,29 +44,39 @@ const readSnap = () => { try { return globalThis.localStorage?.getItem(SNAP_KEY)
 // When the server can't reach OpenStreetMap, the phone fetches the roads
 // itself (tiles the server names) and hands them over: they're kept for
 // everyone for a month.
-const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter',
-  'https://maps.mail.ru/osm/tools/overpass/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
+const OVERPASS = ['https://maps.mail.ru/osm/tools/overpass/api/interpreter', 'https://overpass-api.de/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
 const fetching: Record<string, Promise<boolean>> = {};
 async function fetchTiles(missing: { key: string; query: string }[] | undefined): Promise<boolean> {
   if (!missing?.length) return false;
   const one = (m: { key: string; query: string }) => (fetching[m.key] ||= (async () => {
+    // Ask every server at once and take the first answer (they're slow).
     const why: string[] = [];
-    for (const url of OVERPASS) {
-      const t0 = Date.now();
+    const t0 = Date.now();
+    const ask = async (url: string) => {
+      const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timer = setTimeout(() => ctl?.abort(), 60000);
       try {
-        const r = await fetch(url, { method: 'POST', body: new URLSearchParams({ data: m.query }) });
-        if (!r.ok) { why.push(`${url.split('/')[2]} ${r.status} ${Date.now() - t0}ms`); continue; }
+        const r = await fetch(url, { method: 'POST', body: new URLSearchParams({ data: m.query }), signal: ctl?.signal });
+        if (!r.ok) throw new Error(`${r.status}`);
         const json = await r.json();
-        await apiService.uploadRoadTile(m.key, json);
-        apiService.roadLog('phone ok', `${url.split('/')[2]} ${Date.now() - t0}ms ${(json?.elements || []).length} elements`, [m.key]);
-        return true;
+        if (!(json?.elements || []).length) throw new Error('empty');
+        return { url, json };
       } catch (e: any) {
-        why.push(`${url.split('/')[2]} ${e?.response?.status || ''} ${String(e?.message || e).slice(0, 80)} ${Date.now() - t0}ms`);
-      }
+        why.push(`${url.split('/')[2]} ${String(e?.message || e).slice(0, 60)} ${Date.now() - t0}ms`);
+        throw e;
+      } finally { clearTimeout(timer); }
+    };
+    try {
+      const { url, json } = await Promise.any(OVERPASS.map(ask));
+      await apiService.uploadRoadTile(m.key, json);
+      apiService.roadLog('phone ok', `${url.split('/')[2]} ${Date.now() - t0}ms ${(json?.elements || []).length} elements`, [m.key]);
+      return true;
+    } catch {
+      apiService.roadLog('phone failed', why.join(' | '), [m.key]);
+      delete fetching[m.key];
+      return false;
     }
-    apiService.roadLog('phone failed', why.join(' | '), [m.key]);
-    delete fetching[m.key];
-    return false;
   })());
   const got = await Promise.all(missing.slice(0, 4).map(one));
   return got.some(Boolean);
@@ -254,7 +264,9 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
       let drawingNow = false;
       let panFrom: any = null;
       const fingers = new Set<number>();
-      const cancelStroke = () => { drawingNow = false; pts = []; liveLayer.current?.clearLayers(); };
+      // Two fingers (zooming) only cancel the line being drawn now, never
+      // lines already drawn that are still being snapped and saved.
+      const cancelStroke = () => { drawingNow = false; pts = []; if (live) liveLayer.current?.removeLayer(live); live = null; };
       const down = (e: PointerEvent) => {
         if (!st.current.data?.can_draw || st.current.kind === 'move') return;
         fingers.add(e.pointerId);
