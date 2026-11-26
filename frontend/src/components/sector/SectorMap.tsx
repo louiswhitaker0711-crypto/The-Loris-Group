@@ -41,6 +41,28 @@ type Kind = 'plan' | 'done' | 'request' | 'move' | 'edit' | 'route';
 type RouteTool = 'draw' | 'start' | 'finish';
 const SNAP_KEY = 'loris.map.snap';
 const readSnap = () => { try { return globalThis.localStorage?.getItem(SNAP_KEY) !== '0'; } catch { return true; } };
+// When the server can't reach OpenStreetMap, the phone fetches the roads
+// itself (tiles the server names) and hands them over: they're kept for
+// everyone for a month.
+const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
+const fetching: Record<string, Promise<boolean>> = {};
+async function fetchTiles(missing: { key: string; query: string }[] | undefined): Promise<boolean> {
+  if (!missing?.length) return false;
+  const one = (m: { key: string; query: string }) => (fetching[m.key] ||= (async () => {
+    for (const url of OVERPASS) {
+      try {
+        const r = await fetch(url, { method: 'POST', body: new URLSearchParams({ data: m.query }) });
+        if (!r.ok) continue;
+        await apiService.uploadRoadTile(m.key, await r.json());
+        return true;
+      } catch { /* next server */ }
+    }
+    delete fetching[m.key];
+    return false;
+  })());
+  const got = await Promise.all(missing.slice(0, 4).map(one));
+  return got.some(Boolean);
+}
 // A light moving average: takes the wobble out of a freehand line.
 const smoothLine = (pts: number[][]) => {
   let out = pts;
@@ -116,7 +138,8 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
     const key = b ? `${b.s},${b.w},${b.n},${b.e}` : '';
     if (key && warmed.current !== key) {
       warmed.current = key;
-      apiService.warmRoads({ s: b.s - 0.003, w: b.w - 0.005, n: b.n + 0.003, e: b.e + 0.005 }).catch(() => { /* snapping fetches on demand */ });
+      apiService.warmRoads({ s: b.s - 0.003, w: b.w - 0.005, n: b.n + 0.003, e: b.e + 0.005 })
+        .then((r) => fetchTiles(r.data?.missing)).catch(() => { /* snapping fetches on demand */ });
     }
     if (!chosen.current) { chosen.current = true; setKind('move'); }
     else if (!data.can_confirm && !data.can_plan_areas) setKind((k) => (k === 'plan' ? 'move' : k));
@@ -145,11 +168,13 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
         const z = map.current?.getZoom?.() ?? 17;
         const lat = pts[0][0];
         const mpp = (40075016.686 * Math.cos((lat * Math.PI) / 180)) / Math.pow(2, z + 8);
-        // Never keep someone waiting: after 8 seconds the line goes in freehand.
-        const r: any = await Promise.race([
-          apiService.snapLines([pts], Math.max(8, Math.min(45, mpp * 22))),
-          new Promise((_, no) => setTimeout(() => no(new Error('slow')), 8000)),
-        ]);
+        const tol = Math.max(8, Math.min(45, mpp * 22));
+        // Never keep someone waiting too long: after that the line goes in freehand.
+        const timed = (p: Promise<any>, ms: number) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error('slow')), ms))]);
+        let r: any = await timed(apiService.snapLines([pts], tol), 10000);
+        if (r.data?.missing?.length && await timed(fetchTiles(r.data.missing), 15000).catch(() => false)) {
+          r = await timed(apiService.snapLines([pts], tol), 10000);
+        }
         const o = r.data?.lines?.[0];
         if (o?.line?.length >= 2) { pts = o.line; side = o.side || 'left'; snapped = !!o.snapped; }
       } catch { pts = smoothLine(pts); }
@@ -169,10 +194,10 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
         colour: routing && !d?.can_plan_areas && d?.my_colour ? d.my_colour : col,
         half: halfLine || undefined, side: halfLine ? side : undefined, snapped });
       if (r.data?.id) setUndoStack((u) => [...u, r.data.id]);
-      load();
+      await load();   // wait, so the drawn line stays until the saved one shows
     } catch (e: any) {
       showAlert('Could not save that line', e?.response?.data?.detail || 'Try again.');
-      load();
+      await load();
     }
   }, [load]);
 
@@ -197,7 +222,8 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
     loadLeaflet().then((L) => {
       const el = box.current as unknown as HTMLElement | null;
       if (dead || !el || map.current) return;
-      const m = L.map(el, { scrollWheelZoom: true }).setView([53.8, -1.55], 9);
+      // A generous renderer padding: lines just off screen don't vanish while zooming.
+      const m = L.map(el, { scrollWheelZoom: true, renderer: L.svg({ padding: 1 }) }).setView([53.8, -1.55], 9);
       L.tileLayer(OSM_TILES, { maxZoom: 19, attribution: OSM_ATTRIBUTION }).addTo(m);
       shapeLayer.current = L.layerGroup().addTo(m);
       marksLayer.current = L.layerGroup().addTo(m);
@@ -269,7 +295,10 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
         if (!drawingNow) return;
         drawingNow = false;
         // The line stays on screen until it's snapped and saved.
-        if (pts.length >= 2) saveStroke(pts.map((q) => [q[0], q[1]])).finally(() => setTimeout(() => liveLayer.current?.clearLayers(), 150));
+        if (pts.length >= 2) {
+          const mine = live;
+          saveStroke(pts.map((q) => [q[0], q[1]])).finally(() => { if (mine) liveLayer.current?.removeLayer(mine); });
+        }
         else setTimeout(() => liveLayer.current?.clearLayers(), 600);
         pts = [];
       };
@@ -776,8 +805,8 @@ const styles = (c: any) => StyleSheet.create({
   myHop: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 12, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface },
   bigDot: { width: 18, height: 18, borderRadius: 9 },
   tools: { flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap' },
-  seg: { flexDirection: 'row', flexWrap: 'wrap', padding: 3, gap: 2, borderRadius: 10, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface },
-  segBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8 },
+  seg: { flexDirection: 'row', flexWrap: 'wrap', alignSelf: 'stretch', flexGrow: 1, flexShrink: 1, minWidth: 0, padding: 3, gap: 2, borderRadius: 10, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface },
+  segBtn: { flexGrow: 1, alignItems: 'center', paddingHorizontal: 8, paddingVertical: 7, borderRadius: 8 },
   segOn: { backgroundColor: c.primary },
   segText: { fontFamily: fonts.bodySemibold, fontSize: 13, color: c.text },
   undo: { position: 'absolute', left: 10, bottom: 24, zIndex: 1000, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, height: 38, borderRadius: 19, backgroundColor: c.background, borderWidth: 1, borderColor: c.border },

@@ -1170,6 +1170,7 @@ export const apiService = {
   // Street snapping and hop routes (the Owner, 26 Nov 2026).
   snapLines: (lines: number[][][], tolerance_m: number) => api.post('/roads/snap', { lines, tolerance_m }),
   warmRoads: (b: { s: number; w: number; n: number; e: number }) => api.post('/roads/warm', b),
+  uploadRoadTile: (key: string, data: any) => api.post('/roads/tile', { key, data }),
   setRouteFlag: (body: { date: string; colour: string; which: 'start' | 'finish'; at: number[] | null; leader_id?: string }) => api.put('/coverage/route-flag', body),
   clearRoute: (date: string, colour: string, leaderId?: string) => api.delete('/coverage/route', { params: { date, colour, leader_id: leaderId } }),
   // The sector on screen (its leader's id), not always the caller's own.

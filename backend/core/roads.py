@@ -41,6 +41,7 @@ BETA = 6.0               # transition: metres of extra route per unit cost
 
 _locks: dict[str, asyncio.Lock] = {}
 _failed: dict[str, float] = {}   # tile key → when a fetch last failed (don't hammer a busy server)
+last_error: dict[str, str] = {}  # tile key → why the last fetch failed
 RETRY_AFTER_S = 120
 
 
@@ -389,8 +390,9 @@ async def _fetch(s, w, n, e) -> dict:
     async with httpx.AsyncClient(timeout=25, headers={"User-Agent": "TheLorisHub/1.0 (street snapping)"}) as client:
         for url in OVERPASS:
             try:
-                r = await client.post(url, data={"data": q})
-                r.raise_for_status()
+                r = await client.post(url, data={"data": q}, headers={"Accept": "application/json"})
+                if r.status_code != 200:
+                    raise RuntimeError(f"{url} answered {r.status_code}: {r.text[:120]}")
                 return parse_overpass(r.json())
             except Exception as ex:   # try the next server
                 last = ex
@@ -417,6 +419,7 @@ async def _tile(db, key: str, fetch=None) -> Optional[dict]:
         except Exception as ex:
             logger.warning("road tile %s fetch failed: %s", key, ex)
             _failed[key] = time.monotonic()
+            last_error[key] = f"{type(ex).__name__}: {ex}"[:300]
             return doc   # an old copy beats nothing
         new = {"key": key, "nodes": got["nodes"], "ways": got["ways"],
                "fetched_at": datetime.now(timezone.utc).isoformat()}
@@ -424,13 +427,17 @@ async def _tile(db, key: str, fetch=None) -> Optional[dict]:
         return new
 
 
-async def roads_in(db, s: float, w: float, n: float, e: float, fetch=None) -> tuple[dict, list]:
-    """Every road in the box: ({node id: (lat, lng)}, [[node ids], …])."""
+async def roads_in(db, s: float, w: float, n: float, e: float, fetch=None,
+                   missing: Optional[list] = None) -> tuple[dict, list]:
+    """Every road in the box: ({node id: (lat, lng)}, [[node ids], …]).
+    Tiles that couldn't be fetched are added to `missing`."""
     nodes: dict = {}
     ways: list = []
     for key in tile_keys(s, w, n, e)[:12]:
         t = await _tile(db, key, fetch)
         if not t:
+            if missing is not None:
+                missing.append(key)
             continue
         for nid, lat, lng in t.get("nodes") or []:
             nodes[nid] = (lat, lng)
@@ -438,7 +445,21 @@ async def roads_in(db, s: float, w: float, n: float, e: float, fetch=None) -> tu
     return nodes, ways
 
 
-async def snap_lines(db, lines: list, tol_m: float = 25.0, fetch=None) -> list[dict]:
+def tile_from_upload(key: str, data: dict) -> dict:
+    """A tile the phone fetched from OpenStreetMap itself (when the server
+    can't reach it), checked: node ids and points inside the tile's box."""
+    s, w, n, e = tile_box(key)
+    pad = 0.01
+    got = parse_overpass(data)
+    if len(got["nodes"]) > 120000 or len(got["ways"]) > 30000:
+        raise ValueError("too big")
+    nodes = [[int(i), float(lat), float(lng)] for i, lat, lng in got["nodes"]
+             if s - pad <= float(lat) <= n + pad and w - pad <= float(lng) <= e + pad]
+    ways = [[int(x) for x in way][:2000] for way in got["ways"] if isinstance(way, list)]
+    return {"key": key, "nodes": nodes, "ways": ways, "fetched_at": datetime.now(timezone.utc).isoformat(), "from": "phone"}
+
+
+async def snap_lines(db, lines: list, tol_m: float = 25.0, fetch=None, missing: Optional[list] = None) -> list[dict]:
     """Each drawn stroke snapped to the streets (see `match_line`)."""
     pts = [p for line in lines for p in line]
     if not pts:
@@ -449,7 +470,7 @@ async def snap_lines(db, lines: list, tol_m: float = 25.0, fetch=None) -> list[d
     w = min(p[1] for p in pts) - pad * 1.7
     e = max(p[1] for p in pts) + pad * 1.7
     try:
-        nodes, ways = await roads_in(db, s, w, n, e, fetch)
+        nodes, ways = await roads_in(db, s, w, n, e, fetch, missing)
     except Exception as ex:
         logger.warning("road lookup failed: %s", ex)
         nodes, ways = {}, []

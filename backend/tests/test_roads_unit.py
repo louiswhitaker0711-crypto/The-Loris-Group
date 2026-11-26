@@ -119,3 +119,25 @@ def test_overpass_query_is_roads_only_and_tiles_are_cached():
     db2 = AsyncMongoMockClient()["t2"]
     res = asyncio.run(roads.snap_lines(db2, [drawn], 25, fetch=broken))
     assert res[0]["snapped"] is False and len(res[0]["line"]) >= 2
+
+
+def test_when_the_server_cant_reach_the_roads_the_phone_sends_them():
+    from mongomock_motor import AsyncMongoMockClient
+    db = AsyncMongoMockClient()["t3"]
+    nodes, ways = grid()
+    drawn = wobble([(10, 4), (300, 4)], amp=5)
+
+    async def broken(*_a):
+        raise RuntimeError("403")
+
+    missing = []
+    res = asyncio.run(roads.snap_lines(db, [drawn], 25, fetch=broken, missing=missing))
+    assert not res[0]["snapped"] and missing and "RuntimeError" in roads.last_error[missing[0]]
+    # The phone fetched each tile from OpenStreetMap: Overpass JSON as it comes.
+    data = {"elements": [{"type": "node", "id": k, "lat": v[0], "lon": v[1]} for k, v in nodes.items()]
+            + [{"type": "way", "id": 900 + i, "nodes": w} for i, w in enumerate(ways)]}
+    for key in missing:
+        doc = roads.tile_from_upload(key, data)
+        asyncio.run(db.road_tiles.update_one({"key": key}, {"$set": doc}, upsert=True))
+    res = asyncio.run(roads.snap_lines(db, [drawn], 25, fetch=broken))
+    assert res[0]["snapped"]
