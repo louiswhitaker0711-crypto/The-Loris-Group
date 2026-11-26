@@ -18,13 +18,38 @@ import { useTabBarClearance } from '../src/customization/CustomTabBar';
 import { APP_LOCALE } from '../src/utils/appTime';
 import { useDeviceInsets } from '../src/nav/AppShell';
 import { toast } from '../src/utils/toast';
-import FolderTag from '../src/components/notes/FolderTag';
 import { readBackup, writeBackup, clearBackup, onLeave } from '../src/utils/draftBackup';
 import { pickNotePhoto } from '../src/utils/pickImage';
 
 type Note = { id: string; head: string; head_label: string; title: string; body: string; date: string;
-  source_label: string; shared: boolean; author_name: string; mine: boolean; photos?: string[]; can_delete?: boolean; can_photo?: boolean };
+  source_label: string; shared: boolean; author_name: string; mine: boolean; photos?: string[]; can_delete?: boolean; can_photo?: boolean;
+  where?: string; updated_at?: string };
 type View_ = { kind: 'root' } | { kind: 'stage'; stage: number } | { kind: 'head'; head: string; label: string; sub?: string };
+
+/** Where a heading files, in words: "Close", "Stage 1 · Pitch delivery", a meet-up's name. */
+function whereOf(d: any, head: string): string {
+  if (!head) return '';
+  const p = (d?.pitch || []).find((x: any) => x.head === head);
+  if (p) return p.label;
+  const m = (d?.meetups || []).find((x: any) => x.head === head);
+  if (m) return m.label;
+  for (const st of d?.cod || []) for (const sec of st.sections || []) {
+    const t = (sec.topics || []).find((x: any) => x.head === head);
+    if (t) return `${String(st.name).split(' · ')[0]} · ${t.topic}`;
+  }
+  return head.startsWith('cod:') ? 'A CoD topic' : 'Other';
+}
+
+const ago = (iso?: string) => {
+  if (!iso) return '';
+  const t = Date.parse(iso);
+  if (!t) return '';
+  const mins = Math.round((Date.now() - t) / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins} min ago`;
+  if (mins < 60 * 24 && new Date(t).toDateString() === new Date().toDateString()) return `${Math.round(mins / 60)} hr ago`;
+  return new Date(t).toLocaleDateString(APP_LOCALE, { weekday: 'short', day: 'numeric', month: 'short' });
+};
 
 const fmt = (iso: string) => {
   try { return new Date(`${iso}T12:00:00Z`).toLocaleDateString(APP_LOCALE, { weekday: 'short', day: 'numeric', month: 'short' }); }
@@ -46,6 +71,8 @@ export default function NotesScreen() {
       if (b?.pending && b.value) setEditing({ note: b.value.note, head: b.value.head, restored: b.value });
     });
   }, []);
+  // Recent: your own notes, last written first (the Owner, 26 Nov 2026).
+  const recentQ = useQuery({ queryKey: ['notes-recent'], queryFn: async () => (await api.get('/notes', { params: { recent: 8 } })).data.notes as Note[] });
   const search = q.trim();
   const listQ = useQuery({
     enabled: view.kind === 'head' || search.length >= 2,
@@ -71,8 +98,8 @@ export default function NotesScreen() {
         <View style={s.shell}>
           {/* Write a note here, filed under the heading you're in; it also lands in today's planner (the Owner, 29 Oct 2026). */}
           <Pressable onPress={() => setEditing({ head: view.kind === 'head' ? view.head : '' })} style={s.write} accessibilityRole="button" testID="notes-write">
-            <Ionicons name="add" size={18} color={c.onPrimary} />
-            <Text style={s.writeT}>Write a note</Text>
+            <Ionicons name="create-outline" size={20} color={c.onPrimary} />
+            <Text style={s.writeT}>{view.kind === 'head' ? `New note in ${view.label}` : 'New note'}</Text>
           </Pressable>
           <View style={s.search}>
             <Ionicons name="search" size={16} color={c.textMuted} />
@@ -91,6 +118,30 @@ export default function NotesScreen() {
                   <Text style={s.small}>{d.latest_from_owner.head_label}</Text>
                 </Pressable>
               )}
+              <View style={s.blockHead}>
+                <Text style={s.h2}>Recent</Text>
+              </View>
+              {recentQ.isLoading ? <ActivityIndicator color={c.primary} />
+                : !recentQ.data?.length ? <Text style={s.small}>Nothing yet. Tap New note to write your first one.</Text>
+                : <View style={s.list}>
+                    {recentQ.data.map((n, i) => (
+                      <Pressable key={n.id} onPress={() => setEditing({ note: n, head: n.head })} style={[s.recent, i > 0 && s.rowLine]} accessibilityRole="button" accessibilityHint="Open this note" testID="notes-recent-row">
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <Text style={s.noteT} numberOfLines={1}>{n.title || 'Note'}</Text>
+                          <Text style={s.small}>{ago(n.updated_at) || fmt(n.date)}</Text>
+                        </View>
+                        {!!n.body && <Text style={s.preview} numberOfLines={2}>{n.body}</Text>}
+                        <View style={s.chip}>
+                          <Ionicons name="folder-outline" size={12} color={c.primary} />
+                          <Text style={s.chipT} numberOfLines={1}>{n.where || n.head_label}</Text>
+                          {!!n.photos?.length && <><Ionicons name="image-outline" size={12} color={c.textMuted} /><Text style={s.small}>{n.photos.length}</Text></>}
+                        </View>
+                      </Pressable>
+                    ))}
+                  </View>}
+              <View style={s.blockHead}>
+                <Text style={s.h2}>Folders</Text>
+              </View>
               {/* The Leaders meeting for everyone; Ownership for the Owner only (the Owner, 11 Nov 2026). */}
               {[['meeting', 'Meetings'], ['owner', 'Ownership · just you']].map(([g, label]) => {
                 const rows = (d?.pitch || []).filter((p: any) => p.group === g);
@@ -142,7 +193,6 @@ export default function NotesScreen() {
                   ))}
                 </View>
               </>}
-              {!d?.total && <Text style={[s.small, { textAlign: 'center' }]}>Notes you write in your planner’s note boxes land here by themselves, under the heading you give them.</Text>}
               <Pressable onPress={() => router.push('/notes-removed' as any)} style={[s.row, s.list]} accessibilityRole="button" testID="notes-removed">
                 <Ionicons name="arrow-undo-outline" size={16} color={c.primary} />
                 <Text style={s.rowT}>Recently removed</Text>
@@ -197,6 +247,11 @@ function NoteEditor({ note, head, restored, onClose }: { note?: Note; head: stri
   const [title, setTitle] = useState(restored?.title ?? note?.title ?? '');
   const [body, setBody] = useState(restored?.body ?? note?.body ?? '');
   const [h, setH] = useState(restored?.h ?? note?.head ?? head ?? '');
+  const folderQ = useQuery({ queryKey: ['notes-folder'], queryFn: async () => (await api.get('/notes/folder')).data });
+  const where = whereOf(folderQ.data, h);
+  const meetup = h.startsWith('meetup:');
+  // Pick where it goes before writing (the Owner, 26 Nov 2026).
+  const [picking, setPicking] = useState(!note && !restored && !head);
   // Photos (the Owner, 13 Nov 2026): take one or pick one, up to 4, on a new
   // note or one that sits in the planner as its own note.
   const [photos, setPhotos] = useState<string[]>(restored?.photos ?? note?.photos ?? []);
@@ -251,9 +306,17 @@ function NoteEditor({ note, head, restored, onClose }: { note?: Note; head: stri
         }
         lastSaved.current = sig;
         setState('saved');
+        // Show it straight away in Recent and its folder, before the refresh lands.
+        const local: Note = { ...(note || {} as Note), id: idRef.current || note?.id || 'new', head: hh, title: t || 'Note', body: b,
+          photos: ph, mine: true, shared: !!note?.shared, can_delete: true, can_photo: canPhoto || !!note?.can_photo,
+          where: whereOf(folderQ.data, hh), head_label: whereOf(folderQ.data, hh), updated_at: new Date().toISOString(),
+          date: note?.date || new Date().toISOString().slice(0, 10), source_label: note?.source_label || 'Day notes', author_name: note?.author_name || '' };
+        qc.setQueryData(['notes-recent'], (old: Note[] | undefined) => [local, ...(old || []).filter((x) => x.id !== local.id)].slice(0, 8));
+        qc.setQueriesData({ queryKey: ['notes-list'] }, (old: Note[] | undefined) => old && old.map((x) => (x.id === local.id ? { ...x, ...local } : x)));
         if (sig === JSON.stringify([latest.current.title, latest.current.body, latest.current.h, latest.current.photos])) clearBackup('note:open');
         qc.invalidateQueries({ queryKey: ['notes-folder'] });
         qc.invalidateQueries({ queryKey: ['notes-list'] });
+        qc.invalidateQueries({ queryKey: ['notes-recent'] });
         qc.invalidateQueries({ queryKey: ['weekly-planner'] });
       } catch (e: any) {
         setState('error');
@@ -283,7 +346,10 @@ function NoteEditor({ note, head, restored, onClose }: { note?: Note; head: stri
     try {
       await push();
       clearBackup('note:open');
-      if (idRef.current || note) toast.success(note ? 'Note saved' : 'Note added');
+      if (idRef.current || note) toast.success('Saved', `In ${where || 'Other'}. It\u2019s at the top of Recent.`);
+      qc.refetchQueries({ queryKey: ['notes-recent'] });
+      qc.refetchQueries({ queryKey: ['notes-list'] });
+      qc.refetchQueries({ queryKey: ['notes-folder'] });
       onClose();
     } catch (e: any) {
       toast.error('Couldn\u2019t save yet', typeof e?.response?.data?.detail === 'string' ? e.response.data.detail : 'Your note is kept on this phone and will save when you\u2019re back online.');
@@ -315,6 +381,7 @@ function NoteEditor({ note, head, restored, onClose }: { note?: Note; head: stri
           clearBackup('note:open');
           qc.invalidateQueries({ queryKey: ['notes-folder'] });
           qc.invalidateQueries({ queryKey: ['notes-list'] });
+          qc.invalidateQueries({ queryKey: ['notes-recent'] });
           qc.invalidateQueries({ queryKey: ['weekly-planner'] });
           toast.success('Note deleted', 'It’s in Recently removed for 30 days.');
           onClose();
@@ -325,7 +392,29 @@ function NoteEditor({ note, head, restored, onClose }: { note?: Note; head: stri
       } },
     ]);
   };
-  const statusText = state === 'saving' ? 'Saving\u2026' : state === 'saved' ? 'Saved' : state === 'error' ? 'Not saved yet \u2014 kept on this phone' : '';
+  const dirty = JSON.stringify([title, body, h, photos]) !== lastSaved.current;
+  const status = state === 'error' ? { icon: 'cloud-offline-outline', text: 'Not saved yet \u2014 kept on this phone', col: c.red || '#c0392b' }
+    : state === 'saving' || (dirty && (idRef.current || title.trim() || body.trim() || photos.length)) ? { icon: 'sync-outline', text: 'Saving\u2026', col: c.textMuted }
+    : idRef.current ? { icon: 'checkmark-circle', text: 'Saved', col: c.green }
+    : { icon: 'create-outline', text: 'Start typing \u2014 it saves as you go', col: c.textMuted };
+
+  if (picking) {
+    return (
+      <Modal visible animationType="slide" onRequestClose={() => (h ? setPicking(false) : onClose())}>
+        <View style={[s.edRoot, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 8 }]}>
+          <View style={s.edHead}>
+            <Pressable onPress={() => (h ? setPicking(false) : onClose())} hitSlop={8} accessibilityRole="button" style={{ width: 60 }}>
+              <Text style={[s.back, { color: c.textMuted }]}>{h ? 'Back' : 'Cancel'}</Text>
+            </Pressable>
+            <Text style={s.edTitle}>Where does this go?</Text>
+            <View style={{ width: 60 }} />
+          </View>
+          <FolderPicker d={folderQ.data} loading={folderQ.isLoading} current={h} s={s} c={c}
+            onPick={(hd) => { setH(hd); setPicking(false); }} />
+        </View>
+      </Modal>
+    );
+  }
   return (
     <Modal visible animationType="slide" onRequestClose={save}>
       <View style={[s.edRoot, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 8 }]}>
@@ -335,18 +424,27 @@ function NoteEditor({ note, head, restored, onClose }: { note?: Note; head: stri
           </Pressable>
           <View style={{ alignItems: 'center' }}>
             <Text style={s.edTitle}>{note ? 'Edit note' : 'New note'}</Text>
-            {!!statusText && <Text style={s.small}>{statusText}</Text>}
           </View>
           <Pressable onPress={save} disabled={busy} hitSlop={8} accessibilityRole="button" testID="note-save" style={{ width: 60, alignItems: 'flex-end' }}>
             {busy ? <ActivityIndicator color={c.primary} /> : <Text style={[s.back, { fontFamily: fonts.bodyBold }]}>Done</Text>}
           </Pressable>
         </View>
-        <ScrollView contentContainerStyle={{ padding: 16, gap: 10 }} keyboardShouldPersistTaps="handled">
-          <TextInput value={title} onChangeText={setTitle} placeholder="Title" placeholderTextColor={c.textMuted} style={s.edInput} maxLength={120} />
-          {!h.startsWith('meetup:') && <FolderTag value={{ head: h, title, share: false }} defaultHead={h || 'pitch:other'} defaultTitle={title || 'Note'} isAdmin={false}
-            onChange={(v) => { setH(v.head); setTitle(v.title); }} />}
+        <View style={[s.status, { borderBottomColor: c.border }]}>
+          <Ionicons name={status.icon as any} size={15} color={status.col} />
+          <Text style={[s.statusT, { color: status.col }]}>{status.text}</Text>
+        </View>
+        <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }} keyboardShouldPersistTaps="handled">
+          <Pressable onPress={() => !meetup && setPicking(true)} disabled={meetup} style={s.filed} accessibilityRole="button" accessibilityLabel={`Filed in ${where || 'Other'}. Tap to change`} testID="note-filed-in">
+            <View style={s.filedIcon}><Ionicons name="folder-open" size={18} color={c.primary} /></View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.filedK}>Filed in</Text>
+              <Text style={s.filedT} numberOfLines={2}>{where || 'Other'}</Text>
+            </View>
+            {!meetup && <Text style={s.back}>Change</Text>}
+          </Pressable>
+          <TextInput value={title} onChangeText={setTitle} placeholder="Title" placeholderTextColor={c.textMuted} style={[s.edInput, s.edTitleInput]} maxLength={120} />
           <TextInput value={body} onChangeText={setBody} placeholder="Write the note…" placeholderTextColor={c.textMuted}
-            style={[s.edInput, { minHeight: 260 }]} multiline textAlignVertical="top" autoFocus={!note} />
+            style={[s.edInput, { minHeight: 240 }]} multiline textAlignVertical="top" autoFocus={!note} />
           {canPhoto && (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               {photos.map((p, i) => (
@@ -375,10 +473,86 @@ function NoteEditor({ note, head, restored, onClose }: { note?: Note; head: stri
               <Text style={[s.delT, { color: c.red || '#c0392b' }]}>Delete note</Text>
             </Pressable>
           )}
-          {!note && <Text style={s.small}>{h.startsWith('meetup:') ? 'It also goes in your meet-up planner.' : 'It also goes in today\u2019s Notes box in your planner.'}</Text>}
+          {!note && <Text style={s.small}>{meetup ? 'It also goes in your meet-up planner.' : 'It also goes in today\u2019s Notes box in your planner.'}</Text>}
         </ScrollView>
       </View>
     </Modal>
+  );
+}
+
+/** Where a new note goes (the Owner, 26 Nov 2026): recently used, then every
+ * heading in plain sight, CoD stages opening to their topics; search finds any. */
+function FolderPicker({ d, loading, current, onPick, s, c }: { d: any; loading: boolean; current: string; onPick: (head: string) => void; s: any; c: any }) {
+  const [stage, setStage] = useState<number | null>(null);
+  const [q, setQ] = useState('');
+  const qc = useQueryClient();
+  const recent = (qc.getQueryData(['notes-recent']) as Note[] | undefined) || [];
+  if (loading || !d) return <ActivityIndicator color={c.primary} style={{ marginTop: 24 }} />;
+  const used = Array.from(new Set(recent.map((n) => n.head).filter((h) => h && !h.startsWith('meetup:')))).slice(0, 4);
+  const all: { head: string; label: string }[] = [
+    ...(d.pitch || []).map((p: any) => ({ head: p.head, label: p.label })),
+    ...(d.cod || []).flatMap((st: any) => (st.sections || []).flatMap((sec: any) => (sec.topics || []).map((t: any) => ({ head: t.head, label: `${String(st.name).split(' · ')[0]} · ${t.topic}` })))),
+    ...(d.meetups || []).map((m: any) => ({ head: m.head, label: m.label })),
+  ];
+  const Row = ({ head, label, i, chevron, onPress }: { head?: string; label: string; i: number; chevron?: boolean; onPress: () => void }) => (
+    <Pressable onPress={onPress} style={[s.row, i > 0 && s.rowLine]} accessibilityRole="button">
+      <Text style={s.rowT}>{label}</Text>
+      {head === current && <Ionicons name="checkmark" size={18} color={c.primary} />}
+      {chevron && <Ionicons name="chevron-forward" size={15} color={c.textMuted} />}
+    </Pressable>
+  );
+  const needle = q.trim().toLowerCase();
+  const st = stage != null ? (d.cod || []).find((x: any) => x.stage === stage) : null;
+  return (
+    <ScrollView contentContainerStyle={{ padding: 16, gap: 10 }} keyboardShouldPersistTaps="handled">
+      <View style={s.search}>
+        <Ionicons name="search" size={16} color={c.textMuted} />
+        <TextInput value={q} onChangeText={setQ} placeholder="Find a heading or CoD topic" placeholderTextColor={c.textMuted} style={s.searchInput} />
+      </View>
+      {needle ? (
+        <View style={s.list}>
+          {all.filter((x) => x.label.toLowerCase().includes(needle)).slice(0, 40).map((x, i) => <Row key={x.head} head={x.head} label={x.label} i={i} onPress={() => onPick(x.head)} />)}
+        </View>
+      ) : st ? (
+        <>
+          <Pressable onPress={() => setStage(null)} hitSlop={6}><Text style={s.back}>‹ All headings</Text></Pressable>
+          <Text style={s.h2}>{st.name}</Text>
+          {(st.sections || []).map((sec: any) => (
+            <View key={sec.category} style={{ gap: 6 }}>
+              <Text style={s.section}>{sec.category}</Text>
+              <View style={s.list}>
+                {(sec.topics || []).map((t: any, i: number) => <Row key={t.head} head={t.head} label={t.topic} i={i} onPress={() => onPick(t.head)} />)}
+              </View>
+            </View>
+          ))}
+        </>
+      ) : (
+        <>
+          {used.length > 0 && <>
+            <Text style={s.kicker}>Used lately</Text>
+            <View style={s.list}>{used.map((h, i) => <Row key={h} head={h} label={whereOf(d, h)} i={i} onPress={() => onPick(h)} />)}</View>
+          </>}
+          <Text style={s.kicker}>The pitch and sign-up</Text>
+          <View style={s.list}>
+            {(d.pitch || []).filter((p: any) => !p.group || p.group === 'sales').map((p: any, i: number) => <Row key={p.head} head={p.head} label={p.label} i={i} onPress={() => onPick(p.head)} />)}
+          </View>
+          {(d.pitch || []).some((p: any) => p.group && p.group !== 'sales') && <>
+            <Text style={s.kicker}>Meetings</Text>
+            <View style={s.list}>
+              {(d.pitch || []).filter((p: any) => p.group && p.group !== 'sales').map((p: any, i: number) => <Row key={p.head} head={p.head} label={p.group === 'owner' ? `${p.label} · just you` : p.label} i={i} onPress={() => onPick(p.head)} />)}
+            </View>
+          </>}
+          <Text style={s.kicker}>The CoD</Text>
+          <View style={s.list}>
+            {(d.cod || []).map((x: any, i: number) => <Row key={x.stage} label={x.name} i={i} chevron onPress={() => setStage(x.stage)} />)}
+          </View>
+          {(d.meetups || []).length > 0 && <>
+            <Text style={s.kicker}>Meet-ups</Text>
+            <View style={s.list}>{d.meetups.map((m: any, i: number) => <Row key={m.head} head={m.head} label={m.label} i={i} onPress={() => onPick(m.head)} />)}</View>
+          </>}
+        </>
+      )}
+    </ScrollView>
   );
 }
 
@@ -404,7 +578,7 @@ function NoteList({ notes, loading, empty, s, c, showHead, ownerName, onEdit }: 
             ))}
           </View>
         )}
-        <Text style={s.small}>{showHead ? `${n.head_label} · ` : ''}{n.source_label}{n.shared ? (n.mine ? ' · posted to everyone' : ` · ${n.author_name.split(' ')[0]}`) : ''}</Text>
+        <Text style={s.small}>{showHead ? `${n.where || n.head_label} · ` : ''}{n.source_label}{n.shared ? (n.mine ? ' · posted to everyone' : ` · ${n.author_name.split(' ')[0]}`) : ''}</Text>
       </Pressable>
     );
   };
@@ -428,8 +602,21 @@ const styles = (c: any) => StyleSheet.create({
   edInput: { borderWidth: 1, borderColor: c.border, borderRadius: 12, padding: 12, fontFamily: fonts.body, fontSize: 16, color: c.text, backgroundColor: c.background },
   delBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingVertical: 10, marginTop: 8 },
   delT: { fontFamily: fonts.bodySemibold, fontSize: 14.5 },
-  write: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 46, borderRadius: 12, backgroundColor: c.primary },
-  writeT: { fontFamily: fonts.bodySemibold, fontSize: 15, color: c.onPrimary },
+  write: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, minHeight: 54, borderRadius: 16, backgroundColor: c.primary },
+  writeT: { fontFamily: fonts.bodyBold, fontSize: 16.5, color: c.onPrimary },
+  blockHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
+  h2: { fontFamily: fonts.display, fontSize: 21, color: c.text },
+  recent: { paddingHorizontal: 14, paddingVertical: 12, gap: 5 },
+  preview: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: c.textMuted },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start', backgroundColor: `${c.primary}16`, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3, maxWidth: '100%' },
+  chipT: { fontFamily: fonts.bodySemibold, fontSize: 12, color: c.primary, flexShrink: 1 },
+  status: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 7, borderBottomWidth: 1 },
+  statusT: { fontFamily: fonts.bodySemibold, fontSize: 13 },
+  filed: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 16, borderWidth: 1, borderColor: c.primary, backgroundColor: c.background },
+  filedIcon: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: `${c.primary}16` },
+  filedK: { fontFamily: fonts.mono, fontSize: 10.5, letterSpacing: 0.9, textTransform: 'uppercase', color: c.textMuted },
+  filedT: { fontFamily: fonts.bodyBold, fontSize: 16, color: c.text },
+  edTitleInput: { fontFamily: fonts.bodyBold, fontSize: 17 },
   search: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: c.background, borderWidth: 1, borderColor: c.border, borderRadius: 12, paddingHorizontal: 12, minHeight: 44 },
   searchInput: { flex: 1, fontFamily: fonts.body, fontSize: 16, color: c.text, paddingVertical: 10 },
   latest: { backgroundColor: c.yellowBg, borderWidth: 1, borderColor: c.yellow, borderRadius: 14, padding: 12, gap: 3 },
