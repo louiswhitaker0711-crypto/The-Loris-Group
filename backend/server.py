@@ -495,6 +495,11 @@ async def _startup_work():
         await run_cod_original_restore(db)
     except Exception:
         logger.exception("COD original restore failed (continuing)")
+    try:
+        from core.meetings_catalogue_migration import run_meetings_catalogue
+        await run_meetings_catalogue(db)
+    except Exception:
+        logger.exception("Meetings catalogue re-file failed (continuing)")
 
     await db.users.create_index("email", unique=True)
     # Primetime reads the whole office's week on every Home render, and writes
