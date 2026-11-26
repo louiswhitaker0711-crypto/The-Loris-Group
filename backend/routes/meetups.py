@@ -418,14 +418,19 @@ async def file_notes(user: dict, m: dict, plan: dict) -> None:
         entries.append((f"meetup:{uid}:{m['id']}:debrief", "What I'm bringing back", body, "Debrief"))
     now = _now()
     keep = []
+    before = {n["ref"]: n async for n in db.folder_notes.find(
+        {"ref": {"$in": [e[0] for e in entries]}}, {"_id": 0, "ref": 1, "title": 1, "body": 1, "updated_at": 1})}
     for ref, title, body, src in entries:
         keep.append(ref)
+        old = before.get(ref)
+        same = bool(old) and (old.get("title"), old.get("body")) == (title, body)
         await db.folder_notes.update_one(
             {"ref": ref},
             {"$set": {"office_id": user.get("office_id"), "user_id": uid, "author_name": user.get("name") or "",
                       "head": head, "head_label": m["name"], "stage": None, "category": "",
                       "title": title, "body": body, "photos": [], "date": m["start_date"],
-                      "source_label": src, "shared": False, "updated_at": now},
+                      "source_label": src, "shared": False,
+                      "updated_at": (old.get("updated_at") or now) if same else now},
              "$setOnInsert": {"id": str(uuid.uuid4()), "created_at": now}}, upsert=True)
     await db.folder_notes.delete_many({"ref": {"$regex": f"^meetup:{re.escape(uid)}:{re.escape(m['id'])}:", "$nin": keep}})
 

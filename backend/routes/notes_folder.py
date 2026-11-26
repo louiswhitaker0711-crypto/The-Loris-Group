@@ -205,6 +205,11 @@ async def sync_planner(user: dict, week_ending: str, days: dict, extra: str, fol
     can_share = (user.get("role") or "").lower() == "admin" and not user.get("is_viewer")
     now = datetime.now(timezone.utc).isoformat()
     keep = []
+    # Only a note whose words, heading or photos changed counts as edited now,
+    # so Recent shows what you actually wrote last (the Owner, 26 Nov 2026).
+    before = {n["ref"]: n async for n in db.folder_notes.find(
+        {"ref": {"$in": [e["ref"] for e in entries]}},
+        {"_id": 0, "ref": 1, "title": 1, "body": 1, "head": 1, "photos": 1, "updated_at": 1})}
     for e in entries:
         head, stage, category = allowed_head(user, e["head"]), None, ""
         if head.startswith("cod:"):
@@ -215,13 +220,17 @@ async def sync_planner(user: dict, week_ending: str, days: dict, extra: str, fol
                 stage, category = m.get("stage"), m.get("category") or ""
         label = (cods.get(head[4:]) or {}).get("topic") if head.startswith("cod:") else PITCH_LABEL.get(head[6:], "Other")
         keep.append(e["ref"])
+        old = before.get(e["ref"])
+        same = bool(old) and (old.get("title"), old.get("body"), old.get("head"), old.get("photos") or []) == \
+            (e["title"], e["body"], head, e.get("photos") or [])
         await db.folder_notes.update_one(
             {"ref": e["ref"]},
             {"$set": {"office_id": office_id, "user_id": uid, "author_name": user.get("name") or "",
                       "head": head, "head_label": label or "Other", "stage": stage, "category": category,
                       "title": e["title"], "body": e["body"], "photos": e.get("photos") or [],
                       "date": e["date"], "source_label": e["source_label"],
-                      "shared": bool(e["share"] and can_share and head != OWNERSHIP), "updated_at": now},
+                      "shared": bool(e["share"] and can_share and head != OWNERSHIP),
+                      "updated_at": (old.get("updated_at") or now) if same else now},
              "$setOnInsert": {"id": str(uuid.uuid4()), "created_at": now}},
             upsert=True)
     gone = await db.folder_notes.delete_many({"ref": {"$regex": f"^planner:{re.escape(uid)}:{re.escape(week_ending)}:",
@@ -237,8 +246,12 @@ def _visible(user: dict) -> dict:
 
 
 def _out(n: dict, me: str) -> dict:
+    stage = n.get("stage")
+    where = (f"{STAGE_NAMES.get(stage, 'CoD').split(' · ')[0]} · {n.get('head_label') or ''}"
+             if str(n.get("head") or "").startswith("cod:") else n.get("head_label") or "Other")
     return {k: n.get(k) for k in ("id", "head", "head_label", "stage", "category", "title", "body", "date",
-                                  "source_label", "shared", "author_name")} | {
+                                  "source_label", "shared", "author_name", "updated_at")} | {
+        "where": where,
         "mine": n.get("user_id") == me, "photos": n.get("photos") or [],
         # Meet-up notes are deleted in the meet-up itself.
         "can_delete": n.get("user_id") == me and not str(n.get("ref") or "").startswith("meetup:"),
@@ -304,9 +317,15 @@ async def notes_folder(request: Request):
 
 
 @router.get("/notes")
-async def list_notes(request: Request, head: Optional[str] = None, q: Optional[str] = None):
+async def list_notes(request: Request, head: Optional[str] = None, q: Optional[str] = None,
+                     recent: Optional[int] = None):
     user = await get_current_user(request)
     me = str(user["id"])
+    if recent:
+        # Recent: your own notes, last written or changed first (the Owner, 26 Nov 2026).
+        notes = await db.folder_notes.find({"user_id": me}, {"_id": 0}).sort(
+            [("updated_at", -1), ("date", -1)]).to_list(max(1, min(int(recent), 30)))
+        return {"notes": [_out(n, me) for n in notes]}
     query: dict = _visible(user)
     if head:
         from routes.meetups import MEETUP_HEAD
