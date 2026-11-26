@@ -107,6 +107,8 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
   const [half, setHalf] = useState(false);
   const [routeTool, setRouteTool] = useState<RouteTool>('draw');
   const warmed = useRef('');
+  const liveDone = useRef<any[]>([]);
+  const [liveTick, setLiveTick] = useState(0);
   // A request for more streets (a BA) or a sector leader's redraw of one is
   // drawn here first, then sent as one: nothing is saved line by line.
   const [pending, setPending] = useState<number[][][]>([]);
@@ -171,9 +173,9 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
         const tol = Math.max(8, Math.min(45, mpp * 22));
         // Never keep someone waiting too long: after that the line goes in freehand.
         const timed = (p: Promise<any>, ms: number) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error('slow')), ms))]);
-        let r: any = await timed(apiService.snapLines([pts], tol), 10000);
-        if (r.data?.missing?.length && await timed(fetchTiles(r.data.missing), 15000).catch(() => false)) {
-          r = await timed(apiService.snapLines([pts], tol), 10000);
+        let r: any = await timed(apiService.snapLines([pts], tol), 8000);
+        if (r.data?.missing?.length && await timed(fetchTiles(r.data.missing), 20000).catch(() => false)) {
+          r = await timed(apiService.snapLines([pts], tol), 8000);
         }
         const o = r.data?.lines?.[0];
         if (o?.line?.length >= 2) { pts = o.line; side = o.side || 'left'; snapped = !!o.snapped; }
@@ -297,7 +299,8 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
         // The line stays on screen until it's snapped and saved.
         if (pts.length >= 2) {
           const mine = live;
-          saveStroke(pts.map((q) => [q[0], q[1]])).finally(() => { if (mine) liveLayer.current?.removeLayer(mine); });
+          // The drawn line comes off once the saved one has been drawn (no blink).
+          saveStroke(pts.map((q) => [q[0], q[1]])).finally(() => { if (mine) liveDone.current.push(mine); setLiveTick((t) => t + 1); });
         }
         else setTimeout(() => liveLayer.current?.clearLayers(), 600);
         pts = [];
@@ -412,8 +415,10 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
         });
       }
     }
+    // Drawn lines that are now saved come off, after the saved ones are on.
+    for (const l of liveDone.current.splice(0)) liveLayer.current?.removeLayer(l);
     setDeco(L, map.current, decoFor(marks, data.routes || [], (mk) => styleOf[mk.id] || { color: '#000', weight: DONE_WEIGHT, opacity: 0.95 }, (k) => hopHex(k)));
-  }, [data, ready, c.primary, c.red, load, editing]);
+  }, [data, ready, c.primary, c.red, load, editing, liveTick]);
 
   // What's drawn but not sent yet.
   useEffect(() => {
