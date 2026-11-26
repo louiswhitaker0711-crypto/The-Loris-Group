@@ -351,7 +351,7 @@ function useStyles() {
 /** Where a meeting box goes in Notes: its own catalogue, one entry per meeting. */
 function MeetingFiled({ k }: { k: string }) {
   const c = useColors();
-  const label = k === 'leaders_meeting' ? 'Leaders meetings' : 'Morning meetings';
+  const label = 'Morning meetings';
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}>
       <Ionicons name="albums-outline" size={13} color={c.textMuted} />
@@ -739,7 +739,12 @@ export default function WeeklyPlannerScreen() {
         <RunItButton onPress={() => setRunSheet({ text: draft?.days[String(dayIdx)]?.[f.key] || '', title: f.label })} />
       )}
       {notesChip(dayIdx, f.key, f.label)}
-      {NOTE_FIELDS.some((n) => n.key === f.key) && !!(draft?.days[String(dayIdx)]?.[f.key] || '').trim() && <MeetingFiled k={f.key} />}
+      {f.key === 'leaders_meeting' ? (canEdit && (
+        <FolderTag value={draft?.folder?.[`${dayIdx}:${f.key}`]}
+          defaultHead={draft?.days[String(dayIdx)]?.[`${f.key}_cod`] ? `cod:${draft?.days[String(dayIdx)]?.[`${f.key}_cod`]}` : 'pitch:other'}
+          defaultTitle={f.label} isAdmin={isAdmin}
+          onChange={(v) => update((cur) => ({ ...cur, folder: { ...(cur.folder || {}), [`${dayIdx}:${f.key}`]: v } }))} />
+      )) : NOTE_FIELDS.some((n) => n.key === f.key) && !!(draft?.days[String(dayIdx)]?.[f.key] || '').trim() && <MeetingFiled k={f.key} />}
       {f.key === 'primetime' && showWeekTab && (
         <PrimetimeDayBlock week={week} dayIndex={dayIdx} canEdit={canEdit} />
       )}
@@ -1568,7 +1573,12 @@ export default function WeeklyPlannerScreen() {
                     />
                     {notesChip(tab, f.key, f.label)}
                     {/* Meetings go in Notes' own Morning / Leaders meetings catalogue (the Owner, 26 Nov 2026). */}
-                    {!!(draft.days[String(tab)]?.[f.key] || '').trim() && <MeetingFiled k={f.key} />}
+                    {f.key === 'leaders_meeting' ? (canEdit && (
+                      <FolderTag value={draft.folder?.[`${tab}:${f.key}`]}
+                        defaultHead={draft.days[String(tab)]?.[`${f.key}_cod`] ? `cod:${draft.days[String(tab)]?.[`${f.key}_cod`]}` : 'pitch:other'}
+                        defaultTitle={f.label} isAdmin={isAdmin}
+                        onChange={(v) => update((cur) => ({ ...cur, folder: { ...(cur.folder || {}), [`${tab}:${f.key}`]: v } }))} />
+                    )) : !!(draft.days[String(tab)]?.[f.key] || '').trim() && <MeetingFiled k={f.key} />}
                   </Card>
                 ))}
                 </View>

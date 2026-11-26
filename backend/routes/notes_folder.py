@@ -162,7 +162,7 @@ def default_head(day: dict, box: str) -> str:
     cod = (day or {}).get(f"{box}_cod") or ""
     if cod:
         return f"cod:{cod}"
-    return "pitch:leaders" if box == "leaders_meeting" else "pitch:other"
+    return "pitch:other"
 
 
 def day_date(week_ending: str, day_index: int) -> str:
@@ -193,14 +193,8 @@ def planner_entries(user_id: str, week_ending: str, days: dict, extra: str, fold
                         "body": "\n\n".join(f"{lab}\n{t}" for lab, t in parts if t)[:MAX_BODY],
                         "head": "pitch:morning", "title": meeting_title(topic, "Morning meeting"),
                         "share": False, "date": when, "source_label": "Morning meeting"})
-        lead = (day.get("leaders_meeting") or "").strip()
-        if lead:
-            out.append({"ref": f"planner:{user_id}:{week_ending}:{d}:leaders_meeting", "meeting": True,
-                        "body": lead[:MAX_BODY], "head": "pitch:leaders",
-                        "title": meeting_title(lead, "Leaders meeting"), "share": False,
-                        "date": when, "source_label": "Leaders meeting"})
         for box, label in NOTE_BOXES.items():
-            if box == "leaders_meeting" or box.startswith("morning_"):
+            if box.startswith("morning_"):
                 continue
             text = (day.get(box) or "").strip()
             if not text:
@@ -272,9 +266,67 @@ async def sync_planner(user: dict, week_ending: str, days: dict, extra: str, fol
 
 def _visible(user: dict) -> dict:
     """Your own notes, and the notes posted to everyone in your office
-    (never anyone's Ownership notes)."""
-    return {"$or": [{"user_id": str(user["id"])},
-                    {"shared": True, "office_id": user.get("office_id"), "head": {"$ne": OWNERSHIP}}]}
+    (never anyone's Ownership notes); for the Owner, the office's leaders
+    meetings from the Weekly Plan."""
+    ors = [{"user_id": str(user["id"])},
+           {"shared": True, "office_id": user.get("office_id"), "head": {"$ne": OWNERSHIP}}]
+    if is_owner(user):
+        ors.append({"agenda": True, "office_id": user.get("office_id")})
+    return {"$or": ors}
+
+
+# ── Leaders meetings = the Weekly Plan's COD 3 row (the Owner, 26 Nov 2026) ──
+# Each day's COD 3 cell (its topic and run-through) is one entry in Notes →
+# Leaders meetings. Kept in step whenever Notes opens: any Weekly Plan that
+# changed since is re-filed.
+LEADERS_ROW = re.compile(r"^\s*(cod\s*3|leaders?'?\s*meeting)", re.I)
+
+
+async def _file_agenda(office_id: str, a: dict) -> None:
+    week = a.get("week_ending") or ""
+    keep = []
+    now = datetime.now(timezone.utc).isoformat()
+    for r in a.get("rows") or []:
+        if not LEADERS_ROW.match(str(r.get("label") or "")):
+            continue
+        for c in r.get("cells") or []:
+            topic, run = (c.get("topic") or "").strip(), (c.get("run") or "").strip()
+            if not (topic or run) or not str(c.get("day", "")).isdigit():
+                continue
+            ref = f"agenda:{office_id}:{week}:{r.get('id')}:{c['day']}"
+            keep.append(ref)
+            body = run or topic
+            who = (c.get("presenter") or "").strip()
+            old = await db.folder_notes.find_one({"ref": ref}, {"_id": 0, "title": 1, "body": 1, "updated_at": 1})
+            title = topic or meeting_title(run, "Leaders meeting")
+            same = bool(old) and (old.get("title"), old.get("body")) == (title, body)
+            await db.folder_notes.update_one({"ref": ref}, {"$set": {
+                "office_id": office_id, "user_id": "", "author_name": who, "head": "pitch:leaders",
+                "head_label": "Leaders meetings", "stage": None, "category": "", "title": title, "body": body,
+                "photos": [], "date": day_date(week, int(c["day"])),
+                "source_label": f"{r.get('label') or 'COD 3'}" + (f" \u00b7 {who}" if who else ""),
+                "shared": False, "meeting": True, "agenda": True,
+                "updated_at": (old.get("updated_at") or now) if same else now},
+                "$setOnInsert": {"id": str(uuid.uuid4()), "created_at": now}}, upsert=True)
+    await db.folder_notes.delete_many(
+        {"ref": {"$regex": f"^agenda:{re.escape(office_id)}:{re.escape(week)}:", "$nin": keep}})
+
+
+async def sync_agenda_meetings(user: dict) -> None:
+    if not is_owner(user):
+        return
+    office_id = user.get("office_id") or ""
+    try:
+        async for a in db.weekly_agendas.find({"office_id": office_id},
+                                              {"_id": 0, "id": 1, "week_ending": 1, "rows": 1, "updated_at": 1}):
+            mark = await db.notes_agenda_sync.find_one({"agenda_id": a.get("id")})
+            if mark and mark.get("updated_at") == a.get("updated_at"):
+                continue
+            await _file_agenda(office_id, a)
+            await db.notes_agenda_sync.update_one({"agenda_id": a.get("id")},
+                                                  {"$set": {"updated_at": a.get("updated_at")}}, upsert=True)
+    except Exception as ex:  # noqa: BLE001
+        print(f"[notes] leaders meetings sync failed: {ex}")
 
 
 def _out(n: dict, me: str) -> dict:
@@ -294,6 +346,7 @@ def _out(n: dict, me: str) -> dict:
 @router.get("/notes/folder")
 async def notes_folder(request: Request):
     user = await get_current_user(request)
+    await sync_agenda_meetings(user)
     me = str(user["id"])
     counts: dict = {}
     owner_counts: dict = {}
@@ -352,6 +405,7 @@ async def notes_folder(request: Request):
 async def list_notes(request: Request, head: Optional[str] = None, q: Optional[str] = None,
                      recent: Optional[int] = None):
     user = await get_current_user(request)
+    await sync_agenda_meetings(user)
     me = str(user["id"])
     if recent:
         # Recent: your own notes, last written or changed first (the Owner, 26 Nov 2026).

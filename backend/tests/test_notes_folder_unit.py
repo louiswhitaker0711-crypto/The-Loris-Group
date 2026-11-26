@@ -32,7 +32,8 @@ def test_meetings_file_into_their_catalogues_not_cod_or_other():
                   "morning_cs": "Smile on the doorstep"}}
     out = nf.planner_entries("u1", "2026-11-01", days, "Extra bits", {})
     by = {e["source_label"]: e for e in out}
-    assert by["Leaders meeting"]["head"] == "pitch:leaders" and by["Leaders meeting"]["date"] == "2026-10-27"
+    assert by["Leaders Meeting"]["head"] == "cod:m1" and by["Leaders Meeting"]["date"] == "2026-10-27"
+    assert not by["Leaders Meeting"].get("meeting")
     assert by["Morning meeting"]["head"] == "pitch:morning"
     assert by["Morning meeting"]["body"] == "Customer Service\nSmile on the doorstep"
     assert by["Extra notes"]["date"] == "2026-10-26"
@@ -54,14 +55,32 @@ def test_sync_files_edits_and_removes_and_only_the_owner_shares():
     _run(nf.sync_planner(owner, "2026-11-01", {}, "", {}, slot))
     shared = _run(db.folder_notes.find_one({"user_id": "o"}))
     assert shared["shared"] is True and shared["head_label"] == "Close"
-    _run(nf.sync_planner(owner, "2026-11-01", {"2": {"leaders_meeting": "# Pace\n## Opener"}}, "", {}, slot))
-    m = _run(db.folder_notes.find_one({"user_id": "o", "head": "pitch:leaders"}))
-    assert m["meeting"] is True and m["title"] == "Pace" and m["shared"] is False
 
 
-def test_leaders_meeting_box_files_under_leaders_meeting():
+def test_leaders_meeting_box_is_an_ordinary_note():
     out = nf.planner_entries("u1", "2026-11-15", {"2": {"leaders_meeting": "Pace at the doors"}}, "", {})
-    assert out[0]["head"] == "pitch:leaders"
+    assert out[0]["head"] == "pitch:other" and not out[0].get("meeting")
+
+
+def test_leaders_meetings_come_from_the_weekly_plans_cod3_row():
+    db = AsyncMongoMockClient()["notes_agenda_test"]
+    nf.db = db
+    agenda = {"id": "a1", "office_id": "o1", "week_ending": "2026-11-29", "updated_at": "t1", "rows": [
+        {"id": "r1", "label": "COD 3", "cells": [{"day": 1, "topic": "What is a leader?", "presenter": "Louis",
+                                                   "run": "# What is a leader?\n## Opener · 5 min"},
+                                                  {"day": 2, "topic": "", "run": ""}]},
+        {"id": "r2", "label": "Primetime", "cells": [{"day": 1, "topic": "Closes"}]}]}
+    _run(db.weekly_agendas.insert_one(dict(agenda)))
+    owner = {"id": "o", "office_id": "o1", "role": "admin", "name": "Louis"}
+    _run(nf.sync_agenda_meetings(owner))
+    notes = _run(db.folder_notes.find({}, {"_id": 0}).to_list(10))
+    assert len(notes) == 1
+    n = notes[0]
+    assert n["head"] == "pitch:leaders" and n["title"] == "What is a leader?" and n["meeting"] and n["agenda"]
+    assert n["date"] == "2026-11-24" and n["source_label"] == "COD 3 \u00b7 Louis"
+    _run(db.weekly_agendas.update_one({"id": "a1"}, {"$set": {"updated_at": "t2", "rows": []}}))
+    _run(nf.sync_agenda_meetings(owner))
+    assert _run(db.folder_notes.count_documents({})) == 0
 
 
 def test_ownership_is_the_owners_alone_and_never_shared():
