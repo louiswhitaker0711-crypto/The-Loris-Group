@@ -147,3 +147,47 @@ def test_a_ba_requests_more_streets_and_the_leader_approves_or_declines(monkeypa
     who["u"] = {"id": "lead1", "name": "Sam Example", "role": "trainee", "office_id": "o1"}
     run(cov.decline_request(d["id"], _Req()))
     assert run(db.coverage_marks.find_one({"id": d["id"]})) is None
+
+
+def test_hop_routes_are_for_the_hop_and_come_off_when_the_map_is_saved(monkeypatch):
+    from mongomock_motor import AsyncMongoMockClient
+    db = AsyncMongoMockClient()["t"]
+    monkeypatch.setattr(cov, "db", db)
+    today = cov._today().isoformat()
+    run = asyncio.run
+    run(db.sectors.insert_one({"office_id": "o1", "date": today, "leader_id": "lead1",
+                               "member_ids": ["ba1", "ba2", "ba3"], "postcode": "DN4 0AB",
+                               "hops": [{"colour": "red", "member_ids": ["ba1", "ba2"]}, {"colour": "blue", "member_ids": ["ba3"]}]}))
+    who = {"u": {"id": "ba1", "name": "Ayo Example", "role": "trainee", "office_id": "o1"}}
+
+    async def _user(_r):
+        return dict(who["u"])
+
+    monkeypatch.setattr(cov, "get_current_user", _user)
+    line = [[[53.51, -1.12], [53.512, -1.12]]]
+    # A BA in the red hop draws the red route, whatever colour they ask for, half street on.
+    doc = run(cov.save_coverage(_Req({"lines": line, "kind": "route", "colour": "blue", "half": True, "side": "right"})))
+    assert (doc["status"], doc["colour"], doc["half"], doc["side"]) == ("route", "red", True, "right")
+    # Done lines can be half too; plan lines can't.
+    done = run(cov.save_coverage(_Req({"lines": line, "half": True})))
+    assert done["half"] and done["side"] == "left"
+    # Flags: red hop only for a red BA.
+    r = run(cov.set_route_flag(_Req({"date": today, "colour": "red", "which": "start", "at": [53.51, -1.12]})))
+    assert r["route"]["start"] == [53.51, -1.12]
+    with pytest.raises(HTTPException):
+        run(cov.set_route_flag(_Req({"date": today, "colour": "blue", "which": "start", "at": [53.51, -1.12]})))
+    # Someone in no hop can't draw a route.
+    who["u"] = {"id": "ba9", "role": "trainee", "office_id": "o1"}
+    with pytest.raises(HTTPException):
+        run(cov.save_coverage(_Req({"lines": line, "kind": "route"})))
+    # The leader saves the map: the route comes off with the plan.
+    who["u"] = {"id": "lead1", "name": "Lee Example", "role": "leader", "office_id": "o1"}
+    run(cov.confirm_coverage(_Req({"date": today})))
+    assert run(db.coverage_marks.count_documents({"status": "route"})) == 0
+    # Clearing a route takes its flags too.
+    run(cov.save_coverage(_Req({"lines": line, "kind": "route", "colour": "blue"})))
+    run(cov.set_route_flag(_Req({"date": today, "colour": "blue", "which": "finish", "at": [53.512, -1.12]})))
+    run(cov.clear_route(_Req(), date=today, colour="blue"))
+    sec = run(db.sectors.find_one({"leader_id": "lead1"}))
+    assert run(db.coverage_marks.count_documents({"status": "route"})) == 0
+    assert all(x.get("colour") != "blue" for x in sec.get("routes") or [])

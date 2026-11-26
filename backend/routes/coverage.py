@@ -25,6 +25,19 @@ is drawn in the hop's colour as drafts, then confirmed black.
   POST   /api/coverage/{id}/approve | /decline | /replace  sector leader answers a BA's request
                                                         for more streets (kind "request")
   DELETE /api/coverage/{id}                             author, sector leader or Admin
+  PUT    /api/coverage/route-flag {date, colour, which, at}  a hop's start / finish flag
+  DELETE /api/coverage/route?date&colour&leader_id      clear a hop's route
+
+Routes (the Owner, 26 Nov 2026): optional, per bunny hop. A Coach who plans
+the areas, or anyone in that hop, can draw the hop's route (status "route",
+in the hop's colour): arrows the way it was drawn, a start and a finish
+flag (`sectors.routes`: [{colour, start, finish}], else the route's ends).
+Only that hop (and whoever plans the areas) sees it; it comes off with the
+planned areas when the map is saved, and never reaches the Owner's map.
+
+Half street: a line marked `half` covers one side of the road only; `side`
+(left / right of the way it was drawn) says which. Lines can be snapped to
+the streets first (`core/roads.py`, POST /api/roads/snap).
 """
 from __future__ import annotations
 
@@ -86,7 +99,7 @@ async def coverage_in_view(request: Request, south: float, west: float, north: f
     user = await require_admin_or_leader(request)
     n = max(1, min(int(days or KEEP_DAYS), KEEP_DAYS))
     since = (_today() - timedelta(days=n)).isoformat()
-    q = {"office_id": user.get("office_id"), "date": {"$gte": since}, "status": {"$nin": ["plan", "requested"]},
+    q = {"office_id": user.get("office_id"), "date": {"$gte": since}, "status": {"$nin": ["plan", "requested", "route"]},
          # boxes that overlap the view
          "bbox.s": {"$lte": north}, "bbox.n": {"$gte": south}, "bbox.w": {"$lte": east}, "bbox.e": {"$gte": west}}
     rows = await db.coverage_marks.find(q, {"_id": 0}).sort("date", -1).to_list(500)
@@ -141,8 +154,10 @@ async def save_coverage(request: Request):
     # streets); Coaches and Admins for the last fortnight.
     if role not in ("leader", "admin") and (not sec or (_today() - d).days > 1):
         raise HTTPException(status_code=403, detail="You can mark off your own sector's streets on the day or the day after")
-    kind = body.get("kind") if body.get("kind") in ("plan", "request") else "done"
+    kind = body.get("kind") if body.get("kind") in ("plan", "request", "route") else "done"
     leads = bool(sec) and (sec.get("leader_id") == str(user["id"]) or _is_admin(user))
+    if kind == "route" and (d != _today() or not sec):
+        raise HTTPException(status_code=400, detail="Draw a hop's route on the day")
     # Any Coach in the sector that day can plan the bunny hop areas, not just
     # the sector leader (the Owner, 18 Nov 2026). Confirming and approving
     # requests stay with the leader and Admins.
@@ -152,8 +167,16 @@ async def save_coverage(request: Request):
     if kind in ("done", "request") and not leads:
         # A BA draws in their bunny hop's colour.
         colour = my_hop_colour(sec, str(user["id"])) or ""
+    if kind == "route" and not can_plan_areas(user, sec):
+        # Anyone in a hop can draw their own hop's route.
+        colour = my_hop_colour(sec, str(user["id"])) or ""
+        if not colour:
+            raise HTTPException(status_code=403, detail="Only a Coach in the sector or someone in that bunny hop draws its route")
     if colour not in HOP_COLOURS:
         colour = ""
+    if kind == "route" and not colour:
+        raise HTTPException(status_code=400, detail="Pick the bunny hop's colour first")
+    half = bool(body.get("half")) and kind in ("done", "route")
     # A sector with two joined postcodes files its lines under the first one;
     # the map finds them by where they're drawn (bbox), not by postcode.
     from routes.sector import postcode_parts
@@ -166,8 +189,10 @@ async def save_coverage(request: Request):
            "postcode": pc, "district": district(pc), "lines": lines, "bbox": _bbox(lines),
            # Done lines added after the day (forgotten streets) go straight on
            # the worked map: the day's map has been saved already.
-           "status": {"plan": "plan", "request": "requested"}.get(kind, "draft" if d >= _today() else "confirmed"),
+           "status": {"plan": "plan", "request": "requested", "route": "route"}.get(kind, "draft" if d >= _today() else "confirmed"),
            "kind": kind, "colour": colour,
+           "half": half, "side": ("right" if str(body.get("side") or "") == "right" else "left") if half else None,
+           "snapped": bool(body.get("snapped")),
            "note": " ".join(str(body.get("note") or "").split())[:200],
            "created_at": datetime.now(timezone.utc).isoformat()}
     if kind == "request":
@@ -291,7 +316,7 @@ async def confirm_coverage(request: Request):
         await db.sectors.update_one({"office_id": user.get("office_id"), "date": iso, "leader_id": leader},
                                     {"$set": {"map_saved_at": datetime.now(timezone.utc).isoformat()}})
         d = await db.coverage_marks.delete_many({**{k: v for k, v in q.items() if k != "status"},
-                                                 "status": {"$in": ["plan", "requested"]}})
+                                                 "status": {"$in": ["plan", "requested", "route"]}})
         cleared = d.deleted_count
     return {"confirmed": r.modified_count, "cleared": cleared}
 
@@ -308,3 +333,64 @@ async def delete_coverage(mark_id: str, request: Request):
         raise HTTPException(status_code=403, detail="Only the person who drew it, the sector leader or an Admin can remove it")
     await db.coverage_marks.delete_one({"id": mark_id})
     return {"deleted": True}
+
+
+async def _route_sector(user: dict, iso: str, colour: str, leader_id: Optional[str]) -> dict:
+    """The sector whose hop route is being changed, checked: a Coach who
+    plans the areas, or someone in that hop."""
+    sec = None
+    if leader_id and _is_admin(user):
+        sec = await db.sectors.find_one({"office_id": user.get("office_id"), "date": iso, "leader_id": str(leader_id)}, {"_id": 0})
+    if not sec:
+        sec = await sector_of(str(user["id"]), iso, user.get("office_id"))
+    if not sec or colour not in HOP_COLOURS:
+        raise HTTPException(status_code=404, detail="That bunny hop wasn't found")
+    if not (can_plan_areas(user, sec) or my_hop_colour(sec, str(user["id"])) == colour):
+        raise HTTPException(status_code=403, detail="Only a Coach in the sector or someone in that bunny hop changes its route")
+    return sec
+
+
+@router.put("/coverage/route-flag")
+async def set_route_flag(request: Request):
+    """Place (or take away, `at: null`) a hop route's start or finish flag."""
+    user = await get_current_user(request)
+    body = await request.json()
+    iso = str(body.get("date") or _today().isoformat())[:10]
+    colour = str(body.get("colour") or "").lower()
+    which = body.get("which")
+    if which not in ("start", "finish"):
+        raise HTTPException(status_code=400, detail="Start or finish?")
+    sec = await _route_sector(user, iso, colour, body.get("leader_id"))
+    at = body.get("at")
+    if at is not None:
+        try:
+            lat, lng = float(at[0]), float(at[1])
+        except (TypeError, ValueError, IndexError):
+            raise HTTPException(status_code=400, detail="Tap the map where the flag goes")
+        if not (UK_BOX[0] <= lat <= UK_BOX[2] and UK_BOX[1] <= lng <= UK_BOX[3]):
+            raise HTTPException(status_code=400, detail="Tap the map where the flag goes")
+        at = [round(lat, 6), round(lng, 6)]
+    routes = [r for r in sec.get("routes") or [] if r.get("colour") in HOP_COLOURS]
+    mine = next((r for r in routes if r["colour"] == colour), None)
+    if not mine:
+        mine = {"colour": colour}
+        routes.append(mine)
+    mine[which] = at
+    await db.sectors.update_one({"office_id": sec.get("office_id"), "date": iso, "leader_id": sec["leader_id"]},
+                                {"$set": {"routes": routes}})
+    return {"ok": True, "route": mine}
+
+
+@router.delete("/coverage/route")
+async def clear_route(request: Request, date: Optional[str] = None, colour: str = "", leader_id: Optional[str] = None):
+    """Clear a hop's route: its lines and flags."""
+    user = await get_current_user(request)
+    iso = str(date or _today().isoformat())[:10]
+    colour = (colour or "").lower()
+    sec = await _route_sector(user, iso, colour, leader_id)
+    r = await db.coverage_marks.delete_many({"office_id": sec.get("office_id"), "date": iso, "status": "route",
+                                             "sector_leader_id": sec["leader_id"], "colour": colour})
+    routes = [x for x in sec.get("routes") or [] if x.get("colour") != colour]
+    await db.sectors.update_one({"office_id": sec.get("office_id"), "date": iso, "leader_id": sec["leader_id"]},
+                                {"$set": {"routes": routes}})
+    return {"deleted": r.deleted_count}
