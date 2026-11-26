@@ -64,13 +64,16 @@ async def snap(request: Request):
     return {"lines": out}
 
 
+_tasks: set = set()   # keep background fetches alive until they finish
+
+
 async def _background(keys: list, office_id) -> None:
     for k in keys[:12]:
         try:
             t = await roads._tile(db, k)
-            if not t:
-                await db.road_fetch_log.insert_one({"office_id": office_id, "at": datetime.now(timezone.utc).isoformat(),
-                                                    "tiles": [k], "error": roads.last_error.get(k, "")[:300] or "no roads"})
+            await db.road_fetch_log.insert_one({"office_id": office_id, "at": datetime.now(timezone.utc).isoformat(), "by": "server",
+                                                "tiles": [k], "error": "" if t else (roads.last_error.get(k, "")[:300] or "no roads"),
+                                                "ok": bool(t)})
         except Exception:
             pass
 
@@ -113,6 +116,19 @@ async def warm(request: Request):
     if missing:
         # Try from the server too, in the background (the phone is fetching them as well).
         import asyncio
-        asyncio.create_task(_background(list(missing), user.get("office_id")))
+        t = asyncio.create_task(_background(list(missing), user.get("office_id")))
+        _tasks.add(t)
+        t.add_done_callback(_tasks.discard)
     return {"tiles": len(roads.tile_keys(s, w, n, e)), "nodes": len(nodes),
             "missing": [{"key": k, "query": roads.overpass_query(*_padded(k))} for k in missing[:6]]}
+
+
+@router.post("/roads/log")
+async def phone_log(request: Request):
+    """What the phone saw while fetching streets (to fix snapping)."""
+    user = await get_current_user(request)
+    b = await request.json()
+    await db.road_fetch_log.insert_one({"office_id": user.get("office_id"), "at": datetime.now(timezone.utc).isoformat(),
+                                        "by": "phone", "stage": str(b.get("stage") or "")[:40],
+                                        "error": str(b.get("detail") or "")[:300], "tiles": [str(x) for x in (b.get("tiles") or [])][:12]})
+    return {"ok": True}

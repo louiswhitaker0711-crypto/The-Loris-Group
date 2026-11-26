@@ -44,19 +44,27 @@ const readSnap = () => { try { return globalThis.localStorage?.getItem(SNAP_KEY)
 // When the server can't reach OpenStreetMap, the phone fetches the roads
 // itself (tiles the server names) and hands them over: they're kept for
 // everyone for a month.
-const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
+const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
 const fetching: Record<string, Promise<boolean>> = {};
 async function fetchTiles(missing: { key: string; query: string }[] | undefined): Promise<boolean> {
   if (!missing?.length) return false;
   const one = (m: { key: string; query: string }) => (fetching[m.key] ||= (async () => {
+    const why: string[] = [];
     for (const url of OVERPASS) {
+      const t0 = Date.now();
       try {
         const r = await fetch(url, { method: 'POST', body: new URLSearchParams({ data: m.query }) });
-        if (!r.ok) continue;
-        await apiService.uploadRoadTile(m.key, await r.json());
+        if (!r.ok) { why.push(`${url.split('/')[2]} ${r.status} ${Date.now() - t0}ms`); continue; }
+        const json = await r.json();
+        await apiService.uploadRoadTile(m.key, json);
+        apiService.roadLog('phone ok', `${url.split('/')[2]} ${Date.now() - t0}ms ${(json?.elements || []).length} elements`, [m.key]);
         return true;
-      } catch { /* next server */ }
+      } catch (e: any) {
+        why.push(`${url.split('/')[2]} ${e?.response?.status || ''} ${String(e?.message || e).slice(0, 80)} ${Date.now() - t0}ms`);
+      }
     }
+    apiService.roadLog('phone failed', why.join(' | '), [m.key]);
     delete fetching[m.key];
     return false;
   })());
@@ -141,7 +149,10 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
     if (key && warmed.current !== key) {
       warmed.current = key;
       apiService.warmRoads({ s: b.s - 0.003, w: b.w - 0.005, n: b.n + 0.003, e: b.e + 0.005 })
-        .then((r) => fetchTiles(r.data?.missing)).catch(() => { /* snapping fetches on demand */ });
+        .then((r) => {
+          apiService.roadLog('warm', `missing ${(r.data?.missing || []).length} of ${r.data?.tiles}`, (r.data?.missing || []).map((x: any) => x.key));
+          return fetchTiles(r.data?.missing);
+        }).catch((e) => apiService.roadLog('warm error', String(e?.message || e)));
     }
     if (!chosen.current) { chosen.current = true; setKind('move'); }
     else if (!data.can_confirm && !data.can_plan_areas) setKind((k) => (k === 'plan' ? 'move' : k));
@@ -178,8 +189,9 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
           r = await timed(apiService.snapLines([pts], tol), 8000);
         }
         const o = r.data?.lines?.[0];
+        if (!o?.snapped) apiService.roadLog('not snapped', `missing ${(r.data?.missing || []).length}, ${pts.length} pts`);
         if (o?.line?.length >= 2) { pts = o.line; side = o.side || 'left'; snapped = !!o.snapped; }
-      } catch { pts = smoothLine(pts); }
+      } catch (e: any) { apiService.roadLog('snap error', String(e?.message || e)); pts = smoothLine(pts); }
     } else {
       pts = smoothLine(pts);
     }
