@@ -348,6 +348,18 @@ function useStyles() {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+/** Where a meeting box goes in Notes: its own catalogue, one entry per meeting. */
+function MeetingFiled({ k }: { k: string }) {
+  const c = useColors();
+  const label = k === 'leaders_meeting' ? 'Leaders meetings' : 'Morning meetings';
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}>
+      <Ionicons name="albums-outline" size={13} color={c.textMuted} />
+      <Text style={{ fontFamily: fonts.body, fontSize: 12.5, color: c.textMuted }}>Saved in Notes \u203a {label}</Text>
+    </View>
+  );
+}
+
 export default function WeeklyPlannerScreen() {
   const colors = useColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -727,12 +739,7 @@ export default function WeeklyPlannerScreen() {
         <RunItButton onPress={() => setRunSheet({ text: draft?.days[String(dayIdx)]?.[f.key] || '', title: f.label })} />
       )}
       {notesChip(dayIdx, f.key, f.label)}
-      {canEdit && NOTE_FIELDS.some((n) => n.key === f.key) && (
-        <FolderTag value={draft?.folder?.[`${dayIdx}:${f.key}`]}
-          defaultHead={draft?.days[String(dayIdx)]?.[`${f.key}_cod`] ? `cod:${draft?.days[String(dayIdx)]?.[`${f.key}_cod`]}` : f.key === 'leaders_meeting' ? 'pitch:leaders' : 'pitch:other'}
-          defaultTitle={f.label} isAdmin={isAdmin}
-          onChange={(v) => update((cur) => ({ ...cur, folder: { ...(cur.folder || {}), [`${dayIdx}:${f.key}`]: v } }))} />
-      )}
+      {NOTE_FIELDS.some((n) => n.key === f.key) && !!(draft?.days[String(dayIdx)]?.[f.key] || '').trim() && <MeetingFiled k={f.key} />}
       {f.key === 'primetime' && showWeekTab && (
         <PrimetimeDayBlock week={week} dayIndex={dayIdx} canEdit={canEdit} />
       )}
@@ -1560,13 +1567,8 @@ export default function WeeklyPlannerScreen() {
                       onOpen={() => setEditorField({ where: 'day', tab, key: f.key, title: f.label })}
                     />
                     {notesChip(tab, f.key, f.label)}
-                    {/* Files itself into the Notes folder (the Owner, 29 Oct 2026). */}
-                    {canEdit && (
-                      <FolderTag value={draft.folder?.[`${tab}:${f.key}`]}
-                        defaultHead={draft.days[String(tab)]?.[`${f.key}_cod`] ? `cod:${draft.days[String(tab)]?.[`${f.key}_cod`]}` : f.key === 'leaders_meeting' ? 'pitch:leaders' : 'pitch:other'}
-                        defaultTitle={f.label} isAdmin={isAdmin}
-                        onChange={(v) => update((cur) => ({ ...cur, folder: { ...(cur.folder || {}), [`${tab}:${f.key}`]: v } }))} />
-                    )}
+                    {/* Meetings go in Notes' own Morning / Leaders meetings catalogue (the Owner, 26 Nov 2026). */}
+                    {!!(draft.days[String(tab)]?.[f.key] || '').trim() && <MeetingFiled k={f.key} />}
                   </Card>
                 ))}
                 </View>

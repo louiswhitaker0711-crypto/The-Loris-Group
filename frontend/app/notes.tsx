@@ -20,10 +20,11 @@ import { useDeviceInsets } from '../src/nav/AppShell';
 import { toast } from '../src/utils/toast';
 import { readBackup, writeBackup, clearBackup, onLeave } from '../src/utils/draftBackup';
 import { pickNotePhoto } from '../src/utils/pickImage';
+import RunSheet, { RunItButton } from '../src/components/planner/RunSheet';
 
 type Note = { id: string; head: string; head_label: string; title: string; body: string; date: string;
   source_label: string; shared: boolean; author_name: string; mine: boolean; photos?: string[]; can_delete?: boolean; can_photo?: boolean;
-  where?: string; updated_at?: string };
+  where?: string; updated_at?: string; meeting?: boolean };
 type View_ = { kind: 'root' } | { kind: 'stage'; stage: number } | { kind: 'head'; head: string; label: string; sub?: string };
 
 /** Where a heading files, in words: "Close", "Stage 1 · Pitch delivery", a meet-up's name. */
@@ -97,10 +98,10 @@ export default function NotesScreen() {
       <ScrollView contentContainerStyle={[s.content, { paddingBottom: 32 + tabClear }]} keyboardShouldPersistTaps="handled">
         <View style={s.shell}>
           {/* Write a note here, filed under the heading you're in; it also lands in today's planner (the Owner, 29 Oct 2026). */}
-          <Pressable onPress={() => setEditing({ head: view.kind === 'head' ? view.head : '' })} style={s.write} accessibilityRole="button" testID="notes-write">
+          {!(view.kind === 'head' && view.head === 'pitch:morning') && <Pressable onPress={() => setEditing({ head: view.kind === 'head' ? view.head : '' })} style={s.write} accessibilityRole="button" testID="notes-write">
             <Ionicons name="create-outline" size={20} color={c.onPrimary} />
             <Text style={s.writeT}>{view.kind === 'head' ? `New note in ${view.label}` : 'New note'}</Text>
-          </Pressable>
+          </Pressable>}
           <View style={s.search}>
             <Ionicons name="search" size={16} color={c.textMuted} />
             <TextInput value={q} onChangeText={setQ} placeholder="Search all your notes" placeholderTextColor={c.textMuted} style={s.searchInput} accessibilityLabel="Search all your notes" />
@@ -536,10 +537,10 @@ function FolderPicker({ d, loading, current, onPick, s, c }: { d: any; loading: 
           <View style={s.list}>
             {(d.pitch || []).filter((p: any) => !p.group || p.group === 'sales').map((p: any, i: number) => <Row key={p.head} head={p.head} label={p.label} i={i} onPress={() => onPick(p.head)} />)}
           </View>
-          {(d.pitch || []).some((p: any) => p.group && p.group !== 'sales') && <>
+          {(d.pitch || []).some((p: any) => p.group && p.group !== 'sales' && p.head !== 'pitch:morning') && <>
             <Text style={s.kicker}>Meetings</Text>
             <View style={s.list}>
-              {(d.pitch || []).filter((p: any) => p.group && p.group !== 'sales').map((p: any, i: number) => <Row key={p.head} head={p.head} label={p.group === 'owner' ? `${p.label} · just you` : p.label} i={i} onPress={() => onPick(p.head)} />)}
+              {(d.pitch || []).filter((p: any) => p.group && p.group !== 'sales' && p.head !== 'pitch:morning').map((p: any, i: number) => <Row key={p.head} head={p.head} label={p.group === 'owner' ? `${p.label} · just you` : p.label} i={i} onPress={() => onPick(p.head)} />)}
             </View>
           </>}
           <Text style={s.kicker}>The CoD</Text>
@@ -558,6 +559,7 @@ function FolderPicker({ d, loading, current, onPick, s, c }: { d: any; loading: 
 
 function NoteList({ notes, loading, empty, s, c, showHead, ownerName, onEdit }: { notes?: Note[]; loading: boolean; empty: string; s: any; c: any; showHead?: boolean; ownerName: string; onEdit?: (n: Note) => void }) {
   const [open, setOpen] = useState<string | null>(null);
+  const [run, setRun] = useState<Note | null>(null);
   if (loading) return <ActivityIndicator color={c.primary} style={{ marginTop: 16 }} />;
   if (!notes?.length) return <Text style={[s.small, { textAlign: 'center', marginTop: 12 }]}>{empty}</Text>;
   const owner = notes.filter((n) => n.shared && !n.mine);
@@ -565,7 +567,7 @@ function NoteList({ notes, loading, empty, s, c, showHead, ownerName, onEdit }: 
   const card = (n: Note) => {
     const big = open === n.id;
     return (
-      <Pressable key={n.id} onPress={() => (n.mine && onEdit ? onEdit(n) : setOpen(big ? null : n.id))} style={[s.note, n.shared && !n.mine && s.noteOwner]} accessibilityRole="button" accessibilityHint={n.mine ? 'Edit this note' : undefined}>
+      <Pressable key={n.id} onPress={() => (n.mine && onEdit && !n.meeting ? onEdit(n) : setOpen(big ? null : n.id))} style={[s.note, n.shared && !n.mine && s.noteOwner]} accessibilityRole="button" accessibilityHint={n.mine ? 'Edit this note' : undefined}>
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <Text style={s.noteT}>{n.title}</Text>
           <Text style={s.small}>{fmt(n.date)}</Text>
@@ -578,6 +580,14 @@ function NoteList({ notes, loading, empty, s, c, showHead, ownerName, onEdit }: 
             ))}
           </View>
         )}
+        {n.meeting && big && (
+          <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <RunItButton onPress={() => setRun(n)} />
+            <Pressable onPress={() => router.push('/weekly-planner' as any)} hitSlop={6} accessibilityRole="button">
+              <Text style={s.back}>Change it in the planner</Text>
+            </Pressable>
+          </View>
+        )}
         <Text style={s.small}>{showHead ? `${n.where || n.head_label} · ` : ''}{n.source_label}{n.shared ? (n.mine ? ' · posted to everyone' : ` · ${n.author_name.split(' ')[0]}`) : ''}</Text>
       </Pressable>
     );
@@ -588,6 +598,7 @@ function NoteList({ notes, loading, empty, s, c, showHead, ownerName, onEdit }: 
       {owner.map(card)}
       {mine.length > 0 && owner.length > 0 && <Text style={s.kicker}>My notes</Text>}
       {mine.map(card)}
+      <RunSheet visible={!!run} text={run?.body || ''} title={run?.title} onClose={() => setRun(null)} />
     </View>
   );
 }

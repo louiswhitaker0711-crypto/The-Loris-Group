@@ -48,10 +48,24 @@ PITCH_HEADS = [
     ("sales_tip", "Sales tips"), ("other", "Other"),
     # Not pitch headings, but filed the same way (the Owner, 11 Nov 2026):
     # the Leaders meeting for everyone, and Ownership for the Owner alone.
-    ("leaders", "Leaders meeting"), ("ownership", "Ownership"),
+    ("morning", "Morning meetings"), ("leaders", "Leaders meetings"), ("ownership", "Ownership"),
 ]
 PITCH_LABEL = dict(PITCH_HEADS)
-HEAD_GROUP = {"leaders": "meeting", "ownership": "owner"}
+HEAD_GROUP = {"morning": "meeting", "leaders": "meeting", "ownership": "owner"}
+# Meetings from the planner go in their own catalogue, one entry per meeting,
+# never in Other (the Owner, 26 Nov 2026).
+MORNING_PARTS = [("morning_news", "News"), ("morning_topic", "Topic"),
+                 ("morning_cs", "Customer Service"), ("morning_bells", "Bells")]
+MEETING_HEADS = ("pitch:morning", "pitch:leaders")
+
+
+def meeting_title(text: str, fallback: str) -> str:
+    """A meeting's name: its run-through's '# Title', else its first line."""
+    for line in (text or "").splitlines():
+        t = line.strip().lstrip("#").strip()
+        if t and not t.startswith(">"):
+            return " ".join(t.split())[:MAX_TITLE] if len(t) <= MAX_TITLE else t[:MAX_TITLE - 1] + "\u2026"
+    return fallback
 OWNERSHIP = "pitch:ownership"   # the Owner's own: never shown to or shared with anyone else
 
 
@@ -170,7 +184,24 @@ def planner_entries(user_id: str, week_ending: str, days: dict, extra: str, fold
                         "source_label": label, "photos": n.get("photos") or []})
     for d in range(6):
         day = (days or {}).get(str(d)) or {}
+        when = day_date(week_ending, d)
+        # The day's morning meeting: one catalogue entry with every part.
+        parts = [(lab, (day.get(box) or "").strip()) for box, lab in MORNING_PARTS]
+        if any(t for _, t in parts):
+            topic = dict(parts).get("Topic") or next(t for _, t in parts if t)
+            out.append({"ref": f"planner:{user_id}:{week_ending}:{d}:morning", "meeting": True,
+                        "body": "\n\n".join(f"{lab}\n{t}" for lab, t in parts if t)[:MAX_BODY],
+                        "head": "pitch:morning", "title": meeting_title(topic, "Morning meeting"),
+                        "share": False, "date": when, "source_label": "Morning meeting"})
+        lead = (day.get("leaders_meeting") or "").strip()
+        if lead:
+            out.append({"ref": f"planner:{user_id}:{week_ending}:{d}:leaders_meeting", "meeting": True,
+                        "body": lead[:MAX_BODY], "head": "pitch:leaders",
+                        "title": meeting_title(lead, "Leaders meeting"), "share": False,
+                        "date": when, "source_label": "Leaders meeting"})
         for box, label in NOTE_BOXES.items():
+            if box == "leaders_meeting" or box.startswith("morning_"):
+                continue
             text = (day.get(box) or "").strip()
             if not text:
                 continue
@@ -228,6 +259,7 @@ async def sync_planner(user: dict, week_ending: str, days: dict, extra: str, fol
             {"$set": {"office_id": office_id, "user_id": uid, "author_name": user.get("name") or "",
                       "head": head, "head_label": label or "Other", "stage": stage, "category": category,
                       "title": e["title"], "body": e["body"], "photos": e.get("photos") or [],
+                      "meeting": bool(e.get("meeting")),
                       "date": e["date"], "source_label": e["source_label"],
                       "shared": bool(e["share"] and can_share and head != OWNERSHIP),
                       "updated_at": (old.get("updated_at") or now) if same else now},
@@ -251,10 +283,10 @@ def _out(n: dict, me: str) -> dict:
              if str(n.get("head") or "").startswith("cod:") else n.get("head_label") or "Other")
     return {k: n.get(k) for k in ("id", "head", "head_label", "stage", "category", "title", "body", "date",
                                   "source_label", "shared", "author_name", "updated_at")} | {
-        "where": where,
+        "where": where, "meeting": bool(n.get("meeting")),
         "mine": n.get("user_id") == me, "photos": n.get("photos") or [],
         # Meet-up notes are deleted in the meet-up itself.
-        "can_delete": n.get("user_id") == me and not str(n.get("ref") or "").startswith("meetup:"),
+        "can_delete": n.get("user_id") == me and not str(n.get("ref") or "").startswith("meetup:") and not n.get("meeting"),
         # Photos can be added to notes that sit in the planner as their own note.
         "can_photo": n.get("user_id") == me and ":n:" in str(n.get("ref") or "")}
 
@@ -323,7 +355,7 @@ async def list_notes(request: Request, head: Optional[str] = None, q: Optional[s
     me = str(user["id"])
     if recent:
         # Recent: your own notes, last written or changed first (the Owner, 26 Nov 2026).
-        notes = await db.folder_notes.find({"user_id": me}, {"_id": 0}).sort(
+        notes = await db.folder_notes.find({"user_id": me, "meeting": {"$ne": True}}, {"_id": 0}).sort(
             [("updated_at", -1), ("date", -1)]).to_list(max(1, min(int(recent), 30)))
         return {"notes": [_out(n, me) for n in notes]}
     query: dict = _visible(user)
@@ -415,6 +447,8 @@ async def edit_note(note_id: str, request: Request):
     note = await db.folder_notes.find_one({"id": note_id})
     if not note or note.get("user_id") != me:
         raise HTTPException(status_code=404, detail="Note not found")
+    if note.get("meeting"):
+        raise HTTPException(status_code=400, detail="Change meetings in your planner")
     raw = await request.json()
     e = _clean_edit(raw if isinstance(raw, dict) else {})
     e["head"] = allowed_head(user, e["head"]) if e["head"] else ""
