@@ -141,3 +141,55 @@ def test_when_the_server_cant_reach_the_roads_the_phone_sends_them():
         asyncio.run(db.road_tiles.update_one({"key": key}, {"$set": doc}, upsert=True))
     res = asyncio.run(roads.snap_lines(db, [drawn], 25, fetch=broken))
     assert res[0]["snapped"]
+
+
+def test_vector_tile_roads_are_read_and_joined():
+    """A tiny hand-made vector tile: a road, a footpath, and a side road that
+    stops just short of the main one (joined), from the transportation layer."""
+    def varint(v):
+        out = b""
+        while True:
+            b = v & 0x7F
+            v >>= 7
+            out += bytes([b | (0x80 if v else 0)])
+            if not v:
+                return out
+
+    def field(num, wt, payload):
+        key = varint((num << 3) | wt)
+        return key + (varint(payload) if wt == 0 else varint(len(payload)) + payload)
+
+    def zz(n):
+        return (n << 1) ^ (n >> 31)
+
+    def line(pts):
+        geom = [(1 & 7) | (1 << 3), zz(pts[0][0]), zz(pts[0][1]), (2 & 7) | ((len(pts) - 1) << 3)]
+        x, y = pts[0]
+        for px, py in pts[1:]:
+            geom += [zz(px - x), zz(py - y)]
+            x, y = px, py
+        return b"".join(varint(g) for g in geom)
+
+    def feature(cls_idx, pts):
+        return field(2, 2, varint(0) + varint(cls_idx)) + field(3, 0, 2) + field(4, 2, line(pts))
+
+    value = lambda s: field(1, 2, s.encode())
+    layer = (field(1, 2, b"transportation") + field(3, 2, b"class")
+             + field(4, 2, value("minor")) + field(4, 2, value("path"))
+             + field(2, 2, feature(0, [(100, 2000), (3000, 2000)]))      # main road
+             + field(2, 2, feature(1, [(100, 2500), (3000, 2500)]))      # footpath: left out
+             + field(2, 2, feature(0, [(1500, 1000), (1500, 1996)]))     # side road stopping short
+             + field(5, 0, 4096))
+    tile = field(3, 2, layer)
+    tx, ty = roads._tile_xy(53.42, -1.51, 14)
+    lines = roads.decode_roads(tile, tx, ty)
+    assert len(lines) == 2
+    s, w = roads._px_to_ll(tx * 4096, ty * 4096 + 4096, 14)
+    n, e = roads._px_to_ll(tx * 4096 + 4096, ty * 4096, 14)
+    net = roads.lines_to_network(lines, s, w, n, e)
+    nodes = {i: (a, b) for i, a, b in net["nodes"]}
+    # The side road's end is joined onto the main road (a shared node).
+    main = max(net["ways"], key=len)
+    assert len(main) == 3
+    assert any(main[1] in way for way in net["ways"] if way is not main)
+    assert all(i < 0 for i in nodes)
