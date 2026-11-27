@@ -882,6 +882,10 @@ async def _startup_work():
 
         scheduler.add_job(_roads_job, "cron", hour=2, minute=17, id="road_tiles",
                           replace_existing=True, max_instances=1, coalesce=True)
+        # And once a few minutes after each deploy, so a new territory is ready the same day.
+        from datetime import timedelta as _td
+        scheduler.add_job(_roads_job, "date", run_date=datetime.now(timezone.utc) + _td(minutes=3),
+                          id="road_tiles_startup", replace_existing=True)
 
         # ── New month: everyone checks their breakeven (1st, 09:12 UK) ────────
         async def _breakeven_month_job():
