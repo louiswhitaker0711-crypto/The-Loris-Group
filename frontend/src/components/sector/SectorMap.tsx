@@ -126,6 +126,7 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
   const [routeTool, setRouteTool] = useState<RouteTool>('draw');
   const warmed = useRef('');
   const liveDone = useRef<any[]>([]);
+  const lastStroke = useRef(0);
   const [liveTick, setLiveTick] = useState(0);
   // A request for more streets (a BA) or a sector leader's redraw of one is
   // drawn here first, then sent as one: nothing is saved line by line.
@@ -322,11 +323,17 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
         drawingNow = false;
         // The line stays on screen until it's snapped and saved.
         if (pts.length >= 2) {
+          lastStroke.current = Date.now();
           const mine = live;
           // The drawn line comes off once the saved one has been drawn (no blink).
           saveStroke(pts.map((q) => [q[0], q[1]])).finally(() => { if (mine) liveDone.current.push(mine); setLiveTick((t) => t + 1); });
         }
-        else setTimeout(() => liveLayer.current?.clearLayers(), 600);
+        else if (live) {
+          // A tap: only this one dot comes off, never lines still being saved.
+          const dot = live;
+          setTimeout(() => liveLayer.current?.removeLayer(dot), 300);
+        }
+        live = null;
         pts = [];
       };
       const noMenu = (e: Event) => { if (st.current.data?.can_draw && st.current.kind !== 'move') e.preventDefault(); };
@@ -429,6 +436,15 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
         if (!isDeco(mk)) L.polyline(line, { ...style, interactive: false }).addTo(marksLayer.current);
         const del = mk.can_delete ? `<br/><a href="#" data-del="${esc(mk.id)}">Remove</a>` : '';
         hit.bindPopup(`<b>${title}</b><br/>By ${who}${del}`);
+        // Only a tap opens the box, never the end of a line just drawn over it.
+        if (hit._openPopup) {
+          hit.off('click', hit._openPopup, hit);
+          hit.on('click', (e: any) => {
+            const k = st.current.kind;
+            if (k !== 'move' && Date.now() - lastStroke.current < 1500) return;
+            hit._openPopup(e);
+          });
+        }
         hit.on('popupopen', (ev: any) => {
           const a = ev.popup.getElement()?.querySelector('a[data-del]');
           if (a) a.onclick = async (e: any) => {

@@ -7,10 +7,10 @@
 // redrawn whenever the zoom changes. One decoration layer per map.
 
 export type DecoItem =
-  | { type: 'line'; latlngs: number[][]; color: string; weight: number; opacity: number; offsetPx?: number; arrows?: boolean }
+  | { type: 'line'; latlngs: number[][]; color: string; weight: number; opacity: number; offsetPx?: number; arrows?: boolean; dash?: string }
   | { type: 'flag'; at: number[]; which: 'start' | 'finish' };
 
-export const HALF_OFFSET_PX = 5;
+export const HALF_OFFSET_PX = 7;
 const ARROW_EVERY_PX = 70;
 
 type Pt = { x: number; y: number };
@@ -67,7 +67,7 @@ function draw(L: any, m: any, layer: any, items: DecoItem[]) {
     const px: Pt[] = it.latlngs.map((p) => m.latLngToLayerPoint(p));
     const pts = offsetPts(px, it.offsetPx || 0);
     const lls = pts.map((p) => m.layerPointToLatLng(p));
-    L.polyline(lls, { color: it.color, weight: it.weight, opacity: it.opacity, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(layer);
+    L.polyline(lls, { color: it.color, weight: it.weight, opacity: it.opacity, dashArray: it.dash, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(layer);
     if (!it.arrows) continue;
     // Arrows along the line, every so often, pointing the way it was drawn.
     let next = ARROW_EVERY_PX / 2;
@@ -121,7 +121,12 @@ export function decoFor(marks: any[], routes: any[], style: (mk: any) => { color
   for (const mk of marks) {
     if (!isDeco(mk) || mk.status === 'route') continue;
     const st = style(mk);
-    for (const line of mk.lines || []) items.push({ type: 'line', latlngs: line, ...st, offsetPx: halfOffset(mk) });
+    for (const line of mk.lines || []) {
+      // Half street: a thinner line on the side that's done, and a faint
+      // dotted line on the side that's left (the Owner, 27 Nov 2026).
+      items.push({ type: 'line', latlngs: line, color: st.color, weight: 3.5, opacity: Math.max(0.85, st.opacity), offsetPx: halfOffset(mk) });
+      items.push({ type: 'line', latlngs: line, color: st.color, weight: 2.5, opacity: 0.4, offsetPx: -halfOffset(mk), dash: '2 7' });
+    }
   }
   const byColour: Record<string, any[]> = {};
   for (const mk of marks) if (mk.status === 'route' && !mk.other) (byColour[mk.colour || ''] ||= []).push(mk);
