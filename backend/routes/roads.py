@@ -58,6 +58,17 @@ async def snap(request: Request):
     # only roads already saved; the phone fetches any that are missing.
     out = await roads.snap_lines(db, lines, tol, missing=missing, cached_only=True)
     if missing:
+        # Vector tiles are quick (about a second): fetch them now and snap again.
+        import asyncio
+        for k in missing[:3]:
+            roads._failed.pop(k, None)
+            try:
+                await asyncio.wait_for(roads._tile(db, k, fetch=roads.fetch_vector), 10)
+            except Exception:
+                pass
+        missing = []
+        out = await roads.snap_lines(db, lines, tol, missing=missing, cached_only=True)
+    if missing:
         # The server couldn't get these roads: the phone can fetch them from
         # OpenStreetMap itself and send them (POST /roads/tile), then retry.
         return {"lines": out, "missing": [{"key": k, "query": roads.overpass_query(*_padded(k))} for k in missing[:6]]}

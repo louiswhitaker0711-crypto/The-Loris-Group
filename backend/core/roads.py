@@ -386,6 +386,261 @@ def parse_overpass(data: dict) -> dict:
     return {"nodes": nodes, "ways": ways}
 
 
+# ── Vector tiles (OpenFreeMap): the fast, reliable source ───────────────────
+# Overpass's free servers are often overloaded (502/504, minutes per area,
+# 27 Nov 2026). OpenFreeMap serves OpenStreetMap as vector tiles from a CDN:
+# the same roads, in a second. Roads come from the `transportation` layer
+# (OpenMapTiles schema); we read the tiles with a small decoder below.
+
+VECTOR_TILEJSON = "https://tiles.openfreemap.org/planet"
+VECTOR_Z = 14
+ROAD_CLASSES = {"motorway_link", "trunk", "primary", "secondary", "tertiary", "minor", "service", "living_street", "residential", "unclassified"}
+NOT_SERVICE = {"driveway", "parking_aisle", "drive-through", "drive_through"}
+_tilejson: dict = {}
+
+
+def _varint(buf: bytes, i: int) -> tuple[int, int]:
+    out = shift = 0
+    while True:
+        b = buf[i]
+        i += 1
+        out |= (b & 0x7F) << shift
+        if b < 0x80:
+            return out, i
+        shift += 7
+
+
+def _fields(buf: bytes):
+    """Protobuf fields: (number, wire type, value)."""
+    i, n = 0, len(buf)
+    while i < n:
+        key, i = _varint(buf, i)
+        num, wt = key >> 3, key & 7
+        if wt == 0:
+            v, i = _varint(buf, i)
+        elif wt == 2:
+            ln, i = _varint(buf, i)
+            v = buf[i:i + ln]
+            i += ln
+        elif wt == 1:
+            v = buf[i:i + 8]
+            i += 8
+        elif wt == 5:
+            v = buf[i:i + 4]
+            i += 4
+        else:
+            raise ValueError("bad tile")
+        yield num, wt, v
+
+
+def _packed(buf: bytes) -> list[int]:
+    out, i = [], 0
+    while i < len(buf):
+        v, i = _varint(buf, i)
+        out.append(v)
+    return out
+
+
+def _value(buf: bytes):
+    import struct
+    for num, wt, v in _fields(buf):
+        if num == 1:
+            return v.decode("utf-8", "replace")
+        if num == 2:
+            return struct.unpack("<f", v)[0]
+        if num == 3:
+            return struct.unpack("<d", v)[0]
+        if num in (4, 5):
+            return v
+        if num == 6:
+            return (v >> 1) ^ -(v & 1)
+        if num == 7:
+            return bool(v)
+    return None
+
+
+def decode_roads(tile: bytes, tx: int, ty: int, z: int = VECTOR_Z) -> list[list[tuple[int, int]]]:
+    """The road lines in one vector tile, as global integer pixel points
+    (tile x · extent + x), so points shared across tiles match exactly."""
+    import gzip
+    if tile[:2] == b"\x1f\x8b":
+        tile = gzip.decompress(tile)
+    lines = []
+    for num, wt, layer in _fields(tile):
+        if num != 3:
+            continue
+        name, keys, values, feats, extent = "", [], [], [], 4096
+        for ln, lwt, lv in _fields(layer):
+            if ln == 1:
+                name = lv.decode()
+            elif ln == 2:
+                feats.append(lv)
+            elif ln == 3:
+                keys.append(lv.decode())
+            elif ln == 4:
+                values.append(_value(lv))
+            elif ln == 5:
+                extent = lv
+        if name != "transportation":
+            continue
+        for f in feats:
+            tags, gtype, geom = [], 0, []
+            for fn, fwt, fv in _fields(f):
+                if fn == 2:
+                    tags = _packed(fv)
+                elif fn == 3:
+                    gtype = fv
+                elif fn == 4:
+                    geom = _packed(fv)
+            if gtype != 2:
+                continue
+            props = {keys[tags[k]]: values[tags[k + 1]] for k in range(0, len(tags) - 1, 2)
+                     if tags[k] < len(keys) and tags[k + 1] < len(values)}
+            cls = str(props.get("class") or "")
+            if cls not in ROAD_CLASSES:
+                continue
+            if cls == "service" and str(props.get("service") or "") in NOT_SERVICE:
+                continue
+            x = y = 0
+            i = 0
+            cur: list = []
+            while i < len(geom):
+                cmd, count = geom[i] & 7, geom[i] >> 3
+                i += 1
+                if cmd == 7:
+                    continue
+                for _ in range(count):
+                    dx, dy = geom[i], geom[i + 1]
+                    i += 2
+                    x += (dx >> 1) ^ -(dx & 1)
+                    y += (dy >> 1) ^ -(dy & 1)
+                    pt = (tx * extent + x, ty * extent + y)
+                    if cmd == 1:
+                        if len(cur) >= 2:
+                            lines.append(cur)
+                        cur = [pt]
+                    else:
+                        cur.append(pt)
+            if len(cur) >= 2:
+                lines.append(cur)
+    return lines
+
+
+def _tile_xy(lat: float, lng: float, z: int) -> tuple[int, int]:
+    n = 2 ** z
+    x = int((lng + 180) / 360 * n)
+    y = int((1 - math.log(math.tan(math.radians(lat)) + 1 / math.cos(math.radians(lat))) / math.pi) / 2 * n)
+    return x, y
+
+
+def _px_to_ll(gx: int, gy: int, z: int, extent: int = 4096) -> tuple[float, float]:
+    n = 2 ** z * extent
+    lng = gx / n * 360 - 180
+    lat = math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * gy / n))))
+    return round(lat, 7), round(lng, 7)
+
+
+def lines_to_network(lines: list, s: float, w: float, n: float, e: float, z: int = VECTOR_Z) -> dict:
+    """Vector-tile lines → {nodes, ways} like Overpass gives, with roads that
+    meet mid-line joined (the tiles don't always share a point there)."""
+    pad = 0.003
+    ways = []
+    for ln in lines:
+        lls = [_px_to_ll(gx, gy, z) for gx, gy in ln]
+        if all(not (s - pad <= a <= n + pad and w - pad <= b <= e + pad) for a, b in lls):
+            continue
+        ways.append(list(ln))
+    # Join a road's end onto the road it meets, if within ~3 m and not already joined.
+    seg_grid: dict = {}
+    CELL = 64     # ~ 6 m at z14 in pixels
+    for wi, way in enumerate(ways):
+        for si, (a, b) in enumerate(zip(way, way[1:])):
+            for cx in range(min(a[0], b[0]) // CELL, max(a[0], b[0]) // CELL + 1):
+                for cy in range(min(a[1], b[1]) // CELL, max(a[1], b[1]) // CELL + 1):
+                    seg_grid.setdefault((cx, cy), []).append((wi, si))
+    points = {p for way in ways for p in way}
+    lat0 = (s + n) / 2
+    m_per_px = 156543.03 * math.cos(math.radians(lat0)) / (2 ** z) * 256 / 4096
+    reach = 3.5 / m_per_px
+    inserts: dict = {}
+    extra = []
+    for way in ways:
+        for end in (way[0], way[-1]):
+            best = None
+            cx, cy = end[0] // CELL, end[1] // CELL
+            for gx in (cx - 1, cx, cx + 1):
+                for gy in (cy - 1, cy, cy + 1):
+                    for wi, si in seg_grid.get((gx, gy), ()):
+                        a, b = ways[wi][si], ways[wi][si + 1]
+                        if end in (a, b):
+                            continue
+                        t, qx, qy, d = _project(end[0], end[1], a[0], a[1], b[0], b[1])
+                        if d <= reach and (best is None or d < best[0]):
+                            best = (d, wi, si, t, (round(qx), round(qy)))
+            if best and best[4] not in points:
+                d, wi, si, t, q = best
+                inserts.setdefault((wi, si), []).append((t, q))
+                points.add(q)
+                extra.append([end, q])
+            elif best:
+                extra.append([end, best[4]])
+    for (wi, si), qs in sorted(inserts.items(), reverse=True):
+        for t, q in sorted(qs, reverse=True):
+            ways[wi].insert(si + 1, q)
+    ways += [x for x in extra if x[0] != x[1]]
+    ids: dict = {}
+    nodes = []
+    out_ways = []
+    for way in ways:
+        row = []
+        for p in way:
+            if p not in ids:
+                ids[p] = -(p[0] * (1 << 28) + p[1] + 1)   # negative: never clashes with an OSM id
+                lat, lng = _px_to_ll(p[0], p[1], z)
+                nodes.append([ids[p], lat, lng])
+            if not row or row[-1] != ids[p]:
+                row.append(ids[p])
+        if len(row) >= 2:
+            out_ways.append(row)
+    return {"nodes": nodes, "ways": out_ways}
+
+
+async def fetch_vector(s, w, n, e) -> dict:
+    """The roads in a box from OpenFreeMap's vector tiles."""
+    import httpx
+    async with httpx.AsyncClient(timeout=httpx.Timeout(15, connect=6),
+                                 headers={"User-Agent": "TheLorisHub/1.0 (street snapping)"}) as client:
+        now = datetime.now(timezone.utc)
+        if not _tilejson.get("url") or _tilejson.get("at", now) < now - timedelta(hours=12):
+            r = await client.get(VECTOR_TILEJSON)
+            r.raise_for_status()
+            _tilejson.update({"url": r.json()["tiles"][0], "at": now})
+        x0, y0 = _tile_xy(n, w, VECTOR_Z)
+        x1, y1 = _tile_xy(s, e, VECTOR_Z)
+        lines = []
+        for tx in range(x0, x1 + 1):
+            for ty in range(y0, y1 + 1):
+                url = _tilejson["url"].replace("{z}", str(VECTOR_Z)).replace("{x}", str(tx)).replace("{y}", str(ty))
+                r = await client.get(url)
+                if r.status_code == 404:
+                    continue
+                r.raise_for_status()
+                lines += decode_roads(r.content, tx, ty)
+    got = lines_to_network(lines, s, w, n, e)
+    if not got["nodes"]:
+        raise RuntimeError("no roads in the vector tiles")
+    return got
+
+
+async def fetch_any(s, w, n, e) -> dict:
+    """Vector tiles first (fast), Overpass if they fail."""
+    try:
+        return await fetch_vector(s, w, n, e)
+    except Exception as ex:
+        logger.warning("vector roads failed, trying Overpass: %s", ex)
+        return await _fetch(s, w, n, e)
+
+
 async def _fetch(s, w, n, e) -> dict:
     import httpx
     q = overpass_query(s, w, n, e)
@@ -420,7 +675,7 @@ async def _tile(db, key: str, fetch=None, cached_only: bool = False) -> Optional
         s, w, n, e = tile_box(key)
         pad = 0.001
         try:
-            got = await (fetch or _fetch)(s - pad, w - pad, n + pad, e + pad)
+            got = await (fetch or fetch_any)(s - pad, w - pad, n + pad, e + pad)
         except Exception as ex:
             logger.warning("road tile %s fetch failed: %s", key, ex)
             _failed[key] = time.monotonic()

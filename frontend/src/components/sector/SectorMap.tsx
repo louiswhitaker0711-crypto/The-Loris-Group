@@ -125,7 +125,7 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
   const [half, setHalf] = useState(false);
   const [routeTool, setRouteTool] = useState<RouteTool>('draw');
   const warmed = useRef('');
-  const liveDone = useRef<any[]>([]);
+  const liveDone = useRef<{ layer: any; id?: string; at: number }[]>([]);
   const lastStroke = useRef(0);
   const [liveTick, setLiveTick] = useState(0);
   // A request for more streets (a BA) or a sector leader's redraw of one is
@@ -136,9 +136,13 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
   const st = useRef({ kind, colour, data, date, leaderId, editColour: '', snap, half, routeTool });
   st.current = { kind, colour, data, date, leaderId, editColour: editing?.colour || '', snap, half, routeTool };
 
+  const loadSeq = useRef(0);
   const load = useCallback(async () => {
+    // Only the newest answer counts: an older, slower one never wipes a line just saved.
+    const mine = ++loadSeq.current;
     try {
       const r = await apiService.getSectorMap(date, leaderId);
+      if (mine !== loadSeq.current) return;
       setData(r.data);
     } catch { /* keep what's shown */ }
     finally { setLoading(false); }
@@ -220,9 +224,11 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
         half: halfLine || undefined, side: halfLine ? side : undefined, snapped });
       if (r.data?.id) setUndoStack((u) => [...u, r.data.id]);
       await load();   // wait, so the drawn line stays until the saved one shows
+      return r.data?.id as string | undefined;
     } catch (e: any) {
       showAlert('Could not save that line', e?.response?.data?.detail || 'Try again.');
       await load();
+      return undefined;
     }
   }, [load]);
 
@@ -326,7 +332,7 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
           lastStroke.current = Date.now();
           const mine = live;
           // The drawn line comes off once the saved one has been drawn (no blink).
-          saveStroke(pts.map((q) => [q[0], q[1]])).finally(() => { if (mine) liveDone.current.push(mine); setLiveTick((t) => t + 1); });
+          saveStroke(pts.map((q) => [q[0], q[1]])).then((id) => { if (mine) liveDone.current.push({ layer: mine, id, at: Date.now() }); setLiveTick((t) => t + 1); });
         }
         else if (live) {
           // A tap: only this one dot comes off, never lines still being saved.
@@ -455,8 +461,13 @@ export function SectorMap({ date, leaderId, height = 400, endOfDay = false }: Pr
         });
       }
     }
-    // Drawn lines that are now saved come off, after the saved ones are on.
-    for (const l of liveDone.current.splice(0)) liveLayer.current?.removeLayer(l);
+    // Drawn lines come off only once their saved line is on the map.
+    const shown = new Set((data.marks || []).map((mk: any) => mk.id));
+    liveDone.current = liveDone.current.filter((x) => {
+      if (x.id && !shown.has(x.id) && Date.now() - x.at < 15000) return true;
+      liveLayer.current?.removeLayer(x.layer);
+      return false;
+    });
     setDeco(L, map.current, decoFor(marks, data.routes || [], (mk) => styleOf[mk.id] || { color: '#000', weight: DONE_WEIGHT, opacity: 0.95 }, (k) => hopHex(k)));
   }, [data, ready, c.primary, c.red, load, editing, liveTick]);
 
